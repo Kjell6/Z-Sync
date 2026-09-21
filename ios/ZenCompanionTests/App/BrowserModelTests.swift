@@ -271,6 +271,18 @@ final class BrowserModelTests: XCTestCase {
 
         XCTAssertEqual(makeModel(FakeSpacesRepository(), preferences: prefs).toolbarPlacement, .top)
     }
+
+    func testSetToolbarPlacementMirrorsChoiceWithoutPersisting() {
+        let prefs = FakePreferences()
+        let model = makeModel(FakeSpacesRepository(), preferences: prefs)
+
+        model.setToolbarPlacement(.bottom)
+
+        XCTAssertEqual(model.toolbarPlacement, .bottom)
+        // Persistence is SettingsModel's job; the browser model only mirrors.
+        XCTAssertFalse(prefs.hasObject(PreferenceKeys.toolbarPlacement, scope: .appGroup))
+        XCTAssertFalse(prefs.hasObject(PreferenceKeys.toolbarPlacement, scope: .standard))
+    }
 }
 
 // MARK: - Fakes

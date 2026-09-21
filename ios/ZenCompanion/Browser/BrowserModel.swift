@@ -61,6 +61,22 @@ final class BrowserModel {
             PreferenceKeys.didDismissSyncSetupHint,
             scope: .standard
         )
+        self.toolbarPlacement = Self.loadToolbarPlacement(preferences)
+    }
+
+    /// AppGroup first, standard defaults fallback, `.top` default.
+    private static func loadToolbarPlacement(_ preferences: PreferencesStoring) -> ToolbarPlacement {
+        let key = PreferenceKeys.toolbarPlacement
+        if preferences.hasObject(key, scope: .appGroup),
+           let raw = preferences.string(key, scope: .appGroup),
+           let value = ToolbarPlacement(rawValue: raw) {
+            return value
+        }
+        if let raw = preferences.string(key, scope: .standard),
+           let value = ToolbarPlacement(rawValue: raw) {
+            return value
+        }
+        return .top
     }
 
     // MARK: - Derived state
@@ -109,18 +125,18 @@ final class BrowserModel {
     }
 
     /// Where the action bar renders: the user's choice, else `.top`.
-    var toolbarPlacement: ToolbarPlacement {
-        let key = PreferenceKeys.toolbarPlacement
-        if preferences.hasObject(key, scope: .appGroup),
-           let raw = preferences.string(key, scope: .appGroup),
-           let value = ToolbarPlacement(rawValue: raw) {
-            return value
-        }
-        if let raw = preferences.string(key, scope: .standard),
-           let value = ToolbarPlacement(rawValue: raw) {
-            return value
-        }
-        return .top
+    ///
+    /// Stored rather than re-read from `preferences` on every access so the
+    /// spaces screen re-renders the moment the settings sheet changes it,
+    /// while the sheet is still open. `SettingsModel` owns persistence;
+    /// `setToolbarPlacement` mirrors the choice into observable state.
+    var toolbarPlacement: ToolbarPlacement
+
+    /// Mirrors a placement chosen in the settings sheet. Persisting stays with
+    /// `SettingsModel`, which already writes the same key to both stores.
+    func setToolbarPlacement(_ placement: ToolbarPlacement) {
+        guard placement != toolbarPlacement else { return }
+        toolbarPlacement = placement
     }
 
     /// Essentials to show above `space` under the current grouping.

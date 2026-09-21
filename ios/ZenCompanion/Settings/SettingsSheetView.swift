@@ -7,6 +7,9 @@ struct SettingsSheet: View {
     let loadError: String?
     let scheme: ColorScheme
     var normalTabsCapability: NormalTabsCapability = .absent
+    /// Called right after the user picks a toolbar placement, so the screen
+    /// behind the sheet re-renders immediately instead of on dismissal.
+    var onToolbarPlacementChange: (ToolbarPlacement) -> Void = { _ in }
 
     @Environment(\.dismiss) private var dismiss
     @State private var model = SettingsModel()
@@ -231,6 +234,7 @@ struct SettingsSheet: View {
                                     ForEach(ToolbarPlacement.allCases) { placement in
                                         Button {
                                             model.toolbarPlacement = placement
+                                            onToolbarPlacementChange(placement)
                                         } label: {
                                             if model.toolbarPlacement == placement {
                                                 Label(placement.title, systemImage: "checkmark")

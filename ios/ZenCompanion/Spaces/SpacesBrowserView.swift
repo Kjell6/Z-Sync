@@ -214,7 +214,8 @@ struct SpacesBrowserView: View {
                     account: account,
                     loadError: model.loadError,
                     scheme: scheme,
-                    normalTabsCapability: model.snapshot.normalTabsCapability
+                    normalTabsCapability: model.snapshot.normalTabsCapability,
+                    onToolbarPlacementChange: { model.setToolbarPlacement($0) }
                 )
                 .presentationDetents([.fraction(0.85), .large])
                 .presentationDragIndicator(.visible)

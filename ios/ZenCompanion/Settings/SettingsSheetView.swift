@@ -210,6 +210,51 @@ struct SettingsSheet: View {
                             }
                         }
 
+                        // Action bar placement: above the essentials grid or
+                        // below the space switcher. Own card, under
+                        // "Save shared tabs as".
+                        VStack(spacing: 0) {
+                            HStack {
+                                Label {
+                                    Text("settings.toolbar")
+                                        .font(.system(size: 16, weight: .medium, design: .rounded))
+                                } icon: {
+                                    Image(systemName: "arrow.up.and.down")
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundStyle(Palette.ink(scheme).opacity(0.6))
+                                }
+                                .foregroundStyle(Palette.ink(scheme))
+
+                                Spacer()
+
+                                Menu {
+                                    ForEach(ToolbarPlacement.allCases) { placement in
+                                        Button {
+                                            model.toolbarPlacement = placement
+                                        } label: {
+                                            if model.toolbarPlacement == placement {
+                                                Label(placement.title, systemImage: "checkmark")
+                                            } else {
+                                                Text(placement.title)
+                                            }
+                                        }
+                                    }
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Text(model.toolbarPlacement.title)
+                                            .font(.system(size: 15.5, design: .rounded))
+                                        Image(systemName: "chevron.up.chevron.down")
+                                            .font(.system(size: 10, weight: .semibold))
+                                    }
+                                    .foregroundStyle(Palette.ink(scheme).opacity(0.65))
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .frame(minHeight: 54)
+                        }
+                        .background(Palette.lift(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .padding(.top, 8)
+
                         VStack(spacing: 0) {
                             NavigationLink {
                                 AdvancedSettingsView(model: model, scheme: scheme)

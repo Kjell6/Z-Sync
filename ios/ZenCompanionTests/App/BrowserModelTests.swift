@@ -244,6 +244,33 @@ final class BrowserModelTests: XCTestCase {
         XCTAssertFalse(model.reviewPromptPending)
         XCTAssertFalse(prefs.bool(PreferenceKeys.didRequestReview, scope: .standard))
     }
+    // MARK: - Toolbar placement
+
+    func testToolbarPlacementDefaultsToTopAndPrefersAppGroup() {
+        XCTAssertEqual(makeModel(FakeSpacesRepository()).toolbarPlacement, .top)
+
+        let appGroupWins = FakePreferences()
+        appGroupWins.setString(ToolbarPlacement.bottom.rawValue, PreferenceKeys.toolbarPlacement, scope: .standard)
+        appGroupWins.setString(ToolbarPlacement.top.rawValue, PreferenceKeys.toolbarPlacement, scope: .appGroup)
+        XCTAssertEqual(
+            makeModel(FakeSpacesRepository(), preferences: appGroupWins).toolbarPlacement,
+            .top
+        )
+
+        let standardOnly = FakePreferences()
+        standardOnly.setString(ToolbarPlacement.bottom.rawValue, PreferenceKeys.toolbarPlacement, scope: .standard)
+        XCTAssertEqual(
+            makeModel(FakeSpacesRepository(), preferences: standardOnly).toolbarPlacement,
+            .bottom
+        )
+    }
+
+    func testToolbarPlacementIgnoresUnknownStoredValue() {
+        let prefs = FakePreferences()
+        prefs.setString("sideways", PreferenceKeys.toolbarPlacement, scope: .appGroup)
+
+        XCTAssertEqual(makeModel(FakeSpacesRepository(), preferences: prefs).toolbarPlacement, .top)
+    }
 }
 
 // MARK: - Fakes

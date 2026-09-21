@@ -15,6 +15,7 @@ enum PreferenceKeys {
     static let alwaysOpenExternally = "always_open_links_externally"
     static let essentialsGrouping = "essentials_grouping"
     static let saveKind = "save_kind"
+    static let toolbarPlacement = "toolbar_placement"
 }
 
 enum PreferenceScope {

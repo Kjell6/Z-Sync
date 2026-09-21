@@ -18,6 +18,21 @@ enum class SaveKind(val storageValue: String) {
 }
 
 /**
+ * Where the spaces screen's action bar (history, search, settings) sits:
+ * above the essentials grid (default) or below the space switcher.
+ */
+enum class ToolbarPlacement(val storageValue: String) {
+    TOP("top"),
+    BOTTOM("bottom"),
+    ;
+
+    companion object {
+        fun fromStorage(value: String?): ToolbarPlacement =
+            entries.firstOrNull { it.storageValue == value } ?: TOP
+    }
+}
+
+/**
  * Whether tapping a tab opens the URL in the system default browser
  * instead of the in-app mini-browser, plus the essentials grouping override
  * and the pinned/normal save kind.
@@ -27,6 +42,7 @@ object BrowserSettings {
     const val KEY_ALWAYS_OPEN_EXTERNALLY = "always_open_links_externally"
     const val KEY_ESSENTIALS_GROUPING = "essentials_grouping"
     const val KEY_SAVE_KIND = "save_tab_kind"
+    const val KEY_TOOLBAR_PLACEMENT = "toolbar_placement"
 
     fun get(context: Context): Boolean =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -62,6 +78,20 @@ object BrowserSettings {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putString(KEY_SAVE_KIND, kind.storageValue)
+            .apply()
+    }
+
+    /** Where the action bar sits; top when the user never chose. */
+    fun getToolbarPlacement(context: Context): ToolbarPlacement =
+        ToolbarPlacement.fromStorage(
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_TOOLBAR_PLACEMENT, null),
+        )
+
+    fun setToolbarPlacement(context: Context, placement: ToolbarPlacement) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_TOOLBAR_PLACEMENT, placement.storageValue)
             .apply()
     }
 }

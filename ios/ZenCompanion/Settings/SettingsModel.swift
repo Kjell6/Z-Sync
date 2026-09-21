@@ -42,6 +42,15 @@ final class SettingsModel {
         }
     }
 
+    /// Where the spaces screen's action bar sits: top (default) or bottom.
+    var toolbarPlacement: ToolbarPlacement {
+        didSet {
+            guard toolbarPlacement != oldValue else { return }
+            preferences.setString(toolbarPlacement.rawValue, PreferenceKeys.toolbarPlacement, scope: .appGroup)
+            preferences.setString(toolbarPlacement.rawValue, PreferenceKeys.toolbarPlacement, scope: .standard)
+        }
+    }
+
     private let searchEngine: SearchEngineProviding
     private let preferences: PreferencesStoring
     private let signerOut: SessionSigningOut
@@ -62,6 +71,7 @@ final class SettingsModel {
             : preferences.bool(key, scope: .standard)
         self.essentialsGrouping = Self.loadEssentialsGrouping(preferences)
         self.saveKind = Self.loadSaveKind(preferences)
+        self.toolbarPlacement = Self.loadToolbarPlacement(preferences)
     }
 
     private static func loadEssentialsGrouping(_ preferences: PreferencesStoring) -> EssentialsGrouping {
@@ -85,6 +95,18 @@ final class SettingsModel {
             return value
         }
         return .pinned
+    }
+
+    /// AppGroup first, standard defaults fallback, `.top` default.
+    private static func loadToolbarPlacement(_ preferences: PreferencesStoring) -> ToolbarPlacement {
+        let key = PreferenceKeys.toolbarPlacement
+        if let raw = preferences.string(key, scope: .appGroup), let value = ToolbarPlacement(rawValue: raw) {
+            return value
+        }
+        if let raw = preferences.string(key, scope: .standard), let value = ToolbarPlacement(rawValue: raw) {
+            return value
+        }
+        return .top
     }
 
     /// Validates and appends a custom engine, selecting it on success.

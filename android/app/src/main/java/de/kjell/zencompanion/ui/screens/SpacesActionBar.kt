@@ -30,9 +30,13 @@ import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.ui.theme.LocalZenColors
 
-/** Top bar: History | Search | Settings — all cards sharing the essentials tile look. */
+/**
+ * Action bar: History | Search | Settings — all cards sharing the essentials
+ * tile look. Rendered above the essentials grid or below the space switcher,
+ * per the user's `ToolbarPlacement`.
+ */
 @Composable
-internal fun TopBar(
+internal fun ActionBar(
     onOpenBrowser: (url: String?, title: String?) -> Unit,
     onOpenActivity: () -> Unit,
     onOpenAccount: () -> Unit,

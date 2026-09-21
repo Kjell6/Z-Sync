@@ -635,6 +635,36 @@
         }
       }
     },
+    "settings.toolbar" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toolbar position"
+          }
+        }
+      }
+    },
+    "settings.toolbar.bottom" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bottom"
+          }
+        }
+      }
+    },
+    "settings.toolbar.top" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Top"
+          }
+        }
+      }
+    },
     "share.failed.title" : {
       "extractionState" : "stale",
       "localizations" : {

@@ -151,6 +151,7 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
             isDemo = account.isDemo,
             state = browser,
             essentialsGrouping = preferences.essentialsGrouping,
+            toolbarPlacement = preferences.toolbarPlacement,
             onSelectSpace = { viewModel.selectSpace(it) },
             onRefresh = { viewModel.refresh() },
             onDeleteTab = { id -> viewModel.deleteTab(id) },
@@ -199,6 +200,7 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
             onSetAlwaysOpenExternally = { viewModel.setAlwaysOpenExternally(it) },
             onSetEssentialsGrouping = { viewModel.setEssentialsGrouping(it) },
             onSetSaveKind = { viewModel.setSaveKind(it) },
+            onSetToolbarPlacement = { viewModel.setToolbarPlacement(it) },
             onSignOut = {
                 showSettings = false
                 // Clears encrypted store + sync cache + wipes WebView data.

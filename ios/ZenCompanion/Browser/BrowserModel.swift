@@ -108,6 +108,21 @@ final class BrowserModel {
         return .automatic
     }
 
+    /// Where the action bar renders: the user's choice, else `.top`.
+    var toolbarPlacement: ToolbarPlacement {
+        let key = PreferenceKeys.toolbarPlacement
+        if preferences.hasObject(key, scope: .appGroup),
+           let raw = preferences.string(key, scope: .appGroup),
+           let value = ToolbarPlacement(rawValue: raw) {
+            return value
+        }
+        if let raw = preferences.string(key, scope: .standard),
+           let value = ToolbarPlacement(rawValue: raw) {
+            return value
+        }
+        return .top
+    }
+
     /// Essentials to show above `space` under the current grouping.
     func essentials(for space: ZenSpace) -> [ZenTab] {
         snapshot.essentials(for: space, grouping: essentialsGrouping)

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -48,6 +49,7 @@ import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.SaveKind
 import de.kjell.zencompanion.data.SearchEngine
 import de.kjell.zencompanion.data.SearchEngines
+import de.kjell.zencompanion.data.ToolbarPlacement
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.PreferencesState
 import de.kjell.zencompanion.ui.theme.LocalZenColors
@@ -61,6 +63,7 @@ internal fun SettingsPreferencesSection(
     onDeleteSearchEngine: (String) -> Unit,
     onSetAlwaysOpenExternally: (Boolean) -> Unit,
     onSetSaveKind: (SaveKind) -> Unit,
+    onSetToolbarPlacement: (ToolbarPlacement) -> Unit,
     onOpenAdvanced: () -> Unit,
 ) {
     // Preferences Section
@@ -205,11 +208,6 @@ internal fun SettingsPreferencesSection(
                 )
             }
 
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-            )
-
             // Save kind (pinned vs normal). Hidden when the browser version
             // never proved normal-tab support (`absent`).
             if (normalTabsCapability != ZenSpaces.NormalTabsCapability.ABSENT) {
@@ -247,6 +245,86 @@ internal fun SettingsPreferencesSection(
                             style = MaterialTheme.typography.labelSmall,
                             color = LocalZenColors.current.ink.copy(alpha = 0.45f),
                             modifier = Modifier.padding(start = 4.dp, top = 4.dp),
+                        )
+                    }
+                }
+            }
+        }
+
+        // Action bar placement: above the essentials grid or below the space
+        // switcher. Own card, under "Save shared tabs as".
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            ),
+            shape = MaterialTheme.shapes.medium,
+        ) {
+            var placementMenuExpanded by remember { mutableStateOf(false) }
+            val toolbarPlacement = preferences.toolbarPlacement
+
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { placementMenuExpanded = true }
+                        .padding(horizontal = 16.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.SwapVert,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(22.dp),
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = stringResource(R.string.settings_toolbar),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = stringResource(toolbarPlacement.labelRes()),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Outlined.ArrowDropDown,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = placementMenuExpanded,
+                    onDismissRequest = { placementMenuExpanded = false },
+                ) {
+                    ToolbarPlacement.entries.forEach { placement ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = stringResource(placement.labelRes()),
+                                    fontWeight = if (placement == toolbarPlacement) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = if (placement == toolbarPlacement) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                )
+                            },
+                            trailingIcon = if (placement == toolbarPlacement) {
+                                {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                            } else null,
+                            onClick = {
+                                onSetToolbarPlacement(placement)
+                                placementMenuExpanded = false
+                            },
                         )
                     }
                 }
@@ -510,4 +588,9 @@ private fun ZenSpaces.EssentialsGrouping.labelRes(): Int = when (this) {
     ZenSpaces.EssentialsGrouping.AUTOMATIC -> R.string.settings_essentials_grouping_automatic
     ZenSpaces.EssentialsGrouping.CONTAINER_SPECIFIC -> R.string.settings_essentials_grouping_container_specific
     ZenSpaces.EssentialsGrouping.SHARED -> R.string.settings_essentials_grouping_shared
+}
+
+private fun ToolbarPlacement.labelRes(): Int = when (this) {
+    ToolbarPlacement.TOP -> R.string.settings_toolbar_top
+    ToolbarPlacement.BOTTOM -> R.string.settings_toolbar_bottom
 }

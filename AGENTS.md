@@ -8,6 +8,10 @@
 - Platform code stays inside its platform folder. The only exception is `shared/`, which is spec + fixtures, not code. Display name is **Z-Sync**. Xcode/Gradle module and bundle id still use `ZenCompanion` / `de.kjell.zencompanion` (App Store identity).
 - Canonical privacy text: `docs/privacy.md`. Apple Team ID lives in gitignored `ios/Config/Team.local.xcconfig` (see the `.example` next to it).
 
+## Platform parity
+
+iOS and Android ship together. Every feature change must land on **both** platforms in the same piece of work — never one now and the other later. Only leave a platform out when the user explicitly scopes the task to a single platform. This is the rule from `CONTRIBUTING.md`, restated here so it is never missed.
+
 ## Language
 
 The whole app is English-only. Never add or keep localizations (de, fr, …) — all strings are English regardless of the device locale.

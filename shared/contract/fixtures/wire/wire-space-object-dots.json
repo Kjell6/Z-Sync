@@ -1,0 +1,52 @@
+{
+  "contract": 1,
+  "id": "wire-space-object-dots",
+  "purpose": "Real desktop gradientColors as generator objects decode into canonical dots, including lightness sent as the string \"60\".",
+  "input": {
+    "id": "s~abc",
+    "kind": "space",
+    "data": {
+      "uuid": "space-work",
+      "name": "Work",
+      "icon": "💼",
+      "theme": {
+        "type": "gradient",
+        "gradientColors": [
+          {
+            "c": "#4f46e5",
+            "isCustom": false,
+            "algorithm": "floating",
+            "isPrimary": true,
+            "lightness": "60",
+            "position": { "x": 225, "y": 237 },
+            "type": "explicit-lightness"
+          }
+        ],
+        "opacity": 0.5,
+        "texture": 0.2
+      },
+      "containerGuid": null,
+      "children": ["t1"]
+    }
+  },
+  "expect": {
+    "decodesAs": "space",
+    "uuid": "space-work",
+    "name": "Work",
+    "gradientColors": ["#4f46e5"],
+    "dots": [
+      {
+        "hex": "#4f46e5",
+        "isCustom": false,
+        "isPrimary": true,
+        "algorithm": "floating",
+        "lightness": 60,
+        "positionX": 225,
+        "positionY": 237,
+        "type": "explicit-lightness"
+      }
+    ],
+    "opacity": 0.5,
+    "texture": 0.2
+  }
+}

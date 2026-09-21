@@ -1,0 +1,24 @@
+{
+  "contract": 1,
+  "id": "wire-layout-basic",
+  "purpose": "The layout record decodes spaces order and essentials buckets; non-string tab ids in a bucket are dropped while the bucket and record still decode.",
+  "input": {
+    "id": "layout",
+    "kind": "layout",
+    "data": {
+      "spaces": ["space-2", "space-1"],
+      "essentials": {
+        "default": ["tab-pinned"],
+        "work": ["tab-w", 42, null, "tab-x"]
+      }
+    }
+  },
+  "expect": {
+    "decodesAs": "layout",
+    "spaces": ["space-2", "space-1"],
+    "essentials": {
+      "default": ["tab-pinned"],
+      "work": ["tab-w", "tab-x"]
+    }
+  }
+}

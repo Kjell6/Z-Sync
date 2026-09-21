@@ -1,0 +1,31 @@
+{
+  "contract": 1,
+  "id": "wire-folder-live-object",
+  "purpose": "Unknown fields such as the live object are ignored; the folder record still decodes and icon null stays null.",
+  "input": {
+    "id": "f1",
+    "kind": "folder",
+    "data": {
+      "folderId": "f1",
+      "name": "Docs",
+      "icon": null,
+      "workspaceUuid": "space-a",
+      "parentFolderId": null,
+      "live": {
+        "kind": "rss",
+        "feedUrl": "https://example.com/rss"
+      },
+      "children": ["t2"]
+    }
+  },
+  "expect": {
+    "decodesAs": "folder",
+    "folderId": "f1",
+    "name": "Docs",
+    "icon": null,
+    "workspaceUuid": "space-a",
+    "parentFolderId": null,
+    "children": ["t2"],
+    "unknownFieldsIgnored": ["live"]
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "contract": 1,
+  "id": "http-get-stuck-offset",
+  "purpose": "Stuck-token guard: the server answers the requested offset with an X-Weave-Next-Offset equal to that same offset. The client MUST stop paginating instead of looping. The BSO list body is constructed in test code and is not recorded.",
+  "input": {
+    "request": {
+      "method": "GET",
+      "path": "/storage/spaces?full=1&limit=2500&offset=1700000200",
+      "headers": {}
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "headers": {
+        "X-Weave-Next-Offset": "1700000200",
+        "X-Last-Modified": "1700000100.00"
+      },
+      "body": null
+    }
+  }
+}

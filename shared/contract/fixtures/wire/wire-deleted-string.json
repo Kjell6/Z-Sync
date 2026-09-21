@@ -1,0 +1,21 @@
+{
+  "contract": 1,
+  "id": "wire-deleted-string",
+  "purpose": "Hostile: deleted MUST be a JSON bool. The string \"true\" is ignored (not treated as a tombstone), so the otherwise valid tab record still decodes.",
+  "input": {
+    "id": "tab-a",
+    "kind": "tab",
+    "deleted": "true",
+    "data": {
+      "tabId": "tab-a",
+      "url": "https://example.com",
+      "title": "Example"
+    }
+  },
+  "expect": {
+    "decodesAs": "tab",
+    "tabId": "tab-a",
+    "url": "https://example.com",
+    "title": "Example"
+  }
+}

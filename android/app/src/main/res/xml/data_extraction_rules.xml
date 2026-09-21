@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="zen_secure_prefs.xml" />
+        <exclude domain="sharedpref" path="zen_secure_prefs_plain.xml" />
+        <exclude domain="file" path="spaces-cache.json" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="zen_secure_prefs.xml" />
+        <exclude domain="sharedpref" path="zen_secure_prefs_plain.xml" />
+        <exclude domain="file" path="spaces-cache.json" />
+    </device-transfer>
+</data-extraction-rules>

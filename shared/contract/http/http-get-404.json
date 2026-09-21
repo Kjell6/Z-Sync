@@ -1,0 +1,19 @@
+{
+  "contract": 1,
+  "id": "http-get-404",
+  "purpose": "A GET /storage/spaces that the server answers with 404 and no body (collection or resource not found). The recording pins only the status and the absent body; client error mapping is not asserted here.",
+  "input": {
+    "request": {
+      "method": "GET",
+      "path": "/storage/spaces",
+      "headers": {}
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 404,
+      "headers": {},
+      "body": null
+    }
+  }
+}

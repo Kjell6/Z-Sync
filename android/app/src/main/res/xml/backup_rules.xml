@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <exclude domain="sharedpref" path="zen_secure_prefs.xml" />
+    <exclude domain="sharedpref" path="zen_secure_prefs_plain.xml" />
+    <exclude domain="file" path="spaces-cache.json" />
+</full-backup-content>

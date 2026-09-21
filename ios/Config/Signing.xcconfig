@@ -1,0 +1,2 @@
+// Optional local override (gitignored): copy Team.local.xcconfig.example
+#include? "Team.local.xcconfig"

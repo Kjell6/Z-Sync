@@ -1,0 +1,26 @@
+{
+  "contract": 1,
+  "id": "wire-tab-normal-pinned-false",
+  "purpose": "A tab record with pinned false is a normal (unpinned) tab.",
+  "input": {
+    "id": "tab-n",
+    "kind": "tab",
+    "data": {
+      "tabId": "tab-n",
+      "url": "https://n.de",
+      "title": "N",
+      "essential": false,
+      "pinned": false,
+      "workspaceUuid": "space-1"
+    }
+  },
+  "expect": {
+    "decodesAs": "tab",
+    "tabId": "tab-n",
+    "url": "https://n.de",
+    "essential": false,
+    "pinned": false,
+    "isNormalTab": true,
+    "workspaceUuid": "space-1"
+  }
+}

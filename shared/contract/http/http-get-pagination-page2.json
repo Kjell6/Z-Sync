@@ -1,0 +1,21 @@
+{
+  "contract": 1,
+  "id": "http-get-pagination-page2",
+  "purpose": "Full-read page 2: the same route with the offset from page 1 returns 200 and no X-Weave-Next-Offset, so pagination stops after this page. The BSO list body is constructed in test code and is not recorded.",
+  "input": {
+    "request": {
+      "method": "GET",
+      "path": "/storage/spaces?full=1&limit=2500&offset=1700000200",
+      "headers": {}
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "headers": {
+        "X-Last-Modified": "1700000100.00"
+      },
+      "body": null
+    }
+  }
+}

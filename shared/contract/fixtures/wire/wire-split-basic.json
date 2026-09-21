@@ -1,0 +1,26 @@
+{
+  "contract": 1,
+  "id": "wire-split-basic",
+  "purpose": "A split record decodes with its member tab ids in order; pinned absent means pinned (isNormalSplit false).",
+  "input": {
+    "id": "split-1",
+    "kind": "split",
+    "data": {
+      "splitId": "split-1",
+      "gridType": "vsep",
+      "tabs": ["tab-a", "tab-b"],
+      "workspaceUuid": "space-1",
+      "folderId": null
+    }
+  },
+  "expect": {
+    "decodesAs": "split",
+    "splitId": "split-1",
+    "gridType": "vsep",
+    "tabs": ["tab-a", "tab-b"],
+    "workspaceUuid": "space-1",
+    "folderId": null,
+    "pinned": null,
+    "isNormalSplit": false
+  }
+}

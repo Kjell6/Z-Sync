@@ -1,0 +1,28 @@
+# Gradle
+.gradle/
+build/
+*/build/
+!src/**/build/
+
+# Local configuration (machine-specific: SDK path, keystore)
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+.kotlin/
+
+# Signing & secrets
+*.jks
+*.keystore
+*.properties.dontcommit
+keystore.properties
+
+# Logs & caches
+*.log
+.cxx/
+captures/
+.externalNativeBuild/
+
+# macOS
+.DS_Store

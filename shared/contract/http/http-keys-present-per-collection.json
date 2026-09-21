@@ -1,0 +1,23 @@
+{
+  "contract": 1,
+  "id": "http-keys-present-per-collection",
+  "purpose": "Collection-key bootstrap (payload present, per-collection bundles): GET /storage/crypto/keys returns 200 with X-Last-Modified. The encrypted envelope is built in test code from the crypto fixtures' fixed keys and is not recorded; the structural expectation records that a payload exists and covers both the default and spaces key bundles.",
+  "input": {
+    "request": {
+      "method": "GET",
+      "path": "/storage/crypto/keys",
+      "headers": {}
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "headers": {
+        "X-Last-Modified": "1700000100.00"
+      },
+      "body": null,
+      "hasPayload": true,
+      "collections": ["default", "spaces"]
+    }
+  }
+}

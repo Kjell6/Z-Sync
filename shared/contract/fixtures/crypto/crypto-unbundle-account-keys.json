@@ -1,0 +1,14 @@
+{
+  "contract": 1,
+  "id": "crypto-unbundle-account-keys",
+  "purpose": "PICL HKDF-unbundle of an account/keys payload: derive hmacKey|xorKey from the bundle key and namespace, verify the trailing HMAC, then XOR-decrypt.",
+  "input": {
+    "bundleKeyHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "namespace": "account/keys",
+    "payloadHex": "be5a4398c6cd757f43007bd7aebe2a654c63d1650c06d70bb13ce0df828bde70e162925e0af18b7765053e196fe85b00c57477a74475dcfdb243"
+  },
+  "expect": {
+    "plaintextUtf8": "account-keys-payload-bytes",
+    "hmacValid": true
+  }
+}

@@ -1,0 +1,33 @@
+# Xcode
+build/
+DerivedData/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+xcuserdata/
+*.xcuserstate
+* 1.xcscheme
+*.ipa
+*.dSYM.zip
+
+# macOS
+.DS_Store
+
+# Swift Package Manager
+.build/
+Package.resolved
+
+# Secrets / local state
+*.entitlements.bak
+ios/Config/Team.local.xcconfig
+*.p8
+*.mobileprovision
+credentials.env
+keystore.properties
+*.jks
+*.keystore
+
+# Marketing assets (large generated mockups/screenshots)
+marketing/
+
+# Local planning notes, not for the public repo
+plans/

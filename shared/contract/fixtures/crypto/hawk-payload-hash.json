@@ -1,0 +1,14 @@
+{
+  "contract": 1,
+  "id": "hawk-payload-hash",
+  "purpose": "Hawk payload hash is base64(SHA-256(\"hawk.1.payload\\n\" + normalized content type + \"\\n\" + body + \"\\n\")).",
+  "input": {
+    "bodyUtf8": "{\"a\":1}",
+    "contentType": "application/json"
+  },
+  "expect": {
+    "normalizedType": "application/json",
+    "preimageUtf8": "hawk.1.payload\napplication/json\n{\"a\":1}\n",
+    "hashBase64": "qKG2AtsqLMhIdy7+OrxWG0bU8wTDncYSW0gmNukAKpI="
+  }
+}

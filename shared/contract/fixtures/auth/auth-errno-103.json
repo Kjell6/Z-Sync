@@ -1,0 +1,37 @@
+{
+  "contract": 1,
+  "id": "auth-errno-103",
+  "purpose": "FxA auth error-body mapping: HTTP >= 400 with errno 103 (two-step authentication enabled) maps to the totpRequired error kind; any other errno stays a plain auth error carrying the body message.",
+  "cases": [
+    {
+      "id": "errno-103-totp",
+      "input": {
+        "httpStatus": 401,
+        "body": {
+          "errno": 103,
+          "error": "Two-step authentication required.",
+          "message": "Two-step authentication required.",
+          "code": 401
+        }
+      },
+      "expect": {
+        "errorKind": "totpRequired"
+      }
+    },
+    {
+      "id": "errno-104-plain-auth",
+      "input": {
+        "httpStatus": 401,
+        "body": {
+          "errno": 104,
+          "message": "Unconfirmed account",
+          "code": 401
+        }
+      },
+      "expect": {
+        "errorKind": "auth",
+        "message": "Unconfirmed account"
+      }
+    }
+  ]
+}

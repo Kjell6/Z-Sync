@@ -1,0 +1,22 @@
+{
+  "contract": 1,
+  "id": "bso-ids-percent-encoding",
+  "purpose": "BSO ids are percent-encoded over their UTF-8 bytes using only the RFC 3986 unreserved set, with uppercase %XX hex; plain ids pass through untouched.",
+  "cases": [
+    {
+      "id": "braced-uuid",
+      "input": { "id": "{ebaf893e-6ab2-4dbe-a336-62beb0c2b962}" },
+      "expect": { "encoded": "%7Bebaf893e-6ab2-4dbe-a336-62beb0c2b962%7D" }
+    },
+    {
+      "id": "plain",
+      "input": { "id": "layout" },
+      "expect": { "encoded": "layout" }
+    },
+    {
+      "id": "epoch-suffix",
+      "input": { "id": "1787333003647-5" },
+      "expect": { "encoded": "1787333003647-5" }
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "contract": 1,
+  "id": "wire-space-basic",
+  "purpose": "A space record with hex-string gradient colors decodes with all canonical fields intact.",
+  "input": {
+    "id": "space-1",
+    "kind": "space",
+    "data": {
+      "uuid": "space-1",
+      "name": "Coding",
+      "icon": "🧑‍💻",
+      "theme": {
+        "type": "gradient",
+        "gradientColors": ["#f76f53", "#ffd9a0"],
+        "opacity": 0.5,
+        "texture": 0
+      },
+      "containerGuid": null,
+      "children": ["tab-a", "folder-x", "tab-b"]
+    }
+  },
+  "expect": {
+    "decodesAs": "space",
+    "uuid": "space-1",
+    "name": "Coding",
+    "icon": "🧑‍💻",
+    "children": ["tab-a", "folder-x", "tab-b"],
+    "gradientColors": ["#f76f53", "#ffd9a0"],
+    "dotCount": 2,
+    "opacity": 0.5,
+    "texture": 0,
+    "containerGuid": null
+  }
+}

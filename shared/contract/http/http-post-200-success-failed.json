@@ -1,0 +1,25 @@
+{
+  "contract": 1,
+  "id": "http-post-200-success-failed",
+  "purpose": "Atomic multi-record POST with a collection-level X-If-Unmodified-Since returns 200 and a per-record outcome: success lists accepted BSO ids and failed maps rejected ids to reasons (empty here). Per-BSO envelopes are constructed in test code and are not recorded.",
+  "input": {
+    "request": {
+      "method": "POST",
+      "path": "/storage/spaces",
+      "headers": {
+        "X-If-Unmodified-Since": "1700000000.00"
+      }
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "headers": {},
+      "body": {
+        "modified": 1700000200.00,
+        "success": ["tab-1", "space-1"],
+        "failed": {}
+      }
+    }
+  }
+}

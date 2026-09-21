@@ -1,0 +1,25 @@
+{
+  "contract": 1,
+  "id": "wire-split-normal-pinned-false",
+  "purpose": "A split record with pinned false belongs to the normal (unpinned) bucket.",
+  "input": {
+    "id": "split-n",
+    "kind": "split",
+    "data": {
+      "splitId": "split-n",
+      "gridType": "vsep",
+      "pinned": false,
+      "tabs": ["n1", "n2"],
+      "workspaceUuid": "space-1"
+    }
+  },
+  "expect": {
+    "decodesAs": "split",
+    "splitId": "split-n",
+    "gridType": "vsep",
+    "pinned": false,
+    "isNormalSplit": true,
+    "tabs": ["n1", "n2"],
+    "workspaceUuid": "space-1"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "contract": 1,
+  "id": "crypto-bso-envelope-valid",
+  "purpose": "A valid BSO envelope decrypts to the known plaintext; the HMAC is computed over the base64 ciphertext STRING bytes, and AES-256-CBC/PKCS7 encryption with the fixed IV reproduces the exact ciphertext.",
+  "input": {
+    "encryptionKeyHex": "0707070707070707070707070707070707070707070707070707070707070707",
+    "hmacKeyHex": "0909090909090909090909090909090909090909090909090909090909090909",
+    "envelope": {
+      "ciphertext": "PEaCEZeS0kJ46CWznfkBiQ==",
+      "IV": "AAECAwQFBgcICQoLDA0ODw==",
+      "hmac": "3daf55dd421f98b3636d2252bcb72ef6d9901222093222b2e14a56d147e22ea1"
+    }
+  },
+  "expect": {
+    "plaintextUtf8": "{\"hello\":\"zen\"}",
+    "plaintextHex": "7b2268656c6c6f223a227a656e227d",
+    "decryptOk": true,
+    "hmacValid": true,
+    "recomputedCiphertext": "PEaCEZeS0kJ46CWznfkBiQ=="
+  }
+}

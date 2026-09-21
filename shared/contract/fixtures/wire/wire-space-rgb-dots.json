@@ -1,0 +1,35 @@
+{
+  "contract": 1,
+  "id": "wire-space-rgb-dots",
+  "purpose": "Desktop gradientColors whose c is an RGB byte array decode into canonical hex dots.",
+  "input": {
+    "id": "s~rgb",
+    "kind": "space",
+    "data": {
+      "uuid": "space-rgb",
+      "name": "Design",
+      "theme": {
+        "type": "gradient",
+        "gradientColors": [
+          { "c": [255, 120, 80], "isCustom": false, "isPrimary": true },
+          { "c": [40, 60, 200], "isCustom": false, "isPrimary": false }
+        ],
+        "opacity": 0.6,
+        "texture": 0.1
+      },
+      "children": []
+    }
+  },
+  "expect": {
+    "decodesAs": "space",
+    "uuid": "space-rgb",
+    "name": "Design",
+    "gradientColors": ["#ff7850", "#283cc8"],
+    "dots": [
+      { "hex": "#ff7850", "isPrimary": true },
+      { "hex": "#283cc8", "isPrimary": false }
+    ],
+    "opacity": 0.6,
+    "texture": 0.1
+  }
+}

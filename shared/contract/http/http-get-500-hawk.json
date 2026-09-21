@@ -1,0 +1,22 @@
+{
+  "contract": 1,
+  "id": "http-get-500-hawk",
+  "purpose": "Server error carrying Hawk clock-skew material: a 500 response includes WWW-Authenticate and X-Timestamp so the client can re-sign with server time on retry. Body is empty.",
+  "input": {
+    "request": {
+      "method": "GET",
+      "path": "/storage/spaces",
+      "headers": {}
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 500,
+      "headers": {
+        "WWW-Authenticate": "Hawk ts=\"1700000050.00\", ttl=\"60\", nonce=\"dGVzdG5vbmNl\"",
+        "X-Timestamp": "1700000050.00"
+      },
+      "body": null
+    }
+  }
+}

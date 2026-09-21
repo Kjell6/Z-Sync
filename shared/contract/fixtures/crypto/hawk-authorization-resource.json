@@ -1,0 +1,32 @@
+{
+  "contract": 1,
+  "id": "hawk-authorization-resource",
+  "purpose": "Hawk header MAC over the verbatim request-line resource (percent-encoding preserved) with no payload hash; the normalized preimage is exactly the 10 lines below.",
+  "input": {
+    "method": "PUT",
+    "url": "https://sync.example.com/1.5/1/storage/spaces/%7Babc%7D",
+    "id": "id",
+    "keyHex": "0101010101010101010101010101010101010101010101010101010101010101",
+    "payloadHash": null,
+    "resource": "/1.5/1/storage/spaces/%7Babc%7D",
+    "fixedTimestamp": 1700000000,
+    "fixedNonce": "nonce"
+  },
+  "expect": {
+    "normalizedLines": [
+      "hawk.1.header",
+      "1700000000",
+      "nonce",
+      "PUT",
+      "/1.5/1/storage/spaces/%7Babc%7D",
+      "sync.example.com",
+      "443",
+      "",
+      "",
+      ""
+    ],
+    "normalized": "hawk.1.header\n1700000000\nnonce\nPUT\n/1.5/1/storage/spaces/%7Babc%7D\nsync.example.com\n443\n\n\n",
+    "macBase64": "bkWL+Q72f2nS3Lb5oLNIv7rKiB3NuT4qdKTZI6kpRxM=",
+    "authorization": "Hawk id=\"id\", ts=\"1700000000\", nonce=\"nonce\", mac=\"bkWL+Q72f2nS3Lb5oLNIv7rKiB3NuT4qdKTZI6kpRxM=\""
+  }
+}

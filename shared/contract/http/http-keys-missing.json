@@ -1,0 +1,19 @@
+{
+  "contract": 1,
+  "id": "http-keys-missing",
+  "purpose": "Collection-key bootstrap (missing payload): GET /storage/crypto/keys returns 200 with the empty object as body, i.e. no payload, so the client must create fresh collection keys and re-read.",
+  "input": {
+    "request": {
+      "method": "GET",
+      "path": "/storage/crypto/keys",
+      "headers": {}
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "headers": {},
+      "body": {}
+    }
+  }
+}

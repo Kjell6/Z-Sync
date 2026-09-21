@@ -1,0 +1,12 @@
+{
+  "contract": 1,
+  "id": "crypto-client-state-bytes-kb-zero",
+  "purpose": "clientStateBytes(kB) is SHA-256(kB) truncated to its first 16 bytes; rendered as hex and unpadded base64url.",
+  "input": {
+    "kbHex": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "expect": {
+    "stateHex": "66687aadf862bd776c8fc18b8e9f8e20",
+    "stateBase64Url": "Zmh6rfhivXdsj8GLjp-OIA"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "contract": 1,
+  "id": "crypto-token-material-session-token",
+  "purpose": "sessionToken token material is 96 HKDF bytes split into id (hex), auth key (HAWK-1 id) and bundle key.",
+  "input": {
+    "tokenHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "type": "sessionToken",
+    "namespacePrefix": "identity.mozilla.com/picl/v1/",
+    "length": 96
+  },
+  "expect": {
+    "idHex": "5fa7b1a9a3266f052b766e956f525b583607e777f264a5bb67b57ed5e34c2c5c",
+    "authKeyHex": "4f05fbeb8c81b662f52d5c21595c1033a5126f3b7dabd872c4cfd8298254651c",
+    "bundleKeyHex": "d72c04a78494bc4cfd7ebc2ff4c600c3c89dd2a075c8d7e42cd3dd4bd47d2af9"
+  }
+}

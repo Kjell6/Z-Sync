@@ -1,0 +1,27 @@
+{
+  "contract": 1,
+  "id": "wire-tab-pinned-default",
+  "purpose": "Tab record without a pinned field defaults to pinned (isNormalTab false), with folderId absent decoding to null.",
+  "input": {
+    "id": "tab-a",
+    "kind": "tab",
+    "data": {
+      "tabId": "tab-a",
+      "url": "https://example.com",
+      "title": "Example",
+      "essential": false,
+      "workspaceUuid": "space-1"
+    }
+  },
+  "expect": {
+    "decodesAs": "tab",
+    "tabId": "tab-a",
+    "url": "https://example.com",
+    "title": "Example",
+    "essential": false,
+    "workspaceUuid": "space-1",
+    "pinned": null,
+    "isNormalTab": false,
+    "folderId": null
+  }
+}

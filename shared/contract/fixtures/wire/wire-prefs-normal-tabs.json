@@ -1,0 +1,32 @@
+{
+  "contract": 1,
+  "id": "wire-prefs-normal-tabs",
+  "purpose": "The zen.spaces-sync.normal-tabs pref value parses tolerantly from JSON bools, strings and numbers; unknown shapes yield null (caller defaults true).",
+  "cases": [
+    {
+      "id": "bool-true",
+      "input": { "value": true },
+      "expect": { "prefBool": true }
+    },
+    {
+      "id": "string-false",
+      "input": { "value": "false" },
+      "expect": { "prefBool": false }
+    },
+    {
+      "id": "number-1",
+      "input": { "value": 1 },
+      "expect": { "prefBool": true }
+    },
+    {
+      "id": "number-0",
+      "input": { "value": 0 },
+      "expect": { "prefBool": false }
+    },
+    {
+      "id": "unknown-string",
+      "input": { "value": "perhaps" },
+      "expect": { "prefBool": null }
+    }
+  ]
+}

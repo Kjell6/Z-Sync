@@ -1,0 +1,21 @@
+{
+  "contract": 1,
+  "id": "http-put-200",
+  "purpose": "Legacy unconditional PUT of a BSO: PUT /storage/spaces/%7Babc%7D with the §4 envelope body (constructed in test code, not recorded) returns 200 and the new X-Last-Modified for the BSO.",
+  "input": {
+    "request": {
+      "method": "PUT",
+      "path": "/storage/spaces/%7Babc%7D",
+      "headers": {}
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "headers": {
+        "X-Last-Modified": "1700000200.00"
+      },
+      "body": null
+    }
+  }
+}

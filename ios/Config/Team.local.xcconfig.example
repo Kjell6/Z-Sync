@@ -1,0 +1,3 @@
+// Copy to Team.local.xcconfig (gitignored) and put your Apple Team ID.
+// Simulator builds work without this file.
+DEVELOPMENT_TEAM = YOUR_TEAM_ID

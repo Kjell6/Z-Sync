@@ -1,0 +1,59 @@
+{
+  "contract": 1,
+  "id": "wire-ignored-records",
+  "purpose": "Every non-decodable cleartext shape is dropped: container kind (contractually not applied), future kinds, malformed data, tombstones, records missing required fields, and records missing kind.",
+  "cases": [
+    {
+      "id": "container-kind",
+      "input": {
+        "id": "c",
+        "kind": "container",
+        "data": { "guid": "g" }
+      },
+      "expect": { "decodesAs": null, "dropped": true }
+    },
+    {
+      "id": "future-kind",
+      "input": {
+        "id": "x",
+        "kind": "future-kind",
+        "data": {}
+      },
+      "expect": { "decodesAs": null, "dropped": true }
+    },
+    {
+      "id": "malformed-space",
+      "input": {
+        "id": "y",
+        "kind": "space",
+        "data": { "nope": true }
+      },
+      "expect": { "decodesAs": null, "dropped": true }
+    },
+    {
+      "id": "tombstone",
+      "input": {
+        "id": "tab-a",
+        "deleted": true
+      },
+      "expect": { "decodesAs": null, "dropped": true }
+    },
+    {
+      "id": "tab-missing-required-fields",
+      "input": {
+        "id": "t",
+        "kind": "tab",
+        "data": { "title": "No id or url" }
+      },
+      "expect": { "decodesAs": null, "dropped": true }
+    },
+    {
+      "id": "record-missing-kind",
+      "input": {
+        "id": "m",
+        "data": {}
+      },
+      "expect": { "decodesAs": null, "dropped": true }
+    }
+  ]
+}

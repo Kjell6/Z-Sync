@@ -1,0 +1,21 @@
+{
+  "contract": 1,
+  "id": "wire-folder-missing-folderid",
+  "purpose": "D2 hostile: a folder-kind record missing folderId is still folder-shaped, but must never match a target-folder predicate — neither for a nil target nor for the folder-1 target. D2 requires a non-empty exact string folderId match.",
+  "input": {
+    "id": "f-hostile",
+    "kind": "folder",
+    "data": {
+      "name": "Ghost",
+      "workspaceUuid": "space-1",
+      "parentFolderId": null,
+      "children": []
+    },
+    "targetRequests": [null, "folder-1"]
+  },
+  "expect": {
+    "decodesAsFolder": true,
+    "matchesNilTarget": false,
+    "matchesFolder1": false
+  }
+}

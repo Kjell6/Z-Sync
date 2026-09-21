@@ -1,0 +1,22 @@
+{
+  "contract": 1,
+  "id": "http-get-pagination-page1",
+  "purpose": "Full-read page 1: GET /storage/spaces?full=1&limit=2500 returns 200 with X-Weave-Next-Offset signalling another page, so the client must continue paginating. The BSO list body is constructed in test code (plain JSON carrying encrypted payloads) and is not recorded.",
+  "input": {
+    "request": {
+      "method": "GET",
+      "path": "/storage/spaces?full=1&limit=2500",
+      "headers": {}
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "headers": {
+        "X-Weave-Next-Offset": "1700000200",
+        "X-Last-Modified": "1700000100.00"
+      },
+      "body": null
+    }
+  }
+}

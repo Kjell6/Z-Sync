@@ -1,0 +1,27 @@
+{
+  "contract": 1,
+  "id": "wire-folder-basic",
+  "purpose": "A basic folder record decodes with canonical fields; children list preserved and parentFolderId null.",
+  "input": {
+    "id": "folder-1",
+    "kind": "folder",
+    "data": {
+      "folderId": "folder-1",
+      "name": "Docs",
+      "icon": "📁",
+      "workspaceUuid": "space-1",
+      "parentFolderId": null,
+      "children": ["tab-b"],
+      "live": null
+    }
+  },
+  "expect": {
+    "decodesAs": "folder",
+    "folderId": "folder-1",
+    "name": "Docs",
+    "icon": "📁",
+    "workspaceUuid": "space-1",
+    "parentFolderId": null,
+    "children": ["tab-b"]
+  }
+}

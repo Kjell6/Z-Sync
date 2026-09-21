@@ -1,0 +1,57 @@
+{
+  "contract": 1,
+  "id": "wire-prefs-normal-tabs-capability",
+  "purpose": "Derives normal-tabs sync capability from the synced prefs map. The key's presence is the browser-version support signal (Zen registers the pref for sync only since normal-tab syncing exists); enabled only when the value parses true, disabled when present but false/null/unparseable, absent when the prefs record or the key is missing.",
+  "cases": [
+    {
+      "id": "record-absent",
+      "input": { "prefsRecordPresent": false },
+      "expect": { "normalTabsCapability": "absent" }
+    },
+    {
+      "id": "record-present-key-absent",
+      "input": { "prefsRecordPresent": true, "values": {} },
+      "expect": { "normalTabsCapability": "absent" }
+    },
+    {
+      "id": "key-present-true",
+      "input": {
+        "prefsRecordPresent": true,
+        "values": { "zen.spaces-sync.normal-tabs": true }
+      },
+      "expect": { "normalTabsCapability": "enabled" }
+    },
+    {
+      "id": "key-present-false",
+      "input": {
+        "prefsRecordPresent": true,
+        "values": { "zen.spaces-sync.normal-tabs": false }
+      },
+      "expect": { "normalTabsCapability": "disabled" }
+    },
+    {
+      "id": "key-present-null",
+      "input": {
+        "prefsRecordPresent": true,
+        "values": { "zen.spaces-sync.normal-tabs": null }
+      },
+      "expect": { "normalTabsCapability": "disabled" }
+    },
+    {
+      "id": "key-present-number-one",
+      "input": {
+        "prefsRecordPresent": true,
+        "values": { "zen.spaces-sync.normal-tabs": 1 }
+      },
+      "expect": { "normalTabsCapability": "enabled" }
+    },
+    {
+      "id": "key-present-unparseable-string",
+      "input": {
+        "prefsRecordPresent": true,
+        "values": { "zen.spaces-sync.normal-tabs": "perhaps" }
+      },
+      "expect": { "normalTabsCapability": "disabled" }
+    }
+  ]
+}

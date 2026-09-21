@@ -1,0 +1,23 @@
+{
+  "contract": 1,
+  "id": "http-put-412",
+  "purpose": "Conditional PUT conflict: X-If-Unmodified-Since does not match the BSO's current timestamp, so the server rejects the write with 412 and an empty body; X-Last-Modified carries the current timestamp the client must re-read and merge before retrying once. The request envelope body is constructed in test code and is not recorded.",
+  "input": {
+    "request": {
+      "method": "PUT",
+      "path": "/storage/spaces/%7Babc%7D",
+      "headers": {
+        "X-If-Unmodified-Since": "1700000000.00"
+      }
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 412,
+      "headers": {
+        "X-Last-Modified": "1700000100.12"
+      },
+      "body": null
+    }
+  }
+}

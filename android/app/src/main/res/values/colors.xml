@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="coral">#264540</color>
+    <color name="paper_light">#F3ECE6</color>
+    <color name="paper_dark">#1F1F1F</color>
+    <color name="ink_light">#2E2E2E</color>
+    <color name="ink_dark">#F3ECE6</color>
+    <color name="zen_icon_fill">#FF000000</color>
+    <color name="ic_launcher_background">#264540</color>
+</resources>

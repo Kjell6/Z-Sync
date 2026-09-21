@@ -1,0 +1,15 @@
+{
+  "contract": 1,
+  "id": "crypto-sync-key-bundle-kb-zero",
+  "purpose": "The oldsync sync key bundle (encryption + HMAC keys) derived from a 32-zero-byte kB via HKDF-SHA256 with empty salt.",
+  "input": {
+    "kbHex": "0000000000000000000000000000000000000000000000000000000000000000",
+    "infoUtf8": "identity.mozilla.com/picl/v1/oldsync",
+    "saltHex": "",
+    "length": 64
+  },
+  "expect": {
+    "encryptionKeyHex": "ec830aefab7dc43c66fb56acc16ed3b723f090ae6f50d6e610b55f4675dcbefb",
+    "hmacKeyHex": "a1351b80de8cbeff3c368949c34e8f5520ec7f1d4fa24a0970b437684259f946"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "contract": 1,
+  "id": "wire-space-numeric-uuid",
+  "purpose": "Hostile: uuid must be a JSON string. A numeric uuid is not coerced and the record is dropped (Android must be fixed to strict; iOS is already strict).",
+  "input": {
+    "id": "space-num",
+    "kind": "space",
+    "data": {
+      "uuid": 42,
+      "name": "Numeric",
+      "children": []
+    }
+  },
+  "expect": {
+    "decodesAs": null,
+    "dropped": true
+  }
+}

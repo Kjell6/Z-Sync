@@ -1,0 +1,21 @@
+{
+  "contract": 1,
+  "id": "wire-tab-pinned-string-false",
+  "purpose": "A boolean flag sent as the string \"false\" decodes tolerantly to false, so the tab is normal.",
+  "input": {
+    "id": "tab-s",
+    "kind": "tab",
+    "data": {
+      "tabId": "tab-s",
+      "url": "https://s.de",
+      "pinned": "false"
+    }
+  },
+  "expect": {
+    "decodesAs": "tab",
+    "tabId": "tab-s",
+    "url": "https://s.de",
+    "pinned": false,
+    "isNormalTab": true
+  }
+}

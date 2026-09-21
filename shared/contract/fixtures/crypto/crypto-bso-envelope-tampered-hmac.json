@@ -1,0 +1,18 @@
+{
+  "contract": 1,
+  "id": "crypto-bso-envelope-tampered-hmac",
+  "purpose": "The same envelope with an hmac prefixed by ff fails HMAC verification before any decryption (error: bso hmac mismatch).",
+  "input": {
+    "encryptionKeyHex": "0707070707070707070707070707070707070707070707070707070707070707",
+    "hmacKeyHex": "0909090909090909090909090909090909090909090909090909090909090909",
+    "envelope": {
+      "ciphertext": "PEaCEZeS0kJ46CWznfkBiQ==",
+      "IV": "AAECAwQFBgcICQoLDA0ODw==",
+      "hmac": "ff3daf55dd421f98b3636d2252bcb72ef6d9901222093222b2e14a56d147e22ea1"
+    }
+  },
+  "expect": {
+    "decryptOk": false,
+    "error": "bso hmac mismatch"
+  }
+}

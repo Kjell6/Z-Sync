@@ -44,6 +44,7 @@ import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.SaveKind
 import de.kjell.zencompanion.data.SearchEngine
 import de.kjell.zencompanion.data.SearchEngineValidation
+import de.kjell.zencompanion.data.ToolbarPlacement
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.PreferencesState
 import de.kjell.zencompanion.ui.theme.LocalZenColors
@@ -73,6 +74,7 @@ fun SettingsSheet(
     onSetAlwaysOpenExternally: (Boolean) -> Unit,
     onSetEssentialsGrouping: (ZenSpaces.EssentialsGrouping) -> Unit,
     onSetSaveKind: (SaveKind) -> Unit,
+    onSetToolbarPlacement: (ToolbarPlacement) -> Unit,
     onSignOut: () -> Unit,
     onDone: () -> Unit,
 ) {
@@ -295,6 +297,7 @@ fun SettingsSheet(
                 onDeleteSearchEngine = onDeleteSearchEngine,
                 onSetAlwaysOpenExternally = onSetAlwaysOpenExternally,
                 onSetSaveKind = onSetSaveKind,
+                onSetToolbarPlacement = onSetToolbarPlacement,
                 onOpenAdvanced = { showAdvanced = true },
             )
 

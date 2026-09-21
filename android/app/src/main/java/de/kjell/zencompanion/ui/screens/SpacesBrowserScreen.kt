@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
+import de.kjell.zencompanion.data.ToolbarPlacement
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.BrowserState
 import de.kjell.zencompanion.ui.components.ZenSpaceGradientBackground
@@ -36,14 +37,17 @@ import de.kjell.zencompanion.ui.theme.ZenTheme
 
 /**
  * Native Material 3 Spaces Browser Screen.
- * Top bar: History card | Search card | Settings card (essentials look).
- * Bottom: space switcher + disclaimer. Refresh via pull-to-refresh.
+ * Action bar: History card | Search card | Settings card (essentials look),
+ * rendered above the essentials grid or below the space switcher, per
+ * [toolbarPlacement]. Bottom: space switcher + disclaimer. Refresh via
+ * pull-to-refresh.
  */
 @Composable
 fun SpacesBrowserScreen(
     isDemo: Boolean,
     state: BrowserState,
     essentialsGrouping: ZenSpaces.EssentialsGrouping,
+    toolbarPlacement: ToolbarPlacement,
     onSelectSpace: (Int) -> Unit,
     onRefresh: () -> Unit,
     onDeleteTab: (String) -> Unit,
@@ -63,6 +67,14 @@ fun SpacesBrowserScreen(
         spaces.associate { space ->
             space.id to state.snapshot.essentialsFor(space, essentialsGrouping)
         }
+    }
+    // Single definition of the bar; the placement decides which edge renders it.
+    val actionBar: @Composable () -> Unit = {
+        ActionBar(
+            onOpenBrowser = onOpenBrowser,
+            onOpenActivity = onOpenActivity,
+            onOpenAccount = onOpenAccount,
+        )
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -90,11 +102,9 @@ fun SpacesBrowserScreen(
                     )
                 }
                 if (spaces.isEmpty()) {
-                    TopBar(
-                        onOpenBrowser = onOpenBrowser,
-                        onOpenActivity = onOpenActivity,
-                        onOpenAccount = onOpenAccount,
-                    )
+                    if (toolbarPlacement == ToolbarPlacement.TOP) {
+                        actionBar()
+                    }
                     Spacer(Modifier.weight(1f))
                     if (state.zeroSpaces) {
                         ZeroSpacesHelp(
@@ -111,11 +121,9 @@ fun SpacesBrowserScreen(
                     }
                     Spacer(Modifier.weight(1f))
                 } else {
-                    TopBar(
-                        onOpenBrowser = onOpenBrowser,
-                        onOpenActivity = onOpenActivity,
-                        onOpenAccount = onOpenAccount,
-                    )
+                    if (toolbarPlacement == ToolbarPlacement.TOP) {
+                        actionBar()
+                    }
 
                     androidx.compose.animation.AnimatedVisibility(
                         visible = state.showSyncSetupHint,
@@ -151,7 +159,7 @@ fun SpacesBrowserScreen(
                     }
                 }
 
-                // Bottom: Space Switcher + disclaimer
+                // Bottom: Space Switcher (+ action bar when placed low) + disclaimer
                 if (spaces.isNotEmpty()) {
                     Column(
                         modifier = Modifier
@@ -164,6 +172,9 @@ fun SpacesBrowserScreen(
                             selectedIndex = state.selectedIndex,
                             onSelect = onSelectSpace,
                         )
+                        if (toolbarPlacement == ToolbarPlacement.BOTTOM) {
+                            actionBar()
+                        }
                         Text(
                             text = stringResource(R.string.home_disclaimer),
                             style = MaterialTheme.typography.labelSmall,
@@ -172,6 +183,9 @@ fun SpacesBrowserScreen(
                         )
                     }
                 } else {
+                    if (toolbarPlacement == ToolbarPlacement.BOTTOM) {
+                        actionBar()
+                    }
                     Spacer(Modifier.navigationBarsPadding())
                 }
             }

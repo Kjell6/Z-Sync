@@ -128,6 +128,9 @@
     <string name="settings_save_kind_pinned">Pinned tab</string>
     <string name="settings_save_kind_normal">Normal tab</string>
     <string name="settings_save_kind_normal_hint">Needs \"Include unpinned tabs\" in your desktop browser\'s Settings → Sync.</string>
+    <string name="settings_toolbar">Toolbar position</string>
+    <string name="settings_toolbar_top">Top</string>
+    <string name="settings_toolbar_bottom">Bottom</string>
     <string name="settings_about_section">About</string>
     <string name="settings_feedback_section">Feedback</string>
     <string name="settings_version">Version</string>

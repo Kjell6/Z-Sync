@@ -15,6 +15,7 @@ import de.kjell.zencompanion.data.SearchEngines
 import de.kjell.zencompanion.data.SearchEngineTemplate
 import de.kjell.zencompanion.data.SearchEngineValidation
 import de.kjell.zencompanion.data.SnapshotCache
+import de.kjell.zencompanion.data.ToolbarPlacement
 import de.kjell.zencompanion.favicon.FaviconLoader
 import de.kjell.zencompanion.sync.FxAClient
 import de.kjell.zencompanion.sync.FxACrypto
@@ -143,6 +144,8 @@ data class PreferencesState(
     val essentialsGrouping: ZenSpaces.EssentialsGrouping = ZenSpaces.EssentialsGrouping.AUTOMATIC,
     /** Pinned (default) or normal tab for tabs saved from share/mini browser. */
     val saveKind: SaveKind = SaveKind.PINNED,
+    /** Where the action bar sits: above the essentials grid (default) or below the switcher. */
+    val toolbarPlacement: ToolbarPlacement = ToolbarPlacement.TOP,
 )
 
 /**
@@ -156,6 +159,7 @@ interface PreferencesRepository {
     fun setAlwaysOpenExternally(enabled: Boolean)
     fun setEssentialsGrouping(grouping: ZenSpaces.EssentialsGrouping)
     fun setSaveKind(kind: SaveKind)
+    fun setToolbarPlacement(placement: ToolbarPlacement)
     fun syncSetupHintDismissed(): Boolean
     fun setSyncSetupHintDismissed(dismissed: Boolean)
     fun didShowShareExtensionTip(): Boolean
@@ -175,6 +179,7 @@ internal class AndroidPreferencesRepository(private val context: Context) : Pref
             BrowserSettings.getEssentialsGrouping(context),
         ),
         saveKind = BrowserSettings.getSaveKind(context),
+        toolbarPlacement = BrowserSettings.getToolbarPlacement(context),
     )
 
     override fun setSearchEngine(engine: SearchEngine) = SearchEngines.set(context, engine)
@@ -188,6 +193,9 @@ internal class AndroidPreferencesRepository(private val context: Context) : Pref
         BrowserSettings.setEssentialsGrouping(context, grouping.storageValue)
 
     override fun setSaveKind(kind: SaveKind) = BrowserSettings.setSaveKind(context, kind)
+
+    override fun setToolbarPlacement(placement: ToolbarPlacement) =
+        BrowserSettings.setToolbarPlacement(context, placement)
 
     override fun syncSetupHintDismissed(): Boolean =
         onboardingPrefs().getBoolean(KEY_DISMISSED_SYNC_SETUP, false)
@@ -598,6 +606,11 @@ class AppViewModel(
     fun setSaveKind(kind: SaveKind) {
         preferencesRepository.setSaveKind(kind)
         _preferences.value = _preferences.value.copy(saveKind = kind)
+    }
+
+    fun setToolbarPlacement(placement: ToolbarPlacement) {
+        preferencesRepository.setToolbarPlacement(placement)
+        _preferences.value = _preferences.value.copy(toolbarPlacement = placement)
     }
 
     /** Loads (or retries) the synced browsing history into [activity]. */

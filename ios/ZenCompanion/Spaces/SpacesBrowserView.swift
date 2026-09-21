@@ -10,7 +10,9 @@ struct BrowserTabSession: Identifiable {
 }
 
 /// The whole app: swipe between spaces (pinned tabs + folders per space),
-/// space switcher at the bottom, native bottom toolbar.
+/// space switcher at the bottom and the action bar (activity, search,
+/// settings) above the essentials grid or below the switcher, per the
+/// user's `ToolbarPlacement`.
 struct SpacesBrowserView: View {
     let account: AccountSnapshot
 
@@ -81,8 +83,13 @@ struct SpacesBrowserView: View {
                             .frame(maxWidth: .infinity)
                             .background(Palette.lift(effectiveScheme).opacity(0.65))
                     }
+
+                    let placement = model.toolbarPlacement
+
                     if model.snapshot.spaces.isEmpty {
-                        topBar(scheme: effectiveScheme)
+                        if placement == .top {
+                            actionBar(scheme: effectiveScheme)
+                        }
                         Spacer(minLength: 0)
                         if model.zeroSpaces {
                             ZeroSpacesHelp(reloading: model.reloading, scheme: effectiveScheme, onSetup: {
@@ -94,8 +101,13 @@ struct SpacesBrowserView: View {
                             stateArea(scheme: effectiveScheme)
                         }
                         Spacer(minLength: 0)
+                        if placement == .bottom {
+                            actionBar(scheme: effectiveScheme)
+                        }
                     } else {
-                        topBar(scheme: effectiveScheme)
+                        if placement == .top {
+                            actionBar(scheme: effectiveScheme)
+                        }
 
                         if model.showSyncSetupHint {
                             SyncSetupHint(scheme: effectiveScheme) {
@@ -171,6 +183,11 @@ struct SpacesBrowserView: View {
                             selectedIndex: $model.selectedIndex,
                             scheme: effectiveScheme
                         )
+
+                        if placement == .bottom {
+                            actionBar(scheme: effectiveScheme)
+                        }
+
                         Text("home.disclaimer")
                             .font(.system(size: 10.5, weight: .regular, design: .rounded))
                             .foregroundStyle(Palette.ink(effectiveScheme).opacity(0.3))
@@ -197,7 +214,8 @@ struct SpacesBrowserView: View {
                     account: account,
                     loadError: model.loadError,
                     scheme: scheme,
-                    normalTabsCapability: model.snapshot.normalTabsCapability
+                    normalTabsCapability: model.snapshot.normalTabsCapability,
+                    onToolbarPlacementChange: { model.setToolbarPlacement($0) }
                 )
                 .presentationDetents([.fraction(0.85), .large])
                 .presentationDragIndicator(.visible)
@@ -268,29 +286,32 @@ struct SpacesBrowserView: View {
         }
     }
 
-    // MARK: - Top bar: Activity (left) + Search (center) + Settings (right)
+    // MARK: - Action bar: Activity (left) + Search (center) + Settings (right)
     // Side cards share the essentials/search tile look and align their outer
-    // edges with the 20pt content padding used across the screen.
+    // edges with the 20pt content padding used across the screen. Rendered
+    // above the essentials grid or below the space switcher, per
+    // `model.toolbarPlacement`.
 
-    private func topBar(scheme: ColorScheme) -> some View {
+    private func actionBar(scheme: ColorScheme) -> some View {
         HStack(spacing: 12) {
-            topCard(systemName: "archivebox", accessibilityKey: "activity.title", scheme: scheme) {
+            actionCard(systemName: "archivebox", accessibilityKey: "activity.title", scheme: scheme) {
                 activeSheet = .activity
             }
 
             searchPill(scheme: scheme)
 
-            topCard(systemName: "gearshape", accessibilityKey: "Settings", scheme: scheme) {
+            actionCard(systemName: "gearshape", accessibilityKey: "Settings", scheme: scheme) {
                 activeSheet = .account
             }
         }
         .padding(.horizontal, 20)
-        // Breathing room between the top cards and the essentials grid
-        // below, so the two tile groups don't read as one block.
+        // Breathing room so the bar and the tile group beside it don't read as
+        // one block: below the bar at the top placement (toward the essentials
+        // grid), toward the disclaimer at the bottom placement.
         .padding(.bottom, 6)
     }
 
-    private func topCard(
+    private func actionCard(
         systemName: String,
         accessibilityKey: String,
         scheme: ColorScheme,

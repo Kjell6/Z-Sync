@@ -7,6 +7,7 @@ import de.kjell.zencompanion.data.DemoCatalog
 import de.kjell.zencompanion.data.SaveKind
 import de.kjell.zencompanion.data.SearchEngine
 import de.kjell.zencompanion.data.SnapshotCache
+import de.kjell.zencompanion.data.ToolbarPlacement
 import de.kjell.zencompanion.sync.SpacesSyncService
 import de.kjell.zencompanion.sync.SyncError
 import de.kjell.zencompanion.sync.SyncedActivityService
@@ -183,6 +184,26 @@ class AppViewModelTests {
 
         repository.setSaveKind(SaveKind.PINNED)
         assertEquals(SaveKind.PINNED, repository.load().saveKind)
+    }
+
+    @Test
+    fun toolbarPlacementPersistsThroughPreferencesRepository() {
+        val repository = AndroidPreferencesRepository(context)
+
+        assertEquals(ToolbarPlacement.TOP, repository.load().toolbarPlacement)
+
+        repository.setToolbarPlacement(ToolbarPlacement.BOTTOM)
+        assertEquals(ToolbarPlacement.BOTTOM, repository.load().toolbarPlacement)
+
+        repository.setToolbarPlacement(ToolbarPlacement.TOP)
+        assertEquals(ToolbarPlacement.TOP, repository.load().toolbarPlacement)
+    }
+
+    @Test
+    fun toolbarPlacementFromStorageIgnoresUnknownValue() {
+        assertEquals(ToolbarPlacement.TOP, ToolbarPlacement.fromStorage(null))
+        assertEquals(ToolbarPlacement.TOP, ToolbarPlacement.fromStorage("sideways"))
+        assertEquals(ToolbarPlacement.BOTTOM, ToolbarPlacement.fromStorage("bottom"))
     }
 
     @Test
@@ -449,6 +470,10 @@ private class FakePreferencesRepository : PreferencesRepository {
 
     override fun setSaveKind(kind: SaveKind) {
         state = state.copy(saveKind = kind)
+    }
+
+    override fun setToolbarPlacement(placement: ToolbarPlacement) {
+        state = state.copy(toolbarPlacement = placement)
     }
 
     override fun syncSetupHintDismissed(): Boolean = syncSetupDismissedFlag

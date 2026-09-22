@@ -9,19 +9,19 @@
 
 Z-Sync is a native iOS and Android app. It syncs your spaces, tabs, and essentials with Zen Browser over Firefox Sync.
 
-<img src="docs/images/spaces.png" alt="Z-Sync on iOS and Android" width="512">
+<img src=".github/assets/spaces.png" alt="Z-Sync on iOS and Android" width="512">
 
 ## Share into a space
 
 Share a link from another app and save it into a space as a pinned tab or a normal tab.
 
-<img src="docs/images/share.png" alt="Share a link into a space" width="360">
+<img src=".github/assets/share.png" alt="Share a link into a space" width="360">
 
 ## Quick browser
 
 Look something up in a small in-app browser without leaving Z-Sync.
 
-<img src="docs/images/quick-browser.png" alt="Quick browser" width="360">
+<img src=".github/assets/quick-browser.png" alt="Quick browser" width="360">
 
 ## Repo
 

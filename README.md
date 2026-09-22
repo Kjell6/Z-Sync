@@ -31,6 +31,8 @@ Look something up in a small in-app browser without leaving Z-Sync.
 | `android/` | Kotlin + Jetpack Compose |
 | `shared/contract/` | Sync spec and golden JSON, no executable code |
 | `store-listings/` | App Store and Play screenshots |
+| `docs/` | The marketing site at z-sync.kjell.cc, uploaded to Cloudflare as-is. Hand-written HTML, CSS and one small script, no build step. Also holds `privacy.md`, the app's privacy policy. |
+| `.github/assets/` | Images the README embeds |
 
 Maintained by one person.
 

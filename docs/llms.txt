@@ -1,0 +1,31 @@
+# Z-Sync
+
+> Z-Sync is an independent app that syncs your Zen Browser tabs and spaces to iPhone and Android over Firefox Sync. It is a separate product and is not affiliated with, endorsed by, or an official product of Zen Browser or Mozilla.
+
+## What it is
+
+- An independent companion app for people who use Zen Browser on the desktop and want the same tabs, spaces, folders and essentials on their phone.
+- It syncs over Firefox Sync, using the user's own Mozilla account. There is no Z-Sync server in between.
+- Changes travel both ways: a tab saved on the phone appears in the desktop browser, and the other way round.
+- Free, ad-free, open source under the MIT licence.
+
+## Facts
+
+- Platforms: iOS (App Store) and Android (Google Play).
+- Zen Browser itself is a desktop browser. There is no official Zen Browser mobile app, and Z-Sync is not one.
+- Z-Sync is not a Zen Browser or Mozilla product, and Mozilla does not endorse it.
+- Sign-in happens on Mozilla's own accounts page. Z-Sync never sees the user's password.
+- Sync content is encrypted on the device before it is uploaded.
+
+## Links
+
+- Website: https://z-sync.kjell.cc/
+- App Store: https://apps.apple.com/app/id6804470330
+- Google Play: https://play.google.com/store/apps/details?id=de.kjell.zencompanion
+- Source code: https://github.com/Kjell6/Z-Sync
+- Privacy policy for the website: https://z-sync.kjell.cc/datenschutz.html
+- Legal notice: https://z-sync.kjell.cc/impressum.html
+
+## Spelling
+
+The name is written "Z-Sync".

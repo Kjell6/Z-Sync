@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Z-Sync: Sync tabs &amp; spaces between your phone and Zen Browser</title>
+<meta name="description" content="Z-Sync is an independent app that syncs your Zen Browser spaces, pinned tabs and essentials to iPhone and Android over Firefox Sync. Free, open source, no ads.">
+<link rel="canonical" href="https://z-sync.kjell.cc/">
+
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+
+<meta property="og:type" content="website">
+<meta property="og:locale" content="en_GB">
+<meta property="og:site_name" content="Z-Sync">
+<meta property="og:title" content="Z-Sync: Sync tabs &amp; spaces between your phone and Zen Browser">
+<meta property="og:description" content="An independent app that syncs your Zen Browser spaces, pinned tabs and essentials to iPhone and Android over Firefox Sync.">
+<meta property="og:url" content="https://z-sync.kjell.cc/">
+<meta property="og:image" content="https://z-sync.kjell.cc/og.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Z-Sync app icon and the line: your browser spaces, on your phone.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Z-Sync: Sync tabs &amp; spaces between your phone and Zen Browser">
+<meta name="twitter:description" content="An independent app that syncs your Zen Browser spaces, pinned tabs and essentials to iPhone and Android over Firefox Sync.">
+<meta name="twitter:image" content="https://z-sync.kjell.cc/og.png">
+
+<link rel="icon" href="favicon.ico" sizes="48x48">
+<link rel="icon" href="icon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#F3ECE6">
+
+<!-- Native Smart App Banner (Safari auf iPhone/iPad). Android/Chrome nutzt
+     stattdessen related_applications aus dem Manifest (kein Banner nötig). -->
+<meta name="apple-itunes-app" content="app-id=6804470330">
+
+<link rel="stylesheet" href="style.css">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Z-Sync",
+  "alternateName": "Z Sync",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "iOS, Android",
+  "softwareVersion": "1.3",
+  "description": "Z-Sync is an independent app that syncs your Zen Browser spaces, pinned tabs and essentials to iPhone and Android over Firefox Sync. It is a separate product and is not affiliated with Zen Browser or Mozilla.",
+  "url": "https://z-sync.kjell.cc/",
+  "downloadUrl": [
+    "https://apps.apple.com/app/id6804470330",
+    "https://play.google.com/store/apps/details?id=de.kjell.zencompanion"
+  ],
+  "installUrl": [
+    "https://apps.apple.com/app/id6804470330",
+    "https://play.google.com/store/apps/details?id=de.kjell.zencompanion"
+  ],
+  "screenshot": "https://z-sync.kjell.cc/images/hero.webp",
+  "image": "https://z-sync.kjell.cc/og.png",
+  "featureList": [
+    "Spaces, tabs, folders and essentials on your phone",
+    "Share a link into a space from any app",
+    "Quick lookup without leaving the app",
+    "Sync over Firefox Sync with your own Mozilla account"
+  ],
+  "isAccessibleForFree": true,
+  "license": "https://opensource.org/licenses/MIT",
+  "author": { "@type": "Person", "name": "Kjell Behrends", "url": "https://kjell.cc" },
+  "sameAs": ["https://github.com/Kjell6/Z-Sync"],
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" }
+}
+</script>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "Z-Sync",
+  "alternateName": ["Z Sync", "ZSync"],
+  "url": "https://z-sync.kjell.cc/",
+  "inLanguage": "en",
+  "publisher": {
+    "@type": "Person",
+    "name": "Kjell Behrends",
+    "url": "https://kjell.cc",
+    "sameAs": ["https://github.com/Kjell6"]
+  }
+}
+</script>
+
+</head>
+
+<body>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav">
+  <a class="brand" href="/">
+    <img src="icon-96.png" alt="Z-Sync" width="44" height="44">
+  </a>
+  <nav class="store-links" aria-label="Get the app">
+    <a class="store-link" href="https://apps.apple.com/app/id6804470330" rel="noopener" aria-label="Download on the App Store">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg>
+    <span class="sr-only">Download on the App Store</span></a>
+    <a class="store-link" href="https://play.google.com/store/apps/details?id=de.kjell.zencompanion" rel="noopener" aria-label="Get it on Google Play">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18.4395 5.5586c-.675 1.1664-1.352 2.3318-2.0274 3.498-.0366-.0155-.0742-.0286-.1113-.043-1.8249-.6957-3.484-.8-4.42-.787-1.8551.0185-3.3544.4643-4.2597.8203-.084-.1494-1.7526-3.021-2.0215-3.4864a1.1451 1.1451 0 0 0-.1406-.1914c-.3312-.364-.9054-.4859-1.379-.203-.475.282-.7136.9361-.3886 1.5019 1.9466 3.3696-.0966-.2158 1.9473 3.3593.0172.031-.4946.2642-1.3926 1.0177C2.8987 12.176.452 14.772 0 18.9902h24c-.119-1.1108-.3686-2.099-.7461-3.0683-.7438-1.9118-1.8435-3.2928-2.7402-4.1836a12.1048 12.1048 0 0 0-2.1309-1.6875c.6594-1.122 1.312-2.2559 1.9649-3.3848.2077-.3615.1886-.7956-.0079-1.1191a1.1001 1.1001 0 0 0-.8515-.5332c-.5225-.0536-.9392.3128-1.0488.5449zm-.0391 8.461c.3944.5926.324 1.3306-.1563 1.6503-.4799.3197-1.188.0985-1.582-.4941-.3944-.5927-.324-1.3307.1563-1.6504.4727-.315 1.1812-.1086 1.582.4941zM7.207 13.5273c.4803.3197.5506 1.0577.1563 1.6504-.394.5926-1.1038.8138-1.584.4941-.48-.3197-.5503-1.0577-.1563-1.6504.4008-.6021 1.1087-.8106 1.584-.4941z"/></svg>
+    <span class="sr-only">Get it on Google Play</span></a>
+  </nav>
+</header>
+
+<main id="main">
+
+  <section class="hero">
+    <div class="hero-copy">
+      <h1>Your tabs and spaces<br>on the go.</h1>
+      <p class="hero-sub">Z-Sync syncs your spaces, pinned tabs and essentials from Zen Browser to iPhone and Android.</p>
+
+      <p class="hero-note">Independent app. Not affiliated with Zen.</p>
+    </div>
+
+    <div class="hero-stage">
+      <div class="hero-phone">
+        <div class="hero-blob" aria-hidden="true">
+          <img src="images/hero-gradient.svg" alt="">
+        </div>
+        <img class="media-img media-hero" src="images/hero.webp" width="760" height="1229" fetchpriority="high" decoding="async" alt="Z-Sync on iPhone, showing spaces with tabs, folders and essentials">
+      </div>
+    </div>
+  </section>
+
+  <!-- Features: list left, media right -->
+  <section class="features">
+
+    <div class="features-body">
+      <div class="feature-list" role="tablist" aria-label="What Z-Sync does">
+
+        <button class="feature is-active" role="tab" id="tab-spaces" aria-controls="panel-spaces" aria-selected="true" tabindex="0">
+          <span class="feature-title">Spaces, tabs and essentials</span>
+          <span class="feature-text">Your spaces sync with their tabs, folders and essentials, in the order you left them.</span>
+        </button>
+
+        <button class="feature" role="tab" id="tab-share" aria-controls="panel-share" aria-selected="false" tabindex="-1">
+          <span class="feature-title">Share into a space</span>
+          <span class="feature-text">Send a link from any other app straight into a space, as a pinned or normal tab.</span>
+        </button>
+
+        <button class="feature" role="tab" id="tab-lookup" aria-controls="panel-lookup" aria-selected="false" tabindex="-1">
+          <span class="feature-title">Quick lookup</span>
+          <span class="feature-text">Do a quick search, save links 
+or open your pinned tabs.</span>
+        </button>
+
+        <button class="feature" role="tab" id="tab-sync" aria-controls="panel-sync" aria-selected="false" tabindex="-1">
+          <span class="feature-title">Synced with your Desktop</span>
+          <span class="feature-text">Z-Sync and Zen Browser talk over Firefox Sync with your own Mozilla account.</span>
+        </button>
+
+      </div>
+
+      <div class="feature-media">
+      <!--
+        Feature clips. Encoded from the screen recordings at 700x1520, 30 fps,
+        with the audio track stripped entirely, H.264 + yuv420p + faststart.
+        Each clip is 424-780 KB and is self-hosted from this domain: no
+        embedded third-party player, which is what keeps the privacy policy
+        and the no-consent-banner position true.
+
+        preload="none" plus a WebP poster means nothing downloads until the
+        visitor opens that tab. app.js plays only the active panel, so at most
+        one clip ever loads. When replacing a clip, keep the same recipe:
+        scale to height 1520, fps 30, -an, -crf 26, -movflags +faststart.
+      -->
+
+        <div class="panel is-active" role="tabpanel" id="panel-spaces" aria-labelledby="tab-spaces" tabindex="0">
+          <div class="phone">
+            <!-- Still frame shown until the clip starts, and as the
+                 fallback under prefers-reduced-motion. Rendered as a real
+                 image because Chromium paints a masked <video> poster at the
+                 wrong size and without clipping. -->
+            <img class="phone-still" src="images/feature-spaces-poster.webp" width="700" height="1520" decoding="async" alt="">
+            <video class="phone-clip" width="700" height="1520" preload="none" muted loop playsinline
+                   aria-label="Screen recording: swiping between spaces with their tabs and essentials">
+              <source src="images/feature-spaces.mp4" type="video/mp4">
+            </video>
+            <img class="phone-frame" src="images/iphone-frame.webp" width="1113" height="2300" alt="" aria-hidden="true">
+          </div>
+        </div>
+
+        <div class="panel" role="tabpanel" id="panel-share" aria-labelledby="tab-share" tabindex="0" hidden>
+          <div class="phone">
+            <!-- Still frame shown until the clip starts, and as the
+                 fallback under prefers-reduced-motion. Rendered as a real
+                 image because Chromium paints a masked <video> poster at the
+                 wrong size and without clipping. -->
+            <img class="phone-still" src="images/feature-share-poster.webp" width="700" height="1520" loading="lazy" decoding="async" alt="">
+            <video class="phone-clip" width="700" height="1520" preload="none" muted loop playsinline
+                   aria-label="Screen recording: sharing a link from the iOS share sheet into a space">
+              <source src="images/feature-share.mp4" type="video/mp4">
+            </video>
+            <img class="phone-frame" src="images/iphone-frame.webp" width="1113" height="2300" alt="" aria-hidden="true">
+          </div>
+        </div>
+
+        <div class="panel" role="tabpanel" id="panel-lookup" aria-labelledby="tab-lookup" tabindex="0" hidden>
+          <div class="phone">
+            <!-- Still frame shown until the clip starts, and as the
+                 fallback under prefers-reduced-motion. Rendered as a real
+                 image because Chromium paints a masked <video> poster at the
+                 wrong size and without clipping. -->
+            <img class="phone-still" src="images/feature-quick-lookup-poster.webp" width="700" height="1520" loading="lazy" decoding="async" alt="">
+            <video class="phone-clip" width="700" height="1520" preload="none" muted loop playsinline
+                   aria-label="Screen recording: a quick lookup without leaving Z-Sync">
+              <source src="images/feature-quick-lookup.mp4" type="video/mp4">
+            </video>
+            <img class="phone-frame" src="images/iphone-frame.webp" width="1113" height="2300" alt="" aria-hidden="true">
+          </div>
+        </div>
+
+        <div class="panel" role="tabpanel" id="panel-sync" aria-labelledby="tab-sync" tabindex="0" hidden>
+          <img class="sync-image" src="images/feature-sync.webp" width="1200" height="1217" loading="lazy" decoding="async"
+               alt="The same space open in Z-Sync on iPhone and in the Zen Browser sidebar on a desktop">
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- How the two relate. Prose on purpose: it can carry the search terms
+       without phrasing it as an official Zen Browser mobile app. -->
+  <section class="bridge">
+    <div class="bridge-inner">
+      <h2>Two separate apps, one Mozilla account.</h2>
+      <p class="bridge-lede">Z-Sync is an independent app that syncs with Zen Browser over Firefox Sync. Sign in with your own Mozilla account and your spaces, pinned tabs and essentials are on your phone. Changes travel both ways, so a tab you save on your phone is waiting in the browser.</p>
+      <div class="bridge-flow">
+        <div class="bridge-node">
+          <span class="bridge-role">Your Mozilla account</span>
+          <span class="bridge-name">Firefox Sync</span>
+        </div>
+        <span class="bridge-stem" aria-hidden="true"></span>
+        <ul class="bridge-sides">
+          <li class="bridge-node">
+            <span class="bridge-role">Desktop</span>
+            <span class="bridge-name">Zen Browser</span>
+          </li>
+          <li class="bridge-node">
+            <span class="bridge-role">iPhone &amp; Android</span>
+            <span class="bridge-name">Z-Sync</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- Closing CTA: download + open source in one -->
+  <section class="closing">
+    <div class="closing-inner">
+      <h2>Take your spaces with you.</h2>
+      <p class="closing-text">Free and ad-free.<br>Sign in with the Mozilla account you already use.</p>
+      <div class="badges">
+        <a class="badge" href="https://apps.apple.com/app/id6804470330" rel="noopener">
+          <img src="images/app-store.svg" alt="Download on the App Store" height="48">
+        </a>
+        <a class="badge" href="https://play.google.com/store/apps/details?id=de.kjell.zencompanion" rel="noopener">
+          <img src="images/google-play.svg" alt="Get it on Google Play" height="48">
+        </a>
+      </div>
+      <div class="opensource-inline">
+        <svg class="gh-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path fill="currentColor" d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.3.5-2.4 1.2-3.2 0-.4-.5-1.6.2-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.6.2 2.8.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.7-2.8 5.7-5.5 6 .4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .3"/>
+        </svg>
+        <p>Z-Sync is open source under the MIT licence.</p>
+        <p><a href="https://github.com/Kjell6/Z-Sync" rel="noopener">View the source on GitHub</a></p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <p class="footer-note">Z-Sync is an independent app. It is not affiliated with, endorsed by, or an official product of Zen Browser or Mozilla.</p>
+    <p class="footer-fine">Copyright 2026 <a href="https://kjell.cc" rel="noopener">Kjell Behrends</a>. MIT licensed.</p>
+    <nav class="footer-legal" aria-label="Legal">
+      <a href="impressum.html">Legal notice</a>
+      <a href="datenschutz.html">Privacy</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="app.js" defer></script>
+</body>
+</html>

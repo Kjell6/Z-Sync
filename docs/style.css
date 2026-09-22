@@ -1,0 +1,812 @@
+/* Z-Sync landing page
+   Palette and grain are taken from the app itself (Shared/ZenTheme.swift,
+   ui/theme/Palette.kt): paper #F3ECE6, ink #2E2E2E, brand green #264540.
+   Light mode only, no web fonts: the app is set in
+   the system font, so the page is too. */
+
+:root {
+  --paper: #F3ECE6;
+  /* Sibling cream for the bridge band: one step deeper than the paper, so the
+     section separates without leaving the palette. */
+  --paper-2: #EBE4DF;
+  /* Cards sitting on the bridge band need to be clearly lighter than it,
+     otherwise the two near-white tones blur together. */
+  --card: #FBF8F4;
+  --ink: #2E2E2E;
+  --brand: #264540;
+  --brand-mid: #2F5F53;
+
+  /* Hero glow, light mode: a fresh green that fades into the deep brand tone. */
+  --blob-a: #7CBB97;
+  --blob-b: #4E8C77;
+  --blob-c: #264540;
+
+  /* Solid greys, not alpha: keeps AA contrast predictable on the paper. */
+  --muted: #5F5A56;
+  --muted-soft: #6E6862;
+  --hairline: rgba(46, 46, 46, .14);
+  --fill: rgba(46, 46, 46, .045);
+
+  --frame: #221F1D;
+  --frame-rim: rgba(46, 46, 46, .18);
+
+  --panel-bg: #264540;
+  --panel-fg: #F3ECE6;
+  --badge-plate: #F3ECE6;
+
+  --r-sm: 10px;
+  --r-md: 20px;
+  --r-lg: 28px;
+  --r-pill: 999px;
+  --r-device: 46px;
+
+  --ease: cubic-bezier(.16, 1, .3, 1);
+  --shell: 1140px;
+  --nav-h: 68px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+/* The paper lives on the root element so that the grain layer below can sit
+   between it and the content. */
+html {
+  -webkit-text-size-adjust: 100%;
+  background: var(--paper);
+}
+
+body {
+  margin: 0;
+  position: relative;
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Helvetica Neue", Arial, sans-serif;
+  font-size: 17px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* Film grain. z-index -1 puts it behind every piece of content: it textures
+   the paper, and never touches text, images or video. Sections with their own
+   opaque background hide this layer and carry their own grain instead. */
+body::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: .16;
+  mix-blend-mode: overlay;
+  background-image: url("images/grain.png");
+  background-repeat: repeat;
+}
+
+h1, h2, p { margin: 0; }
+/* Visually hidden, but present for search engines and screen readers. The
+   header store links are icon-only, which would otherwise leave the anchors
+   with no text at all. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+
+a { color: inherit; }
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 70;
+  background: var(--paper);
+  padding: 12px 18px;
+  border-radius: var(--r-sm);
+}
+.skip:focus { left: 12px; top: 12px; }
+
+/* ---------- nav ---------- */
+
+.nav {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  height: var(--nav-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 clamp(16px, 4vw, 40px);
+}
+.brand img {
+  display: block;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+}
+
+/* Small store shortcuts, top right. The full badges live in the closing CTA. */
+.store-links {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.store-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid var(--hairline);
+  color: var(--ink);
+  transition: transform .2s var(--ease), background-color .2s var(--ease);
+}
+.store-link svg { display: block; width: 18px; height: 18px; }
+.store-link:hover { background: var(--fill); opacity: .8; }
+.store-link:active { transform: scale(.96); }
+
+/* ---------- hero ---------- */
+
+.hero {
+  position: relative;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: hidden;
+  /* No background on purpose: the body-wide grain sits behind the hero, so the
+     paper areas keep their texture. The gradient carries its own grain layer. */
+  padding-top: clamp(80px, 12vh, 120px); /* enough space for header */
+}
+
+/* One grain layer across the whole hero: paper and gradient alike, above the
+   green (z 0) and below the phone (z 2) and the copy (z 3). */
+.hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: .14;
+  mix-blend-mode: overlay;
+  background-image: url("images/grain.png");
+  background-repeat: repeat;
+  background-size: 220px;
+  image-rendering: pixelated;
+}
+
+.hero-copy {
+  position: relative;
+  z-index: 3;
+  text-align: center;
+  padding: 0 20px;
+  max-width: 760px;
+}
+
+.hero h1 {
+  font-size: clamp(2.1rem, 5.4vw, 3.7rem);
+  font-weight: 700;
+  letter-spacing: -.035em;
+  line-height: 1.04;
+  text-wrap: balance;
+}
+
+.hero-sub {
+  margin: 20px auto 0;
+  max-width: 40ch;
+  font-size: clamp(1rem, 1.5vw, 1.125rem);
+  color: var(--muted);
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  margin-top: 30px;
+}
+
+.badge {
+  display: inline-flex;
+  border-radius: var(--r-sm);
+  transition: transform .2s var(--ease), opacity .2s var(--ease);
+}
+.badge img { display: block; height: 48px; width: auto; }
+.badge:hover { opacity: .85; }
+.badge:active { transform: scale(.98); }
+
+.hero-note {
+  margin-top: 22px;
+  font-size: .8125rem;
+  color: var(--muted-soft);
+}
+
+.hero-stage {
+  /* No z-index on purpose. It must NOT become a stacking context, otherwise the
+     gradient inside it would paint above the hero's grain layer below. With
+     z-index auto, the blob (z 0), the hero grain (z 1) and the phone (z 2) all
+     resolve in the same stacking context, which is what we want. */
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding-top: clamp(96px, 12vh, 140px);
+  overflow: visible; /* hero clips the bottom, phone wrapper owns the blob */
+}
+
+/* Coarse grain over the hero BACKGROUND only: it sits above the gradient
+   (z 0) but below copy and device (z 2), so text and phone stay clean.
+   Absolute, so it scrolls with the page. The tile is upscaled with
+   pixelated rendering so the grain reads chunky, not fine. */
+/* Phone wrapper owns the gradient: the blob is pinned to the phone with a
+   fixed overhang, so the green is always a piece taller than the phone and
+   never reaches the copy — on any viewport. */
+.hero-phone {
+  position: relative;
+}
+.hero-blob {
+  position: absolute;
+  top: -72px;
+  bottom: -8%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100vw;
+  pointer-events: none;
+  z-index: 0;
+}
+.hero-blob img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 55%;
+  /* Softly fade the very top edge so the green melts into the paper.
+     Short fade, starting right at the edge. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 32px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 32px);
+}
+
+/* Real screenshots, no CSS phone frames: no radius, no shadow, so the
+   transparent PNG composites seamlessly with the background. */
+.media-img {
+  display: block;
+  height: auto;
+  position: relative;
+  z-index: 2;
+}
+.media-hero { width: min(380px, 82vw); }
+
+/* ---------- phone frame around the feature clips ----------
+   The clip is never baked into the frame. The frame PNG has a transparent
+   screen cut-out, so the video sits behind it and the bezel covers the edges.
+   The exact screen shape comes from an alpha mask, because the corners are
+   Apple's continuous curves, which border-radius cannot reproduce. Geometry
+   measured from the frame file: screen cut-out at 62,59 to 1084,2283 inside a
+   frame trimmed to 1113x2300. */
+
+.phone {
+  position: relative;
+  height: 100%;
+  max-width: 100%;
+  aspect-ratio: 1113 / 2300;
+  flex: 0 0 auto;
+}
+
+/* The still and the clip occupy exactly the same box, share the same mask, and
+   the clip paints over the still once it has frames. Rendered as a real image
+   rather than a <video poster>: Chromium paints a poster on a masked video at
+   the wrong size and without clipping. */
+.phone-still,
+.phone-clip {
+  position: absolute;
+  left: 4.1330%;
+  top: 1.6522%;
+  width: 91.8239%;
+  height: 96.6957%;
+  object-fit: cover;
+  -webkit-mask-image: url("images/iphone-screen-mask-1022x2224.png");
+  mask-image: url("images/iphone-screen-mask-1022x2224.png");
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+.phone-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* ---------- sync panel image ----------
+   Same corner radius as the feature cards on the left, so the panel reads as
+   one of them rather than a picture dropped next to them. */
+
+.sync-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--r-md);
+  position: relative;
+  z-index: 2;
+}
+
+/* ---------- features ---------- */
+
+.features {
+  max-width: var(--shell);
+  margin: 0 auto;
+  padding: clamp(80px, 13vh, 150px) clamp(20px, 4vw, 40px);
+}
+
+
+.features h2,
+.closing h2 {
+  font-size: clamp(1.75rem, 3.4vw, 2.6rem);
+  font-weight: 700;
+  letter-spacing: -.03em;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+
+.features-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  gap: clamp(32px, 6vw, 80px);
+  align-items: center;
+  margin-top: 0;
+}
+
+.feature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.feature {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-md);
+  padding: 18px 20px;
+  cursor: pointer;
+  transition: background-color .3s var(--ease);
+}
+
+.feature:hover { background: var(--fill); }
+
+.feature.is-active { background: var(--fill); }
+
+.feature-title {
+  display: block;
+  font-size: 1.0625rem;
+  font-weight: 620;
+  letter-spacing: -.01em;
+  color: var(--ink);
+}
+
+.feature-text {
+  display: block;
+  margin-top: 6px;
+  font-size: .9375rem;
+  line-height: 1.5;
+  color: var(--muted-soft);
+  transition: color .3s var(--ease);
+}
+
+.feature.is-active .feature-text { color: var(--muted); }
+
+.feature-media {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  /* Fixed height so switching tabs (tall phone vs. wide image) never
+     changes the section height. */
+  height: clamp(520px, 70vh, 760px);
+}
+
+.panel {
+  display: none;
+  width: 100%;
+  height: 100%;
+  justify-content: center;
+  align-items: center;
+}
+.panel.is-active {
+  display: flex;
+  animation: panel-in .42s var(--ease) both;
+}
+
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---------- bridge: how Z-Sync and Zen Browser relate ---------- */
+
+.bridge {
+  position: relative;
+  width: 100%;
+  background: var(--paper-2);
+  padding: clamp(72px, 11vh, 130px) clamp(20px, 4vw, 40px);
+}
+/* Own grain layer: the band is opaque, so the body-wide layer is hidden here.
+   Sits above the band colour, below the content. */
+.bridge::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: .14;
+  mix-blend-mode: overlay;
+  background-image: url("images/grain.png");
+  background-repeat: repeat;
+}
+
+.bridge-inner {
+  position: relative;
+  z-index: 2;
+  max-width: var(--shell);
+  margin: 0 auto;
+  text-align: center;
+}
+
+.bridge h2 {
+  font-size: clamp(1.5rem, 2.6vw, 2rem);
+  font-weight: 700;
+  letter-spacing: -.03em;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.bridge-lede {
+  max-width: 60ch;
+  margin: 18px auto 0;
+  color: var(--muted);
+}
+
+/* Sync sits on top; the browser and the app hang off it side by side, because
+   changes travel in both directions. Connector drawn with hairlines. */
+.bridge-flow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: clamp(28px, 5vh, 44px) 0 0;
+}
+
+.bridge-node {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-width: 168px;
+  padding: 14px 22px;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+}
+
+.bridge-role {
+  font-size: .6875rem;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--muted-soft);
+}
+
+.bridge-name {
+  font-size: 1rem;
+  font-weight: 620;
+  letter-spacing: -.01em;
+}
+
+.bridge-stem {
+  width: 1px;
+  height: 22px;
+  background: var(--hairline);
+}
+
+.bridge-sides {
+  position: relative;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  width: min(440px, 100%);
+}
+/* Horizontal bar between the two node centres (25% / 75% of the grid). */
+.bridge-sides::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 25%;
+  right: 25%;
+  height: 1px;
+  background: var(--hairline);
+}
+.bridge-sides > li {
+  position: relative;
+  margin-top: 22px;
+}
+/* Leg from the bar down into each node. */
+.bridge-sides > li::before {
+  content: "";
+  position: absolute;
+  top: -22px;
+  left: 50%;
+  width: 1px;
+  height: 22px;
+  background: var(--hairline);
+}
+
+/* ---------- closing: download + open source in one ---------- */
+
+.closing {
+  width: 100%;
+  background: var(--panel-bg);
+  color: var(--panel-fg);
+  position: relative;
+  z-index: 1;
+}
+
+.closing-inner {
+  max-width: var(--shell);
+  margin: 0 auto;
+  padding: clamp(64px, 11vh, 120px) clamp(20px, 4vw, 40px) 0;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  z-index: 2;
+}
+
+.closing-text {
+  margin-top: 16px;
+  max-width: 42ch;
+  color: color-mix(in srgb, var(--panel-fg) 72%, transparent);
+}
+
+/* Cream plate keeps the official badges legible on the dark green panel. */
+.closing .badge {
+  background: var(--badge-plate);
+  padding: 7px 10px;
+  border-radius: 12px;
+}
+
+/* Open source row inside the closing panel. */
+.opensource-inline {
+  margin-top: clamp(28px, 4vh, 40px);
+  padding-top: clamp(20px, 3vh, 30px);
+  border-top: 1px solid color-mix(in srgb, var(--panel-fg) 16%, transparent);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.opensource-inline .gh-mark {
+  width: 26px;
+  height: 26px;
+  color: var(--panel-fg);
+}
+.opensource-inline p {
+  font-size: .9375rem;
+  color: color-mix(in srgb, var(--panel-fg) 72%, transparent);
+  max-width: 52ch;
+}
+.opensource-inline a {
+  font-weight: 600;
+  color: var(--panel-fg);
+  text-underline-offset: 3px;
+}
+
+/* ---------- footer ---------- */
+
+.footer {
+  width: 100%;
+  padding: clamp(36px, 5vh, 52px) 0 clamp(32px, 5vh, 48px);
+  background: var(--panel-bg);
+  color: var(--panel-fg);
+  position: relative;
+  z-index: 1;
+}
+
+.footer-inner {
+  max-width: var(--shell);
+  margin: 0 auto;
+  padding: 0 clamp(20px, 4vw, 40px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  z-index: 2;
+}
+.footer-inner::before {
+  content: "";
+  width: min(280px, 50%);
+  height: 1px;
+  margin-bottom: clamp(24px, 4vh, 36px);
+  background: color-mix(in srgb, var(--panel-fg) 16%, transparent);
+}
+
+/* Legal links sit last and deliberately quiet: same size as the copyright
+   line, muted, no visual weight. They exist for compliance, not for browsing. */
+.footer-legal {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 12px;
+  font-size: .8125rem;
+}
+.footer-legal a {
+  color: color-mix(in srgb, var(--panel-fg) 40%, transparent);
+  text-decoration: none;
+}
+.footer-legal a:hover {
+  color: color-mix(in srgb, var(--panel-fg) 75%, transparent);
+  text-decoration: underline;
+}
+
+.footer-note {
+  margin: 26px auto 0;
+  text-align: center;
+  font-size: .875rem;
+  color: color-mix(in srgb, var(--panel-fg) 72%, transparent);
+  max-width: 48ch;
+}
+
+.footer-fine {
+  margin-top: 10px;
+  text-align: center;
+  font-size: .8125rem;
+  color: color-mix(in srgb, var(--panel-fg) 40%, transparent);
+}
+.footer-fine a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.footer-fine a:hover { color: var(--panel-fg); }
+
+/* Explicitly add restrained grain to the closing and footer section */
+.closing::after, .footer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: .06;
+  mix-blend-mode: overlay;
+  background-image: url("images/grain.png");
+  background-repeat: repeat;
+}
+
+/* ---------- legal pages (Impressum, Datenschutz) ---------- */
+
+.legal {
+  max-width: 78ch;
+  margin: 0 auto;
+  padding: clamp(120px, 17vh, 168px) clamp(20px, 4vw, 40px) clamp(64px, 9vh, 100px);
+}
+
+.legal h1 {
+  font-size: clamp(1.9rem, 3.6vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: -.03em;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+.legal h2 {
+  margin-top: 2.2em;
+  font-size: 1.1875rem;
+  font-weight: 680;
+  letter-spacing: -.015em;
+}
+
+.legal h3 {
+  margin-top: 1.6em;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.legal p,
+.legal ul,
+.legal ol {
+  margin-top: .85em;
+  color: var(--ink);
+}
+
+.legal ul,
+.legal ol {
+  padding-left: 1.25em;
+}
+
+.legal li { margin-top: .35em; }
+
+.legal a {
+  color: var(--brand);
+  text-underline-offset: 3px;
+}
+
+.legal-address {
+  margin-top: 1em;
+  padding: 18px 22px;
+  background: var(--fill);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  line-height: 1.5;
+}
+
+.legal-meta {
+  margin-top: 2.6em;
+  padding-top: 1.4em;
+  border-top: 1px solid var(--hairline);
+  font-size: .875rem;
+  color: var(--muted-soft);
+}
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 900px) {
+  .features-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+  .feature-media { order: 2; }
+  .feature-list { order: 1; }
+}
+
+@media (max-width: 560px) {
+  body { font-size: 16px; }
+  .bridge-sides { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .bridge-sides::before,
+  .bridge-sides > li::before { display: none; }
+  .bridge-sides > li { margin-top: 0; }
+  .bridge-node { min-width: 0; }
+  .hero h1 { font-size: clamp(1.9rem, 9vw, 2.4rem); }
+  .hero h1 br { display: none; }
+  .hero-sub { font-size: 1rem; }
+  .badge img { height: 44px; }
+  .media-hero { width: min(360px, 84vw); }
+  .feature { padding: 15px 16px; }
+}
+
+/* ---------- motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+  .badge:hover { transform: none; }
+}

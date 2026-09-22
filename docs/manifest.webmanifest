@@ -1,0 +1,24 @@
+{
+  "name": "Z-Sync",
+  "short_name": "Z-Sync",
+  "description": "Your Zen Browser spaces, on your phone.",
+  "start_url": ".",
+  "display": "browser",
+  "icons": [
+    { "src": "icon-96.png", "sizes": "96x96", "type": "image/png" },
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" }
+  ],
+  "related_applications": [
+    {
+      "platform": "play",
+      "id": "de.kjell.zencompanion",
+      "url": "https://play.google.com/store/apps/details?id=de.kjell.zencompanion"
+    },
+    {
+      "platform": "itunes",
+      "url": "https://apps.apple.com/app/id6804470330"
+    }
+  ],
+  "prefer_related_applications": true
+}

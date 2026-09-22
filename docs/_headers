@@ -1,0 +1,48 @@
+# Cloudflare Pages response headers.
+#
+# Two things to know about this file's format:
+#   1. Comments start with '#'. Block comments (/* ... */) are NOT supported.
+#   2. When two matching rules set the same header, the values are JOINED with a
+#      comma, which produces broken values. So Cache-Control is set exactly once
+#      per request here: never on /* together with a more specific path.
+
+# Security headers for every response.
+#
+# script-src allows 'unsafe-inline' on purpose: the pages carry inline JSON-LD
+# data blocks for search engines. There is no user input, no form, no database
+# and no dynamic HTML here, so the injection surface that 'unsafe-inline' would
+# normally widen does not exist. img-src allows data: for the same reason it
+# always has: inline SVG fallbacks.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=(), interest-cohort=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; media-src 'self'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests
+
+# Keep the *.pages.dev preview host out of search results so it never competes
+# with the custom domain as duplicate content.
+https://:project.pages.dev/*
+  X-Robots-Tag: noindex
+
+# Caching. Nothing is fingerprinted, so these are deliberately moderate: long
+# enough to avoid re-fetching on every visit, short enough that replacing an
+# image or a clip is visible within a week.
+/images/*
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+
+/style.css
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/app.js
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/icon*.png
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+
+/favicon.ico
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+
+/og.png
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400

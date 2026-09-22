@@ -137,8 +137,10 @@ schemes:
     build:
       targets:
         ZenCompanion: all
-        ShareExtension: all
         ZenCompanionTests: [test]
+    run:
+      config: Debug
     test:
+      config: Debug
       targets:
         - ZenCompanionTests

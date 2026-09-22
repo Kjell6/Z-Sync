@@ -7,13 +7,13 @@
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://z-sync.kjell.cc/impressum.html</loc>
+    <loc>https://z-sync.kjell.cc/impressum</loc>
     <lastmod>2026-09-22</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.2</priority>
   </url>
   <url>
-    <loc>https://z-sync.kjell.cc/datenschutz.html</loc>
+    <loc>https://z-sync.kjell.cc/datenschutz</loc>
     <lastmod>2026-09-22</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.2</priority>

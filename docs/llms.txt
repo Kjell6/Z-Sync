@@ -23,8 +23,8 @@
 - App Store: https://apps.apple.com/app/id6804470330
 - Google Play: https://play.google.com/store/apps/details?id=de.kjell.zencompanion
 - Source code: https://github.com/Kjell6/Z-Sync
-- Privacy policy for the website: https://z-sync.kjell.cc/datenschutz.html
-- Legal notice: https://z-sync.kjell.cc/impressum.html
+- Privacy policy for the website: https://z-sync.kjell.cc/datenschutz
+- Legal notice: https://z-sync.kjell.cc/impressum
 
 ## Spelling
 

@@ -18,7 +18,7 @@ Independent app for browser spaces:
 
 ## Build
 
-Requirements: JDK 17+, Android SDK with platform 36.
+Requirements: JDK 17–26 (the Gradle wrapper pins 9.7.1), Android SDK with platform 37.
 
 ```bash
 cd android
@@ -27,10 +27,13 @@ cd android
 ./gradlew :app:testDebugUnitTest      # crypto/decoder/resolver unit tests
 ```
 
-(If `./gradlew` is missing, run `gradle wrapper --gradle-version 8.14.3` once.)
+(If `./gradlew` is missing, run `gradle wrapper --gradle-version 9.7.1` once.)
 
 Package: `de.kjell.zencompanion` · versionName `1.3` · versionCode `6` ·
-minSdk 26 · target/compileSdk 36 · portrait-only.
+minSdk 26 · targetSdk 36 · compileSdk 37 · portrait-only.
+
+Toolchain: Gradle 9.7.1 · AGP 9.4.1 · built-in Kotlin (Compose compiler plugin
+2.2.10) · Compose BOM 2026.09.00.
 
 ## Architecture
 

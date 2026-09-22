@@ -1,7 +1,7 @@
 {
   "name": "Z-Sync",
   "short_name": "Z-Sync",
-  "description": "Your Zen Browser spaces, on your phone.",
+  "description": "Your browser spaces, on your phone.",
   "start_url": ".",
   "display": "browser",
   "icons": [

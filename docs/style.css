@@ -787,11 +787,24 @@ a { color: inherit; }
 
 @media (max-width: 560px) {
   body { font-size: 16px; }
-  .bridge-sides { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  .bridge-sides::before,
-  .bridge-sides > li::before { display: none; }
-  .bridge-sides > li { margin-top: 0; }
-  .bridge-node { min-width: 0; }
+  /* Keep the hub-and-spoke shape and its connector on phones. Collapsing it to
+     a single column turned the diagram into a plain list, which loses the one
+     thing it exists to say: both hang off the same Mozilla account. The cards
+     just get tighter so two of them still fit side by side. */
+  .bridge-sides {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    width: 100%;
+  }
+  .bridge-node {
+    min-width: 0;
+    padding: 11px 12px;
+  }
+  .bridge-role {
+    font-size: .625rem;
+    letter-spacing: .05em;
+  }
+  .bridge-name { font-size: .9375rem; }
   .hero h1 { font-size: clamp(1.9rem, 9vw, 2.4rem); }
   .hero h1 br { display: none; }
   .hero-sub { font-size: 1rem; }

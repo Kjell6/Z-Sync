@@ -22,4 +22,4 @@ Run the full test suite once at the end of a module (or at the very end of the w
 
 ## Signing and stores
 
-Do not commit keystores, Team IDs, `.p8` keys, or store credentials. Do not upload to App Store Connect or Google Play. Store releases are maintainer-only.
+Do not commit keystores, Team IDs, `.p8` keys, or store credentials. Do not upload to App Store Connect or Google Play. Store releases are maintainer-only. Never bump build or version numbers yourself — that is maintainer-only too.

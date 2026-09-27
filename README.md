@@ -40,6 +40,11 @@ Maintained by one person.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Community
+
+Questions, ideas and general chat belong in [Discussions](https://github.com/Kjell6/Z-Sync/discussions).
+Use [Issues](https://github.com/Kjell6/Z-Sync/issues) for concrete bugs and feature requests.
+
 ## Support
 
 Z-Sync is free and ad-free. If you'd like to say thanks:

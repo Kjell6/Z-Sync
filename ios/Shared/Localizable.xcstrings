@@ -646,6 +646,7 @@
       }
     },
     "settings.toolbar.bottom" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -656,6 +657,7 @@
       }
     },
     "settings.toolbar.top" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {

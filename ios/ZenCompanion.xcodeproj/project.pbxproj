@@ -242,7 +242,7 @@
 		35ABA361CF71FABF621D774C /* ShareSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareSheetView.swift; sourceTree = "<group>"; };
 		3707140B47B8EF1E826F2718 /* SpaceSwitcherView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherView.swift; sourceTree = "<group>"; };
 		3790E4F893F6F84606F5ACA6 /* SettingsSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheetView.swift; sourceTree = "<group>"; };
-		380EDD371A34DE8E341F5CAA /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		380EDD371A34DE8E341F5CAA /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		38EDC6E1A002A0B3F656D52A /* http-post-200-success-failed.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "http-post-200-success-failed.json"; sourceTree = "<group>"; };
 		3A20C13D6D5652C863A07EEE /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		3AE92CB1C958DA9581C29AB6 /* MiniBrowserGlass.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniBrowserGlass.swift; sourceTree = "<group>"; };
@@ -266,7 +266,7 @@
 		5DE9BECA1EE5226AB886EA70 /* EssentialsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EssentialsViews.swift; sourceTree = "<group>"; };
 		63D3F179AA4CFC003509DDEB /* BrowserModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserModelTests.swift; sourceTree = "<group>"; };
 		64F1D8367C0B85E2075F184B /* MiniBrowserWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniBrowserWebView.swift; sourceTree = "<group>"; };
-		6D9C432715118EF441DC9CBB /* ShareExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		6D9C432715118EF441DC9CBB /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		7010EFB613D814CEE8A3F51A /* DemoCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoCatalog.swift; sourceTree = "<group>"; };
 		724C16E928D3A4784D49F4E6 /* http-put-200.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "http-put-200.json"; sourceTree = "<group>"; };
 		72542D5E48E7226A116200C6 /* FaviconLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaviconLoader.swift; sourceTree = "<group>"; };
@@ -275,13 +275,13 @@
 		74D1BAADC0AC4A9146438347 /* crypto-token-material-session-token.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "crypto-token-material-session-token.json"; sourceTree = "<group>"; };
 		751D6FACA31E390F2F4F5821 /* BrowserInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserInput.swift; sourceTree = "<group>"; };
 		75B43D4249A106C3DAB0B695 /* bso-ids-percent-encoding.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "bso-ids-percent-encoding.json"; sourceTree = "<group>"; };
-		7634EBBE3E8E98B649C6916D /* ZenCompanion.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ZenCompanion.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7634EBBE3E8E98B649C6916D /* ZenCompanion.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ZenCompanion.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		763B5462ECF65032DC123576 /* FxACrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FxACrypto.swift; sourceTree = "<group>"; };
 		7858A8DCADAB7F0C6206742E /* SignInModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInModel.swift; sourceTree = "<group>"; };
 		7B826660118D98FEDA254814 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 		7C2AFCDE724CF4B31BC73E8A /* AppServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppServices.swift; sourceTree = "<group>"; };
 		7C6A281B783890BC1D710543 /* BrowserInputTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserInputTests.swift; sourceTree = "<group>"; };
-		7D59054F346B2ACFAD54A1B8 /* ZenCompanionTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ZenCompanionTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		7D59054F346B2ACFAD54A1B8 /* ZenCompanionTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ZenCompanionTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8134F90DC307742DD6DDA3D3 /* wire-layout-basic.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "wire-layout-basic.json"; sourceTree = "<group>"; };
 		8164E7ADF678B75D18EA7685 /* wire-ignored-records.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "wire-ignored-records.json"; sourceTree = "<group>"; };
 		82E5BEFA80377E9205BF7EC0 /* wire-split-normal-pinned-false.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "wire-split-normal-pinned-false.json"; sourceTree = "<group>"; };
@@ -308,7 +308,7 @@
 		ACD7FC0B20567414EAE19CFE /* PinDestination.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinDestination.swift; sourceTree = "<group>"; };
 		ADA20E171E96EB2ADAEE51CA /* ZenCompanionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZenCompanionApp.swift; sourceTree = "<group>"; };
 		B0C5E77694324350B586C5DF /* SettingsModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsModel.swift; sourceTree = "<group>"; };
-		B222AF8E8E75B84E51DA3C99 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		B222AF8E8E75B84E51DA3C99 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		B3EE1F1C68EC0EBC19D94349 /* FaviconView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaviconView.swift; sourceTree = "<group>"; };
 		BD9272C2DC6DE3E00B6676AD /* SyncSetupViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncSetupViews.swift; sourceTree = "<group>"; };
 		BF50823FBB077FEA5EF2366E /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
@@ -1085,7 +1085,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = ZenCompanion/ZenCompanion.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ZenCompanion/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1122,7 +1122,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = ZenCompanion/ZenCompanion.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ZenCompanion/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (

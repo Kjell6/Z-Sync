@@ -160,6 +160,7 @@
 		E00AEB0559B188314BA1D37B /* http-get-pagination-page2.json in Resources */ = {isa = PBXBuildFile; fileRef = 8DD39E2F2EB13EDDE541FC50 /* http-get-pagination-page2.json */; };
 		E01EBABD6ED47CCF7BA5EDAC /* AccountStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0ACBE9A3AC25E6E8B2DF0A /* AccountStore.swift */; };
 		E0AA84F033C68D0A348E3AD7 /* crypto-unbundle-account-keys.json in Resources */ = {isa = PBXBuildFile; fileRef = E155A48FD3D5E99748FD52B5 /* crypto-unbundle-account-keys.json */; };
+		E1E5DC96F0372000C7227BAE /* ContainerCornerCompat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B67FA1F9288A8F67CC014C1 /* ContainerCornerCompat.swift */; };
 		E230A22AA435D3F2C959DE2D /* DemoCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7010EFB613D814CEE8A3F51A /* DemoCatalog.swift */; };
 		E2AFC66814E9694AF2123CF4 /* FxACrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 763B5462ECF65032DC123576 /* FxACrypto.swift */; };
 		E3A95472FF789DEA518E3947 /* EssentialsGroupingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B5ED845C6FEB068E5855189 /* EssentialsGroupingTests.swift */; };
@@ -223,6 +224,7 @@
 		175FA2F641A8F734B4BB8FE5 /* BrowserNavigationPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserNavigationPolicyTests.swift; sourceTree = "<group>"; };
 		19FBBF46E01F0A978C5B77B3 /* wire-folder-missing-folderid.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "wire-folder-missing-folderid.json"; sourceTree = "<group>"; };
 		1A0ACBE9A3AC25E6E8B2DF0A /* AccountStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountStore.swift; sourceTree = "<group>"; };
+		1B67FA1F9288A8F67CC014C1 /* ContainerCornerCompat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContainerCornerCompat.swift; sourceTree = "<group>"; };
 		1B7EB7F5DFB9EB6B5C63F378 /* FxAClientAuthTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FxAClientAuthTests.swift; sourceTree = "<group>"; };
 		1E2882450D1A733CBE1DA11D /* ActivityModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityModel.swift; sourceTree = "<group>"; };
 		2058D8CE3FB57598C1EFB484 /* MiniBrowserModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniBrowserModel.swift; sourceTree = "<group>"; };
@@ -346,6 +348,7 @@
 			isa = PBXGroup;
 			children = (
 				7C2AFCDE724CF4B31BC73E8A /* AppServices.swift */,
+				1B67FA1F9288A8F67CC014C1 /* ContainerCornerCompat.swift */,
 				3A20C13D6D5652C863A07EEE /* HomeView.swift */,
 				447B48CE102E2C66A3010EE3 /* ScrollCompat.swift */,
 				0645E086D905B55853588FF6 /* SessionModel.swift */,
@@ -866,6 +869,7 @@
 				C6A087F0045E03D01134ECBD /* BrowserInput.swift in Sources */,
 				B332B5F9161027D76C6DA2DB /* BrowserModel.swift in Sources */,
 				2535BA913CF533167F3E4705 /* BrowserNavigationPolicy.swift in Sources */,
+				E1E5DC96F0372000C7227BAE /* ContainerCornerCompat.swift in Sources */,
 				E230A22AA435D3F2C959DE2D /* DemoCatalog.swift in Sources */,
 				40DA19F1E6628FE6C7632FCF /* DeviceHistory.swift in Sources */,
 				B9D4F3E9FDBC21D07F728C9C /* EssentialsViews.swift in Sources */,

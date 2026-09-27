@@ -177,6 +177,11 @@ struct SpacesBrowserView: View {
                                 model.selectedIndexChangedFromPager()
                             }
                         }
+                        // With the action bar at the bottom, the essentials grid
+                        // is the topmost row and would sit under the iPadOS 26
+                        // window controls; reserve that band. No-op when the
+                        // action bar already owns the top edge.
+                        .containerCornerOffsetCompat(.top)
 
                         SpaceSwitcher(
                             spaces: model.snapshot.spaces,
@@ -309,6 +314,11 @@ struct SpacesBrowserView: View {
         // one block: below the bar at the top placement (toward the essentials
         // grid), toward the disclaimer at the bottom placement.
         .padding(.bottom, 6)
+        // iPadOS 26 windowed mode puts the system window controls on the
+        // window's top-leading corner; the bar makes room on the leading edge
+        // so the Activity button stays reachable. No-op when the insets are
+        // zero (full screen, iPhone, iOS < 26).
+        .containerCornerOffsetCompat(.horizontal)
     }
 
     private func actionCard(

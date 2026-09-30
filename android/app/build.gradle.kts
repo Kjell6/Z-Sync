@@ -38,8 +38,12 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // AGP 9.3+: R8 shrinking, optimization, and obfuscation, plus
+            // resource shrinking. Default Android keep rules are included.
+            // Play requires each DEX score at or above 25% once DEX exceeds 10 MB.
+            optimization {
+                enable = true
+            }
             if (keystoreProps["storeFile"] != null) {
                 signingConfig = signingConfigs.getByName("release")
             }

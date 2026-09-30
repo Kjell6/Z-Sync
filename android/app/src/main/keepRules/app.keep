@@ -1,0 +1,5 @@
+# Firefox accounts page calls AndroidBridge.fxa(json). The method name is
+# the JS contract, so it must survive renaming. The class itself may be renamed.
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}

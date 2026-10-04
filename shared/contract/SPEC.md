@@ -547,7 +547,10 @@ Rendering follows desktop `_shouldShowTab`: a space with a container shows its
 bucket; a space without one shows the `default` bucket plus buckets no space uses
 (orphan containers). Shared grouping shows every essential on every space, merging
 buckets `default` first, the rest in stable key order (the wire format orders tabs
-within a bucket only).
+within a bucket only). When several buckets are merged, entries MUST additionally be
+de-duplicated by URL across buckets, first occurrence winning, because the same site
+is commonly stored once per container bucket; a genuine duplicate within a single
+bucket is preserved.
 
 ---
 
@@ -616,6 +619,11 @@ fixtures, but fixtures do not pin them and future work SHOULD remove them:
 
 ## 11. Changelog
 
+- **2026-10-04 — Essentials merge de-duplication by URL.** When merging essentials
+  buckets for shared display, entries are now de-duplicated by URL across buckets
+  (first occurrence wins), while duplicates within one bucket are preserved (§7.4).
+  Added fixture `wire-layout-essentials-dup-url`. Contract-Version stays 1: additive
+  and non-breaking (identical behavior for the common single-bucket case).
 - **2026-09-12 — Normal-tabs capability.** Added the write-gating derived predicate
   (`normalTabsCapability`, §7) plus fixture `wire-prefs-normal-tabs-capability`.
   Contracts 1: additive derived behavior, no wire change; the read default `true`

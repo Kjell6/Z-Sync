@@ -1,0 +1,50 @@
+{
+  "contract": 1,
+  "id": "wire-layout-essentials-dup-url",
+  "purpose": "Essentials merged for shared display are de-duplicated by URL across buckets (first occurrence wins, bucketed in default-first then stable key order), while a duplicate URL inside a single bucket stays visible. Pins SPEC §7.4.",
+  "cases": [
+    {
+      "id": "same-url-in-two-buckets",
+      "input": {
+        "buckets": {
+          "default": [
+            { "id": "tab-a", "url": "https://example.com/", "title": "Example" }
+          ],
+          "work": [
+            { "id": "tab-b", "url": "https://example.com/", "title": "Example" }
+          ]
+        }
+      },
+      "expect": { "ids": ["tab-a"] }
+    },
+    {
+      "id": "same-url-twice-in-one-bucket",
+      "input": {
+        "buckets": {
+          "default": [
+            { "id": "tab-a", "url": "https://example.com/", "title": "Example" },
+            { "id": "tab-b", "url": "https://example.com/", "title": "Example" }
+          ]
+        }
+      },
+      "expect": { "ids": ["tab-a", "tab-b"] }
+    },
+    {
+      "id": "distinct-urls-keep-bucket-order",
+      "input": {
+        "buckets": {
+          "default": [
+            { "id": "tab-d", "url": "https://d.example/", "title": "D" }
+          ],
+          "work": [
+            { "id": "tab-w", "url": "https://w.example/", "title": "W" }
+          ],
+          "alpha": [
+            { "id": "tab-a", "url": "https://a.example/", "title": "A" }
+          ]
+        }
+      },
+      "expect": { "ids": ["tab-d", "tab-a", "tab-w"] }
+    }
+  ]
+}

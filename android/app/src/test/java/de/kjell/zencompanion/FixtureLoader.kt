@@ -29,6 +29,7 @@ internal object FixtureLoader {
         "wire-folder-missing-folderid",
         "wire-ignored-records",
         "wire-layout-basic",
+        "wire-layout-essentials-dup-url",
         "wire-prefs-normal-tabs",
         "wire-prefs-normal-tabs-capability",
         "wire-space-basic",

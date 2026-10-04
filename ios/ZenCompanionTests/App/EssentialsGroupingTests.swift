@@ -118,6 +118,52 @@ final class EssentialsGroupingTests: XCTestCase {
         XCTAssertEqual(["t1", "t2", "t3"], ids(snap.essentials(for: space("s"))))
     }
 
+    // MARK: URL de-duplication across buckets
+
+    func testSharedMergeDeduplicatesSameUrlAcrossBuckets() {
+        let snap = snapshot(
+            spaces: [space("s")],
+            essentials: [
+                "default": [ZenTab(id: "t1", url: "https://dup.example/", title: "dup")],
+                "work": [ZenTab(id: "t2", url: "https://dup.example/", title: "dup")],
+            ]
+        )
+        XCTAssertEqual(
+            ["t1"],
+            ids(snap.essentials(for: space("s"))),
+            "the first bucket wins; the per-container copy is dropped"
+        )
+    }
+
+    func testSharedMergeKeepsSameUrlWithinOneBucket() {
+        let snap = snapshot(
+            spaces: [space("s")],
+            essentials: [
+                "default": [
+                    ZenTab(id: "t1", url: "https://dup.example/", title: "dup"),
+                    ZenTab(id: "t2", url: "https://dup.example/", title: "dup"),
+                ]
+            ]
+        )
+        XCTAssertEqual(
+            ["t1", "t2"],
+            ids(snap.essentials(for: space("s"))),
+            "a genuine duplicate inside one bucket is real Zen data and stays visible"
+        )
+    }
+
+    func testSharedMergeKeepsDistinctUrlsInBucketOrder() {
+        let snap = snapshot(
+            spaces: [space("s")],
+            essentials: [
+                "work": [tab("w")],
+                "alpha": [tab("a")],
+                "default": [tab("d")],
+            ]
+        )
+        XCTAssertEqual(["d", "a", "w"], ids(snap.essentials(for: space("s"))))
+    }
+
     func testContainerSpaceReadsOnlyItsOwnBucket() {
         let snap = snapshot(
             spaces: [space("work", containerGuid: "container-work"), space("plain")],

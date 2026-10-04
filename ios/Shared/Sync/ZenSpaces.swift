@@ -866,13 +866,24 @@ struct ZenSnapshot: Equatable, Codable {
         return mergedBuckets(["default"] + otherKeys)
     }
 
+    /// Merges buckets in `keys` order (default first, then stable key order).
+    /// De-duplicates by id everywhere (existing behavior) and by URL *across*
+    /// buckets, keeping the first occurrence. A genuine duplicate URL inside a
+    /// single bucket is real Zen data and must stay visible, so URLs are only
+    /// compared against buckets already merged.
     private func mergedBuckets(_ keys: [String]) -> [ZenTab] {
         var result: [ZenTab] = []
         var seen = Set<String>()
+        var priorURLs = Set<String>()
         for key in keys {
-            for tab in essentials[key] ?? [] where seen.insert(tab.id).inserted {
+            var bucketURLs = Set<String>()
+            for tab in essentials[key] ?? [] {
+                guard seen.insert(tab.id).inserted else { continue }
+                guard !priorURLs.contains(tab.url) else { continue }
+                bucketURLs.insert(tab.url)
                 result.append(tab)
             }
+            priorURLs.formUnion(bucketURLs)
         }
         return result
     }

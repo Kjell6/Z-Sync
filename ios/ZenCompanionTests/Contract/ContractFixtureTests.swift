@@ -20,7 +20,7 @@ final class ContractFixtureTests: XCTestCase {
     /// every fixture must declare contract 1 (the loader fatalErrors loudly
     /// on drift; the explicit asserts below double-check).
     func testEveryFixtureDeclaresContractVersion1() {
-        XCTAssertEqual(ContractFixtures.all.count, 28, "fixture list must track shared/contract/fixtures")
+        XCTAssertEqual(ContractFixtures.all.count, 29, "fixture list must track shared/contract/fixtures")
         for name in ContractFixtures.all {
             let obj = ContractFixtures.json(name)
             XCTAssertEqual(obj["contract"] as? Int, 1, name)
@@ -123,6 +123,36 @@ final class ContractFixtureTests: XCTestCase {
             XCTAssertEqual(
                 capability.rawValue,
                 expect["normalTabsCapability"] as? String,
+                "case \(caseId)"
+            )
+        }
+    }
+
+    // MARK: - Essentials merge (URL de-duplication across buckets)
+
+    /// `wire-layout-essentials-dup-url`: merging buckets for shared display
+    /// de-duplicates by URL across buckets (first occurrence wins, default
+    /// first then stable key order) and preserves duplicates within a bucket.
+    func testEssentialsMergeDedupesUrlAcrossBuckets() {
+        for record in ContractFixtures.cases("wire-layout-essentials-dup-url") {
+            let caseId = record["id"] as? String ?? "?"
+            let input = record["input"] as! [String: Any]
+            let expect = record["expect"] as! [String: Any]
+            let buckets = input["buckets"] as! [String: [[String: Any]]]
+            let essentials = buckets.mapValues { entries in
+                entries.map {
+                    ZenTab(
+                        id: $0["id"] as! String,
+                        url: $0["url"] as! String,
+                        title: $0["title"] as! String
+                    )
+                }
+            }
+            let space = ZenSpace(id: "s", name: "s")
+            let snapshot = ZenSnapshot(spaces: [space], essentials: essentials, fetchedAt: .distantPast)
+            XCTAssertEqual(
+                expect["ids"] as? [String],
+                snapshot.essentials(for: space, grouping: .shared).map(\.id),
                 "case \(caseId)"
             )
         }

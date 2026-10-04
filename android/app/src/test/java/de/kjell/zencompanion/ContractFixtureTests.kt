@@ -55,7 +55,7 @@ class ContractFixtureTests {
     /** Every golden fixture must load with contract == 1 and id == basename. */
     @Test
     fun everyGoldenFixtureLoads() {
-        assertEquals(28, FixtureLoader.allFixtureNames.size)
+        assertEquals(29, FixtureLoader.allFixtureNames.size)
         for (name in FixtureLoader.allFixtureNames) {
             FixtureLoader.json(name)
             FixtureLoader.data(name)
@@ -225,6 +225,46 @@ class ContractFixtureTests {
                 "case '${case.getString("id")}'",
                 case.getJSONObject("expect").getString("normalTabsCapability"),
                 actual.name.lowercase(),
+            )
+        }
+    }
+
+    // MARK: Essentials merge (URL de-duplication across buckets)
+
+    /**
+     * `wire-layout-essentials-dup-url`: merging buckets for shared display
+     * de-duplicates by URL across buckets (first occurrence wins, default
+     * first then stable key order) and preserves duplicates within a bucket.
+     */
+    @Test
+    fun essentialsMergeDedupesUrlAcrossBuckets() {
+        val cases = FixtureLoader.cases("wire-layout-essentials-dup-url")
+        for (i in 0 until cases.length()) {
+            val case = cases.getJSONObject(i)
+            val buckets = case.getJSONObject("input").getJSONObject("buckets")
+            val essentials = buckets.keys().asSequence().associateWith { key ->
+                val arr = buckets.getJSONArray(key)
+                (0 until arr.length()).map { j ->
+                    val t = arr.getJSONObject(j)
+                    ZenSpaces.ZenTab(t.getString("id"), t.getString("url"), t.getString("title"))
+                }
+            }
+            val space = ZenSpaces.ZenSpace(
+                id = "s",
+                name = "s",
+                icon = null,
+                containerGuid = null,
+                theme = null,
+                pinned = emptyList(),
+            )
+            val snapshot = ZenSpaces.ZenSnapshot(listOf(space), essentials, 0L)
+            val expected = case.getJSONObject("expect").getJSONArray("ids").let { arr ->
+                (0 until arr.length()).map { arr.getString(it) }
+            }
+            assertEquals(
+                "case '${case.getString("id")}'",
+                expected,
+                snapshot.essentialsFor(space, ZenSpaces.EssentialsGrouping.SHARED).map { it.id },
             )
         }
     }

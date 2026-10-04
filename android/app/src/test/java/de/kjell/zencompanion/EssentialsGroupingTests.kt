@@ -129,6 +129,55 @@ class EssentialsGroupingTests {
         assertEquals(listOf("t1", "t2", "t3"), ids(snap.essentialsFor(space("s"))))
     }
 
+    // MARK: URL de-duplication across buckets
+
+    @Test
+    fun sharedMergeDeduplicatesSameUrlAcrossBuckets() {
+        val snap = snapshot(
+            spaces = listOf(space("s")),
+            essentials = mapOf(
+                "default" to listOf(ZenSpaces.ZenTab("t1", "https://dup.example/", "dup")),
+                "work" to listOf(ZenSpaces.ZenTab("t2", "https://dup.example/", "dup")),
+            ),
+        )
+        assertEquals(
+            "the first bucket wins; the per-container copy is dropped",
+            listOf("t1"),
+            ids(snap.essentialsFor(space("s"))),
+        )
+    }
+
+    @Test
+    fun sharedMergeKeepsSameUrlWithinOneBucket() {
+        val snap = snapshot(
+            spaces = listOf(space("s")),
+            essentials = mapOf(
+                "default" to listOf(
+                    ZenSpaces.ZenTab("t1", "https://dup.example/", "dup"),
+                    ZenSpaces.ZenTab("t2", "https://dup.example/", "dup"),
+                ),
+            ),
+        )
+        assertEquals(
+            "a genuine duplicate inside one bucket is real Zen data and stays visible",
+            listOf("t1", "t2"),
+            ids(snap.essentialsFor(space("s"))),
+        )
+    }
+
+    @Test
+    fun sharedMergeKeepsDistinctUrlsInBucketOrder() {
+        val snap = snapshot(
+            spaces = listOf(space("s")),
+            essentials = mapOf(
+                "work" to listOf(tab("w")),
+                "alpha" to listOf(tab("a")),
+                "default" to listOf(tab("d")),
+            ),
+        )
+        assertEquals(listOf("d", "a", "w"), ids(snap.essentialsFor(space("s"))))
+    }
+
     @Test
     fun containerSpaceReadsOnlyItsOwnBucket() {
         val snap = snapshot(

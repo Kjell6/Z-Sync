@@ -45,15 +45,11 @@ struct MiniBrowserView: View {
     /// Keyboard focus or the search-open first paint.
     private var addressEditing: Bool { isAddressFocused || startsInSearch }
 
-    /// The bar's bottom is the physical screen edge, so the keyboard lift is
-    /// the full overlap. While the keyboard is up, the home indicator is gone.
-    private var keyboardLift: CGFloat {
-        keyboardOverlap > 1 ? keyboardOverlap : 0
-    }
-
-    /// Padding under the buttons. The glass continues through it to the edge.
+    /// Space inside the glass, below the buttons.
+    /// While typing this is the keyboard height, so the glass runs under the
+    /// keys and the keyboard sits on that surface. The page stays above it.
     private var chromeContentBottomInset: CGFloat {
-        if keyboardOverlap > 1 { return 8 }
+        if keyboardOverlap > 1 { return keyboardOverlap + 8 }
         return safeBottom + 8
     }
 
@@ -111,14 +107,19 @@ struct MiniBrowserView: View {
                     onSubmit: submitAddress
                 )
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .background(sheetBackground.ignoresSafeArea())
-            .padding(.bottom, keyboardLift)
-            // The bar, not the page, fills the home-indicator area.
+            // The bar, not the page, fills the home-indicator area. Keyboard
+            // avoidance stays off: the glass grows down across the keyboard
+            // overlap so the keys sit on that glass.
             .ignoresSafeArea(edges: .bottom)
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
-                keyboardOverlap = Self.keyboardOverlap(from: note)
-            }
             .ignoresSafeArea(.keyboard)
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
+                let overlap = Self.keyboardOverlap(from: note)
+                withAnimation(Self.keyboardAnimation(from: note)) {
+                    keyboardOverlap = overlap
+                }
+            }
             .animation(
                 animateAddressChrome ? .spring(response: 0.35, dampingFraction: 0.85) : nil,
                 value: addressEditing
@@ -197,6 +198,22 @@ struct MiniBrowserView: View {
             ?? 0
         guard screenHeight > 0 else { return 0 }
         return max(0, screenHeight - frame.minY)
+    }
+
+    private static func keyboardAnimation(from note: Notification) -> Animation {
+        let duration = note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.25
+        let raw = note.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? Int
+            ?? UIView.AnimationCurve.easeInOut.rawValue
+        switch UIView.AnimationCurve(rawValue: raw) {
+        case .linear:
+            return .linear(duration: duration)
+        case .easeIn:
+            return .easeIn(duration: duration)
+        case .easeOut:
+            return .easeOut(duration: duration)
+        default:
+            return .easeInOut(duration: duration)
+        }
     }
 
 }

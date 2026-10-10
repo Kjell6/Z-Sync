@@ -32,6 +32,10 @@ struct MiniBrowserChrome: View {
     /// Same tile as the home action bar.
     private let tileRadius: CGFloat = 13
     private let controlSide: CGFloat = 44
+    /// Gap between the expanded sheet corner and the URL bar. The bar's top
+    /// radius is the sheet radius minus this, so the two curves share a center.
+    private let urlBarInset: CGFloat = 12
+    private let urlBarBottomRadius: CGFloat = 16
 
     private var motion: Animation {
         reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.38, dampingFraction: 0.86)
@@ -275,8 +279,8 @@ struct MiniBrowserChrome: View {
     private var expandedContent: some View {
         VStack(spacing: 0) {
             urlPill
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
+                .padding(.horizontal, urlBarInset)
+                .padding(.top, urlBarInset)
                 .padding(.bottom, 4)
 
             VStack(spacing: 0) {
@@ -296,8 +300,51 @@ struct MiniBrowserChrome: View {
         }
     }
 
-    /// Long pill inside the card: back and forward on the leading side, the
+    /// Top radius of the URL bar, concentric with the sheet's top corners.
+    private var urlBarTopRadius: CGFloat {
+        max(tileRadius, displayCornerRadius - urlBarInset)
+    }
+
+    /// How far the controls sit inside the bar so they clear its corner curve.
+    private var urlBarContentInset: CGFloat {
+        let topSpace = (urlBarHeight - controlSide) / 2
+        return max(12, curveInset(radius: urlBarTopRadius, distanceFromEdge: topSpace) + 6)
+    }
+
+    /// Tall enough that the top radius is actually drawn, not clamped into a capsule.
+    private var urlBarHeight: CGFloat {
+        let top = distanceAlongCurve(radius: urlBarTopRadius, inset: 8)
+        let bottom = distanceAlongCurve(radius: urlBarBottomRadius, inset: 4)
+        return max(controlSide, top + controlSide + bottom)
+    }
+
+    private var urlBarShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: urlBarTopRadius,
+            bottomLeadingRadius: urlBarBottomRadius,
+            bottomTrailingRadius: urlBarBottomRadius,
+            topTrailingRadius: urlBarTopRadius,
+            style: .continuous
+        )
+    }
+
+    /// Horizontal inset of a continuous corner at `distanceFromEdge` from that edge.
+    private func curveInset(radius: CGFloat, distanceFromEdge: CGFloat) -> CGFloat {
+        guard radius > 1, distanceFromEdge < radius else { return 0 }
+        let along = radius - distanceFromEdge
+        return radius - sqrt(max(0, radius * radius - along * along))
+    }
+
+    /// Distance from the edge at which the corner's horizontal inset has fallen to `inset`.
+    private func distanceAlongCurve(radius: CGFloat, inset: CGFloat) -> CGFloat {
+        guard radius > inset, inset > 0 else { return 0 }
+        let remaining = radius - inset
+        return radius - sqrt(max(0, radius * radius - remaining * remaining))
+    }
+
+    /// Long bar inside the sheet: back and forward on the leading side, the
     /// URL in the middle, reload on the trailing side. No page title.
+    /// Top corners follow the sheet radius; the controls sit below that curve.
     private var urlPill: some View {
         HStack(spacing: 0) {
             pillButton(
@@ -346,20 +393,23 @@ struct MiniBrowserChrome: View {
                 }
             }
         }
-        .padding(.horizontal, 4)
+        .padding(.horizontal, urlBarContentInset)
         .frame(height: controlSide)
-        .background(
-            Palette.lift(scheme),
-            in: RoundedRectangle(cornerRadius: tileRadius, style: .continuous)
-        )
+        .frame(maxWidth: .infinity)
+        .frame(height: urlBarHeight)
+        .background(Palette.lift(scheme), in: urlBarShape)
         .overlay(alignment: .bottom) {
             if model.isLoading {
                 progressBar
-                    .padding(.horizontal, 22)
+                    .padding(.horizontal, urlBarContentInset + 8)
                     .padding(.bottom, 1)
             }
         }
-        .glassRim(cornerRadius: tileRadius)
+        .overlay {
+            urlBarShape
+                .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
+                .allowsHitTesting(false)
+        }
     }
 
     /// Host, plus the path when the page is not the site root.

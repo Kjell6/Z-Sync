@@ -233,6 +233,24 @@ class AppViewModelTests {
         assertNull(browser.lastSpace)
     }
 
+    @Test
+    fun renameTabAppliesOptimisticallyAndForwardsRawLabel() = runTest(mainDispatcherRule.testDispatcher) {
+        val browser = FakeBrowserRepository(snapshot = snapshotWithPinnedTab())
+        val vm = newViewModel(browser = browser)
+        vm.completeSignIn(snapshot())
+        advanceUntilIdle()
+
+        vm.renameTab("tab-1", "  Work  ")
+
+        // Visible name updates synchronously, before the write is confirmed.
+        val tab = vm.browser.value.snapshot.spaces.first().pinned
+            .filterIsInstance<ZenSpaces.ZenItem.Tab>().first().tab
+        assertEquals("Work", tab.staticLabel)
+
+        runCurrent()
+        assertEquals("tab-1" to "  Work  ", browser.renamed.single())
+    }
+
     private fun snapshotWithPinnedTab(): ZenSpaces.ZenSnapshot {
         val tab = ZenSpaces.ZenTab(id = "tab-1", url = "https://example.com", title = "Example")
         val space = ZenSpaces.ZenSpace(
@@ -403,6 +421,7 @@ private class FakeBrowserRepository(
 
     val added = mutableListOf<AddedTab>()
     val deleted = mutableListOf<String>()
+    val renamed = mutableListOf<Pair<String, String>>()
     var lastSpace: String? = null
     var refreshGate: CompletableDeferred<Unit>? = null
     var refreshCalls = 0
@@ -436,6 +455,10 @@ private class FakeBrowserRepository(
 
     override suspend fun deleteTab(id: String) {
         deleted += id
+    }
+
+    override suspend fun renameTab(id: String, label: String) {
+        renamed += id to label
     }
 
     override fun isDemo(): Boolean = demo

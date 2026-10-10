@@ -179,6 +179,7 @@ private final class FakeSessionSpaces: SpacesRepository {
     }
     func deleteCachedSnapshot() { cached = nil }
     func deleteTab(id: String) async throws {}
+    func renameTab(id: String, label: String) async throws {}
 }
 
 @MainActor

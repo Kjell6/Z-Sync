@@ -8,14 +8,17 @@ struct TabRow: View {
     var deletable: Bool
     var onOpen: () -> Void = {}
     var onDelete: () async -> Void = {}
+    var onRename: (String) async -> Void = { _ in }
 
     @State private var deleting = false
+    @State private var showingRename = false
+    @State private var renameDraft = ""
 
     var body: some View {
         Button(action: onOpen) {
             HStack(spacing: 12) {
                 ZenTabIcon(tab: tab, size: 28, scheme: scheme)
-                Text(displayTitle)
+                Text(tab.displayTitle)
                     .font(.system(size: 17, weight: .medium))
                     .foregroundStyle(Palette.ink(scheme))
                     .lineLimit(1)
@@ -28,21 +31,36 @@ struct TabRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .contextMenu(deletable ? ContextMenu {
-            Button(role: .destructive) {
-                Task { await remove() }
+        .contextMenu {
+            Button {
+                renameDraft = renameSeed
+                showingRename = true
             } label: {
-                Label(String(localized: "tabs.delete"), systemImage: "trash")
+                Label(String(localized: "tabs.rename"), systemImage: "pencil")
             }
-        } : nil)
+            if deletable {
+                Button(role: .destructive) {
+                    Task { await remove() }
+                } label: {
+                    Label(String(localized: "tabs.delete"), systemImage: "trash")
+                }
+            }
+        }
+        .alert(String(localized: "tabs.rename_title"), isPresented: $showingRename) {
+            TextField(String(localized: "tabs.rename_placeholder"), text: $renameDraft)
+            Button("common.cancel", role: .cancel) {}
+            Button("tabs.rename") {
+                let value = renameDraft
+                Task { await onRename(value) }
+            }
+        }
         .accessibilityHint(Text(tab.url))
     }
 
-    private var displayTitle: String {
-        let raw = tab.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !raw.isEmpty { return raw }
-        let host = URL(string: tab.url)?.host ?? ""
-        return host.isEmpty ? tab.url : host
+    private var renameSeed: String {
+        let label = tab.staticLabel?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !label.isEmpty { return label }
+        return tab.title.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func remove() async {
@@ -63,7 +81,7 @@ struct SplitRow: View {
     @State private var deleting = false
 
     private var displayTitle: String {
-        split.tabs.isEmpty ? "" : TabTitle(tab: split.tabs[0]).text
+        split.tabs.isEmpty ? "" : split.tabs[0].displayTitle
     }
 
     var body: some View {
@@ -99,7 +117,7 @@ struct SplitRow: View {
     }
 
     private var accessibilitySummary: String {
-        let names = split.tabs.map { $0.title.isEmpty ? $0.url : $0.title }.joined(separator: ", ")
+        let names = split.tabs.map(\.displayTitle).joined(separator: ", ")
         return names.isEmpty ? displayTitle : names
     }
 
@@ -123,7 +141,7 @@ private struct SplitCell: View {
             HStack(spacing: 12) {
                 ZenTabIcon(tab: tab, size: 28, scheme: scheme)
                 FadeOutTitle(
-                    text: TabTitle(tab: tab).text,
+                    text: tab.displayTitle,
                     scheme: scheme,
                     font: .system(size: 17, weight: .medium)
                 )
@@ -132,7 +150,7 @@ private struct SplitCell: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(Text(TabTitle(tab: tab).text))
+        .accessibilityLabel(Text(tab.displayTitle))
         .accessibilityHint(Text(tab.url))
     }
 }
@@ -154,17 +172,4 @@ private struct FadeOutTitle: View {
     }
 }
 
-/// Title text helper shared by rows and split cells (mirrors `TabRow.displayTitle`).
-private struct TabTitle {
-    let text: String
 
-    init(tab: ZenTab) {
-        let raw = tab.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !raw.isEmpty {
-            text = raw
-        } else {
-            let host = URL(string: tab.url)?.host ?? ""
-            text = host.isEmpty ? tab.url : host
-        }
-    }
-}

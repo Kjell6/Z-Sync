@@ -430,6 +430,58 @@ class ConflictSafeSyncTests {
         assertEquals(listOf("m1", "m2", "external", "external-2"), server.children("space-1"))
     }
 
+    // MARK: renameTab
+
+    @Test
+    fun renameWritesStaticLabelInOnePost() {
+        val server = ConflictServer(keys, syncKeys)
+        server.seedTab("t1", "space-1")
+
+        runBlocking { SpacesSyncService.renameTab(client(server), id = "t1", label = "Work") }
+
+        val posts = server.requests.filter { it.method == "POST" }
+        assertEquals(1, posts.size)
+        assertTrue(server.requests.none { it.method == "PUT" })
+        val batch = server.batch(posts.single())
+        assertEquals(listOf("t1"), batch.map { it.getString("id") })
+        val data = batch.single().getJSONObject("data")
+        assertEquals("Work", data.getString("staticLabel"))
+        assertEquals("t1", data.getString("title"))
+    }
+
+    @Test
+    fun renameEmptyClearsStaticLabel() {
+        val server = ConflictServer(keys, syncKeys)
+        server.seedTab("t1", "space-1", staticLabel = "Work")
+
+        runBlocking { SpacesSyncService.renameTab(client(server), id = "t1", label = "   ") }
+
+        val data = server.batch(server.requests.single { it.method == "POST" }).single().getJSONObject("data")
+        assertTrue(data.isNull("staticLabel"))
+        assertEquals("t1", data.getString("title"))
+    }
+
+    @Test
+    fun renameRetriesAfter412PreservingConcurrentTitle() {
+        val server = ConflictServer(keys, syncKeys)
+        server.seedTab("t1", "space-1")
+        var desktopWrote = false
+        server.onBeforeRequest = { request ->
+            if (!desktopWrote && request.method == "POST") {
+                desktopWrote = true
+                server.desktopSetTabTitle("t1", "Other")
+            }
+        }
+
+        runBlocking { SpacesSyncService.renameTab(client(server), id = "t1", label = "Work") }
+
+        val posts = server.requests.filter { it.method == "POST" }
+        assertEquals(2, posts.size)
+        val retry = server.batch(posts[1]).single().getJSONObject("data")
+        assertEquals("Work", retry.getString("staticLabel"))
+        assertEquals("Other", retry.getString("title"))
+    }
+
     // MARK: Crypto/keys bootstrap
 
     @Test
@@ -681,20 +733,19 @@ private class ConflictServer(
         )
     }
 
-    fun seedTab(id: String, spaceId: String) {
+    fun seedTab(id: String, spaceId: String, staticLabel: String? = null) {
+        val data = JSONObject()
+            .put("tabId", id)
+            .put("url", "https://tab.example/$id")
+            .put("title", id)
+            .put("workspaceUuid", spaceId)
+        if (staticLabel != null) data.put("staticLabel", staticLabel)
         putRecord(
             id,
             JSONObject()
                 .put("id", id)
                 .put("kind", "tab")
-                .put(
-                    "data",
-                    JSONObject()
-                        .put("tabId", id)
-                        .put("url", "https://tab.example/$id")
-                        .put("title", id)
-                        .put("workspaceUuid", spaceId),
-                ),
+                .put("data", data),
         )
     }
 
@@ -761,6 +812,11 @@ private class ConflictServer(
                         .put("pinned", false),
                 ),
         )
+    }
+
+    fun desktopSetTabTitle(id: String, title: String) {
+        records.getValue(id).getJSONObject("data").put("title", title)
+        bump()
     }
 
     /** Simulates the desktop writer appending a tab to a space. */

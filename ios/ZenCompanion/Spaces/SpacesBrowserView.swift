@@ -157,6 +157,9 @@ struct SpacesBrowserView: View {
                                             },
                                             onDeleteTab: { id in
                                                 await model.deleteTab(id: id)
+                                            },
+                                            onRenameTab: { id, label in
+                                                await model.renameTab(id: id, label: label)
                                             }
                                         )
                                         .frame(width: width, height: height)
@@ -379,7 +382,7 @@ struct SpacesBrowserView: View {
         }
         activeSheet = .browser(BrowserTabSession(
             url: url,
-            initialTitle: tab.title,
+            initialTitle: tab.displayTitle,
             space: space
         ))
     }
@@ -440,6 +443,7 @@ struct FolderBlock: View {
     let scheme: ColorScheme
     var onOpenTab: (ZenTab) -> Void = { _ in }
     var onDeleteTab: (String) async -> Void = { _ in }
+    var onRenameTab: (String, String) async -> Void = { _, _ in }
     /// True when rendered inside another folder's expanded content. The
     /// parent already applies the level indent via `.padding(.leading, 20)`,
     /// so a nested block must not add its own horizontal padding — otherwise
@@ -478,7 +482,8 @@ struct FolderBlock: View {
                         scheme: scheme,
                         deletable: true,
                         onOpen: { onOpenTab(tab) },
-                        onDelete: { await onDeleteTab(tab.id) }
+                        onDelete: { await onDeleteTab(tab.id) },
+                        onRename: { label in await onRenameTab(tab.id, label) }
                     )
                     .padding(.leading, 20)
                     .transition(.opacity.combined(with: .move(edge: .top)))
@@ -489,6 +494,7 @@ struct FolderBlock: View {
                         scheme: scheme,
                         onOpenTab: onOpenTab,
                         onDeleteTab: onDeleteTab,
+                        onRenameTab: onRenameTab,
                         isNested: true
                     )
                     .padding(.leading, 20)

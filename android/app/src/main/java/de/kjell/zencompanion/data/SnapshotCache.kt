@@ -129,6 +129,11 @@ object SnapshotCache {
         cache(SpacesSyncCacheOps.removeTab(current, tabId, fetchedAtMillis))
     }
 
+    fun renameCachedTab(tabId: String, staticLabel: String?, fetchedAtMillis: Long) {
+        val current = cachedSnapshotShared ?: return
+        cache(SpacesSyncCacheOps.renameTab(current, tabId, staticLabel, fetchedAtMillis))
+    }
+
     fun expandCachedSplit(splitId: String, fetchedAtMillis: Long) {
         val current = cachedSnapshotShared ?: return
         cache(SpacesSyncCacheOps.expandSplit(current, splitId, fetchedAtMillis))
@@ -227,6 +232,53 @@ internal object SpacesSyncCacheOps {
         }
         return false
     }
+
+    fun renameTab(
+        snapshot: ZenSpaces.ZenSnapshot,
+        tabId: String,
+        staticLabel: String?,
+        fetchedAtMillis: Long,
+    ): ZenSpaces.ZenSnapshot = snapshot.copy(
+        spaces = snapshot.spaces.map { space ->
+            space.copy(
+                pinned = renameInItems(space.pinned, tabId, staticLabel),
+                tabs = renameInItems(space.tabs, tabId, staticLabel),
+            )
+        },
+        essentials = snapshot.essentials.mapValues { (_, tabs) ->
+            tabs.map { renameOne(it, tabId, staticLabel) }
+        },
+        fetchedAtMillis = fetchedAtMillis,
+    )
+
+    private fun renameInItems(
+        items: List<ZenSpaces.ZenItem>,
+        tabId: String,
+        staticLabel: String?,
+    ): List<ZenSpaces.ZenItem> = items.map { item ->
+        when (item) {
+            is ZenSpaces.ZenItem.Tab ->
+                ZenSpaces.ZenItem.Tab(renameOne(item.tab, tabId, staticLabel))
+            is ZenSpaces.ZenItem.Folder ->
+                ZenSpaces.ZenItem.Folder(renameInFolder(item.folder, tabId, staticLabel))
+            is ZenSpaces.ZenItem.Split ->
+                ZenSpaces.ZenItem.Split(
+                    item.split.copy(tabs = item.split.tabs.map { renameOne(it, tabId, staticLabel) }),
+                )
+        }
+    }
+
+    private fun renameInFolder(
+        folder: ZenSpaces.ZenFolder,
+        tabId: String,
+        staticLabel: String?,
+    ): ZenSpaces.ZenFolder = folder.copy(
+        tabs = folder.tabs.map { renameOne(it, tabId, staticLabel) },
+        subfolders = folder.subfolders?.map { renameInFolder(it, tabId, staticLabel) },
+    )
+
+    private fun renameOne(tab: ZenSpaces.ZenTab, tabId: String, staticLabel: String?): ZenSpaces.ZenTab =
+        if (tab.id == tabId) tab.copy(staticLabel = staticLabel) else tab
 
     fun removeTab(
         snapshot: ZenSpaces.ZenSnapshot,

@@ -1,6 +1,5 @@
 package de.kjell.zencompanion.ui.components
 
-import android.net.Uri
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -17,13 +16,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,11 +50,12 @@ import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.sync.ZenSpaces
 
-internal fun displayTitle(tab: ZenSpaces.ZenTab): String {
-    val raw = tab.title.trim()
-    if (raw.isNotEmpty()) return raw
-    val host = runCatching { Uri.parse(tab.url).host }.getOrNull() ?: ""
-    return host.ifEmpty { tab.url }
+internal fun displayTitle(tab: ZenSpaces.ZenTab): String = tab.displayTitle
+
+internal fun renameSeed(tab: ZenSpaces.ZenTab): String {
+    val label = tab.staticLabel?.trim().orEmpty()
+    if (label.isNotEmpty()) return label
+    return tab.title.trim()
 }
 
 /**
@@ -151,7 +155,7 @@ private fun SplitCell(
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier.clickable { onOpenUrl(tab.url, tab.title) },
+        modifier = modifier.clickable { onOpenUrl(tab.url, tab.displayTitle) },
     ) {
         ZenTabIcon(tab = tab, size = 28.dp)
 
@@ -221,11 +225,14 @@ fun TabRow(
     modifier: Modifier = Modifier,
     deleting: Boolean = false,
     onDelete: () -> Unit = {},
+    onRename: (String) -> Unit = {},
     onOpenUrl: ((String, String?) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     var menuOpen by remember { mutableStateOf(false) }
+    var showRename by remember { mutableStateOf(false) }
     val deleteText = stringResource(R.string.tabs_delete)
+    val renameText = stringResource(R.string.tabs_rename)
     val titleText = displayTitle(tab)
 
     Surface(
@@ -237,16 +244,17 @@ fun TabRow(
             .combinedClickable(
                 onClick = {
                     if (onOpenUrl != null) {
-                        onOpenUrl(tab.url, tab.title)
+                        onOpenUrl(tab.url, tab.displayTitle)
                     } else {
                         openURLExternally(context, tab.url)
                     }
                 },
-                onLongClick = if (deletable) ({ menuOpen = true }) else null,
+                onLongClick = { menuOpen = true },
             )
             .semantics {
-                if (deletable) {
-                    customActions = listOf(CustomAccessibilityAction(deleteText) { onDelete(); true })
+                customActions = buildList {
+                    add(CustomAccessibilityAction(renameText) { showRename = true; true })
+                    if (deletable) add(CustomAccessibilityAction(deleteText) { onDelete(); true })
                 }
             },
     ) {
@@ -285,25 +293,90 @@ fun TabRow(
             DropdownMenuItem(
                 text = {
                     Text(
-                        deleteText,
-                        color = MaterialTheme.colorScheme.error,
+                        renameText,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                     )
                 },
                 leadingIcon = {
                     Icon(
-                        imageVector = Icons.Outlined.Delete,
+                        imageVector = Icons.Outlined.Edit,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(20.dp),
                     )
                 },
                 onClick = {
                     menuOpen = false
-                    onDelete()
+                    showRename = true
                 },
             )
+            if (deletable) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            deleteText,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.Delete,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    },
+                    onClick = {
+                        menuOpen = false
+                        onDelete()
+                    },
+                )
+            }
         }
     }
+
+    if (showRename) {
+        RenameTabDialog(
+            tab = tab,
+            onDismiss = { showRename = false },
+            onConfirm = { value ->
+                showRename = false
+                onRename(value)
+            },
+        )
+    }
+}
+
+@Composable
+internal fun RenameTabDialog(
+    tab: ZenSpaces.ZenTab,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+) {
+    var draft by remember { mutableStateOf(renameSeed(tab)) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.tabs_rename_title)) },
+        text = {
+            OutlinedTextField(
+                value = draft,
+                onValueChange = { draft = it },
+                placeholder = { Text(stringResource(R.string.tabs_rename_placeholder)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(draft) }) {
+                Text(stringResource(R.string.tabs_rename))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_cancel))
+            }
+        },
+    )
 }

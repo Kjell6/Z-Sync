@@ -93,10 +93,12 @@ extension View {
         )
         if #available(iOS 26.0, *) {
             self
+                .contentShape(shape)
                 .clipShape(shape)
                 .glassEffect(.regular, in: shape)
         } else {
             self
+                .contentShape(shape)
                 .background(.ultraThinMaterial, in: shape)
                 .clipShape(shape)
                 .overlay(

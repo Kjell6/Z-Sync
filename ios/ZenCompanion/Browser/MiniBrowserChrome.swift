@@ -2,12 +2,12 @@ import SwiftUI
 
 /// Bottom browser chrome. The page ends where this bar begins.
 ///
-/// Android port (`MiniBrowserChrome` / `MiniBrowserFooter`): one bottom strip,
-/// not separate floating pieces and not an overlay on the page. Collapsed, the
-/// strip is cut off by the screen edges. Expanded, and while typing, it keeps
-/// that full width and the screen bottom. Those two are short, so their top
-/// corners stay well under the display radius. Buttons match the home action
-/// bar: `Palette.lift`, 13pt continuous corners.
+/// Android port (`MiniBrowserChrome` / `MiniBrowserFooter`): one bottom strip.
+/// Collapsed, the page ends where the strip begins. Expanded, and while
+/// typing, the strip draws over the page and keeps the screen bottom, so the
+/// page does not move. While typing the glass continues behind the keyboard.
+/// Those sheets are short, so their top corners stay under the display radius.
+/// Buttons match the home action bar: `Palette.lift`, 13pt continuous corners.
 /// The material behind them is one untinted glass surface.
 struct MiniBrowserChrome: View {
     var model: MiniBrowserModel
@@ -71,6 +71,9 @@ struct MiniBrowserChrome: View {
             }
         }
         .frame(maxWidth: .infinity)
+        // Hug the controls. A flexible height here becomes a full-screen hit
+        // target once the menu has opened, and taps stop reaching the page.
+        .fixedSize(horizontal: false, vertical: true)
         .liquidGlassBar(topRadius: roundsSheetTop ? sheetTopRadius : 0)
         .overlay(alignment: .top) {
             if !roundsSheetTop {
@@ -300,11 +303,6 @@ struct MiniBrowserChrome: View {
 
     private var expandedContent: some View {
         VStack(spacing: 0) {
-            urlPill
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
-                .padding(.bottom, 4)
-
             VStack(spacing: 0) {
                 copyRow
                 rowDivider
@@ -313,115 +311,13 @@ struct MiniBrowserChrome: View {
                 zoomRow
             }
             .padding(.horizontal, 8)
-            .padding(.top, 4)
+            .padding(.top, 18)
 
             actionRow
                 .padding(.horizontal, 20)
                 .padding(.top, 10)
                 .padding(.bottom, 16)
         }
-    }
-
-    /// Expanded URL bar. A pill, rounder than the 13pt tiles, so it sits
-    /// with the sheet's large corner without becoming a second shape.
-    private var urlPillRadius: CGFloat { controlSide / 2 }
-
-    /// Long pill: back and forward on the leading side, the URL in the
-    /// middle, reload on the trailing side. No page title.
-    private var urlPill: some View {
-        HStack(spacing: 0) {
-            pillButton(
-                systemName: "chevron.backward",
-                label: "browser.back",
-                enabled: model.canGoBack
-            ) {
-                model.goBack()
-            }
-            if MiniBrowserTools.showsForwardButton(
-                canGoForward: model.canGoForward,
-                addressEditing: false
-            ) {
-                pillButton(
-                    systemName: "chevron.forward",
-                    label: "browser.forward",
-                    enabled: true
-                ) {
-                    model.goForward()
-                }
-            }
-            HStack(spacing: 6) {
-                if model.effectiveURL?.scheme == "http" {
-                    Image(systemName: "lock.slash.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.orange)
-                        .accessibilityHidden(true)
-                }
-                Text(pillURL)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(maxWidth: .infinity)
-            }
-            .padding(.horizontal, 6)
-            pillButton(
-                systemName: model.isLoading ? "xmark" : "arrow.clockwise",
-                label: model.isLoading ? "browser.stop" : "browser.reload",
-                enabled: model.effectiveURL != nil
-            ) {
-                if model.isLoading {
-                    model.stopLoading()
-                } else {
-                    model.reload()
-                }
-            }
-        }
-        .padding(.horizontal, 4)
-        .frame(height: controlSide)
-        .frame(maxWidth: .infinity)
-        .background(
-            Palette.lift(scheme),
-            in: RoundedRectangle(cornerRadius: urlPillRadius, style: .continuous)
-        )
-        .overlay(alignment: .bottom) {
-            if model.isLoading {
-                progressBar
-                    .padding(.horizontal, 22)
-                    .padding(.bottom, 1)
-            }
-        }
-        .glassRim(cornerRadius: urlPillRadius)
-    }
-
-    /// Host, plus the path when the page is not the site root.
-    private var pillURL: String {
-        guard let url = model.effectiveURL else {
-            let typed = model.addressText.trimmingCharacters(in: .whitespacesAndNewlines)
-            return typed.isEmpty ? String(localized: "browser.search_placeholder") : typed
-        }
-        let host = url.host ?? url.absoluteString
-        let path = url.path
-        guard !path.isEmpty, path != "/" else { return host }
-        return host + path
-    }
-
-    private func pillButton(
-        systemName: String,
-        label: LocalizedStringKey,
-        enabled: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(Palette.ink(scheme).opacity(enabled ? 0.75 : 0.35))
-                .frame(width: 40, height: 40)
-                .contentShape(Rectangle())
-                .contentTransition(.symbolEffect(.replace))
-        }
-        .buttonStyle(SquircleButtonStyle())
-        .disabled(!enabled)
-        .accessibilityLabel(Text(label))
     }
 
     /// Bottom row, trailing edge first for the thumb: Pin sits on the right.

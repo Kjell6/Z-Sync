@@ -1,10 +1,10 @@
 import SwiftUI
 import WebKit
 
-/// In-app mini-browser. The page ends where the bottom bar begins. That bar is
-/// one glass strip, cut off by the screen edges. The open menu and the keyboard
-/// composer keep the full width and the screen bottom, with a top radius smaller
-/// than the display corner (`MiniBrowserChrome`).
+/// In-app mini-browser. Collapsed, the page ends where the bottom bar begins.
+/// The open menu and the keyboard composer draw over the page, so the page
+/// itself does not move. The keyboard composer keeps running down to the
+/// screen bottom, behind the keys (`MiniBrowserChrome`).
 struct MiniBrowserView: View {
     let initialURL: URL?
     let space: ZenSpace
@@ -45,12 +45,17 @@ struct MiniBrowserView: View {
     /// Keyboard focus or the search-open first paint.
     private var addressEditing: Bool { isAddressFocused || startsInSearch }
 
-    /// Space inside the glass, below the buttons. While typing, this is only the
-    /// air between the field and the keys. The composer stays one row tall.
+    /// Space inside the glass, below the controls. While typing this includes
+    /// the keyboard height, so the same glass continues behind the keys down
+    /// to the screen bottom. The field stays just above the keys.
     private var chromeContentBottomInset: CGFloat {
-        if keyboardOverlap > 1 { return 16 }
+        if keyboardOverlap > 1 { return keyboardOverlap + 16 }
         return safeBottom + 8
     }
+
+    /// Height of the collapsed bar. The page always reserves exactly this, so
+    /// opening the menu or the keyboard does not push the page up.
+    private var collapsedBarHeight: CGFloat { 10 + 44 + safeBottom + 8 }
 
     private var defaultBackground: Color {
         scheme == .dark ? Color(uiColor: .systemBackground) : Color.white
@@ -64,34 +69,44 @@ struct MiniBrowserView: View {
         @Bindable var model = model
 
         NavigationStack {
-            VStack(spacing: 0) {
-                ZStack(alignment: .bottom) {
-                    webPane
+            ZStack(alignment: .bottom) {
+                VStack(spacing: 0) {
+                    ZStack {
+                        webPane
 
-                    if model.menuExpanded {
-                        Color.clear
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
+                        if model.menuExpanded {
+                            // UIKit scrim, not a SwiftUI tap gesture. A SwiftUI
+                            // gesture left on top of the web view kept eating
+                            // touches after the menu closed.
+                            PageDismissScrim {
                                 withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
                                     model.collapseMenu()
                                 }
                             }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .accessibilityLabel(Text("browser.close_menu"))
                             .accessibilityAddTraits(.isButton)
+                        }
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                    if model.showPinBanner {
-                        pinBanner
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 8)
-                    } else if let notice = model.pinNotice {
-                        pinNoticeToast(notice)
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 8)
-                    }
+                    Color.clear
+                        .frame(height: collapsedBarHeight)
+                        .accessibilityHidden(true)
+                        .allowsHitTesting(false)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                if model.showPinBanner {
+                    pinBanner
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, collapsedBarHeight + 8)
+                        .frame(maxWidth: .infinity)
+                } else if let notice = model.pinNotice {
+                    pinNoticeToast(notice)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, collapsedBarHeight + 8)
+                        .frame(maxWidth: .infinity)
+                }
 
                 MiniBrowserChrome(
                     model: model,
@@ -105,20 +120,13 @@ struct MiniBrowserView: View {
                     onCancel: cancelAddressEditing,
                     onSubmit: submitAddress
                 )
+                .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .background(sheetBackground.ignoresSafeArea())
-            // Lift the whole bar onto the keyboard. The padding stays outside
-            // the background so the gap is only the keyboard, not a new color.
-            .padding(.bottom, keyboardOverlap > 1 ? keyboardOverlap : 0)
             .ignoresSafeArea(edges: .bottom)
             .ignoresSafeArea(.keyboard)
-            // Same cut on the sheet fill. Otherwise the page theme, or the
-            // plain white behind the page, shows through the keyboard.
-            .presentationBackground {
-                sheetBackground
-                    .padding(.bottom, keyboardOverlap > 1 ? keyboardOverlap : 0)
-            }
+            .presentationBackground(sheetBackground)
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
                 let overlap = Self.keyboardOverlap(from: note)
                 withAnimation(Self.keyboardAnimation(from: note)) {
@@ -135,7 +143,6 @@ struct MiniBrowserView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)
             .tint(Palette.ink(scheme))
-            .geometryGroup()
             .onAppear {
                 safeBottom = Self.windowSafeBottom()
                 displayCornerRadius = DisplayCornerRadius.points()
@@ -176,7 +183,8 @@ struct MiniBrowserView: View {
         MiniBrowserRepresentable(
             model: model,
             bottomBarVisible: false,
-            bottomChromeHeight: 0
+            bottomChromeHeight: 0,
+            acceptsPageTaps: !model.menuExpanded
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

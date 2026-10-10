@@ -96,12 +96,7 @@ struct MiniBrowserView: View {
                         .allowsHitTesting(false)
                 }
 
-                if model.showPinBanner {
-                    pinBanner
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, collapsedBarHeight + 8)
-                        .frame(maxWidth: .infinity)
-                } else if let notice = model.pinNotice {
+                if let notice = model.pinNotice {
                     pinNoticeToast(notice)
                         .padding(.horizontal, 20)
                         .padding(.bottom, collapsedBarHeight + 8)
@@ -137,7 +132,6 @@ struct MiniBrowserView: View {
                 animateAddressChrome ? .spring(response: 0.35, dampingFraction: 0.85) : nil,
                 value: addressEditing
             )
-            .animation(.spring(response: 0.38, dampingFraction: 0.86), value: model.showPinBanner)
             .animation(.spring(response: 0.38, dampingFraction: 0.86), value: model.pinNotice != nil)
             .animation(.easeInOut(duration: 0.25), value: model.themeColor)
             .navigationBarTitleDisplayMode(.inline)
@@ -157,6 +151,14 @@ struct MiniBrowserView: View {
             }
             .onChange(of: model.currentURL) { _, newURL in
                 model.currentURLDidChange(newURL, isAddressFocused: isAddressFocused)
+            }
+            .onChange(of: model.pinNotice) { _, notice in
+                // The refusal toast sits above the collapsed bar. An open
+                // sheet would cover it, so a notice closes the menu.
+                guard notice != nil, model.menuExpanded else { return }
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+                    model.collapseMenu()
+                }
             }
             .onChange(of: isAddressFocused) { _, focused in
                 if focused {
@@ -246,59 +248,6 @@ private extension MiniBrowserView {
             startsInSearch = false
         }
         model.submitAddress()
-    }
-
-    // MARK: - Pin Toast Banner View
-
-    @ViewBuilder
-    private var pinBanner: some View {
-        HStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Image(systemName: "pin.fill")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.primary)
-
-                Text(model.pinSaveKind == .pinned ? "browser.pinned" : "browser.saved_as_normal")
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-            }
-
-            Spacer(minLength: 14)
-
-            Rectangle()
-                .fill(Color.primary.opacity(0.16))
-                .frame(width: 1, height: 18)
-                .padding(.horizontal, 12)
-
-            PinDestinationMenuButton(
-                destination: model.pinnedDestination,
-                spaces: allSpaces,
-                scheme: scheme,
-                titleSize: 16,
-                allowsFolders: model.pinSaveKind == .pinned,
-                onSelect: { chosen in
-                    model.selectPinDestination(chosen)
-                },
-                onMenuWillOpen: {
-                    // Keep the banner alive while the picker is open.
-                    model.pinMenuWillOpen()
-                },
-                onMenuDidDismiss: {
-                    model.pinMenuDidDismiss()
-                }
-            )
-        }
-        .padding(.horizontal, 16)
-        .frame(height: 48)
-        .liquidGlassCapsule(
-            interactive: true,
-            glassVisible: !model.pinBannerGlassSuppressed
-        )
-        .floatingGlassShadow(scheme: scheme)
-        .transition(.asymmetric(
-            insertion: .move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.95)),
-            removal: .move(edge: .bottom).combined(with: .opacity)
-        ))
     }
 
     // MARK: - Pin Refusal Toast

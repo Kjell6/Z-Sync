@@ -82,8 +82,13 @@ extension View {
     /// Full-width bottom bar. Bottom corners stay square so the glass is cut
     /// off by the screen. `topRadius` is 0 while collapsed. The open menu and
     /// the keyboard composer pass a radius smaller than the display corner.
+    ///
+    /// `glassVisible == false` drops the glass layer. iOS 26 paints
+    /// `glassEffect` as an opaque white slab while a context menu is up, and
+    /// through the menu's close. The pin row uses that only until the save
+    /// confirmation goes away.
     @ViewBuilder
-    func liquidGlassBar(topRadius: CGFloat) -> some View {
+    func liquidGlassBar(topRadius: CGFloat, glassVisible: Bool = true) -> some View {
         let shape = UnevenRoundedRectangle(
             topLeadingRadius: topRadius,
             bottomLeadingRadius: 0,
@@ -94,11 +99,16 @@ extension View {
         if #available(iOS 26.0, *) {
             self
                 .background {
-                    // The glass plate must not take taps. On iOS 26 the effect
-                    // keeps a hit target the size of the open menu after it closes.
-                    Color.clear
-                        .glassEffect(.regular, in: shape)
-                        .allowsHitTesting(false)
+                    // The plate must not take taps. On iOS 26 the effect keeps
+                    // a hit target the size of the open menu after it closes.
+                    if glassVisible {
+                        Color.clear
+                            .glassEffect(.regular, in: shape)
+                            .allowsHitTesting(false)
+                    } else {
+                        shape.fill(.regularMaterial)
+                            .allowsHitTesting(false)
+                    }
                 }
                 .clipShape(shape)
         } else {

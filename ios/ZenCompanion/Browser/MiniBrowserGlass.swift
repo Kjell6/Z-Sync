@@ -41,6 +41,26 @@ extension View {
         }
     }
 
+    /// Untinted regular glass for the bottom browser card. One radius for the
+    /// collapsed bar and the expanded page menu, so the card reads as the same
+    /// surface while it grows. No tint: the sheet stays the system material.
+    @ViewBuilder
+    func liquidGlassCard(cornerRadius: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        if #available(iOS 26.0, *) {
+            self
+                .clipShape(shape)
+                .glassEffect(.regular, in: shape)
+        } else {
+            self
+                .background(.ultraThinMaterial, in: shape)
+                .clipShape(shape)
+                .overlay(
+                    shape.strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.6)
+                )
+        }
+    }
+
     @ViewBuilder
     func liquidGlassCircle() -> some View {
         if #available(iOS 26.0, *) {

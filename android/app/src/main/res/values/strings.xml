@@ -61,6 +61,9 @@
     <string name="tabs_folder">Folder</string>
     <string name="pin_folder_menu">Pin to Folder…</string>
     <string name="tabs_delete">Delete tab</string>
+    <string name="tabs_rename">Rename</string>
+    <string name="tabs_rename_title">Rename tab</string>
+    <string name="tabs_rename_placeholder">Tab name</string>
     <string name="tabs_unsplit">Unsplit tabs</string>
 
     <string name="activity_title">History</string>

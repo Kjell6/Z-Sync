@@ -1157,6 +1157,36 @@
         }
       }
     },
+    "tabs.rename" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rename"
+          }
+        }
+      }
+    },
+    "tabs.rename_placeholder" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tab name"
+          }
+        }
+      }
+    },
+    "tabs.rename_title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rename tab"
+          }
+        }
+      }
+    },
     "tabs.delete" : {
       "extractionState" : "stale",
       "localizations" : {

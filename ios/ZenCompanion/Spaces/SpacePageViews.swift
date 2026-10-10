@@ -16,6 +16,7 @@ struct SpacePageContainer: View {
     var onRefresh: () async -> Void = {}
     var onOpenTab: (ZenTab, ZenSpace) -> Void = { _, _ in }
     var onDeleteTab: (String) async -> Void = { _ in }
+    var onRenameTab: (String, String) async -> Void = { _, _ in }
 
     var body: some View {
         GeometryReader { pageGeo in
@@ -40,7 +41,8 @@ struct SpacePageContainer: View {
                     EssentialsGrid(
                         tabs: essentials,
                         scheme: scheme,
-                        onOpen: { tab in onOpenTab(tab, space) }
+                        onOpen: { tab in onOpenTab(tab, space) },
+                        onRenameTab: onRenameTab
                     )
                     .padding(.top, 8)
                     .padding(.bottom, 6)
@@ -53,7 +55,8 @@ struct SpacePageContainer: View {
                     scheme: scheme,
                     onRefresh: onRefresh,
                     onOpenTab: { tab in onOpenTab(tab, space) },
-                    onDeleteTab: onDeleteTab
+                    onDeleteTab: onDeleteTab,
+                    onRenameTab: onRenameTab
                 )
             }
             .frame(width: containerWidth)
@@ -70,6 +73,7 @@ private struct SpacePageView: View {
     let onRefresh: () async -> Void
     var onOpenTab: (ZenTab) -> Void = { _ in }
     var onDeleteTab: (String) async -> Void = { _ in }
+    var onRenameTab: (String, String) async -> Void = { _, _ in }
 
     @State private var containerHeight: CGFloat = 0
     @State private var contentHeight: CGFloat = 0
@@ -109,7 +113,8 @@ private struct SpacePageView: View {
                                     scheme: scheme,
                                     deletable: true,
                                     onOpen: { onOpenTab(tab) },
-                                    onDelete: { await onDeleteTab(tab.id) }
+                                    onDelete: { await onDeleteTab(tab.id) },
+                                    onRename: { label in await onRenameTab(tab.id, label) }
                                 )
                                 .padding(.horizontal, 20)
                             case .folder(let folder):
@@ -117,7 +122,8 @@ private struct SpacePageView: View {
                                     folder: folder,
                                     scheme: scheme,
                                     onOpenTab: onOpenTab,
-                                    onDeleteTab: onDeleteTab
+                                    onDeleteTab: onDeleteTab,
+                                    onRenameTab: onRenameTab
                                 )
                             case .split(let split):
                                 SplitRow(
@@ -153,7 +159,8 @@ private struct SpacePageView: View {
                                         scheme: scheme,
                                         deletable: true,
                                         onOpen: { onOpenTab(tab) },
-                                        onDelete: { await onDeleteTab(tab.id) }
+                                        onDelete: { await onDeleteTab(tab.id) },
+                                        onRename: { label in await onRenameTab(tab.id, label) }
                                     )
                                     .padding(.horizontal, 20)
                                 case .split(let split):
@@ -169,7 +176,8 @@ private struct SpacePageView: View {
                                         folder: folder,
                                         scheme: scheme,
                                         onOpenTab: onOpenTab,
-                                        onDeleteTab: onDeleteTab
+                                        onDeleteTab: onDeleteTab,
+                                        onRenameTab: onRenameTab
                                     )
                                 }
                             }

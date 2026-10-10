@@ -18,12 +18,18 @@ final class ConflictSafeSyncTests: XCTestCase {
         SpacesSyncService.safeSyncEnabledOverride = nil
         SpacesSyncService.deleteCachedSnapshot()
         AppGroup.defaults.removeObject(forKey: "safeSyncEnabled")
+        // Account state is process-global (in-memory snapshot + injected
+        // stores). A preceding test can leave a demo/signed-in account behind,
+        // which would route later service calls down the demo path. Reset it
+        // so every test starts signed out.
+        AccountStore.clear()
     }
 
     override func tearDown() {
         SpacesSyncService.safeSyncEnabledOverride = nil
         SpacesSyncService.deleteCachedSnapshot()
         AppGroup.defaults.removeObject(forKey: "safeSyncEnabled")
+        AccountStore.clear()
         super.tearDown()
     }
 
@@ -829,6 +835,105 @@ final class ConflictSafeSyncTests: XCTestCase {
             "a demo normal save must land at the top of the open-tabs list"
         )
         XCTAssertFalse(cached.pinned.map(\.id).contains(outcome.recordId))
+    }
+
+    // MARK: - renameTab
+
+    func testRenameWritesStaticLabelInOnePost() async throws {
+        let server = MutableSyncServer()
+        try seed(server, id: "t1", kind: "tab", data: [
+            "tabId": "t1",
+            "url": "https://t1.example",
+            "title": "Page",
+        ])
+        let client = makeClient(transport: server)
+
+        try await SpacesSyncService.renameTab(client: client, id: "t1", label: "Work")
+
+        let posts = postRequests(server)
+        XCTAssertEqual(posts.count, 1, "rename must be a single conditional POST")
+        XCTAssertTrue(server.requests.filter { $0.method == "PUT" }.isEmpty)
+        let records = try postRecords(posts[0])
+        XCTAssertEqual(records.compactMap { $0["id"] as? String }, ["t1"])
+        let data = try recordData(bso(records, id: "t1"))
+        XCTAssertEqual(data["staticLabel"] as? String, "Work")
+        XCTAssertEqual(data["title"] as? String, "Page")
+        XCTAssertEqual(data["url"] as? String, "https://t1.example")
+    }
+
+    func testRenameEmptyClearsStaticLabel() async throws {
+        let server = MutableSyncServer()
+        try seed(server, id: "t1", kind: "tab", data: [
+            "tabId": "t1",
+            "url": "https://t1.example",
+            "title": "Page",
+            "staticLabel": "Work",
+        ])
+        let client = makeClient(transport: server)
+
+        try await SpacesSyncService.renameTab(client: client, id: "t1", label: "   ")
+
+        let data = try recordData(bso(try postRecords(postRequests(server)[0]), id: "t1"))
+        XCTAssertTrue(data["staticLabel"] is NSNull)
+        XCTAssertEqual(data["title"] as? String, "Page")
+    }
+
+    func testRenameRetriesAfter412PreservingConcurrentTitle() async throws {
+        let server = MutableSyncServer()
+        try seed(server, id: "t1", kind: "tab", data: [
+            "tabId": "t1",
+            "url": "https://t1.example",
+            "title": "Page",
+        ])
+        let keys = defaultKeys
+        var injected = false
+        server.beforeWrite = { request in
+            guard !injected, request.method == "POST" else { return }
+            injected = true
+            try? server.mutateCleartext(collection: "spaces", id: "t1", keys: keys) { obj in
+                var data = obj["data"] as? [String: Any] ?? [:]
+                data["title"] = "Other"
+                obj["data"] = data
+            }
+        }
+        let client = makeClient(transport: server)
+
+        try await SpacesSyncService.renameTab(client: client, id: "t1", label: "Work")
+
+        let posts = postRequests(server)
+        XCTAssertEqual(posts.count, 2)
+        let retry = try recordData(bso(try postRecords(posts[1]), id: "t1"))
+        XCTAssertEqual(retry["staticLabel"] as? String, "Work")
+        XCTAssertEqual(retry["title"] as? String, "Other")
+    }
+
+    func testRenameUpdatesCachedSnapshot() async throws {
+        let server = MutableSyncServer()
+        try seed(server, id: "t1", kind: "tab", data: [
+            "tabId": "t1",
+            "url": "https://t1.example",
+            "title": "Page",
+        ])
+        SpacesSyncService.cache(ZenSnapshot(
+            spaces: [
+                ZenSpace(
+                    id: "space-1",
+                    name: "Space",
+                    pinned: [.tab(ZenTab(id: "t1", url: "https://t1.example", title: "Page"))]
+                ),
+            ],
+            fetchedAt: Date(timeIntervalSince1970: 0)
+        ))
+        let client = makeClient(transport: server)
+
+        try await SpacesSyncService.renameTab(client: client, id: "t1", label: "Work")
+
+        let cached = try XCTUnwrap(SpacesSyncService.cachedSnapshot())
+        guard case .tab(let tab) = cached.spaces.first?.pinned.first else {
+            return XCTFail("expected cached tab")
+        }
+        XCTAssertEqual(tab.staticLabel, "Work")
+        XCTAssertEqual(tab.displayTitle, "Work")
     }
 
     // MARK: - Helpers

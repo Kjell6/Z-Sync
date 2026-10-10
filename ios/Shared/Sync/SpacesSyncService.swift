@@ -412,6 +412,11 @@ enum SpacesSyncService {
         )
     }
 
+    static func normalizedStaticLabel(_ raw: String?) -> String? {
+        let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     static func makeTab(_ record: ZenTabRecord) -> ZenTab? {
         let rawURL = record.url.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !rawURL.isEmpty, URL(string: rawURL)?.scheme != nil else { return nil }
@@ -421,7 +426,8 @@ enum SpacesSyncService {
             title: record.title ?? "",
             iconURL: nil,
             icon: record.icon,
-            hasStaticIcon: record.hasStaticIcon
+            hasStaticIcon: record.hasStaticIcon,
+            staticLabel: normalizedStaticLabel(record.staticLabel)
         )
     }
 
@@ -832,6 +838,91 @@ enum SpacesSyncService {
         }
 
         NotificationCenter.default.post(name: .zenCompanionSnapshotStale, object: nil)
+    }
+
+    /// Writes `staticLabel` on an existing tab record. Empty/whitespace
+    /// clears the custom name so the page title shows again.
+    static func renameTab(id: String, label: String) async throws {
+        let normalized = normalizedStaticLabel(label)
+        if AccountStore.isDemo {
+            if let cached = cachedSnapshot() {
+                cache(SpacesSyncEdits.renaming(id: id, staticLabel: normalized, in: cached))
+            }
+            NotificationCenter.default.post(name: .zenCompanionSnapshotStale, object: nil)
+            return
+        }
+        let client = try await AccountStore.connect()
+        try await renameTab(client: client, id: id, label: label)
+    }
+
+    static func renameTab(client: SyncClient, id: String, label: String) async throws {
+        let normalized = normalizedStaticLabel(label)
+        if safeSyncEnabled {
+            try await renameTabConflictSafe(client: client, id: id, label: normalized)
+        } else {
+            try await renameTabLegacy(client: client, id: id, label: normalized)
+        }
+        if let cached = cachedSnapshot() {
+            cache(SpacesSyncEdits.renaming(id: id, staticLabel: normalized, in: cached))
+        }
+        NotificationCenter.default.post(name: .zenCompanionSnapshotStale, object: nil)
+    }
+
+    /// Conflict-safe rename: one consistent read, then a conditional POST of
+    /// the tab record with only `staticLabel` changed. A 412 re-reads and
+    /// reapplies the label on the fresh record so concurrent field edits
+    /// survive; retry once.
+    private static func renameTabConflictSafe(
+        client: SyncClient,
+        id: String,
+        label: String?
+    ) async throws {
+        for attempt in 0..<2 {
+            let (records, lastModified) = try await client.getCollectionWithMetadata(collection: collection)
+            let incoming = await decryptedCleartexts(client: client, records: records)
+            guard let write = renameWrite(id: id, label: label, incoming: incoming) else {
+                throw SyncError.conflict
+            }
+            let outcome = try await client.postRecords(
+                collection: collection,
+                records: [write],
+                ifUnmodifiedSince: lastModified
+            )
+            switch outcome {
+            case .applied:
+                return
+            case .preconditionFailed:
+                if attempt == 1 { throw SyncError.conflict }
+            case .partialFailure:
+                throw SyncError.conflict
+            }
+        }
+        throw SyncError.conflict
+    }
+
+    private static func renameTabLegacy(
+        client: SyncClient,
+        id: String,
+        label: String?
+    ) async throws {
+        let incoming = try await decryptedCollection(client: client)
+        guard let write = renameWrite(id: id, label: label, incoming: incoming) else {
+            throw SyncError.conflict
+        }
+        try await client.putRecord(collection: collection, id: write.id, object: write.cleartext)
+    }
+
+    private static func renameWrite(
+        id: String,
+        label: String?,
+        incoming: [IncomingCleartext]
+    ) -> SyncWriteRecord? {
+        guard let rec = incoming.first(where: { $0.id == id }), rec.kind == "tab" else {
+            return nil
+        }
+        var data = rec.data
+        data["staticLabel"] = label ?? NSNull()
+        return rewrittenWrite(id: id, kind: "tab", data: data)
     }
 
     /// Conflict-safe delete: one consistent read and one atomic conditional
@@ -1331,6 +1422,54 @@ enum SpacesSyncService {
             }
             return [item]
         }
+    }
+
+    /// Local cache after renaming a tab: `staticLabel` is updated everywhere
+    /// the tab appears (pinned, normal, folder, split member, essentials).
+    static func renaming(id: String, staticLabel: String?, in snapshot: ZenSnapshot) -> ZenSnapshot {
+        var next = snapshot
+        next.spaces = next.spaces.map { space in
+            var copy = space
+            copy.pinned = renaming(id: id, staticLabel: staticLabel, in: copy.pinned)
+            copy.tabs = renaming(id: id, staticLabel: staticLabel, in: copy.tabs)
+            return copy
+        }
+        next.essentials = next.essentials.mapValues { tabs in
+            tabs.map { renaming($0, id: id, staticLabel: staticLabel) }
+        }
+        next.fetchedAt = Date()
+        return next
+    }
+
+    private static func renaming(id: String, staticLabel: String?, in items: [ZenItem]) -> [ZenItem] {
+        items.map { item in
+            switch item {
+            case .tab(let tab):
+                return .tab(renaming(tab, id: id, staticLabel: staticLabel))
+            case .split(let split):
+                return .split(ZenSplit(
+                    id: split.id,
+                    gridType: split.gridType,
+                    tabs: split.tabs.map { renaming($0, id: id, staticLabel: staticLabel) }
+                ))
+            case .folder(let folder):
+                return .folder(renaming(id: id, staticLabel: staticLabel, in: folder))
+            }
+        }
+    }
+
+    private static func renaming(id: String, staticLabel: String?, in folder: ZenFolder) -> ZenFolder {
+        var next = folder
+        next.tabs = next.tabs.map { renaming($0, id: id, staticLabel: staticLabel) }
+        next.subfolders = next.subfolders?.map { renaming(id: id, staticLabel: staticLabel, in: $0) }
+        return next
+    }
+
+    private static func renaming(_ tab: ZenTab, id: String, staticLabel: String?) -> ZenTab {
+        guard tab.id == id else { return tab }
+        var next = tab
+        next.staticLabel = staticLabel
+        return next
     }
 
     /// Local cache after deleting a tab (or collapsing a split that lost a member).

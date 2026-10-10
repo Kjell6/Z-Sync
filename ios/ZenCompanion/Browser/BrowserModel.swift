@@ -402,6 +402,17 @@ final class BrowserModel {
         try? await repository.deleteTab(id: id)
     }
 
+    func renameTab(id: String, label: String) async {
+        // Optimistic: apply the custom name to the on-screen snapshot right
+        // away, then confirm the write against the server. Without this the
+        // name only appeared after the conditional write *and* the follow-up
+        // full reload, which read as "the rename did not take". A failed write
+        // self-corrects on the next reload.
+        let normalized = SpacesSyncService.normalizedStaticLabel(label)
+        snapshot = SpacesSyncEdits.renaming(id: id, staticLabel: normalized, in: snapshot)
+        try? await repository.renameTab(id: id, label: label)
+    }
+
     private static func isCancellation(_ error: Error) -> Bool {
         if error is CancellationError { return true }
         if let urlError = error as? URLError, urlError.code == .cancelled { return true }

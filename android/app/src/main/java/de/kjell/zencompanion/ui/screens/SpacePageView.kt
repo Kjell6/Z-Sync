@@ -42,6 +42,7 @@ import de.kjell.zencompanion.ui.theme.ZenType
 internal fun SpacePageView(
     space: ZenSpaces.ZenSpace,
     onDeleteTab: (String) -> Unit,
+    onRenameTab: (String, String) -> Unit,
     onOpenUrl: (String, String?) -> Unit,
 ) {
     val fallbackName = stringResource(R.string.share_workspace)
@@ -95,6 +96,7 @@ internal fun SpacePageView(
                                 deletable = true,
                                 modifier = Modifier.padding(horizontal = 20.dp),
                                 onDelete = { onDeleteTab(item.id) },
+                                onRename = { label -> onRenameTab(item.tab.id, label) },
                                 onOpenUrl = onOpenUrl,
                             )
                         }
@@ -105,6 +107,7 @@ internal fun SpacePageView(
                             FolderBlock(
                                 folder = item.folder,
                                 onDeleteTab = onDeleteTab,
+                                onRenameTab = onRenameTab,
                                 onOpenUrl = onOpenUrl,
                                 modifier = Modifier.padding(horizontal = 20.dp),
                             )
@@ -148,6 +151,7 @@ internal fun SpacePageView(
                                     deletable = true,
                                     modifier = Modifier.padding(horizontal = 20.dp),
                                     onDelete = { onDeleteTab(item.id) },
+                                    onRename = { label -> onRenameTab(item.tab.id, label) },
                                     onOpenUrl = onOpenUrl,
                                 )
                             }
@@ -169,6 +173,7 @@ internal fun SpacePageView(
                                 FolderBlock(
                                     folder = item.folder,
                                     onDeleteTab = onDeleteTab,
+                                    onRenameTab = onRenameTab,
                                     onOpenUrl = onOpenUrl,
                                     modifier = Modifier.padding(horizontal = 20.dp),
                                 )

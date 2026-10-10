@@ -47,6 +47,7 @@ private val expandedIndent = 16.dp
 fun FolderBlock(
     folder: ZenSpaces.ZenFolder,
     onDeleteTab: (String) -> Unit,
+    onRenameTab: (String, String) -> Unit = { _, _ -> },
     onOpenUrl: ((String, String?) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -123,6 +124,7 @@ fun FolderBlock(
                         deletable = true,
                         modifier = Modifier.fillMaxWidth(),
                         onDelete = { onDeleteTab(tab.id) },
+                        onRename = { label -> onRenameTab(tab.id, label) },
                         onOpenUrl = onOpenUrl,
                     )
                 }
@@ -130,6 +132,7 @@ fun FolderBlock(
                     FolderBlock(
                         folder = subfolder,
                         onDeleteTab = onDeleteTab,
+                        onRenameTab = onRenameTab,
                         onOpenUrl = onOpenUrl,
                     )
                 }

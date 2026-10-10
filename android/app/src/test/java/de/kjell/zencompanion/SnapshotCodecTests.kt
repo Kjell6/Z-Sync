@@ -28,7 +28,7 @@ class SnapshotCodecTests {
                 lightness = null,
             ),
             pinned = listOf(
-                ZenSpaces.ZenItem.Tab(ZenSpaces.ZenTab(id = "t1", url = "https://a.de", title = "A")),
+                ZenSpaces.ZenItem.Tab(ZenSpaces.ZenTab(id = "t1", url = "https://a.de", title = "A", staticLabel = "Work")),
                 ZenSpaces.ZenItem.Folder(
                     ZenSpaces.ZenFolder(
                         id = "f1", name = "Docs", icon = null,
@@ -65,6 +65,9 @@ class SnapshotCodecTests {
         assertEquals("Specs", folder.subfolders?.single()?.name)
         assertEquals("t3", folder.subfolders?.single()?.tabs?.single()?.id)
         assertEquals(1, decoded.essentials["default"]?.size)
+        val decodedTab = decoded.spaces[0].pinned[0] as ZenSpaces.ZenItem.Tab
+        assertEquals("Work", decodedTab.tab.staticLabel)
+        assertEquals("Work", decodedTab.tab.displayTitle)
     }
 
     @Test

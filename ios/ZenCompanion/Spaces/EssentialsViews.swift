@@ -6,6 +6,7 @@ struct EssentialsGrid: View {
     let tabs: [ZenTab]
     let scheme: ColorScheme
     var onOpen: (ZenTab) -> Void = { _ in }
+    var onRenameTab: (String, String) async -> Void = { _, _ in }
 
     private var columnCount: Int {
         switch tabs.count {
@@ -34,7 +35,8 @@ struct EssentialsGrid: View {
                     tab: tab,
                     height: tileHeight,
                     scheme: scheme,
-                    onOpen: { onOpen(tab) }
+                    onOpen: { onOpen(tab) },
+                    onRename: { label in await onRenameTab(tab.id, label) }
                 )
             }
         }
@@ -47,6 +49,10 @@ private struct EssentialTile: View {
     let height: CGFloat
     let scheme: ColorScheme
     var onOpen: () -> Void = {}
+    var onRename: (String) async -> Void = { _ in }
+
+    @State private var showingRename = false
+    @State private var renameDraft = ""
 
     var body: some View {
         Button(action: onOpen) {
@@ -61,7 +67,24 @@ private struct EssentialTile: View {
             .contentShape(shape)
         }
         .buttonStyle(SquircleButtonStyle())
-        .accessibilityLabel(Text(tab.title.isEmpty ? tab.url : tab.title))
+        .contextMenu {
+            Button {
+                let label = tab.staticLabel?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                renameDraft = label.isEmpty ? tab.title.trimmingCharacters(in: .whitespacesAndNewlines) : label
+                showingRename = true
+            } label: {
+                Label(String(localized: "tabs.rename"), systemImage: "pencil")
+            }
+        }
+        .alert(String(localized: "tabs.rename_title"), isPresented: $showingRename) {
+            TextField(String(localized: "tabs.rename_placeholder"), text: $renameDraft)
+            Button("common.cancel", role: .cancel) {}
+            Button("tabs.rename") {
+                let value = renameDraft
+                Task { await onRename(value) }
+            }
+        }
+        .accessibilityLabel(Text(tab.displayTitle))
     }
 }
 

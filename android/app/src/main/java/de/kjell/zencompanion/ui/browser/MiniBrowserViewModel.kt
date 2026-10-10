@@ -11,6 +11,8 @@ import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.BrowserRepository
 import de.kjell.zencompanion.ui.components.PinDestination
 import de.kjell.zencompanion.ui.screens.formatBrowserInput
+import de.kjell.zencompanion.util.PageTitle
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -77,6 +79,12 @@ class MiniBrowserViewModel(
     private var hasPendingPinSave = false
 
     /**
+     * Live `document.title` from the WebView. The screen installs this.
+     * WebView's own title callback is often the URL.
+     */
+    var documentTitle: suspend () -> String? = { null }
+
+    /**
      * Re-arms the single per-screen instance for a new browser launch. The
      * screen keeps one ViewModel key (so launches no longer accumulate
      * ViewModels); a repeated launch key is a no-op so configuration changes
@@ -141,11 +149,15 @@ class MiniBrowserViewModel(
     }
 
     fun onCurrentUrlChange(url: String) {
-        _state.update { it.copy(currentUrl = url) }
+        _state.update { state ->
+            if (PageTitle.sameDocument(state.currentUrl, url)) state.copy(currentUrl = url)
+            else state.copy(currentUrl = url, currentTitle = "")
+        }
     }
 
     fun onCurrentTitleChange(title: String) {
-        _state.update { it.copy(currentTitle = title) }
+        val usable = PageTitle.usable(title, effectiveUrl()) ?: return
+        _state.update { it.copy(currentTitle = usable) }
     }
 
     fun onSiteThemeColorChange(color: Color?) {
@@ -259,10 +271,15 @@ class MiniBrowserViewModel(
         val urlToPin = effectiveUrl()
         if (urlToPin.isEmpty()) return
 
-        val titleToPin = _state.value.currentTitle.ifEmpty {
-            runCatching { Uri.parse(urlToPin).host }.getOrNull() ?: urlToPin
-        }
         viewModelScope.launch {
+            val live = try {
+                documentTitle()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
+            val titleToPin = PageTitle.headline(live ?: _state.value.currentTitle, urlToPin)
             runCatching {
                 val outcome = repository.addTab(
                     url = urlToPin,

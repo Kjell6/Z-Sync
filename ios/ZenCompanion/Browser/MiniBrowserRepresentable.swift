@@ -89,13 +89,13 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
 
             urlObservation = webView.observe(\.url, options: [.new]) { [weak self] wv, _ in
                 DispatchQueue.main.async {
-                    self?.model.currentURL = wv.url
+                    self?.model.updateCurrentURL(wv.url)
                 }
             }
 
             titleObservation = webView.observe(\.title, options: [.new]) { [weak self] wv, _ in
                 DispatchQueue.main.async {
-                    self?.model.pageTitle = wv.title ?? ""
+                    self?.model.adoptPageTitle(wv.title ?? "")
                 }
             }
 
@@ -131,8 +131,8 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             DispatchQueue.main.async {
                 self.model.isLoading = false
-                self.model.currentURL = webView.url
-                self.model.pageTitle = webView.title ?? ""
+                self.model.updateCurrentURL(webView.url)
+                self.model.adoptPageTitle(webView.title ?? "")
                 if #available(iOS 15.0, *) {
                     if let native = webView.themeColor {
                         self.model.themeColor = Color(uiColor: native)

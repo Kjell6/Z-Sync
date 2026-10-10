@@ -37,6 +37,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -58,7 +59,10 @@ import de.kjell.zencompanion.ui.BrowserRepository
 import de.kjell.zencompanion.ui.browser.MiniBrowserViewModel
 import de.kjell.zencompanion.ui.components.PinDestinationPicker
 import de.kjell.zencompanion.util.Haptics
+import de.kjell.zencompanion.util.PageTitle
+import kotlin.coroutines.resume
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 /** One ViewModel per screen; a launch key re-arms it instead of accumulating. */
 private const val MINI_BROWSER_VIEW_MODEL_KEY = "mini-browser"
@@ -103,6 +107,22 @@ fun MiniBrowserScreen(
 
     var webView by remember { mutableStateOf<WebView?>(null) }
     val focusRequester = remember { FocusRequester() }
+
+    SideEffect {
+        viewModel.documentTitle = documentTitle@{
+            val view = webView ?: return@documentTitle null
+            suspendCancellableCoroutine { continuation ->
+                view.post {
+                    if (!continuation.isActive) return@post
+                    view.evaluateJavascript(PageTitle.DOCUMENT_TITLE_SCRIPT) { raw ->
+                        if (continuation.isActive) {
+                            continuation.resume(PageTitle.pickJsPayload(raw, view.url))
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     DisposableEffect(Unit) {
         onDispose {

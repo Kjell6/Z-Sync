@@ -38,10 +38,10 @@ final class ShareViewController: UIViewController {
         extensionItems.flatMap { $0.attachments ?? [] }
     }
 
+    /// `attributedContentText` is the URL or a text selection, not the tab title.
     private var sharedPageTitle: String {
         for item in extensionItems {
             if let title = item.attributedTitle?.string, !title.isEmpty { return title }
-            if let title = item.attributedContentText?.string, !title.isEmpty { return title }
         }
         return ""
     }

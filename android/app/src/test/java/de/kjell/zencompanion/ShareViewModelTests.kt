@@ -147,6 +147,44 @@ class ShareViewModelTests {
     }
 
     @Test
+    fun saveReplacesUrlShapedTitleWithResolvedPageTitle() = runTest(mainDispatcherRule.testDispatcher) {
+        val space = testSpace("s1")
+        val repository = FakeShareRepository(
+            signedIn = true,
+            cached = ZenSpaces.ZenSnapshot(listOf(space)),
+            fresh = ZenSpaces.ZenSnapshot(listOf(space)),
+        )
+        val vm = ShareViewModel(
+            repository = repository,
+            initialUrl = "https://pin.example/page",
+            initialPageTitle = "https://pin.example/page/",
+            titleResolver = { _, _ -> "Pinned Page" },
+        )
+
+        assertEquals("Pinned Page", vm.state.value.pageTitle)
+        vm.save()
+        assertEquals("Pinned Page", repository.added.first().title)
+    }
+
+    @Test
+    fun saveFallsBackToHostWhenTheOnlyNameIsTheUrl() = runTest(mainDispatcherRule.testDispatcher) {
+        val space = testSpace("s1")
+        val repository = FakeShareRepository(
+            signedIn = true,
+            cached = ZenSpaces.ZenSnapshot(listOf(space)),
+            fresh = ZenSpaces.ZenSnapshot(listOf(space)),
+        )
+        val vm = ShareViewModel(
+            repository = repository,
+            initialUrl = "https://pin.example/page",
+            initialPageTitle = "https://pin.example/page",
+        )
+
+        vm.save()
+        assertEquals("pin.example", repository.added.first().title)
+    }
+
+    @Test
     fun saveWithNoSpacesFailsWithoutRepositoryWrite() = runTest(mainDispatcherRule.testDispatcher) {
         val repository = FakeShareRepository(
             signedIn = true,

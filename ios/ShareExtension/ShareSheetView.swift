@@ -22,7 +22,8 @@ struct ShareSheetView: View {
         self.cancel = cancel
         _model = State(initialValue: ShareModel(
             session: LiveShareSession(),
-            pageTitle: pageTitle
+            pageTitle: pageTitle,
+            titleResolver: { _, url in await PageTitleLoader.fetchTitle(for: url) }
         ))
     }
 
@@ -102,6 +103,7 @@ struct ShareSheetView: View {
             if model.url == nil, let found = await ShareItemLoader.firstHTTPURL(from: itemProviders) {
                 model.url = found
             }
+            await model.resolveSharedTitle()
             await warming
         }
     }

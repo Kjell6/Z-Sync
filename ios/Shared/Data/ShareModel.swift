@@ -102,13 +102,7 @@ enum ShareLink {
     }
 
     static func headlineTitle(pageTitle: String, url: URL?) -> String {
-        let raw = pageTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        let host = url?.host ?? ""
-        if !raw.isEmpty, raw != host, raw != url?.absoluteString {
-            return raw
-        }
-        if !host.isEmpty { return host }
-        return url?.absoluteString ?? "Tab"
+        PageTitle.headline(pageTitle, url: url)
     }
 }
 
@@ -157,18 +151,43 @@ final class ShareModel {
 
     private let session: ShareSessioning
     private let sleep: (Duration) async -> Void
+    private let titleResolver: @Sendable (String, URL) async -> String?
+    @ObservationIgnored private var resolveTask: Task<Void, Never>?
 
     init(
         session: ShareSessioning,
         pageTitle: String = "",
         url: URL? = nil,
-        sleep: @escaping (Duration) async -> Void = { try? await Task.sleep(for: $0) }
+        sleep: @escaping (Duration) async -> Void = { try? await Task.sleep(for: $0) },
+        titleResolver: @escaping @Sendable (String, URL) async -> String? = { _, _ in nil }
     ) {
         self.session = session
         self.pageTitle = pageTitle
         self.url = url
         self.sleep = sleep
+        self.titleResolver = titleResolver
         self.saveKind = session.saveKind()
+    }
+
+    /// Replaces a missing or URL-shaped name with the page's real title.
+    /// Safe to call more than once; a save waits for the in-flight lookup.
+    func resolveSharedTitle() async {
+        guard let url else { return }
+        guard PageTitle.usable(pageTitle, url: url) == nil else { return }
+        if let resolveTask {
+            await resolveTask.value
+            return
+        }
+        let task = Task { await resolveSharedTitleNow() }
+        resolveTask = task
+        await task.value
+    }
+
+    private func resolveSharedTitleNow() async {
+        guard let url, PageTitle.usable(pageTitle, url: url) == nil else { return }
+        guard let resolved = await titleResolver(pageTitle, url) else { return }
+        guard PageTitle.usable(pageTitle, url: url) == nil else { return }
+        pageTitle = resolved
     }
 
     func selectDestination(_ chosen: PinDestination) {
@@ -227,6 +246,7 @@ final class ShareModel {
         }
         guard let selected = selectedSpace else { return }
         phase = .saving
+        await resolveSharedTitle()
         let kind = saveKind
         let folderId = kind == .normal ? nil : destination.folderId
         do {

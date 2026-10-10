@@ -171,6 +171,52 @@ final class ShareModelTests: XCTestCase {
             ZenCompanion.ShareLink.headlineTitle(pageTitle: "", url: URL(string: "https://example.com/path")),
             "example.com"
         )
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.headlineTitle(pageTitle: "https://pin.example/page/", url: url),
+            "pin.example"
+        )
+    }
+
+    func testSaveReplacesUrlShapedTitleWithResolvedPageTitle() async {
+        let space = space("s1")
+        let session = FakeShareSession(
+            signedIn: true,
+            cached: snapshot([space]),
+            fresh: snapshot([space])
+        )
+        let model = ZenCompanion.ShareModel(
+            session: session,
+            pageTitle: "https://pin.example/page/",
+            url: URL(string: "https://pin.example/page"),
+            sleep: { _ in },
+            titleResolver: { _, _ in "Pinned Page" }
+        )
+        await model.resolveSharedTitle()
+        XCTAssertEqual(model.pageTitle, "Pinned Page")
+        XCTAssertEqual(model.headlineTitle, "Pinned Page")
+
+        await model.bootstrap()
+        await model.save()
+
+        XCTAssertEqual(session.added.first?.title, "Pinned Page")
+    }
+
+    func testSaveFallsBackToHostWhenTheOnlyNameIsTheUrl() async {
+        let space = space("s1")
+        let session = FakeShareSession(
+            signedIn: true,
+            cached: snapshot([space]),
+            fresh: snapshot([space])
+        )
+        let model = makeModel(
+            session: session,
+            url: URL(string: "https://pin.example/page"),
+            pageTitle: "https://pin.example/page"
+        )
+        await model.bootstrap()
+        await model.save()
+
+        XCTAssertEqual(session.added.first?.title, "pin.example")
     }
 
     func testSignedOutSkipsRefresh() async {

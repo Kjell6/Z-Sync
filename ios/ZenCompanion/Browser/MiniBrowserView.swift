@@ -1,16 +1,10 @@
 import SwiftUI
 import WebKit
 
-/// A clean, native iOS In-App Mini-Browser with genuine Liquid Glass material:
-/// - Minimalist Liquid Glass Address Pill (Height 48pt) with embedded progress bar
-/// - Round Liquid Glass "X" cancel button in focus mode
-/// - Native UIKit grouped ToolbarItemGroup (Back/Forward and Safari/Pin)
-/// - Pin button with instant tap (pin to current space) and long-press Menu without preview lift
-/// - Asynchronous background pinning with loading spinner and 2.5s auto-revert checkmark
-/// - Webview positioned strictly UNDER the pill (no content behind header, no progressive blur)
-/// - Entire Sheet adopts the adaptive website theme color
-/// - Real HTTPS vs Insecure (HTTP) security indicator
-/// - Edge-to-edge WKWebView with target="_blank" support
+/// In-app mini-browser. The page fills the sheet. Every control lives in one
+/// untinted Liquid Glass card along the bottom (`MiniBrowserChrome`): back,
+/// forward when there is a forward entry, the address field, and More.
+/// More unfolds that same card into the page menu.
 struct MiniBrowserView: View {
     let initialURL: URL?
     let space: ZenSpace
@@ -57,190 +51,26 @@ struct MiniBrowserView: View {
         @Bindable var model = model
 
         NavigationStack {
-            ZStack(alignment: .bottom) {
-                ZStack(alignment: .top) {
-                    // 1. Entire Sheet Background
-                    sheetBackground
-                        .ignoresSafeArea()
+            ZStack {
+                sheetBackground
+                    .ignoresSafeArea()
 
-                    // 2. Main Vertical Stack: Header on top, Web View full-bleed below
-                    VStack(spacing: 0) {
-                        // Top Header (Liquid Glass Address Pill)
-                        HStack(spacing: 10) {
-                            // Liquid Glass Address Pill
-                            HStack(spacing: 10) {
-                                // Security / Search Indicator
-                                securityIcon
-
-                                // Address & Search Text
-                                TextField("browser.search_placeholder", text: $model.addressText)
-                                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                    .textInputAutocapitalization(.never)
-                                    .autocorrectionDisabled()
-                                    .keyboardType(.webSearch)
-                                    .submitLabel(.go)
-                                    .multilineTextAlignment(addressEditing ? .leading : .center)
-                                    .focused($isAddressFocused)
-                                    .onSubmit {
-                                        submitAddress()
-                                    }
-                                    .frame(maxWidth: .infinity)
-
-                                // Stable Trailing Icon Container (Clear button when editing, Reload/Stop otherwise)
-                                ZStack {
-                                    if addressEditing && !model.addressText.isEmpty {
-                                        Button {
-                                            model.clearAddressText()
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .font(.system(size: 16))
-                                                .foregroundStyle(.secondary)
-                                                .frame(width: 36, height: 44)
-                                                .contentShape(Rectangle())
-                                        }
-                                        .buttonStyle(.plain)
-                                        .transition(.scale.combined(with: .opacity))
-                                    } else if !addressEditing {
-                                        Button {
-                                            if model.isLoading {
-                                                model.stopLoading()
-                                            } else {
-                                                model.reload()
-                                            }
-                                        } label: {
-                                            Image(systemName: model.isLoading ? "xmark" : "arrow.clockwise")
-                                                .font(.system(size: 16, weight: .semibold))
-                                                .foregroundStyle(.secondary)
-                                                .frame(width: 44, height: 44)
-                                                .contentShape(Rectangle())
-                                                .contentTransition(.symbolEffect(.replace))
-                                        }
-                                        .buttonStyle(.plain)
-                                        .transition(.scale.combined(with: .opacity))
-                                    }
-                                }
-                                .animation(
-                                    animateAddressChrome ? .spring(response: 0.25, dampingFraction: 0.85) : nil,
-                                    value: addressEditing
-                                )
-                                .animation(
-                                    animateAddressChrome ? .spring(response: 0.25, dampingFraction: 0.85) : nil,
-                                    value: model.addressText.isEmpty
-                                )
-                            }
-                            .padding(.leading, 14)
-                            .padding(.trailing, 4)
-                            .frame(height: 48)
-                            .frame(maxWidth: .infinity)
-                            .overlay(alignment: .bottom) {
-                                // Edge-to-edge progress bar strictly clipped inside the capsule
-                                if model.isLoading && !addressEditing {
-                                    GeometryReader { geo in
-                                        Rectangle()
-                                            .fill(Palette.coral(scheme))
-                                            .frame(width: geo.size.width * CGFloat(max(model.estimatedProgress, 0.05)), height: 2.5)
-                                            .animation(.linear(duration: 0.2), value: model.estimatedProgress)
-                                    }
-                                    .frame(height: 2.5)
-                                }
-                            }
-                            .clipShape(Capsule())
-                            .liquidGlassCapsule()
-
-                            // Round Liquid Glass Cancel "X" Button
-                            if addressEditing {
-                                Button {
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                                        if model.effectiveURL != nil {
-                                            isAddressFocused = false
-                                            startsInSearch = false
-                                        } else {
-                                            onDismiss()
-                                        }
-                                    }
-                                } label: {
-                                    Image(systemName: "xmark")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundStyle(Palette.coral(scheme))
-                                        .frame(width: 48, height: 48)
-                                        .liquidGlassCircle()
-                                }
-                                .buttonStyle(.plain)
-                                .transition(animateAddressChrome
-                                    ? .asymmetric(
-                                        insertion: .scale(scale: 0.8).combined(with: .opacity).combined(with: .move(edge: .trailing)),
-                                        removal: .scale(scale: 0.8).combined(with: .opacity).combined(with: .move(edge: .trailing))
-                                    )
-                                    : .identity
-                                )
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 16)
-                        .padding(.bottom, 12)
-                        .overlay(alignment: .bottom) {
-                            if #available(iOS 26.0, *) {
-                                EmptyView()
-                            } else {
-                                chromeStroke
-                            }
-                        }
-
-                        // iOS 26: full-bleed under glass; layout viewport is
-                        // shrunk via obscuredContentInsets. Older iOS: the
-                        // web view sits between the header and a full-width
-                        // bottom bar, separated by hairline strokes.
-                        webPane
-                    }
-                }
-
-                if model.showPinBanner {
-                    pinBanner
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 6)
-                } else if let notice = model.pinNotice {
-                    pinNoticeToast(notice)
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 6)
+                VStack(spacing: 0) {
+                    webPane
+                    bottomStack
                 }
             }
             .animation(
                 animateAddressChrome ? .spring(response: 0.35, dampingFraction: 0.85) : nil,
                 value: addressEditing
             )
+            .animation(.spring(response: 0.38, dampingFraction: 0.86), value: model.showPinBanner)
+            .animation(.spring(response: 0.38, dampingFraction: 0.86), value: model.pinNotice != nil)
             .animation(.easeInOut(duration: 0.25), value: model.themeColor)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)
-            .toolbar(addressEditing ? .hidden : .visible, for: .bottomBar)
-            .hiddenBottomScrollEdgeEffect()
-            .legacyBottomToolbarBackground(sheetBackground)
             .tint(Palette.ink(scheme))
-            .toolbar {
-                if #available(iOS 26.0, *) {
-                    ToolbarItemGroup(placement: .bottomBar) {
-                        ControlGroup {
-                            toolbarBackButton
-                            toolbarForwardButton
-                        }
-                        Spacer()
-                        ControlGroup {
-                            toolbarSafariButton
-                            toolbarPinButton
-                        }
-                    }
-                } else {
-                    ToolbarItemGroup(placement: .bottomBar) {
-                        toolbarBackButton
-                        toolbarForwardButton
-                        Spacer()
-                        toolbarSafariButton
-                        toolbarPinButton
-                    }
-                }
-            }
             .presentationBackground(sheetBackground)
-            // Keyboard must not re-layout the address bar; it stays glued to the sheet.
-            .ignoresSafeArea(.keyboard)
             .geometryGroup()
             .onAppear {
                 model.loadInitial()
@@ -256,7 +86,11 @@ struct MiniBrowserView: View {
                 model.currentURLDidChange(newURL, isAddressFocused: isAddressFocused)
             }
             .onChange(of: isAddressFocused) { _, focused in
-                if !focused { startsInSearch = false }
+                if focused {
+                    model.collapseMenu()
+                } else {
+                    startsInSearch = false
+                }
                 model.addressFocusDidChange(focused)
                 if focused && !model.addressText.isEmpty {
                     DispatchQueue.main.async {
@@ -271,108 +105,58 @@ struct MiniBrowserView: View {
         .geometryGroup()
     }
 
-    // MARK: - Security Indicator
-
-    private var securityIcon: some View {
-        ZStack {
-            // Non-focused Security Icon (Grey Lock / Insecure Warning / Globe)
-            Group {
-                if let url = model.currentURL {
-                    if url.scheme == "https" {
-                        Image(systemName: "lock.fill")
-                            .foregroundStyle(.secondary)
-                    } else if url.scheme == "http" {
-                        Image(systemName: "lock.slash.fill")
-                            .foregroundStyle(.orange)
-                    } else {
-                        Image(systemName: "globe")
-                            .foregroundStyle(.secondary)
-                    }
-                } else {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .opacity(addressEditing ? 0 : 1)
-            .scaleEffect(addressEditing ? 0.7 : 1.0)
-
-            // Focused Search Icon (Vibrant Coral Magnifying Glass)
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(Palette.coral(scheme))
-                .opacity(addressEditing ? 1 : 0)
-                .scaleEffect(addressEditing ? 1.0 : 0.7)
-        }
-        .font(.system(size: 15, weight: .semibold))
-        .frame(width: 20, height: 20)
-    }
-
-    // MARK: - Bottom chrome (iOS 26 glass ControlGroups vs native toolbar)
-
-    private var chromeStroke: some View {
-        Rectangle()
-            .fill(Palette.ink(scheme).opacity(0.12))
-            .frame(height: 0.5)
-            .frame(maxWidth: .infinity)
-    }
-
-    @ViewBuilder
+    /// Page, dimmed while the card is unfolded so the menu reads as a dialog.
+    /// The dimmer is not a tint on the glass.
     private var webPane: some View {
-        let representable = MiniBrowserRepresentable(
-            model: model,
-            // Overlay inset only for iOS 26 floating glass. On older iOS the
-            // native bottom bar already owns that space.
-            bottomBarVisible: {
-                if #available(iOS 26.0, *) { return !addressEditing }
-                return false
-            }()
-        )
-        if #available(iOS 26.0, *) {
-            representable.ignoresSafeArea(edges: .bottom)
-        } else {
-            representable
+        ZStack {
+            MiniBrowserRepresentable(model: model, bottomBarVisible: false)
+            if model.menuExpanded {
+                Color.black.opacity(scheme == .dark ? 0.32 : 0.14)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+                            model.collapseMenu()
+                        }
+                    }
+                    .accessibilityLabel(Text("browser.close_menu"))
+                    .accessibilityAddTraits(.isButton)
+            }
         }
     }
 
-    private var toolbarBackButton: some View {
-        Button {
-            model.goBack()
-        } label: {
-            Image(systemName: "chevron.backward")
+    private var bottomStack: some View {
+        VStack(spacing: 8) {
+            if model.showPinBanner {
+                pinBanner
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if let notice = model.pinNotice {
+                pinNoticeToast(notice)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            MiniBrowserChrome(
+                model: model,
+                addressEditing: addressEditing,
+                animateChrome: animateAddressChrome,
+                isAddressFocused: $isAddressFocused,
+                space: space,
+                allSpaces: allSpaces,
+                onCancel: cancelAddressEditing,
+                onSubmit: submitAddress
+            )
         }
-        .disabled(!model.canGoBack)
-        .accessibilityLabel(Text("browser.back"))
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
     }
 
-    private var toolbarForwardButton: some View {
-        Button {
-            model.goForward()
-        } label: {
-            Image(systemName: "chevron.forward")
+    private func cancelAddressEditing() {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            if model.effectiveURL != nil {
+                isAddressFocused = false
+                startsInSearch = false
+            } else {
+                onDismiss()
+            }
         }
-        .disabled(!model.canGoForward)
-        .accessibilityLabel(Text("browser.forward"))
-    }
-
-    private var toolbarSafariButton: some View {
-        Button {
-            model.openCurrentInExternalBrowser()
-        } label: {
-            Image(systemName: "safari")
-                .symbolRenderingMode(.monochrome)
-        }
-        .disabled(model.effectiveURL == nil)
-        .accessibilityLabel(Text("browser.open_in_browser"))
-    }
-
-    private var toolbarPinButton: some View {
-        Button {
-            model.triggerPinBanner(spaces: allSpaces, fallbackSpace: space)
-        } label: {
-            Image(systemName: "pin")
-                .symbolRenderingMode(.monochrome)
-        }
-        .disabled(model.effectiveURL == nil)
-        .accessibilityLabel(Text("browser.pin_to_space"))
     }
 
     private func submitAddress() {

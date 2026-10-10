@@ -68,6 +68,7 @@
 		498F3D4ABBE278BED660C9D4 /* SyncTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CA894BDBD81D2435A152AD0 /* SyncTransportTests.swift */; };
 		4BE39E942399255D3CD7CD91 /* FaviconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3EE1F1C68EC0EBC19D94349 /* FaviconView.swift */; };
 		4C2B4D57E6249A59DA7DEE93 /* MiniBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B9C27DE87E0085284EC33C1 /* MiniBrowserView.swift */; };
+		A7C31E90B4D25F6180E2C4B1 /* MiniBrowserChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8D42FA1C5E3607291F3D5C2 /* MiniBrowserChrome.swift */; };
 		4CD197E78621F20F7D7544A4 /* wire-split-basic.json in Resources */ = {isa = PBXBuildFile; fileRef = B4FD967BF8879332A570A9DB /* wire-split-basic.json */; };
 		4DB362A4286CC6A7F6B01FEE /* FaviconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3EE1F1C68EC0EBC19D94349 /* FaviconView.swift */; };
 		4F0FCBE2BAEC78D48F79B411 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 735001951819B5FAF5C17D4A /* Assets.xcassets */; };
@@ -253,6 +254,7 @@
 		39FFB0D55894F8331066AE50 /* http-get-500-hawk.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "http-get-500-hawk.json"; sourceTree = "<group>"; };
 		3A20C13D6D5652C863A07EEE /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		3AE92CB1C958DA9581C29AB6 /* MiniBrowserGlass.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniBrowserGlass.swift; sourceTree = "<group>"; };
+		B8D42FA1C5E3607291F3D5C2 /* MiniBrowserChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniBrowserChrome.swift; sourceTree = "<group>"; };
 		3B5ED845C6FEB068E5855189 /* EssentialsGroupingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EssentialsGroupingTests.swift; sourceTree = "<group>"; };
 		3CA894BDBD81D2435A152AD0 /* SyncTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncTransportTests.swift; sourceTree = "<group>"; };
 		3CCB1D59F3A6A8B4AED0A5F5 /* BrowserNavigationPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserNavigationPolicy.swift; sourceTree = "<group>"; };
@@ -455,6 +457,7 @@
 				A006678CAB750D920916FD35 /* BrowserModel.swift */,
 				3CCB1D59F3A6A8B4AED0A5F5 /* BrowserNavigationPolicy.swift */,
 				066DB7F2F4C4D3C0593A0A44 /* ExternalBrowser.swift */,
+				B8D42FA1C5E3607291F3D5C2 /* MiniBrowserChrome.swift */,
 				3AE92CB1C958DA9581C29AB6 /* MiniBrowserGlass.swift */,
 				2058D8CE3FB57598C1EFB484 /* MiniBrowserModel.swift */,
 				97D3637F7C3D1A54FA941E1A /* MiniBrowserRepresentable.swift */,
@@ -904,6 +907,7 @@
 				48291D1E141CC8CD3377832B /* FxAWebView.swift in Sources */,
 				E85653BB2F9DFC8A8EF771AB /* HawkAuth.swift in Sources */,
 				02C7053DB867B64BA1C2D87A /* HomeView.swift in Sources */,
+				A7C31E90B4D25F6180E2C4B1 /* MiniBrowserChrome.swift in Sources */,
 				AFE54951016753BB6ECE0D7F /* MiniBrowserGlass.swift in Sources */,
 				FAF161B20F38FB133E565A64 /* MiniBrowserModel.swift in Sources */,
 				994D5D037AFA4659819A717A /* MiniBrowserRepresentable.swift in Sources */,

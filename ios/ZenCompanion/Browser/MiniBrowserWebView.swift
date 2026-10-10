@@ -76,7 +76,11 @@ final class MiniBrowserWebView: WKWebView {
 
     private func computedBottomObscuredInset() -> CGFloat {
         let homeIndicator = super.safeAreaInsets.bottom
-        guard bottomBarVisible else { return homeIndicator }
+        guard bottomBarVisible else {
+            // The page sits above the card now. The card owns home-indicator
+            // clearance, so a leftover inset here would open a gap.
+            return 0
+        }
 
         // Measured overlap with the real toolbar, if it is reachable in the hierarchy.
         if let overlap = overlappingBottomChromeHeight() {

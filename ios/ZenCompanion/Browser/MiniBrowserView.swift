@@ -45,11 +45,10 @@ struct MiniBrowserView: View {
     /// Keyboard focus or the search-open first paint.
     private var addressEditing: Bool { isAddressFocused || startsInSearch }
 
-    /// Space inside the glass, below the buttons.
-    /// While typing this is the keyboard height, so the glass runs under the
-    /// keys and the keyboard sits on that surface. The page stays above it.
+    /// Space inside the glass, below the buttons. While typing the bar stays
+    /// its own height and is lifted onto the keyboard, so no second fill appears.
     private var chromeContentBottomInset: CGFloat {
-        if keyboardOverlap > 1 { return keyboardOverlap + 8 }
+        if keyboardOverlap > 1 { return 8 }
         return safeBottom + 8
     }
 
@@ -109,11 +108,17 @@ struct MiniBrowserView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .background(sheetBackground.ignoresSafeArea())
-            // The bar, not the page, fills the home-indicator area. Keyboard
-            // avoidance stays off: the glass grows down across the keyboard
-            // overlap so the keys sit on that glass.
+            // Lift the whole bar onto the keyboard. The padding stays outside
+            // the background so the gap is only the keyboard, not a new color.
+            .padding(.bottom, keyboardOverlap > 1 ? keyboardOverlap : 0)
             .ignoresSafeArea(edges: .bottom)
             .ignoresSafeArea(.keyboard)
+            // Same cut on the sheet fill. Otherwise the page theme, or the
+            // plain white behind the page, shows through the keyboard.
+            .presentationBackground {
+                sheetBackground
+                    .padding(.bottom, keyboardOverlap > 1 ? keyboardOverlap : 0)
+            }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
                 let overlap = Self.keyboardOverlap(from: note)
                 withAnimation(Self.keyboardAnimation(from: note)) {
@@ -130,7 +135,6 @@ struct MiniBrowserView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)
             .tint(Palette.ink(scheme))
-            .presentationBackground(sheetBackground)
             .geometryGroup()
             .onAppear {
                 safeBottom = Self.windowSafeBottom()

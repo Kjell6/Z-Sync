@@ -237,7 +237,6 @@ struct SpacesBrowserView: View {
                 )
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-                .geometryGroup()
             case .activity:
                 SyncedActivitySheet(
                     allSpaces: model.snapshot.spaces,

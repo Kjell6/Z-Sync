@@ -7,9 +7,6 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
     var bottomBarVisible: Bool
     /// Height of the floating glass above the home indicator, including keyboard lift.
     var bottomChromeHeight: CGFloat = 0
-    /// False while the page menu covers the web view. Toggling this also
-    /// clears a stuck UIKit gesture left behind by an earlier overlay.
-    var acceptsPageTaps: Bool = true
 
     func makeCoordinator() -> Coordinator {
         Coordinator(model: model)
@@ -50,7 +47,9 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
         guard let webView = uiView as? MiniBrowserWebView else { return }
         webView.bottomBarVisible = bottomBarVisible
         webView.reservedBottomChrome = bottomChromeHeight
-        context.coordinator.syncPageTaps(on: webView, accepts: acceptsPageTaps)
+        if !webView.isUserInteractionEnabled {
+            webView.isUserInteractionEnabled = true
+        }
         model.applyWebpagePreferences()
         webView.updateObscuredInsets()
     }
@@ -64,23 +63,9 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
         private var backObservation: NSKeyValueObservation?
         private var forwardObservation: NSKeyValueObservation?
         private var themeColorObservation: NSKeyValueObservation?
-        private var pageTapsWereBlocked = false
 
         init(model: MiniBrowserModel) {
             self.model = model
-        }
-
-        /// Re-enables the web view after the menu scrim goes away. Assigning
-        /// `true` over a stuck gesture recognizer does nothing; flipping the
-        /// flag off and on drops that recognizer.
-        func syncPageTaps(on webView: WKWebView, accepts: Bool) {
-            let wasBlocked = pageTapsWereBlocked
-            pageTapsWereBlocked = !accepts
-            guard webView.isUserInteractionEnabled != accepts || (accepts && wasBlocked) else { return }
-            if accepts && wasBlocked {
-                webView.isUserInteractionEnabled = false
-            }
-            webView.isUserInteractionEnabled = accepts
         }
 
         func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {

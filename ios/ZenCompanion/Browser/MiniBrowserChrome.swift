@@ -47,19 +47,19 @@ struct MiniBrowserChrome: View {
     /// Expanded menu and the typing composer round the top. Collapsed stays cut.
     private var roundsSheetTop: Bool { menuOpen || addressEditing }
 
-    /// The display corner (~55pt) swallows a short sheet. The open menu is the
-    /// taller of the two and keeps a modest sheet corner. The keyboard composer
-    /// is only one row, so its corner is smaller still.
+    /// The display corner (~55pt) is too round for the open menu. The keyboard
+    /// composer is taller, so its top corner can be rounder than the menu.
     private var sheetTopRadius: CGFloat {
-        let cap: CGFloat = addressEditing ? 22 : 32
+        let cap: CGFloat = addressEditing ? 40 : 32
         return min(cap, displayCornerRadius)
     }
 
     var body: some View {
         VStack(spacing: 0) {
             if menuOpen {
-                expandedMenu
-                    .transition(.opacity)
+                // No ScrollView and no opacity transition. Both left a gesture
+                // in the hierarchy, so after closing nothing on the page received taps.
+                expandedContent
             }
             if addressEditing {
                 inputComposer
@@ -82,7 +82,6 @@ struct MiniBrowserChrome: View {
                     .frame(height: 0.5)
             }
         }
-        .animation(chromeAnimation, value: model.menuExpanded)
         .animation(chromeAnimation, value: model.canGoForward)
         .animation(chromeAnimation, value: addressEditing)
         .animation(chromeAnimation, value: model.addressText.isEmpty)
@@ -290,17 +289,6 @@ struct MiniBrowserChrome: View {
 
     /// Grows inside the same full-width glass. The bar's top corners, not this
     /// content, carry the reduced sheet radius.
-    private var expandedMenu: some View {
-        ViewThatFits(in: .vertical) {
-            expandedContent
-            ScrollView {
-                expandedContent
-            }
-            .scrollBounceBehavior(.basedOnSize)
-            .frame(maxHeight: 460)
-        }
-    }
-
     private var expandedContent: some View {
         VStack(spacing: 0) {
             VStack(spacing: 0) {

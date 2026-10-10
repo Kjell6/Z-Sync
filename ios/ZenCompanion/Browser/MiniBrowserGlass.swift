@@ -93,16 +93,24 @@ extension View {
         )
         if #available(iOS 26.0, *) {
             self
-                .contentShape(shape)
+                .background {
+                    // The glass plate must not take taps. On iOS 26 the effect
+                    // keeps a hit target the size of the open menu after it closes.
+                    Color.clear
+                        .glassEffect(.regular, in: shape)
+                        .allowsHitTesting(false)
+                }
                 .clipShape(shape)
-                .glassEffect(.regular, in: shape)
         } else {
             self
-                .contentShape(shape)
-                .background(.ultraThinMaterial, in: shape)
+                .background {
+                    shape.fill(.ultraThinMaterial)
+                        .allowsHitTesting(false)
+                }
                 .clipShape(shape)
                 .overlay(
                     shape.strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.6)
+                        .allowsHitTesting(false)
                 )
         }
     }

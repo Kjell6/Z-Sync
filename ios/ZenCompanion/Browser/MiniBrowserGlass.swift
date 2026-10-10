@@ -1,4 +1,24 @@
 import SwiftUI
+import UIKit
+
+/// The display's own corner radius, in points. Read from the screen so the
+/// expanded bar matches the phone it is running on. Falls back only when the
+/// system does not publish a radius.
+enum DisplayCornerRadius {
+    static func points(for screen: UIScreen? = nil) -> CGFloat {
+        let screen = screen
+            ?? UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap(\.windows)
+                .first(where: \.isKeyWindow)?
+                .screen
+            ?? UIScreen.main
+        let selector = NSSelectorFromString("_displayCornerRadius")
+        guard screen.responds(to: selector) else { return 55 }
+        let value = screen.value(forKey: "_displayCornerRadius") as? CGFloat ?? 0
+        return value > 1 ? value : 55
+    }
+}
 
 // MARK: - Liquid Glass View Modifier Helper
 
@@ -57,6 +77,32 @@ extension View {
             x: 0,
             y: 6
         )
+    }
+
+    /// Full-width bottom bar. Bottom corners stay square so the glass is cut
+    /// off by the screen. `topRadius` is 0 while collapsed and the display
+    /// corner radius while the menu is open.
+    @ViewBuilder
+    func liquidGlassBar(topRadius: CGFloat) -> some View {
+        let shape = UnevenRoundedRectangle(
+            topLeadingRadius: topRadius,
+            bottomLeadingRadius: 0,
+            bottomTrailingRadius: 0,
+            topTrailingRadius: topRadius,
+            style: .continuous
+        )
+        if #available(iOS 26.0, *) {
+            self
+                .clipShape(shape)
+                .glassEffect(.regular, in: shape)
+        } else {
+            self
+                .background(.ultraThinMaterial, in: shape)
+                .clipShape(shape)
+                .overlay(
+                    shape.strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.6)
+                )
+        }
     }
 
     /// Untinted regular glass for the bottom browser card. One radius for the

@@ -1,10 +1,10 @@
 import SwiftUI
 import WebKit
 
-/// In-app mini-browser. The page fills the sheet, including the area under the
-/// bottom controls. Back, Forward, the address field, and More are separate
-/// untinted Liquid Glass pieces floating on that page (`MiniBrowserChrome`).
-/// More morphs those pieces into one glass card, still on the page.
+/// In-app mini-browser. The page ends where the bottom bar begins. That bar is
+/// one glass strip, cut off by the screen edges. Opening it keeps the full
+/// width and the screen bottom, and rounds only the top to the display's
+/// corner radius (`MiniBrowserChrome`).
 struct MiniBrowserView: View {
     let initialURL: URL?
     let space: ZenSpace
@@ -20,18 +20,12 @@ struct MiniBrowserView: View {
     /// Chrome springs stay off while the sheet presents, so the address bar
     /// rides the sheet instead of running a second animation.
     @State private var animateAddressChrome = false
-    /// Distance from the screen bottom to the top of the keyboard. The page
-    /// stays full-bleed; only the floating glass lifts.
+    /// Distance from the screen bottom to the top of the keyboard.
     @State private var keyboardOverlap: CGFloat = 0
-    /// Height of the floating glass, measured from the physical bottom,
-    /// not including the keyboard lift.
-    @State private var chromeHeight: CGFloat = 72
-
-    /// Resting gap from the physical screen edge to the glass. The bar sits
-    /// in the home-indicator area, the way a browser toolbar does.
-    private let chromeBottomInset: CGFloat = 12
-    /// Gap left between the keyboard and the glass.
-    private let chromeKeyboardGap: CGFloat = 4
+    /// Home-indicator inset. The glass fills it; the buttons sit above it.
+    @State private var safeBottom: CGFloat = Self.windowSafeBottom()
+    /// Corner radius of the display this sheet is on.
+    @State private var displayCornerRadius: CGFloat = DisplayCornerRadius.points()
 
     init(
         initialURL: URL?,
@@ -51,10 +45,16 @@ struct MiniBrowserView: View {
     /// Keyboard focus or the search-open first paint.
     private var addressEditing: Bool { isAddressFocused || startsInSearch }
 
-    /// Extra lift so the glass sits just above the keyboard. The resting inset
-    /// is already part of the measured chrome, so it is not added twice.
+    /// The bar's bottom is the physical screen edge, so the keyboard lift is
+    /// the full overlap. While the keyboard is up, the home indicator is gone.
     private var keyboardLift: CGFloat {
-        max(0, keyboardOverlap + chromeKeyboardGap - chromeBottomInset)
+        keyboardOverlap > 1 ? keyboardOverlap : 0
+    }
+
+    /// Padding under the buttons. The glass continues through it to the edge.
+    private var chromeContentBottomInset: CGFloat {
+        if keyboardOverlap > 1 { return 8 }
+        return safeBottom + 8
     }
 
     private var defaultBackground: Color {
@@ -69,45 +69,55 @@ struct MiniBrowserView: View {
         @Bindable var model = model
 
         NavigationStack {
-            ZStack(alignment: .bottom) {
-                sheetBackground
-                    .ignoresSafeArea()
+            VStack(spacing: 0) {
+                ZStack(alignment: .bottom) {
+                    webPane
 
-                webPane
-                    .ignoresSafeArea(edges: .bottom)
-
-                if model.menuExpanded {
-                    Color.clear
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
-                                model.collapseMenu()
+                    if model.menuExpanded {
+                        Color.clear
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+                                    model.collapseMenu()
+                                }
                             }
-                        }
-                        .accessibilityLabel(Text("browser.close_menu"))
-                        .accessibilityAddTraits(.isButton)
-                }
-
-                bottomStack
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, chromeBottomInset)
-                    .background {
-                        GeometryReader { geo in
-                            Color.clear.preference(key: ChromeHeightKey.self, value: geo.size.height)
-                        }
+                            .accessibilityLabel(Text("browser.close_menu"))
+                            .accessibilityAddTraits(.isButton)
                     }
-                    .padding(.bottom, keyboardLift)
-                    // Outside the padding, so the 12pt gap is from the physical
-                    // bottom and the bar starts in the home-indicator area.
-                    .ignoresSafeArea(edges: .bottom)
+
+                    if model.showPinBanner {
+                        pinBanner
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 8)
+                    } else if let notice = model.pinNotice {
+                        pinNoticeToast(notice)
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 8)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                MiniBrowserChrome(
+                    model: model,
+                    addressEditing: addressEditing,
+                    animateChrome: animateAddressChrome,
+                    isAddressFocused: $isAddressFocused,
+                    space: space,
+                    allSpaces: allSpaces,
+                    bottomInset: chromeContentBottomInset,
+                    displayCornerRadius: displayCornerRadius,
+                    onCancel: cancelAddressEditing,
+                    onSubmit: submitAddress
+                )
             }
-            .onPreferenceChange(ChromeHeightKey.self) { chromeHeight = $0 }
+            .background(sheetBackground.ignoresSafeArea())
+            .padding(.bottom, keyboardLift)
+            // The bar, not the page, fills the home-indicator area.
+            .ignoresSafeArea(edges: .bottom)
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
                 keyboardOverlap = Self.keyboardOverlap(from: note)
             }
-            // The page stays under the glass. Keyboard avoidance would open a
-            // solid gap and lift the web view off the controls.
             .ignoresSafeArea(.keyboard)
             .animation(
                 animateAddressChrome ? .spring(response: 0.35, dampingFraction: 0.85) : nil,
@@ -122,6 +132,8 @@ struct MiniBrowserView: View {
             .presentationBackground(sheetBackground)
             .geometryGroup()
             .onAppear {
+                safeBottom = Self.windowSafeBottom()
+                displayCornerRadius = DisplayCornerRadius.points()
                 model.loadInitial()
                 if model.opensWithSearch {
                     isAddressFocused = true
@@ -154,14 +166,22 @@ struct MiniBrowserView: View {
         .geometryGroup()
     }
 
-    /// Full-bleed page. The glass overlays it; nothing solid is reserved below.
+    /// The page stops at the bar. No extra viewport inset under the glass.
     private var webPane: some View {
         MiniBrowserRepresentable(
             model: model,
-            bottomBarVisible: true,
-            bottomChromeHeight: chromeHeight + keyboardLift
+            bottomBarVisible: false,
+            bottomChromeHeight: 0
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private static func windowSafeBottom() -> CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)?
+            .safeAreaInsets.bottom ?? 0
     }
 
     private static func keyboardOverlap(from note: Notification) -> CGFloat {
@@ -179,35 +199,6 @@ struct MiniBrowserView: View {
         return max(0, screenHeight - frame.minY)
     }
 
-    private var bottomStack: some View {
-        VStack(spacing: 8) {
-            if model.showPinBanner {
-                pinBanner
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            } else if let notice = model.pinNotice {
-                pinNoticeToast(notice)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-            MiniBrowserChrome(
-                model: model,
-                addressEditing: addressEditing,
-                animateChrome: animateAddressChrome,
-                isAddressFocused: $isAddressFocused,
-                space: space,
-                allSpaces: allSpaces,
-                onCancel: cancelAddressEditing,
-                onSubmit: submitAddress
-            )
-        }
-    }
-
-}
-
-private struct ChromeHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
 }
 
 private extension MiniBrowserView {

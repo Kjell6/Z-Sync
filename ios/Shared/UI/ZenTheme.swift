@@ -39,12 +39,13 @@ enum Palette {
 }
 
 extension View {
-    /// Flat 1pt rim for lift tiles. One color, not a highlight gradient.
-    /// Stays inside the shape so neighboring tiles do not share an edge.
+    /// Flat hairline for lift tiles. One color, close to the tile fill,
+    /// not a highlight gradient. Stays inside the shape so neighboring
+    /// tiles do not share an edge.
     func glassRim(cornerRadius: CGFloat) -> some View {
         overlay {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.18), lineWidth: 1)
+                .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
                 .allowsHitTesting(false)
         }
     }

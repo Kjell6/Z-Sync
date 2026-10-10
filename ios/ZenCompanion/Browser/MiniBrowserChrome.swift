@@ -114,7 +114,7 @@ struct MiniBrowserChrome: View {
                     Palette.lift(scheme),
                     in: RoundedRectangle(cornerRadius: tileRadius, style: .continuous)
                 )
-                .glassRim(cornerRadius: tileRadius, scheme: scheme)
+                .glassRim(cornerRadius: tileRadius)
 
             if addressEditing {
                 homeTile(
@@ -157,7 +157,7 @@ struct MiniBrowserChrome: View {
                     Palette.lift(scheme),
                     in: RoundedRectangle(cornerRadius: tileRadius, style: .continuous)
                 )
-                .glassRim(cornerRadius: tileRadius, scheme: scheme)
+                .glassRim(cornerRadius: tileRadius)
                 .contentShape(RoundedRectangle(cornerRadius: tileRadius, style: .continuous))
                 .contentTransition(.symbolEffect(.replace))
         }
@@ -359,7 +359,7 @@ struct MiniBrowserChrome: View {
                     .padding(.bottom, 1)
             }
         }
-        .glassRim(cornerRadius: tileRadius, scheme: scheme)
+        .glassRim(cornerRadius: tileRadius)
     }
 
     /// Host, plus the path when the page is not the site root.
@@ -475,7 +475,7 @@ struct MiniBrowserChrome: View {
             Palette.lift(scheme),
             in: RoundedRectangle(cornerRadius: tileRadius, style: .continuous)
         )
-        .glassRim(cornerRadius: tileRadius, scheme: scheme)
+        .glassRim(cornerRadius: tileRadius)
     }
 
     private var copyRow: some View {

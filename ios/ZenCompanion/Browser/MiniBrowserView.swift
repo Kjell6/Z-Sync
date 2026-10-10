@@ -1,10 +1,10 @@
 import SwiftUI
 import WebKit
 
-/// In-app mini-browser. The page fills the sheet. Every control lives in one
-/// untinted Liquid Glass card along the bottom (`MiniBrowserChrome`): back,
-/// forward when there is a forward entry, the address field, and More.
-/// More unfolds that same card into the page menu.
+/// In-app mini-browser. The page fills the sheet, including the area under the
+/// bottom controls. Back, Forward, the address field, and More are separate
+/// untinted Liquid Glass pieces floating on that page (`MiniBrowserChrome`).
+/// More opens a glass card above them, also on the page.
 struct MiniBrowserView: View {
     let initialURL: URL?
     let space: ZenSpace
@@ -20,6 +20,14 @@ struct MiniBrowserView: View {
     /// Chrome springs stay off while the sheet presents, so the address bar
     /// rides the sheet instead of running a second animation.
     @State private var animateAddressChrome = false
+    /// Distance from the screen bottom to the top of the keyboard. The page
+    /// stays full-bleed; only the floating glass lifts.
+    @State private var keyboardOverlap: CGFloat = 0
+    /// Home-indicator inset. Subtracted from `keyboardOverlap` so the glass
+    /// sits on the keyboard instead of a second inset above it.
+    @State private var safeBottom: CGFloat = 0
+    /// Height of the floating glass, not including the keyboard lift.
+    @State private var chromeHeight: CGFloat = 72
 
     init(
         initialURL: URL?,
@@ -39,6 +47,9 @@ struct MiniBrowserView: View {
     /// Keyboard focus or the search-open first paint.
     private var addressEditing: Bool { isAddressFocused || startsInSearch }
 
+    /// Extra lift once the keyboard covers the home indicator.
+    private var keyboardLift: CGFloat { max(0, keyboardOverlap - safeBottom) }
+
     private var defaultBackground: Color {
         scheme == .dark ? Color(uiColor: .systemBackground) : Color.white
     }
@@ -51,15 +62,52 @@ struct MiniBrowserView: View {
         @Bindable var model = model
 
         NavigationStack {
-            ZStack {
+            ZStack(alignment: .bottom) {
                 sheetBackground
                     .ignoresSafeArea()
 
-                VStack(spacing: 0) {
-                    webPane
-                    bottomStack
+                webPane
+                    .ignoresSafeArea(edges: .bottom)
+
+                if model.menuExpanded {
+                    Color.clear
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+                                model.collapseMenu()
+                            }
+                        }
+                        .accessibilityLabel(Text("browser.close_menu"))
+                        .accessibilityAddTraits(.isButton)
+                }
+
+                bottomStack
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 6)
+                    .background {
+                        GeometryReader { geo in
+                            Color.clear.preference(key: ChromeHeightKey.self, value: geo.size.height)
+                        }
+                    }
+                    .padding(.bottom, keyboardLift)
+            }
+            .background {
+                GeometryReader { geo in
+                    Color.clear
+                        .onAppear { safeBottom = geo.safeAreaInsets.bottom }
+                        .onChange(of: geo.safeAreaInsets.bottom) { _, newValue in
+                            safeBottom = newValue
+                        }
                 }
             }
+            .onPreferenceChange(ChromeHeightKey.self) { chromeHeight = $0 }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
+                keyboardOverlap = Self.keyboardOverlap(from: note)
+            }
+            // The page stays under the glass. Keyboard avoidance would open a
+            // solid gap and lift the web view off the controls.
+            .ignoresSafeArea(.keyboard)
             .animation(
                 animateAddressChrome ? .spring(response: 0.35, dampingFraction: 0.85) : nil,
                 value: addressEditing
@@ -105,23 +153,29 @@ struct MiniBrowserView: View {
         .geometryGroup()
     }
 
-    /// Page, dimmed while the card is unfolded so the menu reads as a dialog.
-    /// The dimmer is not a tint on the glass.
+    /// Full-bleed page. The glass overlays it; nothing solid is reserved below.
     private var webPane: some View {
-        ZStack {
-            MiniBrowserRepresentable(model: model, bottomBarVisible: false)
-            if model.menuExpanded {
-                Color.black.opacity(scheme == .dark ? 0.32 : 0.14)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
-                            model.collapseMenu()
-                        }
-                    }
-                    .accessibilityLabel(Text("browser.close_menu"))
-                    .accessibilityAddTraits(.isButton)
-            }
+        MiniBrowserRepresentable(
+            model: model,
+            bottomBarVisible: true,
+            bottomChromeHeight: chromeHeight + keyboardLift
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private static func keyboardOverlap(from note: Notification) -> CGFloat {
+        guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
+            return 0
         }
+        let screenHeight = (note.object as? UIScreen)?.bounds.height
+            ?? UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap(\.windows)
+                .first(where: \.isKeyWindow)?
+                .bounds.height
+            ?? 0
+        guard screenHeight > 0 else { return 0 }
+        return max(0, screenHeight - frame.minY)
     }
 
     private var bottomStack: some View {
@@ -144,10 +198,18 @@ struct MiniBrowserView: View {
                 onSubmit: submitAddress
             )
         }
-        .padding(.horizontal, 12)
-        .padding(.bottom, 8)
     }
 
+}
+
+private struct ChromeHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private extension MiniBrowserView {
     private func cancelAddressEditing() {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
             if model.effectiveURL != nil {

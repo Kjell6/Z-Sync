@@ -4,7 +4,7 @@ import WebKit
 /// In-app mini-browser. The page fills the sheet, including the area under the
 /// bottom controls. Back, Forward, the address field, and More are separate
 /// untinted Liquid Glass pieces floating on that page (`MiniBrowserChrome`).
-/// More opens a glass card above them, also on the page.
+/// More morphs those pieces into one glass card, still on the page.
 struct MiniBrowserView: View {
     let initialURL: URL?
     let space: ZenSpace

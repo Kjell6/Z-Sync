@@ -4,9 +4,10 @@ import SwiftUI
 ///
 /// Android port (`MiniBrowserChrome` / `MiniBrowserFooter`): one bottom strip,
 /// not separate floating pieces and not an overlay on the page. Collapsed, the
-/// strip is cut off by the screen edges. Expanded, it keeps that full width
-/// and the screen bottom, and its top corners use the display corner radius.
-/// Buttons match the home action bar: `Palette.lift`, 13pt continuous corners.
+/// strip is cut off by the screen edges. Expanded, and while typing, it keeps
+/// that full width and the screen bottom. Those two are short, so their top
+/// corners stay well under the display radius. Buttons match the home action
+/// bar: `Palette.lift`, 13pt continuous corners.
 /// The material behind them is one untinted glass surface.
 struct MiniBrowserChrome: View {
     var model: MiniBrowserModel
@@ -19,7 +20,7 @@ struct MiniBrowserChrome: View {
     /// is hidden, so the glass runs to the physical bottom and the buttons sit
     /// above the indicator.
     var bottomInset: CGFloat
-    /// Display corner radius for the expanded bar's top edge.
+    /// Display corner radius. Short sheets use less than this.
     var displayCornerRadius: CGFloat
     var onCancel: () -> Void
     var onSubmit: () -> Void
@@ -43,8 +44,16 @@ struct MiniBrowserChrome: View {
 
     private var menuOpen: Bool { model.menuExpanded && !addressEditing }
 
-    /// Expanded menu and the typing state both round the top to the display radius.
+    /// Expanded menu and the typing composer round the top. Collapsed stays cut.
     private var roundsSheetTop: Bool { menuOpen || addressEditing }
+
+    /// The display corner (~55pt) swallows a short sheet. The open menu is the
+    /// taller of the two and keeps a modest sheet corner. The keyboard composer
+    /// is only one row, so its corner is smaller still.
+    private var sheetTopRadius: CGFloat {
+        let cap: CGFloat = addressEditing ? 22 : 32
+        return min(cap, displayCornerRadius)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -52,13 +61,17 @@ struct MiniBrowserChrome: View {
                 expandedMenu
                     .transition(.opacity)
             }
-            controlRow
-                .padding(.horizontal, 20)
-                .padding(.top, menuOpen ? 24 : 10)
-                .padding(.bottom, bottomInset)
+            if addressEditing {
+                inputComposer
+            } else {
+                controlRow
+                    .padding(.horizontal, 20)
+                    .padding(.top, menuOpen ? 24 : 10)
+                    .padding(.bottom, bottomInset)
+            }
         }
         .frame(maxWidth: .infinity)
-        .liquidGlassBar(topRadius: roundsSheetTop ? displayCornerRadius : 0)
+        .liquidGlassBar(topRadius: roundsSheetTop ? sheetTopRadius : 0)
         .overlay(alignment: .top) {
             if !roundsSheetTop {
                 Rectangle()
@@ -74,73 +87,83 @@ struct MiniBrowserChrome: View {
 
     // MARK: - Compact row
 
+    /// Keyboard composer. One field and cancel, with even air above the keys.
+    /// Not the navigation row with a sheet radius pasted on.
+    private var inputComposer: some View {
+        HStack(spacing: 12) {
+            addressCard
+            homeTile(
+                systemName: "xmark",
+                label: "common.cancel",
+                enabled: true,
+                tint: Palette.coral(scheme)
+            ) {
+                onCancel()
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 18)
+        .padding(.bottom, bottomInset)
+    }
+
     /// Same rhythm as the home action bar: side tiles, field, side tile.
     /// The trailing tile opens the menu. It points up while closed.
     private var controlRow: some View {
         HStack(spacing: 12) {
-            if !addressEditing {
-                homeTile(
-                    systemName: "chevron.backward",
-                    label: "browser.back",
-                    enabled: model.canGoBack
-                ) {
-                    model.goBack()
-                }
-                if MiniBrowserTools.showsForwardButton(
-                    canGoForward: model.canGoForward,
-                    addressEditing: addressEditing
-                ) {
-                    homeTile(
-                        systemName: "chevron.forward",
-                        label: "browser.forward",
-                        enabled: true
-                    ) {
-                        model.goForward()
-                    }
-                    .transition(.opacity)
-                }
+            homeTile(
+                systemName: "chevron.backward",
+                label: "browser.back",
+                enabled: model.canGoBack
+            ) {
+                model.goBack()
             }
-
-            addressField
-                .padding(.leading, 16)
-                .padding(.trailing, 4)
-                .frame(height: controlSide)
-                .frame(maxWidth: .infinity)
-                .overlay(alignment: .bottom) {
-                    if model.isLoading && !addressEditing {
-                        progressBar
-                            .padding(.horizontal, 18)
-                            .padding(.bottom, 1)
-                    }
-                }
-                .background(
-                    Palette.lift(scheme),
-                    in: RoundedRectangle(cornerRadius: tileRadius, style: .continuous)
-                )
-                .glassRim(cornerRadius: tileRadius)
-
-            if addressEditing {
+            if MiniBrowserTools.showsForwardButton(
+                canGoForward: model.canGoForward,
+                addressEditing: false
+            ) {
                 homeTile(
-                    systemName: "xmark",
-                    label: "common.cancel",
-                    enabled: true,
-                    tint: Palette.coral(scheme)
+                    systemName: "chevron.forward",
+                    label: "browser.forward",
+                    enabled: true
                 ) {
-                    onCancel()
+                    model.goForward()
                 }
                 .transition(.opacity)
-            } else {
-                homeTile(
-                    systemName: menuOpen ? "chevron.down" : "chevron.up",
-                    label: menuOpen ? "browser.close_menu" : "browser.more",
-                    enabled: menuOpen || model.effectiveURL != nil
-                ) {
-                    withAnimation(motion) {
-                        model.toggleMenu()
-                    }
+            }
+
+            addressCard
+
+            homeTile(
+                systemName: menuOpen ? "chevron.down" : "chevron.up",
+                label: menuOpen ? "browser.close_menu" : "browser.more",
+                enabled: menuOpen || model.effectiveURL != nil
+            ) {
+                withAnimation(motion) {
+                    model.toggleMenu()
                 }
             }
         }
+    }
+
+    /// Lift field shared by the navigation row and the keyboard composer.
+    private var addressCard: some View {
+        addressField
+            .padding(.leading, 16)
+            .padding(.trailing, 4)
+            .frame(height: controlSide)
+            .frame(maxWidth: .infinity)
+            .overlay(alignment: .bottom) {
+                if model.isLoading && !addressEditing {
+                    progressBar
+                        .padding(.horizontal, 18)
+                        .padding(.bottom, 1)
+                }
+            }
+            .background(
+                Palette.lift(scheme),
+                in: RoundedRectangle(cornerRadius: tileRadius, style: .continuous)
+            )
+            .glassRim(cornerRadius: tileRadius)
     }
 
     /// Home action-bar tile: lift fill, 13pt continuous corners, 44pt side.
@@ -263,7 +286,7 @@ struct MiniBrowserChrome: View {
     // MARK: - Expanded menu
 
     /// Grows inside the same full-width glass. The bar's top corners, not this
-    /// content, carry the display radius.
+    /// content, carry the reduced sheet radius.
     private var expandedMenu: some View {
         ViewThatFits(in: .vertical) {
             expandedContent

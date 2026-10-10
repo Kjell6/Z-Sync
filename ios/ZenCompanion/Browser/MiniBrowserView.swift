@@ -2,9 +2,9 @@ import SwiftUI
 import WebKit
 
 /// In-app mini-browser. The page ends where the bottom bar begins. That bar is
-/// one glass strip, cut off by the screen edges. Opening it keeps the full
-/// width and the screen bottom, and rounds only the top to the display's
-/// corner radius (`MiniBrowserChrome`).
+/// one glass strip, cut off by the screen edges. The open menu and the keyboard
+/// composer keep the full width and the screen bottom, with a top radius smaller
+/// than the display corner (`MiniBrowserChrome`).
 struct MiniBrowserView: View {
     let initialURL: URL?
     let space: ZenSpace
@@ -45,10 +45,10 @@ struct MiniBrowserView: View {
     /// Keyboard focus or the search-open first paint.
     private var addressEditing: Bool { isAddressFocused || startsInSearch }
 
-    /// Space inside the glass, below the buttons. While typing the bar stays
-    /// its own height and is lifted onto the keyboard, so no second fill appears.
+    /// Space inside the glass, below the buttons. While typing, this is only the
+    /// air between the field and the keys. The composer stays one row tall.
     private var chromeContentBottomInset: CGFloat {
-        if keyboardOverlap > 1 { return 8 }
+        if keyboardOverlap > 1 { return 16 }
         return safeBottom + 8
     }
 

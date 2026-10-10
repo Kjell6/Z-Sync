@@ -80,8 +80,8 @@ extension View {
     }
 
     /// Full-width bottom bar. Bottom corners stay square so the glass is cut
-    /// off by the screen. `topRadius` is 0 while collapsed and the display
-    /// corner radius while the menu is open.
+    /// off by the screen. `topRadius` is 0 while collapsed. The open menu and
+    /// the keyboard composer pass a radius smaller than the display corner.
     @ViewBuilder
     func liquidGlassBar(topRadius: CGFloat) -> some View {
         let shape = UnevenRoundedRectangle(

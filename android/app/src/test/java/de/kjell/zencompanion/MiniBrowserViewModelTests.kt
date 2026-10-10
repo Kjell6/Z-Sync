@@ -149,6 +149,30 @@ class MiniBrowserViewModelTests {
     }
 
     @Test
+    fun pinSaveUsesDocumentTitleInsteadOfTheUrl() = runTest(mainDispatcherRule.testDispatcher) {
+        val repository = FakeMiniBrowserRepository()
+        val vm = newViewModel(repository)
+        vm.onCurrentTitleChange("https://start.example/")
+        vm.documentTitle = { "Real Page" }
+
+        vm.triggerPinBanner()
+        vm.commitPendingPinSave()
+        runCurrent()
+
+        assertEquals("Real Page", repository.added.first().title)
+        advanceTimeBy(5_000)
+        runCurrent()
+    }
+
+    @Test
+    fun urlShapedTitleDoesNotReplaceARealTitle() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = newViewModel()
+        vm.onCurrentTitleChange("Real Page")
+        vm.onCurrentTitleChange("https://start.example/")
+        assertEquals("Real Page", vm.state.value.currentTitle)
+    }
+
+    @Test
     fun emptySpacesNeverTriggerBannerOrWrite() = runTest(mainDispatcherRule.testDispatcher) {
         val repository = FakeMiniBrowserRepository()
         val vm = newViewModel(repository, spaces = emptyList())

@@ -14,6 +14,9 @@ import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.components.PinDestination
 import de.kjell.zencompanion.ui.components.PinDestinationModel
 import de.kjell.zencompanion.util.FriendlyError
+import de.kjell.zencompanion.util.PageTitle
+import de.kjell.zencompanion.util.fetchRemotePageTitle
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -76,6 +79,7 @@ class ShareViewModel(
     private val repository: ShareRepository,
     initialUrl: String?,
     initialPageTitle: String,
+    private val titleResolver: suspend (String, String) -> String? = { _, _ -> null },
 ) : ViewModel() {
 
     sealed interface Event {
@@ -111,8 +115,33 @@ class ShareViewModel(
     private val _events = MutableSharedFlow<Event>(extraBufferCapacity = 1)
     val events: SharedFlow<Event> = _events
 
+    private var resolveJob: Job? = null
+
     init {
         viewModelScope.launch { bootstrap() }
+        ensureTitleResolution()
+    }
+
+    /**
+     * Replaces a missing or URL-shaped name with the page's real title.
+     * A save waits for the lookup already started at open.
+     */
+    private fun ensureTitleResolution() {
+        if (resolveJob?.isActive == true) return
+        val url = _state.value.url ?: return
+        if (PageTitle.usable(_state.value.pageTitle, url) != null) return
+        val candidate = _state.value.pageTitle
+        resolveJob = viewModelScope.launch {
+            val resolved = titleResolver(candidate, url) ?: return@launch
+            _state.update { current ->
+                val currentUrl = current.url
+                if (currentUrl != null && PageTitle.usable(current.pageTitle, currentUrl) != null) {
+                    current
+                } else {
+                    current.copy(pageTitle = resolved)
+                }
+            }
+        }
     }
 
     fun selectDestination(destination: PinDestination) {
@@ -224,10 +253,13 @@ class ShareViewModel(
         val targetSpace = current.spaces.firstOrNull { it.id == target.spaceId } ?: return
         val kind = current.saveKind
         _state.update { it.copy(phase = SharePhase.saving) }
+        ensureTitleResolution()
+        resolveJob?.join()
+        val title = headlineTitle(_state.value.pageTitle, currentUrl)
         try {
             val outcome = repository.addTab(
                 url = currentUrl,
-                title = headlineTitle(current.pageTitle, currentUrl),
+                title = title,
                 spaceId = targetSpace.id,
                 folderId = if (kind == SaveKind.NORMAL) null else target.folderId,
                 kind = kind,
@@ -260,6 +292,11 @@ class ShareViewModel(
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            ShareViewModel(repository, initialUrl, initialPageTitle) as T
+            ShareViewModel(
+                repository,
+                initialUrl,
+                initialPageTitle,
+                titleResolver = { _, url -> fetchRemotePageTitle(url) },
+            ) as T
     }
 }

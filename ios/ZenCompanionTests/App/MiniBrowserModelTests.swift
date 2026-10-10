@@ -100,6 +100,17 @@ final class MiniBrowserModelTests: XCTestCase {
         XCTAssertEqual(writer.saved.first?.folderId, "folder-1")
     }
 
+    func testPinSaveRejectsUrlShapedTitle() async {
+        let (model, writer) = makeModel(initialURL: URL(string: "https://pin.example/page")!)
+        model.pageTitle = "https://pin.example/page/"
+
+        model.triggerPinBanner(spaces: [space("a")], fallbackSpace: space("a"))
+        model.commitPendingPinSave()
+        await model.waitForPinSave()
+
+        XCTAssertEqual(writer.saved.first?.title, "pin.example")
+    }
+
     func testPinSaveFallsBackToHostTitleWhenPageTitleIsEmpty() async {
         let (model, writer) = makeModel(initialURL: URL(string: "https://pin.example/page")!)
 

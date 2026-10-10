@@ -49,6 +49,7 @@ import de.kjell.zencompanion.ui.motion.StiffnessShareResult
 import de.kjell.zencompanion.ui.theme.LocalZenColors
 import de.kjell.zencompanion.ui.theme.ZenType
 import de.kjell.zencompanion.util.Haptics
+import de.kjell.zencompanion.util.PageTitle
 
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -346,11 +347,6 @@ private fun Picker(
     }
 }
 
-/** Port of `headlineTitle`: page title unless it equals host/url, else host. */
-internal fun headlineTitle(pageTitle: String, url: String?): String {
-    val raw = pageTitle.trim()
-    val host = runCatching { android.net.Uri.parse(url.orEmpty()).host }.getOrNull() ?: ""
-    if (raw.isNotEmpty() && raw != host && raw != url) return raw
-    if (host.isNotEmpty()) return host
-    return url ?: "Tab"
-}
+/** Port of `headlineTitle`: real page title, otherwise the host. */
+internal fun headlineTitle(pageTitle: String, url: String?): String =
+    PageTitle.headline(pageTitle, url)

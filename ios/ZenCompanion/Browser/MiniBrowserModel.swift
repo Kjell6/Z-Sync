@@ -146,6 +146,21 @@ final class MiniBrowserModel {
         addressText = ""
     }
 
+    /// Drops the previous page's title when the document changes.
+    func updateCurrentURL(_ url: URL?) {
+        if !PageTitle.sameDocument(currentURL, url) {
+            pageTitle = ""
+        }
+        currentURL = url
+    }
+
+    /// Keeps a real document title. URL-shaped WebKit titles are ignored so
+    /// they cannot replace the page name.
+    func adoptPageTitle(_ raw: String) {
+        guard let title = PageTitle.usable(raw, url: currentURL ?? webView?.url) else { return }
+        pageTitle = title
+    }
+
     func currentURLDidChange(_ url: URL?, isAddressFocused: Bool) {
         if let url {
             if !isAddressFocused {
@@ -258,9 +273,13 @@ final class MiniBrowserModel {
         hasPendingPinSave = false
         let target = pinnedDestination
         let kind = pinSaveKind
-        let titleToSave = pageTitle.isEmpty ? (url.host ?? url.absoluteString) : pageTitle
+        let fallbackTitle = pageTitle
 
         pinSaveTask = Task(priority: .userInitiated) {
+            // document.title is the browser tab name. WebKit's `title` is often
+            // still the URL when the pin is saved.
+            let live = await liveDocumentTitle(for: url)
+            let titleToSave = PageTitle.headline(live ?? fallbackTitle, url: url)
             // Decoupled task with userInitiated priority guarantees completion even if view/sheet is dismissed.
             // A failed write surfaces through the app's existing error handling.
             if let outcome = try? await pinWriter.addTab(
@@ -273,6 +292,16 @@ final class MiniBrowserModel {
                 showPinNotice(String(localized: "share.saved.fallback_pinned"), duration: 6.0)
             }
         }
+    }
+
+    private func liveDocumentTitle(for url: URL) async -> String? {
+        guard let webView else { return nil }
+        let payload: String? = await withCheckedContinuation { continuation in
+            webView.evaluateJavaScript(PageTitle.documentTitleScript) { result, _ in
+                continuation.resume(returning: result as? String)
+            }
+        }
+        return PageTitle.pickDocumentTitle(payload, url: url)
     }
 
     /// Test/await seam for the decoupled pin write; production never waits.

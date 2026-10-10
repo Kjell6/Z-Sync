@@ -23,11 +23,15 @@ struct MiniBrowserView: View {
     /// Distance from the screen bottom to the top of the keyboard. The page
     /// stays full-bleed; only the floating glass lifts.
     @State private var keyboardOverlap: CGFloat = 0
-    /// Home-indicator inset. Subtracted from `keyboardOverlap` so the glass
-    /// sits on the keyboard instead of a second inset above it.
-    @State private var safeBottom: CGFloat = 0
-    /// Height of the floating glass, not including the keyboard lift.
+    /// Height of the floating glass, measured from the physical bottom,
+    /// not including the keyboard lift.
     @State private var chromeHeight: CGFloat = 72
+
+    /// Resting gap from the physical screen edge to the glass. The bar sits
+    /// in the home-indicator area, the way a browser toolbar does.
+    private let chromeBottomInset: CGFloat = 12
+    /// Gap left between the keyboard and the glass.
+    private let chromeKeyboardGap: CGFloat = 4
 
     init(
         initialURL: URL?,
@@ -47,8 +51,11 @@ struct MiniBrowserView: View {
     /// Keyboard focus or the search-open first paint.
     private var addressEditing: Bool { isAddressFocused || startsInSearch }
 
-    /// Extra lift once the keyboard covers the home indicator.
-    private var keyboardLift: CGFloat { max(0, keyboardOverlap - safeBottom) }
+    /// Extra lift so the glass sits just above the keyboard. The resting inset
+    /// is already part of the measured chrome, so it is not added twice.
+    private var keyboardLift: CGFloat {
+        max(0, keyboardOverlap + chromeKeyboardGap - chromeBottomInset)
+    }
 
     private var defaultBackground: Color {
         scheme == .dark ? Color(uiColor: .systemBackground) : Color.white
@@ -84,22 +91,16 @@ struct MiniBrowserView: View {
 
                 bottomStack
                     .padding(.horizontal, 12)
-                    .padding(.bottom, 6)
+                    .padding(.bottom, chromeBottomInset)
                     .background {
                         GeometryReader { geo in
                             Color.clear.preference(key: ChromeHeightKey.self, value: geo.size.height)
                         }
                     }
                     .padding(.bottom, keyboardLift)
-            }
-            .background {
-                GeometryReader { geo in
-                    Color.clear
-                        .onAppear { safeBottom = geo.safeAreaInsets.bottom }
-                        .onChange(of: geo.safeAreaInsets.bottom) { _, newValue in
-                            safeBottom = newValue
-                        }
-                }
+                    // Outside the padding, so the 12pt gap is from the physical
+                    // bottom and the bar starts in the home-indicator area.
+                    .ignoresSafeArea(edges: .bottom)
             }
             .onPreferenceChange(ChromeHeightKey.self) { chromeHeight = $0 }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
@@ -234,33 +235,29 @@ private extension MiniBrowserView {
     @ViewBuilder
     private var pinBanner: some View {
         HStack(spacing: 0) {
-            // Left: Filled Pin Icon + "Pinned"
             HStack(spacing: 8) {
                 Image(systemName: "pin.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Palette.onCoral(scheme))
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.primary)
 
                 Text(model.pinSaveKind == .pinned ? "browser.pinned" : "browser.saved_as_normal")
-                    .font(.system(size: 15.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Palette.onCoral(scheme))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
             }
 
             Spacer(minLength: 14)
 
-            // Elegant subtle vertical divider
             Rectangle()
-                .fill(Palette.onCoral(scheme).opacity(0.22))
-                .frame(width: 1, height: 22)
+                .fill(Color.primary.opacity(0.16))
+                .frame(width: 1, height: 18)
                 .padding(.horizontal, 12)
 
-            // Right: Destination picker (native menu, space + optional folder)
             PinDestinationMenuButton(
                 destination: model.pinnedDestination,
                 spaces: allSpaces,
                 scheme: scheme,
-                titleSize: 15,
+                titleSize: 16,
                 allowsFolders: model.pinSaveKind == .pinned,
-                inkColor: UIColor(Palette.onCoral(scheme)),
                 onSelect: { chosen in
                     model.selectPinDestination(chosen)
                 },
@@ -273,18 +270,13 @@ private extension MiniBrowserView {
                 }
             )
         }
-        .padding(.horizontal, 18)
-        .frame(height: 58)
-        .clipShape(Capsule())
-        .liquidGlassTintedCapsule(
-            Palette.coral(scheme),
+        .padding(.horizontal, 16)
+        .frame(height: 48)
+        .liquidGlassCapsule(
+            interactive: true,
             glassVisible: !model.pinBannerGlassSuppressed
         )
-        .shadow(color: Color.black.opacity(scheme == .dark ? 0.35 : 0.12), radius: 18, x: 0, y: 8)
-        .overlay(
-            Capsule()
-                .stroke(Palette.onCoral(scheme).opacity(0.14), lineWidth: 0.5)
-        )
+        .floatingGlassShadow(scheme: scheme)
         .transition(.asymmetric(
             insertion: .move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.95)),
             removal: .move(edge: .bottom).combined(with: .opacity)
@@ -296,23 +288,18 @@ private extension MiniBrowserView {
     private func pinNoticeToast(_ text: String) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "pin.slash.fill")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Palette.onCoral(scheme))
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.primary)
 
             Text(text)
-                .font(.system(size: 15.5, weight: .semibold, design: .rounded))
-                .foregroundStyle(Palette.onCoral(scheme))
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .foregroundStyle(.primary)
                 .lineLimit(2)
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 16)
         .frame(minHeight: 48)
-        .clipShape(Capsule())
-        .liquidGlassTintedCapsule(Palette.coral(scheme))
-        .shadow(color: Color.black.opacity(scheme == .dark ? 0.35 : 0.12), radius: 18, x: 0, y: 8)
-        .overlay(
-            Capsule()
-                .stroke(Palette.onCoral(scheme).opacity(0.14), lineWidth: 0.5)
-        )
+        .liquidGlassCapsule(interactive: true)
+        .floatingGlassShadow(scheme: scheme)
         .transition(.asymmetric(
             insertion: .move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.95)),
             removal: .move(edge: .bottom).combined(with: .opacity)

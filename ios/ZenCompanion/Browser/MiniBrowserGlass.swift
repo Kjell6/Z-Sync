@@ -28,10 +28,18 @@ extension View {
         }
     }
 
+    /// Untinted capsule. `interactive` is the same touch flex native glass
+    /// buttons get. `glassVisible == false` drops the glass layer: while a
+    /// native context menu is up, iOS 26 paints `glassEffect` as an opaque
+    /// white slab, so the pin banner falls back to a plain material.
     @ViewBuilder
-    func liquidGlassCapsule() -> some View {
+    func liquidGlassCapsule(interactive: Bool = false, glassVisible: Bool = true) -> some View {
         if #available(iOS 26.0, *) {
-            self.glassEffect(in: Capsule())
+            if glassVisible {
+                self.glassEffect(interactive ? .regular.interactive() : .regular, in: Capsule())
+            } else {
+                self.background(.regularMaterial, in: Capsule())
+            }
         } else {
             self
                 .background(.ultraThinMaterial, in: Capsule())
@@ -39,6 +47,16 @@ extension View {
                     Capsule().strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.6)
                 )
         }
+    }
+
+    /// Soft lift. No fill: the page stays what the glass samples.
+    func floatingGlassShadow(scheme: ColorScheme) -> some View {
+        shadow(
+            color: Color.black.opacity(scheme == .dark ? 0.35 : 0.16),
+            radius: 14,
+            x: 0,
+            y: 6
+        )
     }
 
     /// Untinted regular glass for the bottom browser card. One radius for the

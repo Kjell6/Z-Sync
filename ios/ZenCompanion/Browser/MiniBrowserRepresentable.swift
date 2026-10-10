@@ -18,6 +18,7 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
+        webView.isFindInteractionEnabled = true
         webView.isOpaque = false
         webView.backgroundColor = .clear
         webView.scrollView.backgroundColor = .clear
@@ -35,12 +36,14 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
 
         context.coordinator.setupObservers(for: webView)
         model.webView = webView
+        model.applyWebpagePreferences()
         return webView
     }
 
     func updateUIView(_ uiView: WKWebView, context: Context) {
         guard let webView = uiView as? MiniBrowserWebView else { return }
         webView.bottomBarVisible = bottomBarVisible
+        model.applyWebpagePreferences()
         webView.updateObscuredInsets()
     }
 
@@ -67,13 +70,19 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
             return nil
         }
 
-        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        func webView(
+            _ webView: WKWebView,
+            decidePolicyFor navigationAction: WKNavigationAction,
+            preferences: WKWebpagePreferences,
+            decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void
+        ) {
+            preferences.preferredContentMode = model.requestsDesktopSite ? .desktop : .mobile
             guard let url = navigationAction.request.url, !BrowserNavigationPolicy.loadsInWebView(url) else {
-                decisionHandler(.allow)
+                decisionHandler(.allow, preferences)
                 return
             }
             ExternalBrowser.open(url)
-            decisionHandler(.cancel)
+            decisionHandler(.cancel, preferences)
         }
 
         func setupObservers(for webView: WKWebView) {

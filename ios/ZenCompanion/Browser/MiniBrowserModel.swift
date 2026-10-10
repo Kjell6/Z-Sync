@@ -3,6 +3,44 @@ import Observation
 import SwiftUI
 import WebKit
 
+/// Page-tool rules for the bottom browser card.
+///
+/// Android port: copy these constants into `MiniBrowserViewModel` rather than
+/// inventing new ones from the layout. Zoom is a fraction of 1.0 (1.0 = 100%),
+/// clamped to 0.5...2.0 in steps of 0.1. Forward is visible only when the page
+/// can go forward and the address field is not being edited.
+enum MiniBrowserTools {
+    static let zoomMin = 0.5
+    static let zoomMax = 2.0
+    static let zoomStep = 0.1
+    static let defaultZoom = 1.0
+
+    static func clampedZoom(_ value: Double) -> Double {
+        let steps = (value / zoomStep).rounded()
+        let stepped = steps * zoomStep
+        let clamped = min(zoomMax, max(zoomMin, stepped))
+        return (clamped * 100).rounded() / 100
+    }
+
+    static func zoomPercentLabel(_ value: Double) -> String {
+        "\(Int((clampedZoom(value) * 100).rounded()))%"
+    }
+
+    static func canZoomIn(_ value: Double) -> Bool {
+        clampedZoom(value) < zoomMax - 0.001
+    }
+
+    static func canZoomOut(_ value: Double) -> Bool {
+        clampedZoom(value) > zoomMin + 0.001
+    }
+
+    /// Back stays. Forward appears beside it only when there is a forward entry
+    /// and the user is not editing the address.
+    static func showsForwardButton(canGoForward: Bool, addressEditing: Bool) -> Bool {
+        canGoForward && !addressEditing
+    }
+}
+
 /// State owner for the mini-browser: web-view progress/URL state fed by KVO,
 /// the address field text, URL/search resolution and the pin-save banner state
 /// machine. Replaces the former `MiniBrowserState` + view state in
@@ -18,6 +56,13 @@ final class MiniBrowserModel {
     var canGoBack: Bool = false
     var canGoForward: Bool = false
     var themeColor: Color?
+
+    /// Expanded page menu on the bottom card.
+    var menuExpanded = false
+    /// Session-only. Navigations request the desktop version of the site.
+    var requestsDesktopSite = false
+    /// 1.0 is 100%. Always inside `MiniBrowserTools` limits.
+    private(set) var pageZoom: Double = MiniBrowserTools.defaultZoom
 
     @ObservationIgnored weak var webView: WKWebView?
 
@@ -100,6 +145,16 @@ final class MiniBrowserModel {
         return BrowserInput.resolve(addressText, engine: searchEngine.current)
     }
 
+    /// Host shown in the address field and under the page title. Empty when
+    /// nothing is loaded.
+    var pageHost: String {
+        guard let url = effectiveURL else { return "" }
+        return BrowserInput.displayText(for: url)
+    }
+
+    var canZoomIn: Bool { MiniBrowserTools.canZoomIn(pageZoom) }
+    var canZoomOut: Bool { MiniBrowserTools.canZoomOut(pageZoom) }
+
     // MARK: - Loading
 
     func loadInitial() {
@@ -132,6 +187,81 @@ final class MiniBrowserModel {
     func openCurrentInExternalBrowser() {
         if let url = effectiveURL {
             urlOpener.open(url)
+        }
+    }
+
+    // MARK: - Page menu
+
+    /// Opens the page menu only when there is a page to act on. Closing is
+    /// always allowed.
+    func toggleMenu() {
+        if menuExpanded {
+            menuExpanded = false
+            return
+        }
+        guard effectiveURL != nil else { return }
+        menuExpanded = true
+        haptics.selectionChanged()
+    }
+
+    func collapseMenu() {
+        menuExpanded = false
+    }
+
+    func setPageZoom(_ value: Double) {
+        let next = MiniBrowserTools.clampedZoom(value)
+        guard abs(next - pageZoom) > 0.001 else { return }
+        pageZoom = next
+        applyWebpagePreferences()
+    }
+
+    func zoomIn() {
+        guard canZoomIn else { return }
+        setPageZoom(pageZoom + MiniBrowserTools.zoomStep)
+        haptics.selectionChanged()
+    }
+
+    func zoomOut() {
+        guard canZoomOut else { return }
+        setPageZoom(pageZoom - MiniBrowserTools.zoomStep)
+        haptics.selectionChanged()
+    }
+
+    func toggleDesktopSite() {
+        requestsDesktopSite.toggle()
+        applyWebpagePreferences()
+        haptics.selectionChanged()
+        if webView?.url != nil {
+            webView?.reload()
+        }
+    }
+
+    /// System find bar. The page menu closes so the two bars do not stack.
+    func presentFindOnPage() {
+        menuExpanded = false
+        guard let webView else { return }
+        webView.isFindInteractionEnabled = true
+        webView.findInteraction?.presentFindNavigator(showingReplace: false)
+    }
+
+    /// Copies the current page URL. Returns false when there is nothing to copy.
+    @discardableResult
+    func copyCurrentLink() -> Bool {
+        guard let url = effectiveURL else { return false }
+        UIPasteboard.general.url = url
+        haptics.selectionChanged()
+        return true
+    }
+
+    /// Keeps WebKit's desktop mode and page zoom aligned with the model.
+    /// Called again when the web view is (re)attached.
+    func applyWebpagePreferences() {
+        guard let webView else { return }
+        webView.configuration.defaultWebpagePreferences.preferredContentMode =
+            requestsDesktopSite ? .desktop : .mobile
+        let zoom = CGFloat(pageZoom)
+        if abs(webView.pageZoom - zoom) > 0.001 {
+            webView.pageZoom = zoom
         }
     }
 

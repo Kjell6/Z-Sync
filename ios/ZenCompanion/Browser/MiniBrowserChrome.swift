@@ -1,19 +1,13 @@
 import SwiftUI
 
-/// Bottom browser chrome, drawn on top of the page.
+/// Bottom browser chrome. The page ends where this bar begins.
 ///
-/// Android port (`MiniBrowserChrome` / `MiniBrowserFooter`): overlay the page.
-/// Do not reserve a solid strip under the controls.
-///
-/// Collapsed, each piece is its own material. On iOS 26 Back, Forward, and
-/// More are real `.glass` buttons so the material flexes under the finger.
-/// Forward shows only when `MiniBrowserTools.showsForwardButton` is true.
-/// The address field is its own interactive capsule. More morphs those pieces
-/// into one card on the page: the glass shapes flow, they do not scale-fade.
-/// The card's top is a long URL pill (back, forward, URL, reload). Copy,
-/// desktop site, and zoom sit under it. Find, Share, Open, and Pin are the
-/// bottom row, Pin at the trailing edge. No page title. No translate control.
-/// The material is untinted regular glass (a plain material on Android).
+/// Android port (`MiniBrowserChrome` / `MiniBrowserFooter`): one bottom strip,
+/// not separate floating pieces and not an overlay on the page. Collapsed, the
+/// strip is cut off by the screen edges. Expanded, it keeps that full width
+/// and the screen bottom, and its top corners use the display corner radius.
+/// Buttons match the home action bar: `Palette.lift`, 13pt continuous corners.
+/// The material behind them is one untinted glass surface.
 struct MiniBrowserChrome: View {
     var model: MiniBrowserModel
     var addressEditing: Bool
@@ -21,18 +15,23 @@ struct MiniBrowserChrome: View {
     @FocusState.Binding var isAddressFocused: Bool
     let space: ZenSpace
     let allSpaces: [ZenSpace]
+    /// Space under the controls. Includes the home indicator while the keyboard
+    /// is hidden, so the glass runs to the physical bottom and the buttons sit
+    /// above the indicator.
+    var bottomInset: CGFloat
+    /// Display corner radius for the expanded bar's top edge.
+    var displayCornerRadius: CGFloat
     var onCancel: () -> Void
     var onSubmit: () -> Void
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Namespace private var glassNamespace
     @State private var copied = false
     @State private var copyGeneration = 0
 
-    private let radius: CGFloat = 28
-    /// Collapsed address capsule and the native side buttons share this side.
-    private let addressHeight: CGFloat = 44
+    /// Same tile as the home action bar.
+    private let tileRadius: CGFloat = 13
+    private let controlSide: CGFloat = 44
 
     private var motion: Animation {
         reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.38, dampingFraction: 0.86)
@@ -42,59 +41,45 @@ struct MiniBrowserChrome: View {
         animateChrome ? motion : nil
     }
 
+    private var menuOpen: Bool { model.menuExpanded && !addressEditing }
+
     var body: some View {
-        glassContainer
-            .fixedSize(horizontal: false, vertical: true)
-            .animation(chromeAnimation, value: model.menuExpanded)
-            .animation(chromeAnimation, value: model.canGoForward)
-            .animation(chromeAnimation, value: addressEditing)
-            .animation(chromeAnimation, value: model.addressText.isEmpty)
-    }
-
-    /// One container so the collapsed glasses can flow into the expanded card.
-    /// Spacing matches the row gap: close enough to morph when a piece appears
-    /// or disappears, not so close that the circles merge while collapsed.
-    @ViewBuilder
-    private var glassContainer: some View {
-        if #available(iOS 26.0, *) {
-            GlassEffectContainer(spacing: 10) {
-                morphingChrome
+        VStack(spacing: 0) {
+            if menuOpen {
+                expandedMenu
+                    .transition(.opacity)
             }
-        } else {
-            morphingChrome
+            controlRow
+                .padding(.horizontal, 20)
+                .padding(.top, menuOpen ? 4 : 10)
+                .padding(.bottom, bottomInset)
         }
-    }
-
-    private var morphingChrome: some View {
-        ZStack(alignment: .bottom) {
-            if model.menuExpanded && !addressEditing {
-                expandedCard
-                    .transition(glassSwap)
-            } else {
-                controlRow
-                    .transition(glassSwap)
+        .frame(maxWidth: .infinity)
+        .liquidGlassBar(topRadius: menuOpen ? displayCornerRadius : 0)
+        .overlay(alignment: .top) {
+            if !menuOpen {
+                Rectangle()
+                    .fill(Color.primary.opacity(0.12))
+                    .frame(height: 0.5)
             }
         }
-    }
-
-    /// The glass container owns the motion. A scale or fade on the whole row
-    /// hides that morph. Reduced motion keeps a plain fade.
-    private var glassSwap: AnyTransition {
-        reduceMotion ? .opacity : .identity
+        .animation(chromeAnimation, value: model.menuExpanded)
+        .animation(chromeAnimation, value: model.canGoForward)
+        .animation(chromeAnimation, value: addressEditing)
+        .animation(chromeAnimation, value: model.addressText.isEmpty)
     }
 
     // MARK: - Compact row
 
-    /// Separate glass pieces. Back and More are circles. The address field is
-    /// its own capsule. Nothing here shares one background.
+    /// Same rhythm as the home action bar: side tiles, field, side tile.
+    /// The trailing tile opens the menu. It points up while closed.
     private var controlRow: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             if !addressEditing {
-                glassCircle(
+                homeTile(
                     systemName: "chevron.backward",
                     label: "browser.back",
-                    enabled: model.canGoBack,
-                    glassID: "back"
+                    enabled: model.canGoBack
                 ) {
                     model.goBack()
                 }
@@ -102,11 +87,10 @@ struct MiniBrowserChrome: View {
                     canGoForward: model.canGoForward,
                     addressEditing: addressEditing
                 ) {
-                    glassCircle(
+                    homeTile(
                         systemName: "chevron.forward",
                         label: "browser.forward",
-                        enabled: true,
-                        glassID: "forward"
+                        enabled: true
                     ) {
                         model.goForward()
                     }
@@ -115,9 +99,9 @@ struct MiniBrowserChrome: View {
             }
 
             addressField
-                .padding(.leading, 14)
+                .padding(.leading, 16)
                 .padding(.trailing, 4)
-                .frame(height: addressHeight)
+                .frame(height: controlSide)
                 .frame(maxWidth: .infinity)
                 .overlay(alignment: .bottom) {
                     if model.isLoading && !addressEditing {
@@ -126,13 +110,13 @@ struct MiniBrowserChrome: View {
                             .padding(.bottom, 1)
                     }
                 }
-                .clipShape(Capsule())
-                .liquidGlassCapsule(interactive: true)
-                .modifier(GlassIdentity(id: "address", namespace: glassNamespace, reduceMotion: reduceMotion))
-                .floatingGlassShadow(scheme: scheme)
+                .background(
+                    Palette.lift(scheme),
+                    in: RoundedRectangle(cornerRadius: tileRadius, style: .continuous)
+                )
 
             if addressEditing {
-                glassCircle(
+                homeTile(
                     systemName: "xmark",
                     label: "common.cancel",
                     enabled: true,
@@ -142,11 +126,10 @@ struct MiniBrowserChrome: View {
                 }
                 .transition(.opacity)
             } else {
-                glassCircle(
-                    systemName: "ellipsis",
-                    label: "browser.more",
-                    enabled: model.effectiveURL != nil,
-                    glassID: "more"
+                homeTile(
+                    systemName: menuOpen ? "chevron.down" : "chevron.up",
+                    label: menuOpen ? "browser.close_menu" : "browser.more",
+                    enabled: menuOpen || model.effectiveURL != nil
                 ) {
                     withAnimation(motion) {
                         model.toggleMenu()
@@ -156,11 +139,42 @@ struct MiniBrowserChrome: View {
         }
     }
 
+    /// Home action-bar tile: lift fill, 13pt continuous corners, 44pt side.
+    private func homeTile(
+        systemName: String,
+        label: LocalizedStringKey,
+        enabled: Bool,
+        tint: Color? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(tint ?? Palette.ink(scheme).opacity(enabled ? 0.75 : 0.35))
+                .frame(width: controlSide, height: controlSide)
+                .background(
+                    Palette.lift(scheme),
+                    in: RoundedRectangle(cornerRadius: tileRadius, style: .continuous)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: tileRadius, style: .continuous))
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(SquircleButtonStyle())
+        .disabled(!enabled)
+        .accessibilityLabel(Text(label))
+    }
+
     private var addressField: some View {
         HStack(spacing: 8) {
             leadingIcon
-            TextField("browser.search_placeholder", text: Bindable(model).addressText)
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
+            TextField(
+                "",
+                text: Bindable(model).addressText,
+                prompt: Text("browser.search_placeholder")
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.55))
+            )
+                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .foregroundStyle(Palette.ink(scheme))
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .keyboardType(.webSearch)
@@ -171,7 +185,7 @@ struct MiniBrowserChrome: View {
             trailingIcon
         }
         .frame(maxWidth: .infinity)
-        .frame(minHeight: addressHeight)
+        .frame(minHeight: controlSide)
     }
 
     @ViewBuilder
@@ -179,7 +193,7 @@ struct MiniBrowserChrome: View {
         if addressEditing || model.effectiveURL == nil {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(addressEditing ? Palette.coral(scheme) : Color.secondary)
+                .foregroundStyle(addressEditing ? Palette.coral(scheme) : Palette.ink(scheme).opacity(0.55))
                 .frame(width: 22, height: 22)
         } else if model.effectiveURL?.scheme == "http" {
             Image(systemName: "lock.slash.fill")
@@ -202,7 +216,7 @@ struct MiniBrowserChrome: View {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 16))
                     .foregroundStyle(.secondary)
-                    .frame(width: 36, height: addressHeight)
+                    .frame(width: 36, height: controlSide)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -218,7 +232,7 @@ struct MiniBrowserChrome: View {
                 Image(systemName: model.isLoading ? "xmark" : "arrow.clockwise")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.secondary)
-                    .frame(width: 36, height: addressHeight)
+                    .frame(width: 36, height: controlSide)
                     .contentShape(Rectangle())
                     .contentTransition(.symbolEffect(.replace))
             }
@@ -241,90 +255,11 @@ struct MiniBrowserChrome: View {
         .accessibilityHidden(true)
     }
 
-    /// iOS 26 uses a real glass button so the material flexes with the touch.
-    /// A custom `glassEffect` circle cannot reproduce that. Older systems keep
-    /// the material fallback.
-    @ViewBuilder
-    private func glassCircle(
-        systemName: String,
-        label: LocalizedStringKey,
-        enabled: Bool,
-        tint: Color? = nil,
-        glassID: String? = nil,
-        action: @escaping () -> Void
-    ) -> some View {
-        if #available(iOS 26.0, *) {
-            nativeGlassCircle(
-                systemName: systemName,
-                label: label,
-                enabled: enabled,
-                tint: tint,
-                glassID: glassID,
-                action: action
-            )
-        } else {
-            legacyGlassCircle(
-                systemName: systemName,
-                label: label,
-                enabled: enabled,
-                tint: tint,
-                action: action
-            )
-        }
-    }
-
-    @available(iOS 26.0, *)
-    private func nativeGlassCircle(
-        systemName: String,
-        label: LocalizedStringKey,
-        enabled: Bool,
-        tint: Color?,
-        glassID: String?,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 17, weight: .semibold))
-                .frame(width: addressHeight, height: addressHeight)
-                .contentTransition(.symbolEffect(.replace))
-        }
-        .labelStyle(.iconOnly)
-        .buttonStyle(.glass)
-        .buttonBorderShape(.circle)
-        .buttonSizing(.fitted)
-        .disabled(!enabled)
-        .accessibilityLabel(Text(label))
-        .modifier(OptionalTint(color: tint))
-        .modifier(GlassIdentity(id: glassID, namespace: glassNamespace, reduceMotion: reduceMotion))
-    }
-
-    private func legacyGlassCircle(
-        systemName: String,
-        label: LocalizedStringKey,
-        enabled: Bool,
-        tint: Color?,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(tint ?? (enabled ? Color.primary : Color.secondary.opacity(0.45)))
-                .frame(width: addressHeight, height: addressHeight)
-                .contentShape(Circle())
-                .contentTransition(.symbolEffect(.replace))
-        }
-        .buttonStyle(CardPressStyle())
-        .disabled(!enabled)
-        .accessibilityLabel(Text(label))
-        .liquidGlassCircle()
-        .floatingGlassShadow(scheme: scheme)
-    }
-
     // MARK: - Expanded menu
 
-    /// One glass surface. The collapsed circles and capsule share glass IDs
-    /// with pieces inside this card so the material moves into it.
-    private var expandedCard: some View {
+    /// Grows inside the same full-width glass. The bar's top corners, not this
+    /// content, carry the display radius.
+    private var expandedMenu: some View {
         ViewThatFits(in: .vertical) {
             expandedContent
             ScrollView {
@@ -333,16 +268,13 @@ struct MiniBrowserChrome: View {
             .scrollBounceBehavior(.basedOnSize)
             .frame(maxHeight: 460)
         }
-        .liquidGlassCard(cornerRadius: radius)
-        .modifier(GlassIdentity(id: "address", namespace: glassNamespace, reduceMotion: reduceMotion))
-        .floatingGlassShadow(scheme: scheme)
     }
 
     private var expandedContent: some View {
         VStack(spacing: 0) {
             urlPill
-                .padding(.horizontal, 12)
-                .padding(.top, 12)
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
                 .padding(.bottom, 4)
 
             VStack(spacing: 0) {
@@ -356,9 +288,9 @@ struct MiniBrowserChrome: View {
             .padding(.top, 4)
 
             actionRow
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 20)
                 .padding(.top, 10)
-                .padding(.bottom, 12)
+                .padding(.bottom, 8)
         }
     }
 
@@ -369,8 +301,7 @@ struct MiniBrowserChrome: View {
             pillButton(
                 systemName: "chevron.backward",
                 label: "browser.back",
-                enabled: model.canGoBack,
-                glassID: "back"
+                enabled: model.canGoBack
             ) {
                 model.goBack()
             }
@@ -381,8 +312,7 @@ struct MiniBrowserChrome: View {
                 pillButton(
                     systemName: "chevron.forward",
                     label: "browser.forward",
-                    enabled: true,
-                    glassID: "forward"
+                    enabled: true
                 ) {
                     model.goForward()
                 }
@@ -405,8 +335,7 @@ struct MiniBrowserChrome: View {
             pillButton(
                 systemName: model.isLoading ? "xmark" : "arrow.clockwise",
                 label: model.isLoading ? "browser.stop" : "browser.reload",
-                enabled: model.effectiveURL != nil,
-                glassID: "more"
+                enabled: model.effectiveURL != nil
             ) {
                 if model.isLoading {
                     model.stopLoading()
@@ -416,10 +345,10 @@ struct MiniBrowserChrome: View {
             }
         }
         .padding(.horizontal, 4)
-        .frame(height: 48)
+        .frame(height: controlSide)
         .background(
-            Color.primary.opacity(scheme == .dark ? 0.14 : 0.06),
-            in: Capsule()
+            Palette.lift(scheme),
+            in: RoundedRectangle(cornerRadius: tileRadius, style: .continuous)
         )
         .overlay(alignment: .bottom) {
             if model.isLoading {
@@ -428,7 +357,6 @@ struct MiniBrowserChrome: View {
                     .padding(.bottom, 1)
             }
         }
-        .clipShape(Capsule())
     }
 
     /// Host, plus the path when the page is not the site root.
@@ -447,21 +375,19 @@ struct MiniBrowserChrome: View {
         systemName: String,
         label: LocalizedStringKey,
         enabled: Bool,
-        glassID: String,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(enabled ? Color.primary : Color.secondary.opacity(0.45))
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(Palette.ink(scheme).opacity(enabled ? 0.75 : 0.35))
                 .frame(width: 40, height: 40)
-                .contentShape(Circle())
+                .contentShape(Rectangle())
                 .contentTransition(.symbolEffect(.replace))
         }
-        .buttonStyle(CardPressStyle())
+        .buttonStyle(SquircleButtonStyle())
         .disabled(!enabled)
         .accessibilityLabel(Text(label))
-        .modifier(GlassIdentity(id: glassID, namespace: glassNamespace, reduceMotion: reduceMotion))
     }
 
     /// Bottom row, trailing edge first for the thumb: Pin sits on the right.
@@ -539,12 +465,12 @@ struct MiniBrowserChrome: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
         }
-        .foregroundStyle(.primary)
+        .foregroundStyle(Palette.ink(scheme).opacity(0.85))
         .frame(maxWidth: .infinity)
         .frame(height: 68)
         .background(
-            Color.primary.opacity(scheme == .dark ? 0.12 : 0.06),
-            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            Palette.lift(scheme),
+            in: RoundedRectangle(cornerRadius: tileRadius, style: .continuous)
         )
     }
 
@@ -659,42 +585,7 @@ struct MiniBrowserChrome: View {
     }
 }
 
-/// Links a collapsed glass piece to its place inside the expanded card.
-/// `matchedGeometry` is what makes the material flow. A nil id leaves the
-/// view alone (the cancel circle has no partner).
-private struct GlassIdentity: ViewModifier {
-    var id: String?
-    var namespace: Namespace.ID
-    var reduceMotion: Bool
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if #available(iOS 26.0, *), let id {
-            content
-                .glassEffectID(id, in: namespace)
-                .glassEffectTransition(reduceMotion ? .identity : .matchedGeometry)
-        } else {
-            content
-        }
-    }
-}
-
-/// Applies a tint only when one was asked for, so the other glass buttons
-/// stay the untinted system material.
-private struct OptionalTint: ViewModifier {
-    var color: Color?
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if let color {
-            content.tint(color)
-        } else {
-            content
-        }
-    }
-}
-
-/// Press feedback for controls on the floating glass. The glass is the
+/// Press feedback for rows inside the bar.
 /// control itself, so the press is a small scale rather than another material.
 private struct CardPressStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion

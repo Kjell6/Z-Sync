@@ -31,9 +31,8 @@ struct MiniBrowserChrome: View {
     @State private var copyGeneration = 0
 
     private let radius: CGFloat = 28
-    /// Collapsed address capsule. A step under the old 44pt so it sits nearer
-    /// the native glass circles beside it.
-    private let addressHeight: CGFloat = 36
+    /// Collapsed address capsule and the native side buttons share this side.
+    private let addressHeight: CGFloat = 44
 
     private var motion: Animation {
         reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.38, dampingFraction: 0.86)
@@ -203,7 +202,7 @@ struct MiniBrowserChrome: View {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 16))
                     .foregroundStyle(.secondary)
-                    .frame(width: 32, height: 32)
+                    .frame(width: 36, height: addressHeight)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -219,7 +218,7 @@ struct MiniBrowserChrome: View {
                 Image(systemName: model.isLoading ? "xmark" : "arrow.clockwise")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.secondary)
-                    .frame(width: 32, height: 32)
+                    .frame(width: 36, height: addressHeight)
                     .contentShape(Rectangle())
                     .contentTransition(.symbolEffect(.replace))
             }
@@ -286,12 +285,13 @@ struct MiniBrowserChrome: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 17, weight: .semibold))
+                .frame(width: addressHeight, height: addressHeight)
                 .contentTransition(.symbolEffect(.replace))
         }
         .labelStyle(.iconOnly)
         .buttonStyle(.glass)
         .buttonBorderShape(.circle)
-        .controlSize(.regular)
+        .buttonSizing(.fitted)
         .disabled(!enabled)
         .accessibilityLabel(Text(label))
         .modifier(OptionalTint(color: tint))
@@ -309,7 +309,7 @@ struct MiniBrowserChrome: View {
             Image(systemName: systemName)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(tint ?? (enabled ? Color.primary : Color.secondary.opacity(0.45)))
-                .frame(width: 44, height: 44)
+                .frame(width: addressHeight, height: addressHeight)
                 .contentShape(Circle())
                 .contentTransition(.symbolEffect(.replace))
         }

@@ -5,13 +5,14 @@ import SwiftUI
 /// Android port (`MiniBrowserChrome` / `MiniBrowserFooter`): overlay the page.
 /// Do not reserve a solid strip under the controls.
 ///
-/// Collapsed, each piece is its own material: a circle for Back, a second
-/// circle for Forward only when `MiniBrowserTools.showsForwardButton` is true,
-/// a capsule for the address field, and a circle for More.
-/// More morphs those pieces into one card on the page. The card's top is a
-/// long URL pill (back, forward, URL, reload). Copy, desktop site, and zoom
-/// sit under it. Find, Share, Open, and Pin are the bottom row, Pin at the
-/// trailing edge. No page title. No translate control.
+/// Collapsed, each piece is its own material. On iOS 26 Back, Forward, and
+/// More are real `.glass` buttons so the material flexes under the finger.
+/// Forward shows only when `MiniBrowserTools.showsForwardButton` is true.
+/// The address field is its own interactive capsule. More morphs those pieces
+/// into one card on the page: the glass shapes flow, they do not scale-fade.
+/// The card's top is a long URL pill (back, forward, URL, reload). Copy,
+/// desktop site, and zoom sit under it. Find, Share, Open, and Pin are the
+/// bottom row, Pin at the trailing edge. No page title. No translate control.
 /// The material is untinted regular glass (a plain material on Android).
 struct MiniBrowserChrome: View {
     var model: MiniBrowserModel
@@ -48,13 +49,13 @@ struct MiniBrowserChrome: View {
             .animation(chromeAnimation, value: model.addressText.isEmpty)
     }
 
-    /// One container so the collapsed glasses can morph into the expanded card.
-    /// Spacing stays under the gap between the circles, so they do not merge
-    /// while the bar is collapsed.
+    /// One container so the collapsed glasses can flow into the expanded card.
+    /// Spacing matches the row gap: close enough to morph when a piece appears
+    /// or disappears, not so close that the circles merge while collapsed.
     @ViewBuilder
     private var glassContainer: some View {
         if #available(iOS 26.0, *) {
-            GlassEffectContainer(spacing: 6) {
+            GlassEffectContainer(spacing: 10) {
                 morphingChrome
             }
         } else {
@@ -66,16 +67,18 @@ struct MiniBrowserChrome: View {
         ZStack(alignment: .bottom) {
             if model.menuExpanded && !addressEditing {
                 expandedCard
-                    .transition(cardTransition)
+                    .transition(glassSwap)
             } else {
                 controlRow
-                    .transition(cardTransition)
+                    .transition(glassSwap)
             }
         }
     }
 
-    private var cardTransition: AnyTransition {
-        .scale(scale: 0.86, anchor: .bottom).combined(with: .opacity)
+    /// The glass container owns the motion. A scale or fade on the whole row
+    /// hides that morph. Reduced motion keeps a plain fade.
+    private var glassSwap: AnyTransition {
+        reduceMotion ? .opacity : .identity
     }
 
     // MARK: - Compact row
@@ -105,14 +108,14 @@ struct MiniBrowserChrome: View {
                     ) {
                         model.goForward()
                     }
-                    .transition(.opacity.combined(with: .scale(scale: 0.86)))
+                    .transition(.opacity)
                 }
             }
 
             addressField
                 .padding(.leading, 14)
                 .padding(.trailing, 4)
-                .frame(height: 48)
+                .frame(height: 44)
                 .frame(maxWidth: .infinity)
                 .overlay(alignment: .bottom) {
                     if model.isLoading && !addressEditing {
@@ -122,9 +125,9 @@ struct MiniBrowserChrome: View {
                     }
                 }
                 .clipShape(Capsule())
-                .liquidGlassCapsule()
-                .modifier(GlassIdentity(id: "address", namespace: glassNamespace))
-                .modifier(FloatingGlassShadow(scheme: scheme))
+                .liquidGlassCapsule(interactive: true)
+                .modifier(GlassIdentity(id: "address", namespace: glassNamespace, reduceMotion: reduceMotion))
+                .floatingGlassShadow(scheme: scheme)
 
             if addressEditing {
                 glassCircle(
@@ -135,7 +138,7 @@ struct MiniBrowserChrome: View {
                 ) {
                     onCancel()
                 }
-                .transition(.opacity.combined(with: .scale(scale: 0.86)))
+                .transition(.opacity)
             } else {
                 glassCircle(
                     systemName: "ellipsis",
@@ -236,6 +239,10 @@ struct MiniBrowserChrome: View {
         .accessibilityHidden(true)
     }
 
+    /// iOS 26 uses a real glass button so the material flexes with the touch.
+    /// A custom `glassEffect` circle cannot reproduce that. Older systems keep
+    /// the material fallback.
+    @ViewBuilder
     private func glassCircle(
         systemName: String,
         label: LocalizedStringKey,
@@ -244,11 +251,62 @@ struct MiniBrowserChrome: View {
         glassID: String? = nil,
         action: @escaping () -> Void
     ) -> some View {
+        if #available(iOS 26.0, *) {
+            nativeGlassCircle(
+                systemName: systemName,
+                label: label,
+                enabled: enabled,
+                tint: tint,
+                glassID: glassID,
+                action: action
+            )
+        } else {
+            legacyGlassCircle(
+                systemName: systemName,
+                label: label,
+                enabled: enabled,
+                tint: tint,
+                action: action
+            )
+        }
+    }
+
+    @available(iOS 26.0, *)
+    private func nativeGlassCircle(
+        systemName: String,
+        label: LocalizedStringKey,
+        enabled: Bool,
+        tint: Color?,
+        glassID: String?,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 17, weight: .semibold))
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+        .controlSize(.regular)
+        .disabled(!enabled)
+        .accessibilityLabel(Text(label))
+        .modifier(OptionalTint(color: tint))
+        .modifier(GlassIdentity(id: glassID, namespace: glassNamespace, reduceMotion: reduceMotion))
+    }
+
+    private func legacyGlassCircle(
+        systemName: String,
+        label: LocalizedStringKey,
+        enabled: Bool,
+        tint: Color?,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(tint ?? (enabled ? Color.primary : Color.secondary.opacity(0.45)))
-                .frame(width: 48, height: 48)
+                .frame(width: 44, height: 44)
                 .contentShape(Circle())
                 .contentTransition(.symbolEffect(.replace))
         }
@@ -256,8 +314,7 @@ struct MiniBrowserChrome: View {
         .disabled(!enabled)
         .accessibilityLabel(Text(label))
         .liquidGlassCircle()
-        .modifier(GlassIdentity(id: glassID, namespace: glassNamespace))
-        .modifier(FloatingGlassShadow(scheme: scheme))
+        .floatingGlassShadow(scheme: scheme)
     }
 
     // MARK: - Expanded menu
@@ -274,8 +331,8 @@ struct MiniBrowserChrome: View {
             .frame(maxHeight: 460)
         }
         .liquidGlassCard(cornerRadius: radius)
-        .modifier(GlassIdentity(id: "address", namespace: glassNamespace))
-        .modifier(FloatingGlassShadow(scheme: scheme))
+        .modifier(GlassIdentity(id: "address", namespace: glassNamespace, reduceMotion: reduceMotion))
+        .floatingGlassShadow(scheme: scheme)
     }
 
     private var expandedContent: some View {
@@ -401,7 +458,7 @@ struct MiniBrowserChrome: View {
         .buttonStyle(CardPressStyle())
         .disabled(!enabled)
         .accessibilityLabel(Text(label))
-        .modifier(GlassIdentity(id: glassID, namespace: glassNamespace))
+        .modifier(GlassIdentity(id: glassID, namespace: glassNamespace, reduceMotion: reduceMotion))
     }
 
     /// Bottom row, trailing edge first for the thumb: Pin sits on the right.
@@ -600,33 +657,37 @@ struct MiniBrowserChrome: View {
 }
 
 /// Links a collapsed glass piece to its place inside the expanded card.
-/// A nil id leaves the view alone (the cancel circle has no partner).
+/// `matchedGeometry` is what makes the material flow. A nil id leaves the
+/// view alone (the cancel circle has no partner).
 private struct GlassIdentity: ViewModifier {
     var id: String?
     var namespace: Namespace.ID
+    var reduceMotion: Bool
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *), let id {
-            content.glassEffectID(id, in: namespace)
+            content
+                .glassEffectID(id, in: namespace)
+                .glassEffectTransition(reduceMotion ? .identity : .matchedGeometry)
         } else {
             content
         }
     }
 }
 
-/// Soft lift so each glass piece separates from the page under it.
-/// No fill: the page has to remain the thing the glass samples.
-private struct FloatingGlassShadow: ViewModifier {
-    var scheme: ColorScheme
+/// Applies a tint only when one was asked for, so the other glass buttons
+/// stay the untinted system material.
+private struct OptionalTint: ViewModifier {
+    var color: Color?
 
+    @ViewBuilder
     func body(content: Content) -> some View {
-        content.shadow(
-            color: Color.black.opacity(scheme == .dark ? 0.35 : 0.16),
-            radius: 14,
-            x: 0,
-            y: 6
-        )
+        if let color {
+            content.tint(color)
+        } else {
+            content
+        }
     }
 }
 

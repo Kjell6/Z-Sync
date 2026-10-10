@@ -22,6 +22,8 @@ struct MiniBrowserChrome: View {
     var bottomInset: CGFloat
     /// Display corner radius. Short sheets use less than this.
     var displayCornerRadius: CGFloat
+    /// Collapsed URL label was tapped. The field does not exist yet.
+    var onBeginAddressEdit: () -> Void
     var onCancel: () -> Void
     var onSubmit: () -> Void
 
@@ -63,13 +65,15 @@ struct MiniBrowserChrome: View {
             }
             if addressEditing {
                 inputComposer
+                    .transition(.identity)
             } else {
                 controlRow
                     .padding(.horizontal, 20)
-                    // Open: the option rows only have a hairline between them.
-                    // The tiles need a few points so they do not touch the bar.
-                    .padding(.top, menuOpen ? 8 : 10)
+                    // Option rows are 48pt with the label centered, so the air
+                    // between two labels is about 24pt. 8pt read as too tight.
+                    .padding(.top, menuOpen ? 24 : 10)
                     .padding(.bottom, bottomInset)
+                    .transition(.identity)
             }
         }
         .frame(maxWidth: .infinity)
@@ -201,26 +205,68 @@ struct MiniBrowserChrome: View {
 
     private var addressField: some View {
         HStack(spacing: 8) {
-            leadingIcon
-            TextField(
-                "",
-                text: Bindable(model).addressText,
-                prompt: Text("browser.search_placeholder")
-                    .foregroundStyle(Palette.ink(scheme).opacity(0.55))
-            )
-                .font(.system(size: 16, weight: .medium, design: .rounded))
-                .foregroundStyle(Palette.ink(scheme))
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .keyboardType(.webSearch)
-                .submitLabel(.go)
-                .multilineTextAlignment(addressEditing ? .leading : .center)
-                .focused($isAddressFocused)
-                .onSubmit(onSubmit)
-            trailingIcon
+            if addressEditing {
+                leadingIcon
+                addressEditor
+                trailingIcon
+            } else {
+                // A label, not a text field. Tapping the live field replaced
+                // its text and its parent in the same turn, which wedged the
+                // keyboard until the watchdog killed the app.
+                Button(action: onBeginAddressEdit) {
+                    HStack(spacing: 8) {
+                        leadingIcon
+                        addressLabel
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                trailingIcon
+            }
         }
         .frame(maxWidth: .infinity)
         .frame(minHeight: controlSide)
+    }
+
+    private var addressEditor: some View {
+        TextField(
+            "",
+            text: Bindable(model).addressText,
+            prompt: Text("browser.search_placeholder")
+                .foregroundStyle(Palette.ink(scheme).opacity(0.55))
+        )
+        .font(.system(size: 16, weight: .medium, design: .rounded))
+        .foregroundStyle(Palette.ink(scheme))
+        .textInputAutocapitalization(.never)
+        .autocorrectionDisabled()
+        .keyboardType(.webSearch)
+        .submitLabel(.go)
+        .multilineTextAlignment(.leading)
+        .focused($isAddressFocused)
+        .onSubmit(onSubmit)
+        .onAppear {
+            DispatchQueue.main.async {
+                guard addressEditing else { return }
+                isAddressFocused = true
+            }
+        }
+    }
+
+    private var addressLabel: some View {
+        Group {
+            if model.addressText.isEmpty {
+                Text("browser.search_placeholder")
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.55))
+            } else {
+                Text(model.addressText)
+                    .foregroundStyle(Palette.ink(scheme))
+            }
+        }
+        .font(.system(size: 16, weight: .medium, design: .rounded))
+        .lineLimit(1)
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     @ViewBuilder
@@ -314,7 +360,7 @@ struct MiniBrowserChrome: View {
                 // No opacity transition. The sheet just grows by this row.
                 pinSavedSection
                     .padding(.horizontal, 8)
-                    .padding(.top, 8)
+                    .padding(.top, 16)
                     .transition(.identity)
             }
         }

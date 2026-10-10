@@ -14,6 +14,9 @@ struct MiniBrowserView: View {
     @Environment(\.colorScheme) private var scheme
     @State private var model: MiniBrowserModel
     @FocusState private var isAddressFocused: Bool
+    /// Composer is up. Separate from focus so the text field is created
+    /// before it becomes first responder, and removed only after it resigns.
+    @State private var editingAddress = false
     /// First-frame search chrome when opened from the search pill, so the
     /// sheet never animates unfocused → focused (X button, toolbar, alignment).
     @State private var startsInSearch: Bool
@@ -42,8 +45,8 @@ struct MiniBrowserView: View {
         _startsInSearch = State(initialValue: initialURL == nil)
     }
 
-    /// Keyboard focus or the search-open first paint.
-    private var addressEditing: Bool { isAddressFocused || startsInSearch }
+    /// Keyboard focus, the tap that opens the composer, or the search-open first paint.
+    private var addressEditing: Bool { editingAddress || isAddressFocused || startsInSearch }
 
     /// Space inside the glass, below the controls. While typing this includes
     /// the keyboard height, so the same glass continues behind the keys down
@@ -112,6 +115,7 @@ struct MiniBrowserView: View {
                     allSpaces: allSpaces,
                     bottomInset: chromeContentBottomInset,
                     displayCornerRadius: displayCornerRadius,
+                    onBeginAddressEdit: beginAddressEditing,
                     onCancel: cancelAddressEditing,
                     onSubmit: submitAddress
                 )
@@ -163,13 +167,30 @@ struct MiniBrowserView: View {
             .onChange(of: isAddressFocused) { _, focused in
                 if focused {
                     model.collapseMenu()
-                } else {
-                    startsInSearch = false
-                }
-                model.addressFocusDidChange(focused)
-                if focused && !model.addressText.isEmpty {
+                    guard !model.addressText.isEmpty else { return }
+                    // Select after the keyboard has the field. Doing it in this
+                    // turn deadlocks UIKeyboardTaskQueue on the main thread.
                     DispatchQueue.main.async {
-                        UIApplication.shared.sendAction(#selector(UIResponder.selectAll(_:)), to: nil, from: nil, for: nil)
+                        guard isAddressFocused else { return }
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.selectAll(_:)),
+                            to: nil,
+                            from: nil,
+                            for: nil
+                        )
+                    }
+                } else {
+                    // Resign first. Remove the field and restore the short
+                    // label only after that update, so the text write cannot
+                    // hit a live editor.
+                    DispatchQueue.main.async {
+                        guard !isAddressFocused else { return }
+                        editingAddress = false
+                        startsInSearch = false
+                        DispatchQueue.main.async {
+                            guard !isAddressFocused else { return }
+                            model.restoreAddressDisplay()
+                        }
                     }
                 }
             }
@@ -231,20 +252,35 @@ struct MiniBrowserView: View {
 }
 
 private extension MiniBrowserView {
+    private func beginAddressEditing() {
+        // The full URL is written while the collapsed bar is still a label.
+        // The text field is created afterwards, already holding that string.
+        model.prepareAddressForEditing()
+        model.collapseMenu()
+        editingAddress = true
+    }
+
     private func cancelAddressEditing() {
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-            if model.effectiveURL != nil {
+        if model.effectiveURL != nil {
+            if isAddressFocused {
                 isAddressFocused = false
-                startsInSearch = false
             } else {
+                editingAddress = false
+                startsInSearch = false
+                model.restoreAddressDisplay()
+            }
+        } else {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                 onDismiss()
             }
         }
     }
 
     private func submitAddress() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+        if isAddressFocused {
             isAddressFocused = false
+        } else {
+            editingAddress = false
             startsInSearch = false
         }
         model.submitAddress()

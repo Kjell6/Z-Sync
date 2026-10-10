@@ -7,10 +7,11 @@ import SwiftUI
 ///
 /// Collapsed, each piece is its own material: a circle for Back, a second
 /// circle for Forward only when `MiniBrowserTools.showsForwardButton` is true,
-/// a capsule for the address field, and a circle for More. They are not one
-/// shared card. More opens a separate glass card above that row. The card
-/// holds the title and favicon, then Pin / Open / Share / Find, then Copy
-/// Link, Request Desktop Site, and Page Zoom. No translate control.
+/// a capsule for the address field, and a circle for More.
+/// More morphs those pieces into one card on the page. The card's top is a
+/// long URL pill (back, forward, URL, reload). Copy, desktop site, and zoom
+/// sit under it. Find, Share, Open, and Pin are the bottom row, Pin at the
+/// trailing edge. No page title. No translate control.
 /// The material is untinted regular glass (a plain material on Android).
 struct MiniBrowserChrome: View {
     var model: MiniBrowserModel
@@ -24,6 +25,7 @@ struct MiniBrowserChrome: View {
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var glassNamespace
     @State private var copied = false
     @State private var copyGeneration = 0
 
@@ -38,26 +40,42 @@ struct MiniBrowserChrome: View {
     }
 
     var body: some View {
-        VStack(spacing: 10) {
-            if model.menuExpanded {
-                ViewThatFits(in: .vertical) {
-                    pageMenu
-                    ScrollView {
-                        pageMenu
-                    }
-                    .scrollBounceBehavior(.basedOnSize)
-                    .frame(maxHeight: 420)
-                }
-                .liquidGlassCard(cornerRadius: radius)
-                .modifier(FloatingGlassShadow(scheme: scheme))
-                .transition(.opacity.combined(with: .move(edge: .bottom)))
+        glassContainer
+            .fixedSize(horizontal: false, vertical: true)
+            .animation(chromeAnimation, value: model.menuExpanded)
+            .animation(chromeAnimation, value: model.canGoForward)
+            .animation(chromeAnimation, value: addressEditing)
+            .animation(chromeAnimation, value: model.addressText.isEmpty)
+    }
+
+    /// One container so the collapsed glasses can morph into the expanded card.
+    /// Spacing stays under the gap between the circles, so they do not merge
+    /// while the bar is collapsed.
+    @ViewBuilder
+    private var glassContainer: some View {
+        if #available(iOS 26.0, *) {
+            GlassEffectContainer(spacing: 6) {
+                morphingChrome
             }
-            controlRow
+        } else {
+            morphingChrome
         }
-        .animation(chromeAnimation, value: model.menuExpanded)
-        .animation(chromeAnimation, value: model.canGoForward)
-        .animation(chromeAnimation, value: addressEditing)
-        .animation(chromeAnimation, value: model.addressText.isEmpty)
+    }
+
+    private var morphingChrome: some View {
+        ZStack(alignment: .bottom) {
+            if model.menuExpanded && !addressEditing {
+                expandedCard
+                    .transition(cardTransition)
+            } else {
+                controlRow
+                    .transition(cardTransition)
+            }
+        }
+    }
+
+    private var cardTransition: AnyTransition {
+        .scale(scale: 0.86, anchor: .bottom).combined(with: .opacity)
     }
 
     // MARK: - Compact row
@@ -70,7 +88,8 @@ struct MiniBrowserChrome: View {
                 glassCircle(
                     systemName: "chevron.backward",
                     label: "browser.back",
-                    enabled: model.canGoBack
+                    enabled: model.canGoBack,
+                    glassID: "back"
                 ) {
                     model.goBack()
                 }
@@ -81,7 +100,8 @@ struct MiniBrowserChrome: View {
                     glassCircle(
                         systemName: "chevron.forward",
                         label: "browser.forward",
-                        enabled: true
+                        enabled: true,
+                        glassID: "forward"
                     ) {
                         model.goForward()
                     }
@@ -103,6 +123,7 @@ struct MiniBrowserChrome: View {
                 }
                 .clipShape(Capsule())
                 .liquidGlassCapsule()
+                .modifier(GlassIdentity(id: "address", namespace: glassNamespace))
                 .modifier(FloatingGlassShadow(scheme: scheme))
 
             if addressEditing {
@@ -117,9 +138,10 @@ struct MiniBrowserChrome: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.86)))
             } else {
                 glassCircle(
-                    systemName: model.menuExpanded ? "chevron.down" : "ellipsis",
-                    label: model.menuExpanded ? "browser.close_menu" : "browser.more",
-                    enabled: model.effectiveURL != nil
+                    systemName: "ellipsis",
+                    label: "browser.more",
+                    enabled: model.effectiveURL != nil,
+                    glassID: "more"
                 ) {
                     withAnimation(motion) {
                         model.toggleMenu()
@@ -219,6 +241,7 @@ struct MiniBrowserChrome: View {
         label: LocalizedStringKey,
         enabled: Bool,
         tint: Color? = nil,
+        glassID: String? = nil,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -233,26 +256,34 @@ struct MiniBrowserChrome: View {
         .disabled(!enabled)
         .accessibilityLabel(Text(label))
         .liquidGlassCircle()
+        .modifier(GlassIdentity(id: glassID, namespace: glassNamespace))
         .modifier(FloatingGlassShadow(scheme: scheme))
     }
 
     // MARK: - Expanded menu
 
-    private var pageMenu: some View {
+    /// One glass surface. The collapsed circles and capsule share glass IDs
+    /// with pieces inside this card so the material moves into it.
+    private var expandedCard: some View {
+        ViewThatFits(in: .vertical) {
+            expandedContent
+            ScrollView {
+                expandedContent
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(maxHeight: 460)
+        }
+        .liquidGlassCard(cornerRadius: radius)
+        .modifier(GlassIdentity(id: "address", namespace: glassNamespace))
+        .modifier(FloatingGlassShadow(scheme: scheme))
+    }
+
+    private var expandedContent: some View {
         VStack(spacing: 0) {
-            Rectangle()
-                .fill(Color.primary.opacity(0.10))
-                .frame(height: 0.5)
-                .padding(.horizontal, 18)
-
-            identity
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
-                .padding(.bottom, 14)
-
-            actionRow
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
+            urlPill
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
+                .padding(.bottom, 4)
 
             VStack(spacing: 0) {
                 copyRow
@@ -262,65 +293,131 @@ struct MiniBrowserChrome: View {
                 zoomRow
             }
             .padding(.horizontal, 8)
-            .padding(.bottom, 8)
+            .padding(.top, 4)
+
+            actionRow
+                .padding(.horizontal, 12)
+                .padding(.top, 10)
+                .padding(.bottom, 12)
         }
     }
 
-    private var identity: some View {
-        HStack(alignment: .center, spacing: 12) {
-            if let url = model.effectiveURL {
-                Favicon(urlString: url.absoluteString, size: 40)
+    /// Long pill inside the card: back and forward on the leading side, the
+    /// URL in the middle, reload on the trailing side. No page title.
+    private var urlPill: some View {
+        HStack(spacing: 0) {
+            pillButton(
+                systemName: "chevron.backward",
+                label: "browser.back",
+                enabled: model.canGoBack,
+                glassID: "back"
+            ) {
+                model.goBack()
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(identityTitle)
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                if !identityHost.isEmpty {
-                    HStack(spacing: 4) {
-                        if model.effectiveURL?.scheme == "http" {
-                            Image(systemName: "lock.slash.fill")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(.orange)
-                        }
-                        Text(identityHost)
-                            .font(.system(size: 13, weight: .medium, design: .rounded))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
+            if MiniBrowserTools.showsForwardButton(
+                canGoForward: model.canGoForward,
+                addressEditing: false
+            ) {
+                pillButton(
+                    systemName: "chevron.forward",
+                    label: "browser.forward",
+                    enabled: true,
+                    glassID: "forward"
+                ) {
+                    model.goForward()
                 }
             }
-            Spacer(minLength: 0)
+            HStack(spacing: 6) {
+                if model.effectiveURL?.scheme == "http" {
+                    Image(systemName: "lock.slash.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.orange)
+                        .accessibilityHidden(true)
+                }
+                Text(pillURL)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity)
+            }
+            .padding(.horizontal, 6)
+            pillButton(
+                systemName: model.isLoading ? "xmark" : "arrow.clockwise",
+                label: model.isLoading ? "browser.stop" : "browser.reload",
+                enabled: model.effectiveURL != nil,
+                glassID: "more"
+            ) {
+                if model.isLoading {
+                    model.stopLoading()
+                } else {
+                    model.reload()
+                }
+            }
         }
-        .accessibilityElement(children: .combine)
+        .padding(.horizontal, 4)
+        .frame(height: 48)
+        .background(
+            Color.primary.opacity(scheme == .dark ? 0.14 : 0.06),
+            in: Capsule()
+        )
+        .overlay(alignment: .bottom) {
+            if model.isLoading {
+                progressBar
+                    .padding(.horizontal, 22)
+                    .padding(.bottom, 1)
+            }
+        }
+        .clipShape(Capsule())
     }
 
-    private var identityTitle: String {
-        let title = model.pageTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !title.isEmpty { return title }
-        if !model.pageHost.isEmpty { return model.pageHost }
-        return String(localized: "browser.search_placeholder")
+    /// Host, plus the path when the page is not the site root.
+    private var pillURL: String {
+        guard let url = model.effectiveURL else {
+            let typed = model.addressText.trimmingCharacters(in: .whitespacesAndNewlines)
+            return typed.isEmpty ? String(localized: "browser.search_placeholder") : typed
+        }
+        let host = url.host ?? url.absoluteString
+        let path = url.path
+        guard !path.isEmpty, path != "/" else { return host }
+        return host + path
     }
 
-    private var identityHost: String {
-        let host = model.pageHost
-        if host.isEmpty || host == identityTitle { return "" }
-        return host
+    private func pillButton(
+        systemName: String,
+        label: LocalizedStringKey,
+        enabled: Bool,
+        glassID: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(enabled ? Color.primary : Color.secondary.opacity(0.45))
+                .frame(width: 40, height: 40)
+                .contentShape(Circle())
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(CardPressStyle())
+        .disabled(!enabled)
+        .accessibilityLabel(Text(label))
+        .modifier(GlassIdentity(id: glassID, namespace: glassNamespace))
     }
 
+    /// Bottom row, trailing edge first for the thumb: Pin sits on the right.
+    /// Left to right: Find, Share, Open, Pin.
     private var actionRow: some View {
         HStack(spacing: 8) {
             tile(
-                systemName: "pin",
-                title: model.saveKind == .normal ? "browser.save_short" : "browser.pin_short",
-                accessibility: model.saveKind == .normal ? "browser.save_short" : "browser.pin_to_space"
+                systemName: "magnifyingglass",
+                title: "browser.find_short",
+                accessibility: "browser.find_on_page"
             ) {
                 withAnimation(motion) {
-                    model.collapseMenu()
+                    model.presentFindOnPage()
                 }
-                model.triggerPinBanner(spaces: allSpaces, fallbackSpace: space)
             }
+            shareTile
             tile(
                 systemName: "safari",
                 title: "browser.open_short",
@@ -331,15 +428,15 @@ struct MiniBrowserChrome: View {
                     model.collapseMenu()
                 }
             }
-            shareTile
             tile(
-                systemName: "magnifyingglass",
-                title: "browser.find_short",
-                accessibility: "browser.find_on_page"
+                systemName: "pin",
+                title: model.saveKind == .normal ? "browser.save_short" : "browser.pin_short",
+                accessibility: model.saveKind == .normal ? "browser.save_short" : "browser.pin_to_space"
             ) {
                 withAnimation(motion) {
-                    model.presentFindOnPage()
+                    model.collapseMenu()
                 }
+                model.triggerPinBanner(spaces: allSpaces, fallbackSpace: space)
             }
         }
     }
@@ -499,6 +596,22 @@ struct MiniBrowserChrome: View {
             .fill(Color.primary.opacity(0.08))
             .frame(height: 0.5)
             .padding(.leading, 46)
+    }
+}
+
+/// Links a collapsed glass piece to its place inside the expanded card.
+/// A nil id leaves the view alone (the cancel circle has no partner).
+private struct GlassIdentity: ViewModifier {
+    var id: String?
+    var namespace: Namespace.ID
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *), let id {
+            content.glassEffectID(id, in: namespace)
+        } else {
+            content
+        }
     }
 }
 

@@ -31,6 +31,9 @@ struct MiniBrowserChrome: View {
     @State private var copyGeneration = 0
 
     private let radius: CGFloat = 28
+    /// Collapsed address capsule. A step under the old 44pt so it sits nearer
+    /// the native glass circles beside it.
+    private let addressHeight: CGFloat = 36
 
     private var motion: Animation {
         reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.38, dampingFraction: 0.86)
@@ -115,7 +118,7 @@ struct MiniBrowserChrome: View {
             addressField
                 .padding(.leading, 14)
                 .padding(.trailing, 4)
-                .frame(height: 44)
+                .frame(height: addressHeight)
                 .frame(maxWidth: .infinity)
                 .overlay(alignment: .bottom) {
                     if model.isLoading && !addressEditing {
@@ -169,7 +172,7 @@ struct MiniBrowserChrome: View {
             trailingIcon
         }
         .frame(maxWidth: .infinity)
-        .frame(minHeight: 44)
+        .frame(minHeight: addressHeight)
     }
 
     @ViewBuilder
@@ -200,7 +203,7 @@ struct MiniBrowserChrome: View {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 16))
                     .foregroundStyle(.secondary)
-                    .frame(width: 36, height: 44)
+                    .frame(width: 32, height: 32)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -216,7 +219,7 @@ struct MiniBrowserChrome: View {
                 Image(systemName: model.isLoading ? "xmark" : "arrow.clockwise")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.secondary)
-                    .frame(width: 36, height: 44)
+                    .frame(width: 32, height: 32)
                     .contentShape(Rectangle())
                     .contentTransition(.symbolEffect(.replace))
             }

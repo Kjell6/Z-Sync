@@ -61,8 +61,8 @@ targets:
         INFOPLIST_FILE: ZenCompanion/Info.plist
         CODE_SIGN_ENTITLEMENTS: ZenCompanion/ZenCompanion.entitlements
         GENERATE_INFOPLIST_FILE: false
-        MARKETING_VERSION: "1.3"
-        CURRENT_PROJECT_VERSION: "8"
+        MARKETING_VERSION: "1.4"
+        CURRENT_PROJECT_VERSION: "9"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies:
       - target: ShareExtension
@@ -108,8 +108,8 @@ targets:
         INFOPLIST_FILE: ShareExtension/Info.plist
         CODE_SIGN_ENTITLEMENTS: ShareExtension/ShareExtension.entitlements
         GENERATE_INFOPLIST_FILE: false
-        MARKETING_VERSION: "1.3"
-        CURRENT_PROJECT_VERSION: "8"
+        MARKETING_VERSION: "1.4"
+        CURRENT_PROJECT_VERSION: "9"
         SKIP_INSTALL: true
   ZenCompanionTests:
     type: bundle.unit-test

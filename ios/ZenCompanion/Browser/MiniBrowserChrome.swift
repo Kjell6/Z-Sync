@@ -66,7 +66,9 @@ struct MiniBrowserChrome: View {
             } else {
                 controlRow
                     .padding(.horizontal, 20)
-                    .padding(.top, menuOpen ? 24 : 10)
+                    // Open: the option rows only have a hairline between them.
+                    // The tiles need a few points so they do not touch the bar.
+                    .padding(.top, menuOpen ? 8 : 10)
                     .padding(.bottom, bottomInset)
             }
         }
@@ -74,7 +76,10 @@ struct MiniBrowserChrome: View {
         // Hug the controls. A flexible height here becomes a full-screen hit
         // target once the menu has opened, and taps stop reaching the page.
         .fixedSize(horizontal: false, vertical: true)
-        .liquidGlassBar(topRadius: roundsSheetTop ? sheetTopRadius : 0)
+        .liquidGlassBar(
+            topRadius: roundsSheetTop ? sheetTopRadius : 0,
+            glassVisible: !(model.showPinBanner && model.pinBannerGlassSuppressed)
+        )
         .overlay(alignment: .top) {
             if !roundsSheetTop {
                 Rectangle()
@@ -304,7 +309,14 @@ struct MiniBrowserChrome: View {
             actionRow
                 .padding(.horizontal, 20)
                 .padding(.top, 10)
-                .padding(.bottom, 16)
+
+            if model.showPinBanner {
+                // No opacity transition. The sheet just grows by this row.
+                pinSavedSection
+                    .padding(.horizontal, 8)
+                    .padding(.top, 8)
+                    .transition(.identity)
+            }
         }
     }
 
@@ -337,11 +349,46 @@ struct MiniBrowserChrome: View {
                 title: model.saveKind == .normal ? "browser.save_short" : "browser.pin_short",
                 accessibility: model.saveKind == .normal ? "browser.save_short" : "browser.pin_to_space"
             ) {
-                withAnimation(motion) {
-                    model.collapseMenu()
-                }
+                // Stay open. The saved-to row grows the sheet instead of a banner.
                 model.triggerPinBanner(spaces: allSpaces, fallbackSpace: space)
             }
+        }
+    }
+
+    /// Where the page was saved, and the control that changes that place.
+    /// Sits under the quick actions so the open sheet grows upward.
+    private var pinSavedSection: some View {
+        VStack(spacing: 0) {
+            rowDivider
+            HStack(spacing: 12) {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: 24)
+                    .foregroundStyle(Color.primary)
+                Text(model.pinSaveKind == .pinned ? "browser.pinned" : "browser.saved_as_normal")
+                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                    .foregroundStyle(Color.primary)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                PinDestinationMenuButton(
+                    destination: model.pinnedDestination,
+                    spaces: allSpaces,
+                    scheme: scheme,
+                    titleSize: 15,
+                    allowsFolders: model.pinSaveKind == .pinned,
+                    onSelect: { chosen in
+                        model.selectPinDestination(chosen)
+                    },
+                    onMenuWillOpen: {
+                        model.pinMenuWillOpen()
+                    },
+                    onMenuDidDismiss: {
+                        model.pinMenuDidDismiss()
+                    }
+                )
+            }
+            .padding(.horizontal, 10)
+            .frame(minHeight: 48)
         }
     }
 

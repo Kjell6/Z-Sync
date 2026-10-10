@@ -339,6 +339,7 @@ struct SpacesBrowserView: View {
                     Palette.lift(scheme),
                     in: RoundedRectangle(cornerRadius: 13, style: .continuous)
                 )
+                .glassRim(cornerRadius: 13, scheme: scheme)
                 .contentShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
         }
         .buttonStyle(SquircleButtonStyle())
@@ -368,6 +369,7 @@ struct SpacesBrowserView: View {
                 Palette.lift(scheme),
                 in: RoundedRectangle(cornerRadius: 13, style: .continuous)
             )
+            .glassRim(cornerRadius: 13, scheme: scheme)
             .contentShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
         }
         .buttonStyle(SquircleButtonStyle())

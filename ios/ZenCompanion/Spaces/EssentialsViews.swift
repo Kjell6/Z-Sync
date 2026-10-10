@@ -64,6 +64,7 @@ private struct EssentialTile: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: height)
+            .glassRim(cornerRadius: 13, scheme: scheme)
             .contentShape(shape)
         }
         .buttonStyle(SquircleButtonStyle())

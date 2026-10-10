@@ -35,4 +35,39 @@ enum Palette {
             ? Color.white.opacity(0.07)
             : Color.black.opacity(0.06)
     }
+
+    /// Hairline around a lift tile. Lighter on the top edge, so the flat fill
+    /// reads as a thin piece of glass. A stroke, not `glassEffect`.
+    static func glassRim(_ scheme: ColorScheme) -> LinearGradient {
+        if scheme == .dark {
+            return LinearGradient(
+                colors: [
+                    Color.white.opacity(0.40),
+                    Color.white.opacity(0.14)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+        return LinearGradient(
+            colors: [
+                Color.white.opacity(0.95),
+                Color.black.opacity(0.16)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+}
+
+extension View {
+    /// 1pt rim for lift tiles. Stays inside the shape so neighboring tiles
+    /// do not share an edge.
+    func glassRim(cornerRadius: CGFloat, scheme: ColorScheme) -> some View {
+        overlay {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(Palette.glassRim(scheme), lineWidth: 1)
+                .allowsHitTesting(false)
+        }
+    }
 }

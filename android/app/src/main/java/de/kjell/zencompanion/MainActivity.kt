@@ -155,6 +155,7 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
             onSelectSpace = { viewModel.selectSpace(it) },
             onRefresh = { viewModel.refresh() },
             onDeleteTab = { id -> viewModel.deleteTab(id) },
+            onRenameTab = { id, label -> viewModel.renameTab(id, label) },
             onOpenAccount = { showSettings = true },
             onOpenActivity = { showActivity = true },
             onOpenBrowser = { url, title -> openBrowser(url, title) },

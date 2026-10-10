@@ -62,6 +62,7 @@ protocol SpacesRepository {
     func refresh() async throws -> ZenSnapshot
     func deleteCachedSnapshot()
     func deleteTab(id: String) async throws
+    func renameTab(id: String, label: String) async throws
 }
 
 struct LiveSpacesRepository: SpacesRepository {
@@ -72,6 +73,9 @@ struct LiveSpacesRepository: SpacesRepository {
     func refresh() async throws -> ZenSnapshot { try await SpacesSyncService.refresh() }
     func deleteCachedSnapshot() { SpacesSyncService.deleteCachedSnapshot() }
     func deleteTab(id: String) async throws { try await SpacesSyncService.deleteTab(id: id) }
+    func renameTab(id: String, label: String) async throws {
+        try await SpacesSyncService.renameTab(id: id, label: label)
+    }
 }
 
 @MainActor

@@ -472,6 +472,7 @@ object SpacesSyncService {
             iconURL = null,
             icon = record.icon,
             hasStaticIcon = record.hasStaticIcon,
+            staticLabel = normalizedStaticLabel(record.staticLabel),
         )
     }
 
@@ -801,6 +802,77 @@ object SpacesSyncService {
             }
         }
         AppEvents.emitSnapshotStale()
+    }
+
+    /**
+     * Writes `staticLabel` on an existing tab record. Empty/whitespace
+     * clears the custom name so the page title shows again.
+     */
+    suspend fun renameTab(context: Context, id: String, label: String) {
+        val normalized = normalizedStaticLabel(label)
+        if (AccountStore.isDemo(context)) {
+            SnapshotCache.renameCachedTab(id, normalized, System.currentTimeMillis())
+            AppEvents.emitSnapshotStale()
+            return
+        }
+        val client = AccountStore.connect(context)
+        renameTab(client = client, id = id, label = label)
+    }
+
+    suspend fun renameTab(client: SyncClient, id: String, label: String) {
+        val normalized = normalizedStaticLabel(label)
+        withContext(Dispatchers.IO) {
+            if (SyncSafety.safeSyncEnabled) {
+                renameTabSafe(client, id, normalized)
+            } else {
+                renameTabLegacy(client, id, normalized)
+            }
+        }
+        SnapshotCache.renameCachedTab(id, normalized, System.currentTimeMillis())
+        AppEvents.emitSnapshotStale()
+    }
+
+    private fun renameTabSafe(client: SyncClient, id: String, label: String?) {
+        var read = client.getCollectionWithMetadata(collection)
+        var incoming = decryptedFrom(client, read.records)
+        fun batchFor(list: List<IncomingCleartext>): List<JSONObject> {
+            val write = renameWrite(id, label, list)
+                ?: throw SyncError.Conflict("rename '$id': tab record not found")
+            return listOf(write)
+        }
+        var outcome = client.postRecords(collection, batchFor(incoming), read.lastModified)
+        if (outcome is PostOutcome.PreconditionFailed) {
+            read = client.getCollectionWithMetadata(collection)
+            incoming = decryptedFrom(client, read.records)
+            outcome = client.postRecords(collection, batchFor(incoming), read.lastModified)
+        }
+        when (outcome) {
+            is PostOutcome.Applied -> Unit
+            is PostOutcome.PreconditionFailed ->
+                throw SyncError.Conflict("rename '$id': conditional write lost the race twice")
+            is PostOutcome.PartialFailure ->
+                throw SyncError.Conflict("rename '$id': batch rejected (${failureSummary(outcome)})")
+        }
+    }
+
+    private fun renameTabLegacy(client: SyncClient, id: String, label: String?) {
+        val incoming = decryptedCollection(client)
+        val write = renameWrite(id, label, incoming)
+            ?: throw SyncError.Conflict("rename '$id': tab record not found")
+        client.putRecord(collection = collection, id = id, obj = write)
+    }
+
+    private fun renameWrite(id: String, label: String?, incoming: List<IncomingCleartext>): JSONObject? {
+        val rec = incoming.firstOrNull { it.id == id } ?: return null
+        if (rec.kind != "tab") return null
+        val data = JSONObject(rec.data.toString())
+        if (label == null) data.put("staticLabel", JSONObject.NULL) else data.put("staticLabel", label)
+        return JSONObject().put("id", id).put("kind", "tab").put("data", data)
+    }
+
+    internal fun normalizedStaticLabel(raw: String?): String? {
+        val trimmed = raw?.trim().orEmpty()
+        return trimmed.ifEmpty { null }
     }
 
     private data class IncomingCleartext(val id: String, val cleartext: JSONObject) {

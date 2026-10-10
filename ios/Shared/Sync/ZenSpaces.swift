@@ -534,6 +534,8 @@ struct ZenTab: Identifiable, Hashable, Codable {
     var iconURL: String?
     var icon: String?
     var hasStaticIcon: Bool?
+    /// Zen custom tab name (`data.staticLabel`). Nil/empty falls back to `title`.
+    var staticLabel: String?
 
     init(
         id: String,
@@ -541,7 +543,8 @@ struct ZenTab: Identifiable, Hashable, Codable {
         title: String,
         iconURL: String? = nil,
         icon: String? = nil,
-        hasStaticIcon: Bool? = nil
+        hasStaticIcon: Bool? = nil,
+        staticLabel: String? = nil
     ) {
         self.id = id
         self.url = url
@@ -549,6 +552,17 @@ struct ZenTab: Identifiable, Hashable, Codable {
         self.iconURL = iconURL
         self.icon = icon
         self.hasStaticIcon = hasStaticIcon
+        self.staticLabel = staticLabel
+    }
+
+    /// `staticLabel` when set, then page title, then host, then the raw URL.
+    var displayTitle: String {
+        let label = staticLabel?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !label.isEmpty { return label }
+        let raw = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !raw.isEmpty { return raw }
+        let host = URL(string: url)?.host ?? ""
+        return host.isEmpty ? url : host
     }
 }
 

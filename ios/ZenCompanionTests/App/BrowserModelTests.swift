@@ -283,6 +283,85 @@ final class BrowserModelTests: XCTestCase {
         XCTAssertFalse(prefs.hasObject(PreferenceKeys.toolbarPlacement, scope: .appGroup))
         XCTAssertFalse(prefs.hasObject(PreferenceKeys.toolbarPlacement, scope: .standard))
     }
+
+    // MARK: - Rename
+
+    func testRenameTabUpdatesSnapshotBeforeWriteCompletes() async {
+        let repo = FakeSpacesRepository()
+        repo.blockRename = true
+        let model = makeModel(repo)
+        model.snapshot = ZenCompanion.ZenSnapshot(
+            spaces: [
+                ZenCompanion.ZenSpace(
+                    id: "s1",
+                    name: "One",
+                    pinned: [.tab(ZenCompanion.ZenTab(id: "t1", url: "https://a.example", title: "Old"))]
+                ),
+            ],
+            fetchedAt: Date(timeIntervalSince1970: 0)
+        )
+
+        let task = Task { await model.renameTab(id: "t1", label: "Work") }
+        while !repo.didBlockRename { await Task.yield() }
+
+        // The write is still awaiting the server, but the name is already shown.
+        XCTAssertEqual(pinnedTab(model.snapshot, id: "t1")?.staticLabel, "Work")
+        XCTAssertEqual(repo.renamedTabs.count, 1)
+
+        repo.releaseRename()
+        await task.value
+    }
+
+    func testRenameTabNormalizesWhitespaceIntoSnapshotButForwardsRawLabel() async {
+        let repo = FakeSpacesRepository()
+        let model = makeModel(repo)
+        model.snapshot = ZenCompanion.ZenSnapshot(
+            spaces: [
+                ZenCompanion.ZenSpace(
+                    id: "s1",
+                    name: "One",
+                    pinned: [.tab(ZenCompanion.ZenTab(id: "t1", url: "https://a.example", title: "Old"))]
+                ),
+            ],
+            fetchedAt: Date(timeIntervalSince1970: 0)
+        )
+
+        await model.renameTab(id: "t1", label: "  Work  ")
+
+        XCTAssertEqual(pinnedTab(model.snapshot, id: "t1")?.staticLabel, "Work")
+        XCTAssertEqual(repo.renamedTabs.first?.label, "  Work  ")
+    }
+
+    func testRenameTabWhitespaceOnlyClearsLabel() async {
+        let repo = FakeSpacesRepository()
+        let model = makeModel(repo)
+        model.snapshot = ZenCompanion.ZenSnapshot(
+            spaces: [
+                ZenCompanion.ZenSpace(
+                    id: "s1",
+                    name: "One",
+                    pinned: [.tab(ZenCompanion.ZenTab(
+                        id: "t1",
+                        url: "https://a.example",
+                        title: "Old",
+                        staticLabel: "Work"
+                    ))]
+                ),
+            ],
+            fetchedAt: Date(timeIntervalSince1970: 0)
+        )
+
+        await model.renameTab(id: "t1", label: "   ")
+
+        XCTAssertNil(pinnedTab(model.snapshot, id: "t1")?.staticLabel)
+    }
+
+    private func pinnedTab(_ snapshot: ZenCompanion.ZenSnapshot, id: String) -> ZenCompanion.ZenTab? {
+        snapshot.spaces.first?.pinned.compactMap { item -> ZenCompanion.ZenTab? in
+            if case .tab(let tab) = item { return tab }
+            return nil
+        }.first { $0.id == id }
+    }
 }
 
 // MARK: - Fakes
@@ -293,9 +372,13 @@ private final class FakeSpacesRepository: SpacesRepository {
     var refreshResult: Result<ZenCompanion.ZenSnapshot, Error> = .failure(URLError(.badServerResponse))
     private(set) var refreshCount = 0
     private(set) var deletedTabIds: [String] = []
+    private(set) var renamedTabs: [(id: String, label: String)] = []
     var blockRefresh = false
     private(set) var didBlockRefresh = false
     private var refreshContinuation: CheckedContinuation<Void, Never>?
+    var blockRename = false
+    private(set) var didBlockRename = false
+    private var renameContinuation: CheckedContinuation<Void, Never>?
 
     func cachedSnapshot() -> ZenCompanion.ZenSnapshot? { cached }
 
@@ -316,9 +399,24 @@ private final class FakeSpacesRepository: SpacesRepository {
 
     func deleteTab(id: String) async throws { deletedTabIds.append(id) }
 
+    func renameTab(id: String, label: String) async throws {
+        renamedTabs.append((id, label))
+        if blockRename {
+            await withCheckedContinuation { continuation in
+                renameContinuation = continuation
+                didBlockRename = true
+            }
+        }
+    }
+
     func releaseRefresh() {
         refreshContinuation?.resume()
         refreshContinuation = nil
+    }
+
+    func releaseRename() {
+        renameContinuation?.resume()
+        renameContinuation = nil
     }
 }
 

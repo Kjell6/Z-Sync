@@ -2,6 +2,7 @@ package de.kjell.zencompanion.sync
 
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.URI
 import java.util.UUID
 
 /**
@@ -312,7 +313,20 @@ object ZenSpaces {
         val iconURL: String? = null,
         val icon: String? = null,
         val hasStaticIcon: Boolean? = null,
-    )
+        /** Zen custom tab name (`data.staticLabel`). Null/empty falls back to `title`. */
+        val staticLabel: String? = null,
+    ) {
+        /** `staticLabel` when set, then page title, then host, then the raw URL. */
+        val displayTitle: String
+            get() {
+                val label = staticLabel?.trim().orEmpty()
+                if (label.isNotEmpty()) return label
+                val raw = title.trim()
+                if (raw.isNotEmpty()) return raw
+                val host = runCatching { URI(url).host }.getOrNull().orEmpty()
+                return host.ifEmpty { url }
+            }
+    }
 
     data class ZenFolder(
         val id: String,
@@ -749,6 +763,7 @@ object ZenSpaces {
         tab.iconURL?.let { t.put("iconURL", it) }
         tab.icon?.let { t.put("icon", it) }
         tab.hasStaticIcon?.let { t.put("hasStaticIcon", it) }
+        tab.staticLabel?.let { t.put("staticLabel", it) }
         return t
     }
 
@@ -888,6 +903,7 @@ object ZenSpaces {
             iconURL = optStringOrNull(t, "iconURL"),
             icon = optStringOrNull(t, "icon"),
             hasStaticIcon = if (t.has("hasStaticIcon") && !t.isNull("hasStaticIcon")) t.optBoolean("hasStaticIcon") else null,
+            staticLabel = optStringOrNull(t, "staticLabel"),
         )
     }
 

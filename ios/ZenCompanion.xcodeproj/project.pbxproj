@@ -100,6 +100,7 @@
 		7E68AE714C4BC0B6CD02F7B1 /* FolderIconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33682E4D5A5E389B7E77F30B /* FolderIconView.swift */; };
 		7F1289F85F867D83323CCEA4 /* SignInModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E57B1A6F693633277A260F1A /* SignInModelTests.swift */; };
 		8003E1E50A330565FA9D1E1A /* crypto-bso-envelope-valid.json in Resources */ = {isa = PBXBuildFile; fileRef = 804E96C35794D9B4EF558901 /* crypto-bso-envelope-valid.json */; };
+		80654C37C48DE7A9A7ECA7F0 /* TabRenameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E58A5BF21D5EDB0AC72578C /* TabRenameTests.swift */; };
 		819D3B20142E7D50858FCD7B /* ZenSpaces.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF41F4460A4B104133824554 /* ZenSpaces.swift */; };
 		821192474F91B30F7D6BC43F /* wire-deleted-string.json in Resources */ = {isa = PBXBuildFile; fileRef = 8A6505989F83904DC221E899 /* wire-deleted-string.json */; };
 		82E6F9A335829AE341517911 /* SyncClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55EC7A1C85AEE633291565D0 /* SyncClient.swift */; };
@@ -301,6 +302,7 @@
 		8C6D60DD2114481D3BAC5617 /* SearchEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchEngine.swift; sourceTree = "<group>"; };
 		8DEAD5C2B39CD7E8D2E3164C /* crypto-client-state-bytes-kb-zero.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "crypto-client-state-bytes-kb-zero.json"; sourceTree = "<group>"; };
 		8E29C74A36052BB9170A3AF7 /* CryptoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CryptoTests.swift; sourceTree = "<group>"; };
+		8E58A5BF21D5EDB0AC72578C /* TabRenameTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabRenameTests.swift; sourceTree = "<group>"; };
 		8F1C4B3602A1AFDB918B54C4 /* FxAClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FxAClient.swift; sourceTree = "<group>"; };
 		941564EED33EF0B69C4F9B8F /* ShareModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareModel.swift; sourceTree = "<group>"; };
 		94FCEF8602C71B7E3166BE2A /* ConflictSafeSyncTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConflictSafeSyncTests.swift; sourceTree = "<group>"; };
@@ -509,6 +511,7 @@
 				27085BCD70B4032B42A47ABC /* ShareModelTests.swift */,
 				E57B1A6F693633277A260F1A /* SignInModelTests.swift */,
 				06F668E54E35497DBE22EECC /* SyncSetupTests.swift */,
+				8E58A5BF21D5EDB0AC72578C /* TabRenameTests.swift */,
 				30B15F4C45B25CAC1BDBEE15 /* ZenIconTests.swift */,
 			);
 			path = App;
@@ -617,12 +620,12 @@
 			path = fixtures;
 			sourceTree = "<group>";
 		};
-		9E4C6D8FFE229DD565E4F47D /* t3code-110ed046 */ = {
+		9E4C6D8FFE229DD565E4F47D /* ZenCompanion */ = {
 			isa = PBXGroup;
 			children = (
 				1433A4FEAE9D0FA30CC327AC /* shared */,
 			);
-			name = "t3code-110ed046";
+			name = ZenCompanion;
 			path = ..;
 			sourceTree = "<group>";
 		};
@@ -647,7 +650,7 @@
 				7B09C50D4DA4A19EA4028E56 /* Config */,
 				F204BEC62E1FEC88439ECC35 /* Shared */,
 				78918972A3A714AB30338F16 /* ShareExtension */,
-				9E4C6D8FFE229DD565E4F47D /* t3code-110ed046 */,
+				9E4C6D8FFE229DD565E4F47D /* ZenCompanion */,
 				FA13BB7E1039821C0AC0EE9B /* ZenCompanion */,
 				7FD4C29B16EC30D8DB472E6F /* ZenCompanionTests */,
 				971F90D4B0417D43356DBB47 /* Products */,
@@ -984,6 +987,7 @@
 				188AD403EA9D55B3261105C7 /* SyncSetupTests.swift in Sources */,
 				74CEE128A1B17B46BD622B2F /* SyncTransport.swift in Sources */,
 				498F3D4ABBE278BED660C9D4 /* SyncTransportTests.swift in Sources */,
+				80654C37C48DE7A9A7ECA7F0 /* TabRenameTests.swift in Sources */,
 				AAF3D4FDB21548A65F95CEA8 /* ThemeViews.swift in Sources */,
 				EE87DD725E8649635E59ADAB /* ZenIconTests.swift in Sources */,
 				819D3B20142E7D50858FCD7B /* ZenSpaces.swift in Sources */,

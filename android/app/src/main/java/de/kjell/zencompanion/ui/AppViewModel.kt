@@ -15,6 +15,7 @@ import de.kjell.zencompanion.data.SearchEngines
 import de.kjell.zencompanion.data.SearchEngineTemplate
 import de.kjell.zencompanion.data.SearchEngineValidation
 import de.kjell.zencompanion.data.SnapshotCache
+import de.kjell.zencompanion.data.SpacesSyncCacheOps
 import de.kjell.zencompanion.data.ToolbarPlacement
 import de.kjell.zencompanion.favicon.FaviconLoader
 import de.kjell.zencompanion.sync.FxAClient
@@ -100,6 +101,7 @@ interface BrowserRepository {
         kind: SaveKind = SaveKind.PINNED,
     ): SpacesSyncService.AddTabOutcome
     suspend fun deleteTab(id: String)
+    suspend fun renameTab(id: String, label: String)
     fun isDemo(): Boolean
     /** Global pinned/normal choice for newly saved tabs. */
     fun saveKind(): SaveKind
@@ -128,6 +130,10 @@ internal class AndroidBrowserRepository(private val context: Context) : BrowserR
 
     override suspend fun deleteTab(id: String) = withContext(Dispatchers.IO) {
         SpacesSyncService.deleteTab(context, id)
+    }
+
+    override suspend fun renameTab(id: String, label: String) = withContext(Dispatchers.IO) {
+        SpacesSyncService.renameTab(context, id, label)
     }
 
     override fun isDemo(): Boolean = AccountStore.isDemo(context)
@@ -551,6 +557,26 @@ class AppViewModel(
     fun deleteTab(id: String) {
         viewModelScope.launch {
             runCatching { browserRepository.deleteTab(id) }
+        }
+    }
+
+    fun renameTab(id: String, label: String) {
+        // Optimistic: apply the custom name to the on-screen snapshot right
+        // away, then confirm the write against the server. Without this the
+        // name only appeared after the conditional write *and* the follow-up
+        // full reload, which read as "the rename did not take". A failed write
+        // self-corrects on the next reload.
+        val normalized = SpacesSyncService.normalizedStaticLabel(label)
+        _browser.value = _browser.value.copy(
+            snapshot = SpacesSyncCacheOps.renameTab(
+                _browser.value.snapshot,
+                id,
+                normalized,
+                System.currentTimeMillis(),
+            ),
+        )
+        viewModelScope.launch {
+            runCatching { browserRepository.renameTab(id, label) }
         }
     }
 

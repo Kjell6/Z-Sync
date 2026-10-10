@@ -175,7 +175,6 @@ struct MiniBrowserView: View {
                 model.commitPendingPinSave()
             }
         }
-        .geometryGroup()
     }
 
     /// The page stops at the bar. No extra viewport inset under the glass.
@@ -183,8 +182,7 @@ struct MiniBrowserView: View {
         MiniBrowserRepresentable(
             model: model,
             bottomBarVisible: false,
-            bottomChromeHeight: 0,
-            acceptsPageTaps: !model.menuExpanded
+            bottomChromeHeight: 0
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

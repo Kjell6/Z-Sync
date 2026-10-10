@@ -300,16 +300,22 @@ final class MiniBrowserModel {
         }
     }
 
-    func addressFocusDidChange(_ focused: Bool) {
-        if focused {
-            if let url = effectiveURL {
-                addressText = url.absoluteString
-            }
-        } else {
-            if let url = effectiveURL {
-                addressText = BrowserInput.displayText(for: url)
-            }
-        }
+    /// Full URL for the editor. Call only while no address field is first
+    /// responder. Writing the focused field from the focus callback deadlocks
+    /// the keyboard queue, and the scene-update watchdog kills the app.
+    func prepareAddressForEditing() {
+        guard let url = effectiveURL else { return }
+        let full = url.absoluteString
+        guard addressText != full else { return }
+        addressText = full
+    }
+
+    /// Short host label for the collapsed bar. Call after the editor is gone.
+    func restoreAddressDisplay() {
+        guard let url = effectiveURL else { return }
+        let display = BrowserInput.displayText(for: url)
+        guard addressText != display else { return }
+        addressText = display
     }
 
     // MARK: - Pin save state machine

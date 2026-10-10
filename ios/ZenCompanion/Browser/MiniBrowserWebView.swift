@@ -15,6 +15,15 @@ final class MiniBrowserWebView: WKWebView {
         }
     }
 
+    /// Floating chrome height above the home indicator. The page paints under
+    /// that chrome; this only shrinks the layout viewport.
+    var reservedBottomChrome: CGFloat = 0 {
+        didSet {
+            guard abs(reservedBottomChrome - oldValue) > 0.5 else { return }
+            updateObscuredInsets()
+        }
+    }
+
     private var appliedBottomInset: CGFloat = -1
 
     override var inputAccessoryView: UIView? { nil }
@@ -76,11 +85,12 @@ final class MiniBrowserWebView: WKWebView {
 
     private func computedBottomObscuredInset() -> CGFloat {
         let homeIndicator = super.safeAreaInsets.bottom
-        guard bottomBarVisible else {
-            // The page sits above the card now. The card owns home-indicator
-            // clearance, so a leftover inset here would open a gap.
-            return 0
+        if reservedBottomChrome > 1 {
+            // `reservedBottomChrome` is the overlay above the home indicator.
+            // Adding the indicator reaches the top of the floating glass.
+            return homeIndicator + reservedBottomChrome
         }
+        guard bottomBarVisible else { return 0 }
 
         // Measured overlap with the real toolbar, if it is reachable in the hierarchy.
         if let overlap = overlappingBottomChromeHeight() {

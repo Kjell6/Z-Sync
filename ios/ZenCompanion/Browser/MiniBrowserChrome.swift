@@ -1,15 +1,16 @@
 import SwiftUI
 
-/// Bottom browser card.
+/// Bottom browser chrome, drawn on top of the page.
 ///
-/// Android port (`MiniBrowserChrome` / `MiniBrowserFooter`): one surface at the
-/// bottom of the page, not a top field plus a separate toolbar.
+/// Android port (`MiniBrowserChrome` / `MiniBrowserFooter`): overlay the page.
+/// Do not reserve a solid strip under the controls.
 ///
-/// Collapsed row, leading to trailing: Back, Forward only when
-/// `MiniBrowserTools.showsForwardButton`, the address field, More.
-/// More unfolds this same card. The unfolded menu is, top to bottom:
-/// page title and favicon, then Pin / Open / Share / Find, then Copy Link,
-/// Request Desktop Site, and Page Zoom. No translate control.
+/// Collapsed, each piece is its own material: a circle for Back, a second
+/// circle for Forward only when `MiniBrowserTools.showsForwardButton` is true,
+/// a capsule for the address field, and a circle for More. They are not one
+/// shared card. More opens a separate glass card above that row. The card
+/// holds the title and favicon, then Pin / Open / Share / Find, then Copy
+/// Link, Request Desktop Site, and Page Zoom. No translate control.
 /// The material is untinted regular glass (a plain material on Android).
 struct MiniBrowserChrome: View {
     var model: MiniBrowserModel
@@ -37,11 +38,8 @@ struct MiniBrowserChrome: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            compactRow
+        VStack(spacing: 10) {
             if model.menuExpanded {
-                // The menu keeps its height when it fits. On a short phone or
-                // with large text it scrolls instead of leaving the card.
                 ViewThatFits(in: .vertical) {
                     pageMenu
                     ScrollView {
@@ -50,16 +48,12 @@ struct MiniBrowserChrome: View {
                     .scrollBounceBehavior(.basedOnSize)
                     .frame(maxHeight: 420)
                 }
-                .transition(.opacity)
+                .liquidGlassCard(cornerRadius: radius)
+                .modifier(FloatingGlassShadow(scheme: scheme))
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
+            controlRow
         }
-        .liquidGlassCard(cornerRadius: radius)
-        .shadow(
-            color: Color.black.opacity(scheme == .dark ? 0.35 : 0.12),
-            radius: 18,
-            x: 0,
-            y: 8
-        )
         .animation(chromeAnimation, value: model.menuExpanded)
         .animation(chromeAnimation, value: model.canGoForward)
         .animation(chromeAnimation, value: addressEditing)
@@ -68,10 +62,12 @@ struct MiniBrowserChrome: View {
 
     // MARK: - Compact row
 
-    private var compactRow: some View {
-        HStack(spacing: 0) {
+    /// Separate glass pieces. Back and More are circles. The address field is
+    /// its own capsule. Nothing here shares one background.
+    private var controlRow: some View {
+        HStack(spacing: 10) {
             if !addressEditing {
-                navButton(
+                glassCircle(
                     systemName: "chevron.backward",
                     label: "browser.back",
                     enabled: model.canGoBack
@@ -82,7 +78,7 @@ struct MiniBrowserChrome: View {
                     canGoForward: model.canGoForward,
                     addressEditing: addressEditing
                 ) {
-                    navButton(
+                    glassCircle(
                         systemName: "chevron.forward",
                         label: "browser.forward",
                         enabled: true
@@ -94,9 +90,23 @@ struct MiniBrowserChrome: View {
             }
 
             addressField
+                .padding(.leading, 14)
+                .padding(.trailing, 4)
+                .frame(height: 48)
+                .frame(maxWidth: .infinity)
+                .overlay(alignment: .bottom) {
+                    if model.isLoading && !addressEditing {
+                        progressBar
+                            .padding(.horizontal, 18)
+                            .padding(.bottom, 1)
+                    }
+                }
+                .clipShape(Capsule())
+                .liquidGlassCapsule()
+                .modifier(FloatingGlassShadow(scheme: scheme))
 
             if addressEditing {
-                navButton(
+                glassCircle(
                     systemName: "xmark",
                     label: "common.cancel",
                     enabled: true,
@@ -106,7 +116,7 @@ struct MiniBrowserChrome: View {
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.86)))
             } else {
-                navButton(
+                glassCircle(
                     systemName: model.menuExpanded ? "chevron.down" : "ellipsis",
                     label: model.menuExpanded ? "browser.close_menu" : "browser.more",
                     enabled: model.effectiveURL != nil
@@ -115,16 +125,6 @@ struct MiniBrowserChrome: View {
                         model.toggleMenu()
                     }
                 }
-            }
-        }
-        .padding(.leading, addressEditing ? 8 : 2)
-        .padding(.trailing, 2)
-        .padding(.vertical, 4)
-        .overlay(alignment: .bottom) {
-            if model.isLoading && !addressEditing {
-                progressBar
-                    .padding(.horizontal, 22)
-                    .padding(.bottom, 1)
             }
         }
     }
@@ -214,7 +214,7 @@ struct MiniBrowserChrome: View {
         .accessibilityHidden(true)
     }
 
-    private func navButton(
+    private func glassCircle(
         systemName: String,
         label: LocalizedStringKey,
         enabled: Bool,
@@ -225,13 +225,15 @@ struct MiniBrowserChrome: View {
             Image(systemName: systemName)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(tint ?? (enabled ? Color.primary : Color.secondary.opacity(0.45)))
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
+                .frame(width: 48, height: 48)
+                .contentShape(Circle())
                 .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(CardPressStyle())
         .disabled(!enabled)
         .accessibilityLabel(Text(label))
+        .liquidGlassCircle()
+        .modifier(FloatingGlassShadow(scheme: scheme))
     }
 
     // MARK: - Expanded menu
@@ -500,8 +502,23 @@ struct MiniBrowserChrome: View {
     }
 }
 
-/// Press feedback for controls that sit on the glass card. Glass is the card,
-/// not each control, so the press is a small scale rather than another material.
+/// Soft lift so each glass piece separates from the page under it.
+/// No fill: the page has to remain the thing the glass samples.
+private struct FloatingGlassShadow: ViewModifier {
+    var scheme: ColorScheme
+
+    func body(content: Content) -> some View {
+        content.shadow(
+            color: Color.black.opacity(scheme == .dark ? 0.35 : 0.16),
+            radius: 14,
+            x: 0,
+            y: 6
+        )
+    }
+}
+
+/// Press feedback for controls on the floating glass. The glass is the
+/// control itself, so the press is a small scale rather than another material.
 private struct CardPressStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 

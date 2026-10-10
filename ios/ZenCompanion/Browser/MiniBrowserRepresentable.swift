@@ -5,6 +5,8 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
     var model: MiniBrowserModel
     /// Native `.bottomBar` is visible (hidden while the address field is focused).
     var bottomBarVisible: Bool
+    /// Height of the floating glass above the home indicator, including keyboard lift.
+    var bottomChromeHeight: CGFloat = 0
 
     func makeCoordinator() -> Coordinator {
         Coordinator(model: model)
@@ -23,6 +25,7 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
         webView.backgroundColor = .clear
         webView.scrollView.backgroundColor = .clear
         webView.bottomBarVisible = bottomBarVisible
+        webView.reservedBottomChrome = bottomChromeHeight
 
         // Paint under the translucent bar. Layout inset is `obscuredContentInsets`,
         // not scroll-view contentInset — contentInset would clip the background.
@@ -43,6 +46,7 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
     func updateUIView(_ uiView: WKWebView, context: Context) {
         guard let webView = uiView as? MiniBrowserWebView else { return }
         webView.bottomBarVisible = bottomBarVisible
+        webView.reservedBottomChrome = bottomChromeHeight
         model.applyWebpagePreferences()
         webView.updateObscuredInsets()
     }

@@ -68,13 +68,15 @@ fun ZenIconView(
                 )
             }
             clean.startsWith("data:") -> {
-                // Non-emoji data payloads (e.g. favicon raster bytes). Never
-                // fall through to the text branch: a base64 blob must not
-                // render as text.
+                // Non-emoji data payloads (favicon raster bytes, or an SVG that
+                // only wraps one). Never fall through to the text branch: a
+                // base64 blob must not render as text.
                 val bitmap = remember(clean) {
-                    dataUrlBytes(clean)?.let { bytes ->
-                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                    }
+                    val bytes = dataUrlBytes(clean) ?: return@remember null
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                        ?: embeddedRasterBytes(bytes)?.let { nested ->
+                            BitmapFactory.decodeByteArray(nested, 0, nested.size)
+                        }
                 }
                 if (bitmap != null) {
                     Image(
@@ -127,17 +129,6 @@ fun assetName(raw: String): String? {
     return "zen_${base.replace('-', '_')}"
 }
 
-/**
- * Decodes the icon payloads Zen syncs for tabs and folders.
- *
- * Static tab icons and folder user icons come from Zen's emoji picker
- * (`ZenEmojiPicker.mjs`): selectable SVGs are sent as
- * `chrome://browser/skin/zen-icons/selectable/<name>.svg`, emoji are sent as
- * `data:image/svg+xml;base64,…` wrapping a one-node `<text>` SVG. Favicon
- * payloads (non-static tabs) are plain `data:` image URLs.
- */
-internal const val EMOJI_SVG_PREFIX = "data:image/svg+xml;base64,"
-
 private val TEXT_NODE = Regex("<text[^>]*>(.*?)</text", RegexOption.DOT_MATCHES_ALL)
 
 private val XML_ESCAPES = listOf(
@@ -151,13 +142,52 @@ private val XML_ESCAPES = listOf(
 private fun unescapeXml(text: String): String =
     XML_ESCAPES.fold(text) { acc, (escaped, raw) -> acc.replace(escaped, raw) }
 
+/**
+ * SVG source of a `data:image/svg+xml` URL.
+ *
+ * The picker writes `data:image/svg+xml;base64,…`. Live sidebar icons also
+ * arrive as `charset=utf-8` base64 and as percent-encoded SVG, both with the
+ * same `<text>` node (`viewBox="0 0 32 32"` or `0 0 100 100`).
+ */
+internal fun svgDocument(icon: String): String? {
+    if (!icon.trim().lowercase().startsWith("data:image/svg+xml")) return null
+    val bytes = dataUrlBytes(icon) ?: return null
+    val svg = runCatching { String(bytes, Charsets.UTF_8) }.getOrNull() ?: return null
+    return svg.takeIf { it.contains("<svg", ignoreCase = true) }
+}
+
 /** The emoji inside Zen's emoji-as-SVG data URL, null for every other icon. */
 internal fun emojiFromDataUrl(icon: String): String? {
-    if (!icon.startsWith(EMOJI_SVG_PREFIX)) return null
-    val bytes = runCatching { Base64.getMimeDecoder().decode(icon.removePrefix(EMOJI_SVG_PREFIX)) }
-        .getOrNull() ?: return null
-    val match = TEXT_NODE.find(String(bytes, Charsets.UTF_8)) ?: return null
+    val svg = svgDocument(icon) ?: return null
+    val match = TEXT_NODE.find(svg) ?: return null
     return unescapeXml(match.groupValues[1]).trim().takeIf { it.isNotEmpty() }
+}
+
+private val IMAGE_HREF = Regex(
+    """(?:xlink:)?href\s*=\s*["'](data:image/[^"']+)["']""",
+    RegexOption.IGNORE_CASE,
+)
+
+/** Bitmap bytes nested in an SVG `<image href="data:image/…">`. */
+internal fun embeddedRasterBytes(svgOrBytes: ByteArray): ByteArray? {
+    val svg = runCatching { String(svgOrBytes, Charsets.UTF_8) }.getOrNull() ?: return null
+    val href = IMAGE_HREF.find(svg)?.groupValues?.get(1) ?: return null
+    return dataUrlBytes(unescapeXml(href))
+}
+
+/**
+ * Icon drawn inside the folder flap. Empty and the plain folder emojis
+ * (raw or wrapped in Zen's emoji SVG) stay null: the silhouette is enough.
+ */
+internal fun folderFlapIcon(icon: String?): String? {
+    val clean = icon?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    val glyph = emojiFromDataUrl(clean) ?: clean
+    return if (isPlainFolderEmoji(glyph)) null else clean
+}
+
+private fun isPlainFolderEmoji(value: String): Boolean {
+    val stripped = value.replace("\uFE0F", "")
+    return stripped == "📁" || stripped == "📂"
 }
 
 /** Raw bytes of any `data:` URL, base64 or percent-encoded. */

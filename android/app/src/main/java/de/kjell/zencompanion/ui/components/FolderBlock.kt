@@ -101,8 +101,7 @@ fun FolderBlock(
             // sliced the open folder off at the row edge.
             ZenFolderSidebarIcon(
                 isExpanded = isExpanded,
-                userIcon = folder.icon
-                    ?.takeIf { it.isNotEmpty() && it != "📁" && it != "📂" },
+                userIcon = folderFlapIcon(folder.icon),
                 modifier = Modifier.align(Alignment.CenterStart),
             )
         }

@@ -16,9 +16,8 @@ struct ZenFolderSidebarIcon: View {
     let isExpanded: Bool
     let scheme: ColorScheme
     /// Zen folder user icon (`chrome://…/selectable/….svg`, emoji or data URL).
-    /// Zen draws it as an 11×11 `<image>` inside the folder flap, never instead
-    /// of the folder silhouette. We render it a little smaller (9pt) so it sits
-    /// comfortably inside the flap instead of nearly filling it.
+    /// Zen draws it as an 11×11 `<image>` translated to (8.5, 10.5) inside the
+    /// folder flap, never instead of the folder silhouette.
     var userIcon: String? = nil
 
     private var strokeColor: Color {
@@ -60,9 +59,10 @@ struct ZenFolderSidebarIcon: View {
                             .stroke(strokeColor, lineWidth: 1.4)
                     )
                 if let userIcon, !userIcon.isEmpty {
-                    ZenIconView(icon: userIcon, size: 9, foreground: strokeColor)
-                        // Zen centers the image on the front rect (y 9.625…22.375
-                        // → center 16), two points below the 28pt frame center.
+                    ZenIconView(icon: userIcon, size: 11, foreground: strokeColor)
+                        // Zen centers the 11×11 image on the front rect
+                        // (y 9.625…22.375 → center 16), two points below the
+                        // 28pt frame center.
                         .offset(y: 2)
                 }
             }

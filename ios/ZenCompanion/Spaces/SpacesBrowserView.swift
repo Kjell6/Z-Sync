@@ -519,9 +519,8 @@ struct FolderBlock: View {
     }
 
     /// The folder's user icon, nil for "no icon" and the plain folder emojis
-    /// older records may carry.
+    /// older records may carry (raw or inside Zen's emoji SVG).
     private var userIcon: String? {
-        guard let icon = folder.icon, !icon.isEmpty, icon != "📁", icon != "📂" else { return nil }
-        return icon
+        ZenIconDecoder.folderFlapIcon(folder.icon)
     }
 }

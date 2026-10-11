@@ -38,17 +38,52 @@ struct ZenMark: View {
 /// `data:image/svg+xml;base64,…` wrapping a one-node `<text>` SVG. Favicon
 /// payloads (non-static tabs) are plain `data:` image URLs.
 enum ZenIconDecoder {
-    static let emojiSVGPrefix = "data:image/svg+xml;base64,"
-
     /// The emoji inside a Zen emoji-as-SVG data URL, nil for every other icon.
+    ///
+    /// The picker writes `data:image/svg+xml;base64,…`. Live sidebar icons also
+    /// arrive as `charset=utf-8` base64 and as percent-encoded SVG, both with
+    /// the same `<text>` node (`viewBox="0 0 32 32"` or `0 0 100 100`).
     static func emoji(fromDataURL raw: String) -> String? {
-        guard raw.hasPrefix(emojiSVGPrefix) else { return nil }
-        let base64 = String(raw.dropFirst(emojiSVGPrefix.count))
-        guard let data = Data(base64Encoded: base64, options: [.ignoreUnknownCharacters]),
-              let svg = String(data: data, encoding: .utf8),
+        guard let svg = svgDocument(from: raw),
               let text = firstTextNode(in: svg) else { return nil }
         let emoji = unescapeXML(text).trimmingCharacters(in: .whitespacesAndNewlines)
         return emoji.isEmpty ? nil : emoji
+    }
+
+    /// SVG source of a `data:image/svg+xml` URL, base64 or percent-encoded.
+    static func svgDocument(from raw: String) -> String? {
+        guard raw.lowercased().hasPrefix("data:image/svg+xml"),
+              let data = dataURLBytes(raw),
+              let svg = String(data: data, encoding: .utf8),
+              svg.range(of: "<svg", options: .caseInsensitive) != nil else { return nil }
+        return svg
+    }
+
+    /// Bitmap bytes nested in an SVG `<image href="data:image/…">`. Zen syncs
+    /// some static icons this way; the outer SVG itself is not a bitmap.
+    static func embeddedRaster(in data: Data) -> Data? {
+        guard let svg = String(data: data, encoding: .utf8) else { return nil }
+        return embeddedRaster(inSVG: svg)
+    }
+
+    static func embeddedRaster(inSVG svg: String) -> Data? {
+        guard let href = firstImageHref(in: svg) else { return nil }
+        return dataURLBytes(unescapeXML(href))
+    }
+
+    /// Icon drawn inside the folder flap. Empty and the plain folder emojis
+    /// (raw or wrapped in Zen's emoji SVG) stay nil: the silhouette is enough.
+    static func folderFlapIcon(_ raw: String?) -> String? {
+        guard let icon = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !icon.isEmpty else {
+            return nil
+        }
+        let glyph = emoji(fromDataURL: icon) ?? icon
+        return isPlainFolderEmoji(glyph) ? nil : icon
+    }
+
+    private static func isPlainFolderEmoji(_ value: String) -> Bool {
+        let stripped = value.replacingOccurrences(of: "\u{FE0F}", with: "")
+        return stripped == "📁" || stripped == "📂"
     }
 
     /// Raw bytes of any `data:` URL, base64 or percent-encoded.
@@ -68,6 +103,25 @@ enum ZenIconDecoder {
               let close = svg.range(of: "</text", range: openEnd.upperBound..<svg.endIndex)
         else { return nil }
         return String(svg[openEnd.upperBound..<close.lowerBound])
+    }
+
+    /// First `<image>` / `<img>` href that is itself a `data:image/` URL.
+    private static func firstImageHref(in svg: String) -> String? {
+        guard let marker = svg.range(of: "href", options: .caseInsensitive) else { return nil }
+        var rest = svg[marker.upperBound...]
+        while true {
+            guard let eq = rest.range(of: "=") else { return nil }
+            var after = rest[eq.upperBound...].drop(while: { $0 == " " || $0 == "\n" || $0 == "\t" })
+            guard let quote = after.first, quote == "\"" || quote == "'" else { return nil }
+            after = after.dropFirst()
+            guard let end = after.firstIndex(of: quote) else { return nil }
+            let href = String(after[..<end])
+            if href.lowercased().hasPrefix("data:image/") { return href }
+            guard let next = after[after.index(after: end)...].range(of: "href", options: .caseInsensitive) else {
+                return nil
+            }
+            rest = after[next.lowerBound...]
+        }
     }
 
     private static func unescapeXML(_ text: String) -> String {
@@ -95,10 +149,12 @@ struct ZenIconView: View {
                         .lineLimit(1)
                         .fixedSize()
                 } else if icon.hasPrefix("data:") {
-                    // Non-emoji data payloads (e.g. favicon raster bytes). Never
-                    // fall through to the text branch: a base64 blob must not
-                    // render as text.
-                    if let data = ZenIconDecoder.dataURLBytes(icon), let image = FaviconDecoder.image(from: data) {
+                    // Non-emoji data payloads (e.g. favicon raster bytes, or an
+                    // SVG that only wraps one). Never fall through to the text
+                    // branch: a base64 blob must not render as text.
+                    if let data = ZenIconDecoder.dataURLBytes(icon),
+                       let image = FaviconDecoder.image(from: data)
+                        ?? ZenIconDecoder.embeddedRaster(in: data).flatMap(FaviconDecoder.image(from:)) {
                         Image(uiImage: image)
                             .resizable()
                             .interpolation(.high)

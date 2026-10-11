@@ -29,6 +29,46 @@ final class ZenIconDecoderTests: XCTestCase {
         XCTAssertNil(ZenIconDecoder.emoji(fromDataURL: ""))
     }
 
+    /// Live Zen sidebar payload: `viewBox="0 0 100 100"` and `y=".9em"`, not the picker SVG.
+    func testExtractsEmojiFromLiveSidebarSVG() {
+        let svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><text y=\".9em\" font-size=\"90\">✨</text></svg>"
+        let url = "data:image/svg+xml;base64,\(Data(svg.utf8).base64EncodedString())"
+        XCTAssertEqual(ZenIconDecoder.emoji(fromDataURL: url), "✨")
+    }
+
+    func testExtractsEmojiWhenCharsetPrecedesBase64() {
+        let svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><text y=\"28\" font-size=\"28\">🚀</text></svg>"
+        let url = "data:image/svg+xml;charset=utf-8;base64,\(Data(svg.utf8).base64EncodedString())"
+        XCTAssertEqual(ZenIconDecoder.emoji(fromDataURL: url), "🚀")
+    }
+
+    func testExtractsEmojiFromPercentEncodedSVG() {
+        let svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 32 32\"><text y=\"28\">🚀</text></svg>"
+        let encoded = svg.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
+        XCTAssertEqual(ZenIconDecoder.emoji(fromDataURL: "data:image/svg+xml,\(encoded)"), "🚀")
+    }
+
+    func testExtractsRasterNestedInSVG() {
+        let png = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")!
+        let svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\"><image xlink:href=\"data:image/png;base64,\(png.base64EncodedString())\"/></svg>"
+        let nested = ZenIconDecoder.embeddedRaster(in: Data(svg.utf8))
+        XCTAssertEqual(nested, png)
+    }
+
+    func testFolderFlapSkipsPlainFolderEmoji() {
+        XCTAssertNil(ZenIconDecoder.folderFlapIcon(nil))
+        XCTAssertNil(ZenIconDecoder.folderFlapIcon(""))
+        XCTAssertNil(ZenIconDecoder.folderFlapIcon("   "))
+        XCTAssertNil(ZenIconDecoder.folderFlapIcon("📁"))
+        XCTAssertNil(ZenIconDecoder.folderFlapIcon("📂"))
+        XCTAssertNil(ZenIconDecoder.folderFlapIcon(emojiDataURL("📁")))
+        XCTAssertNil(ZenIconDecoder.folderFlapIcon(emojiDataURL("📂")))
+        let rocket = "chrome://browser/skin/zen-icons/selectable/rocket.svg"
+        XCTAssertEqual(ZenIconDecoder.folderFlapIcon(rocket), rocket)
+        XCTAssertEqual(ZenIconDecoder.folderFlapIcon(emojiDataURL("🚀")), emojiDataURL("🚀"))
+        XCTAssertEqual(ZenIconDecoder.folderFlapIcon("ticket"), "ticket")
+    }
+
     func testExtractsDataURLBytes() {
         let png = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")!
         let base64URL = "data:image/png;base64,\(png.base64EncodedString())"

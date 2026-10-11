@@ -36,16 +36,21 @@ enum Palette {
             : Color.black.opacity(0.06)
     }
 
+    /// Continuous corner on the lift tiles. 16pt on a 44pt side is large
+    /// enough to read as a squircle, and still leaves a flat edge.
+    static let liftCornerRadius: CGFloat = 16
+
 }
 
 extension View {
-    /// Flat hairline for lift tiles. One color, close to the tile fill,
-    /// not a highlight gradient. Stays inside the shape so neighboring
-    /// tiles do not share an edge.
+    /// Flat hairline for lift tiles. One color, just stronger than the lift
+    /// fill (0.06–0.07), so the edge does not read as a separate line.
+    /// Width stays 0.5. Stays inside the shape so neighboring tiles do not
+    /// share an edge.
     func glassRim(cornerRadius: CGFloat) -> some View {
         overlay {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5)
                 .allowsHitTesting(false)
         }
     }

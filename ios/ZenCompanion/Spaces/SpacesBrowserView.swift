@@ -336,10 +336,10 @@ struct SpacesBrowserView: View {
                 .frame(width: 44, height: 44)
                 .background(
                     Palette.lift(scheme),
-                    in: RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    in: RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous)
                 )
-                .glassRim(cornerRadius: 13)
-                .contentShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                .glassRim(cornerRadius: Palette.liftCornerRadius)
+                .contentShape(RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous))
         }
         .buttonStyle(SquircleButtonStyle())
         .accessibilityLabel(Text(LocalizedStringKey(accessibilityKey)))
@@ -366,10 +366,10 @@ struct SpacesBrowserView: View {
             .frame(height: 44)
             .background(
                 Palette.lift(scheme),
-                in: RoundedRectangle(cornerRadius: 13, style: .continuous)
+                in: RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous)
             )
-            .glassRim(cornerRadius: 13)
-            .contentShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .glassRim(cornerRadius: Palette.liftCornerRadius)
+            .contentShape(RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous))
         }
         .buttonStyle(SquircleButtonStyle())
         .accessibilityLabel(Text("browser.web_placeholder"))

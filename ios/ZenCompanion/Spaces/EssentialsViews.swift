@@ -56,7 +56,7 @@ private struct EssentialTile: View {
 
     var body: some View {
         Button(action: onOpen) {
-            let shape = RoundedRectangle(cornerRadius: 13, style: .continuous)
+            let shape = RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous)
             ZStack {
                 shape
                     .fill(Palette.lift(scheme))
@@ -64,7 +64,7 @@ private struct EssentialTile: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: height)
-            .glassRim(cornerRadius: 13)
+            .glassRim(cornerRadius: Palette.liftCornerRadius)
             .contentShape(shape)
         }
         .buttonStyle(SquircleButtonStyle())

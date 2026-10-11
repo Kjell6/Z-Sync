@@ -7,7 +7,7 @@ import SwiftUI
 /// typing, the strip draws over the page and keeps the screen bottom, so the
 /// page does not move. While typing the glass continues behind the keyboard.
 /// Those sheets are short, so their top corners stay under the display radius.
-/// Buttons match the home action bar: `Palette.lift`, 13pt continuous corners.
+/// Buttons match the home action bar: `Palette.lift`, 16pt continuous corners.
 /// The material behind them is one untinted glass surface.
 struct MiniBrowserChrome: View {
     var model: MiniBrowserModel
@@ -33,7 +33,7 @@ struct MiniBrowserChrome: View {
     @State private var copyGeneration = 0
 
     /// Same tile as the home action bar.
-    private let tileRadius: CGFloat = 13
+    private let tileRadius: CGFloat = Palette.liftCornerRadius
     private let controlSide: CGFloat = 44
 
     private var motion: Animation {
@@ -211,7 +211,7 @@ struct MiniBrowserChrome: View {
             .contentShape(RoundedRectangle(cornerRadius: tileRadius, style: .continuous))
     }
 
-    /// Home action-bar tile: lift fill, 13pt continuous corners, 44pt side.
+    /// Home action-bar tile: lift fill, squircle corners, 44pt side.
     private func homeTile(
         systemName: String,
         label: LocalizedStringKey,

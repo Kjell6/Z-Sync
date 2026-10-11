@@ -157,24 +157,58 @@ struct MiniBrowserChrome: View {
     }
 
     /// Lift field shared by the navigation row and the keyboard composer.
+    /// Collapsed, the whole pill is the button, so press-down scales the
+    /// shape the same way as the side tiles. The editor is not that button.
+    @ViewBuilder
     private var addressCard: some View {
-        addressField
+        if addressEditing {
+            addressSurface {
+                HStack(spacing: 8) {
+                    leadingIcon
+                    addressEditor
+                    trailingIcon
+                }
+            }
+        } else {
+            Button(action: onBeginAddressEdit) {
+                addressSurface {
+                    HStack(spacing: 8) {
+                        leadingIcon
+                        addressLabel
+                        trailingIcon
+                    }
+                }
+                .overlay(alignment: .bottom) {
+                    if model.isLoading {
+                        progressBar
+                            .padding(.horizontal, 18)
+                            .padding(.bottom, 1)
+                    }
+                }
+            }
+            .buttonStyle(SquircleButtonStyle())
+            .accessibilityLabel(collapsedAddressLabel)
+        }
+    }
+
+    private var collapsedAddressLabel: Text {
+        model.addressText.isEmpty
+            ? Text("browser.search_placeholder")
+            : Text(model.addressText)
+    }
+
+    private func addressSurface<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
             .padding(.leading, 16)
             .padding(.trailing, 4)
             .frame(height: controlSide)
             .frame(maxWidth: .infinity)
-            .overlay(alignment: .bottom) {
-                if model.isLoading && !addressEditing {
-                    progressBar
-                        .padding(.horizontal, 18)
-                        .padding(.bottom, 1)
-                }
-            }
             .background(
                 Palette.lift(scheme),
                 in: RoundedRectangle(cornerRadius: tileRadius, style: .continuous)
             )
             .glassRim(cornerRadius: tileRadius)
+            .contentShape(RoundedRectangle(cornerRadius: tileRadius, style: .continuous))
     }
 
     /// Home action-bar tile: lift fill, 13pt continuous corners, 44pt side.
@@ -201,33 +235,6 @@ struct MiniBrowserChrome: View {
         .buttonStyle(SquircleButtonStyle())
         .disabled(!enabled)
         .accessibilityLabel(Text(label))
-    }
-
-    private var addressField: some View {
-        HStack(spacing: 8) {
-            if addressEditing {
-                leadingIcon
-                addressEditor
-                trailingIcon
-            } else {
-                // A label, not a text field. Tapping the live field replaced
-                // its text and its parent in the same turn, which wedged the
-                // keyboard until the watchdog killed the app.
-                Button(action: onBeginAddressEdit) {
-                    HStack(spacing: 8) {
-                        leadingIcon
-                        addressLabel
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                trailingIcon
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .frame(minHeight: controlSide)
     }
 
     private var addressEditor: some View {

@@ -294,13 +294,13 @@ final class MiniBrowserModel {
         load(url: url)
     }
 
-    /// A tapped suggestion uses the same resolution as the submit button.
-    /// An http(s) address loads directly; anything else is a search.
+    /// A tapped suggestion searches; only an explicit http(s) address loads
+    /// directly (see `SearchSuggestions.target`).
     func selectSuggestion(_ suggestion: String) {
         suggestionsSuspended = true
         cancelSuggestionRequest()
         addressText = suggestion
-        guard let url = BrowserInput.resolve(suggestion, engine: searchEngine.current) else { return }
+        guard let url = SearchSuggestions.target(of: suggestion, engine: searchEngine.current) else { return }
         load(url: url)
     }
 
@@ -312,8 +312,11 @@ final class MiniBrowserModel {
             cancelSuggestionRequest()
             return
         }
-        cancelSuggestionRequest()
+        // Keep the current list until the new answer arrives, as Android
+        // does, so it does not flicker on every keystroke.
+        cancelSuggestionRequest(keepingList: true)
         guard let url = SearchSuggestions.requestURL(for: addressText, engine: searchEngine.current) else {
+            suggestions = []
             return
         }
         let generation = suggestionGeneration
@@ -347,11 +350,11 @@ final class MiniBrowserModel {
         refreshSuggestions(isEditing: true)
     }
 
-    private func cancelSuggestionRequest() {
+    private func cancelSuggestionRequest(keepingList: Bool = false) {
         suggestionTask?.cancel()
         suggestionTask = nil
         suggestionGeneration += 1
-        if !suggestions.isEmpty {
+        if !keepingList, !suggestions.isEmpty {
             suggestions = []
         }
     }

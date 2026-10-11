@@ -233,6 +233,22 @@ final class SearchEngineTests: XCTestCase {
         XCTAssertNil(query(.bing, "q"))
     }
 
+    func testTappedSuggestionSearchesUnlessItIsAnHTTPAddress() {
+        XCTAssertEqual(
+            SearchSuggestions.target(of: "node.js", engine: .duckDuckGo),
+            SearchEngine.duckDuckGo.searchURL(for: "node.js")
+        )
+        XCTAssertEqual(
+            SearchSuggestions.target(of: "https://zen-browser.app", engine: .duckDuckGo)?.absoluteString,
+            "https://zen-browser.app"
+        )
+    }
+
+    func testPlusInQueryIsEncoded() {
+        let url = SearchSuggestions.requestURL(for: "c++", engine: .google)
+        XCTAssertTrue(url?.absoluteString.contains("q=c%2B%2B") == true, url?.absoluteString ?? "nil")
+    }
+
     func testDotWithSpaceStillSuggests() {
         XCTAssertNotNil(SearchSuggestions.requestURL(for: "hello.world foo", engine: .google))
     }

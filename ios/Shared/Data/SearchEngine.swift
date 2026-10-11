@@ -259,6 +259,10 @@ struct SearchSuggestEndpoint: Equatable, Sendable {
             items.append(URLQueryItem(name: key, value: extra[key]))
         }
         components.queryItems = items
+        // URLQueryItem leaves "+" as is, and the engines read it as a space:
+        // "c++" would ask for "c".
+        components.percentEncodedQuery = components.percentEncodedQuery?
+            .replacingOccurrences(of: "+", with: "%2B")
         return components.url
     }
 }
@@ -324,6 +328,17 @@ enum SearchSuggestions {
 
     /// URL to request, or nil when nothing may be sent: blank text, a web
     /// address, or an engine with no suggest endpoint.
+    /// Where a tapped suggestion goes. Suggestions are search phrases, so
+    /// "node.js" searches instead of opening https://node.js. Only an explicit
+    /// http(s) address loads directly.
+    static func target(of suggestion: String, engine: SearchEngine) -> URL? {
+        let lower = suggestion.lowercased()
+        if lower.hasPrefix("http://") || lower.hasPrefix("https://") {
+            return URL(string: suggestion)
+        }
+        return engine.searchURL(for: suggestion)
+    }
+
     static func requestURL(for raw: String, engine: SearchEngine) -> URL? {
         let query = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty, !isDirectNavigation(query) else { return nil }

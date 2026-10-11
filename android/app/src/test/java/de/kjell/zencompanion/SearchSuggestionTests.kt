@@ -73,6 +73,18 @@ class SearchSuggestionTests {
     }
 
     @Test
+    fun tappedSuggestionSearchesUnlessItIsAnHttpAddress() {
+        assertEquals(
+            SearchEngine.DUCKDUCKGO.searchURL("node.js"),
+            SearchSuggestions.target("node.js", SearchEngine.DUCKDUCKGO),
+        )
+        assertEquals(
+            "https://zen-browser.app",
+            SearchSuggestions.target("https://zen-browser.app", SearchEngine.DUCKDUCKGO),
+        )
+    }
+
+    @Test
     fun dotWithSpaceStillSuggests() {
         assertTrue(SearchSuggestions.requestUrl("hello.world foo", SearchEngine.GOOGLE)!!.contains("hello.world"))
     }

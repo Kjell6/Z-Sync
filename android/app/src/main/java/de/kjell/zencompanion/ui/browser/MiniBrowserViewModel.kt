@@ -191,8 +191,8 @@ class MiniBrowserViewModel(
     }
 
     /**
-     * A tapped suggestion uses the same resolution as the submit button.
-     * An http(s) address loads directly; anything else is a search.
+     * A tapped suggestion searches; only an explicit http(s) address loads
+     * directly (see [SearchSuggestions.target]).
      */
     fun selectSuggestion(suggestion: String): String {
         suggestionsSuspended = true
@@ -203,7 +203,7 @@ class MiniBrowserViewModel(
                 addressText = TextFieldValue(suggestion),
             )
         }
-        return formatBrowserInput(suggestion)
+        return SearchSuggestions.target(suggestion, SearchEngines.current)
     }
 
     /**

@@ -97,6 +97,20 @@ internal object SearchSuggestions {
         return seen.toList()
     }
 
+    /**
+     * Where a tapped suggestion goes. Suggestions are search phrases, so
+     * "node.js" searches instead of opening https://node.js. Only an explicit
+     * http(s) address loads directly.
+     */
+    fun target(suggestion: String, engine: SearchEngine): String =
+        if (suggestion.startsWith("http://", ignoreCase = true) ||
+            suggestion.startsWith("https://", ignoreCase = true)
+        ) {
+            suggestion
+        } else {
+            engine.searchURL(suggestion)
+        }
+
     private fun SearchSuggestEndpoint.url(query: String): String? {
         val pairs = buildList {
             add(queryName to query)

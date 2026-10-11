@@ -39,6 +39,13 @@ enum MiniBrowserTools {
     static func showsForwardButton(canGoForward: Bool, addressEditing: Bool) -> Bool {
         canGoForward && !addressEditing
     }
+
+    /// A webpage or find field has the keyboard. The nav bar stays under the
+    /// keys; a checkmark above them resigns the field. The address composer
+    /// keeps the bar, so this stays false while that field is editing.
+    static func showsPageKeyboardDone(keyboardOverlap: CGFloat, addressEditing: Bool) -> Bool {
+        keyboardOverlap > 1 && !addressEditing
+    }
 }
 
 /// State owner for the mini-browser: web-view progress/URL state fed by KVO,

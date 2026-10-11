@@ -2,9 +2,11 @@ import SwiftUI
 import WebKit
 
 /// In-app mini-browser. Collapsed, the page ends where the bottom bar begins.
-/// The open menu and the keyboard composer draw over the page, so the page
-/// itself does not move. The keyboard composer keeps running down to the
-/// screen bottom, behind the keys (`MiniBrowserChrome`).
+/// The open menu and the address composer draw over the page, so the page
+/// itself does not move. The address composer keeps running down to the
+/// screen bottom, behind the keys (`MiniBrowserChrome`). A field on the page
+/// does not lift that bar: the keys cover it, and a checkmark above them
+/// closes the keyboard.
 struct MiniBrowserView: View {
     let initialURL: URL?
     let space: ZenSpace
@@ -48,12 +50,20 @@ struct MiniBrowserView: View {
     /// Keyboard focus, the tap that opens the composer, or the search-open first paint.
     private var addressEditing: Bool { editingAddress || isAddressFocused || startsInSearch }
 
-    /// Space inside the glass, below the controls. While typing this includes
-    /// the keyboard height, so the same glass continues behind the keys down
-    /// to the screen bottom. The field stays just above the keys.
+    /// Space inside the glass, below the controls. The address composer
+    /// includes the keyboard height, so the same glass continues behind the
+    /// keys. A page field does not: the bar stays on the screen bottom.
     private var chromeContentBottomInset: CGFloat {
-        if keyboardOverlap > 1 { return keyboardOverlap + 16 }
+        if addressEditing, keyboardOverlap > 1 { return keyboardOverlap + 16 }
         return safeBottom + 8
+    }
+
+    /// Webpage or find field, not the address composer.
+    private var pageKeyboard: Bool {
+        MiniBrowserTools.showsPageKeyboardDone(
+            keyboardOverlap: keyboardOverlap,
+            addressEditing: addressEditing
+        )
     }
 
     /// Height of the collapsed bar. The page always reserves exactly this, so
@@ -120,6 +130,17 @@ struct MiniBrowserView: View {
                     onSubmit: submitAddress
                 )
                 .fixedSize(horizontal: false, vertical: true)
+                .accessibilityHidden(pageKeyboard)
+
+                if pageKeyboard {
+                    // Above the keys, trailing. Not inside the bar: the bar
+                    // stays on the screen bottom, under the keyboard.
+                    pageKeyboardDone
+                        .padding(.trailing, 20)
+                        .padding(.bottom, keyboardOverlap + 12)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .transition(.identity)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .background(sheetBackground.ignoresSafeArea())
@@ -274,6 +295,33 @@ private extension MiniBrowserView {
                 onDismiss()
             }
         }
+    }
+
+    /// Closes the webpage keyboard. The address field is not first responder
+    /// in this state. WebKit sometimes ignores `endEditing`, so the responder
+    /// action always runs as well.
+    private func dismissPageKeyboard() {
+        _ = model.webView?.endEditing(true)
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
+    }
+
+    /// One glass squircle over the page. A lift tile would disappear on a
+    /// white page; this control has no bar behind it.
+    private var pageKeyboardDone: some View {
+        Button(action: dismissPageKeyboard) {
+            Image(systemName: "checkmark")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Palette.ink(scheme))
+                .frame(width: 44, height: 44)
+                .liquidGlassCard(cornerRadius: Palette.liftCornerRadius)
+        }
+        .buttonStyle(SquircleButtonStyle())
+        .accessibilityLabel(Text("common.done"))
     }
 
     private func submitAddress() {

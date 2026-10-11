@@ -95,6 +95,13 @@ final class MiniBrowserModelTests: XCTestCase {
         XCTAssertFalse(MiniBrowserTools.showsForwardButton(canGoForward: true, addressEditing: true))
     }
 
+    func testPageKeyboardDoneStaysOffWhileEditingTheAddress() {
+        XCTAssertFalse(MiniBrowserTools.showsPageKeyboardDone(keyboardOverlap: 0, addressEditing: false))
+        XCTAssertFalse(MiniBrowserTools.showsPageKeyboardDone(keyboardOverlap: 1, addressEditing: false))
+        XCTAssertTrue(MiniBrowserTools.showsPageKeyboardDone(keyboardOverlap: 336, addressEditing: false))
+        XCTAssertFalse(MiniBrowserTools.showsPageKeyboardDone(keyboardOverlap: 336, addressEditing: true))
+    }
+
     func testZoomClampsToHalfAndDouble() {
         let (model, _) = makeModel(initialURL: nil)
         XCTAssertEqual(model.pageZoom, 1, accuracy: 0.001)

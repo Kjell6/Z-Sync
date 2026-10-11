@@ -13,6 +13,7 @@ Z-Sync ("the app") is an independent mobile app. It lets you view the spaces and
 - Your Mozilla sign-in happens **directly on Mozilla's website** inside the app. Credentials go to Mozilla only.
 - Sync content is **encrypted on your device** before it ever leaves it; Mozilla's servers store only ciphertext.
 - To display favicon previews, website domains are sent to **DuckDuckGo's icon service**. No account or personal data is attached.
+- While you type in the mini-browser address field, that text is sent to the **suggestion service of the search engine you chose** (DuckDuckGo, Google, Ecosia, Brave, or Bing). An engine you added yourself has no suggestion service, so nothing is sent until you submit. Z-Sync does not run a suggestion server.
 - All remaining data stays **on your device**: Keychain / Android Keystore and local app storage.
 - Signing out or deleting the app removes that local data.
 
@@ -28,7 +29,7 @@ The app contains:
 - **No social plug-ins**
 - **No developer-operated endpoints** of any kind
 
-Nothing about you is transmitted to, stored by, or visible to the developer. Data that leaves the device goes only to Mozilla and DuckDuckGo as described below, so the app can function.
+Nothing about you is transmitted to, stored by, or visible to the developer. Data that leaves the device goes only to Mozilla, to DuckDuckGo's icon service, and — while you type a search in the mini-browser — to the suggestion endpoint of the search engine you selected, as described below.
 
 ---
 
@@ -81,11 +82,38 @@ Tabs that have no built-in icon get their favicon fetched from `icons.duckduckgo
 
 **Legal basis:** legitimate interest — Art. 6(1)(f) GDPR. Our interest is a usable interface in which entries are recognisable at a glance; this interest is not overridden by your rights because only bare domain names are processed, without identifiers, by a provider that does not build profiles. If you object to these lookups, contact us; removing the app stops all such requests.
 
+### 5.3 Search suggestions
+
+The mini-browser address field shows suggestions while you type, for a built-in search engine only. The text is sent **directly from the app** to that engine's public suggestion endpoint. There is no Z-Sync server in between.
+
+- DuckDuckGo — `https://duckduckgo.com/ac/`
+- Google — `https://suggestqueries.google.com/complete/search`
+- Ecosia — `https://ac.ecosia.org/autocomplete`
+- Brave — `https://search.brave.com/api/suggest`
+- Bing — `https://www.bing.com/osjson.aspx`
+
+- **Transmitted:** the text currently in the address field, and your IP address as part of the HTTPS request.
+- **Not transmitted:** your Mozilla account, sync data, or anything to the developer. The request does not include the cookies of the page you are viewing.
+- **Not sent at all** when the field is empty, when the text is already a web address, or when the selected engine is one you added yourself. Those engines only have a search link, so a suggestion lookup does not exist for them.
+- Submitting the field yourself still opens that engine's search page, as before. That page load goes to the engine, not to the developer.
+
+**Legal basis:** performance of the feature you are using — Art. 6(1)(b) GDPR. Pick a custom search engine, or do not type a query, if you do not want these lookups. Removing the app stops them.
+
 ---
 
 ## 6. International data transfers
 
-Mozilla Corporation and Duck Duck Go, LLC are based in the United States. Both companies state that they participate in the EU–U.S. Data Privacy Framework (EU adequacy decision), and both offer Standard Contractual Clauses as described in their respective privacy notices. Please refer to their policies for details; they act as independent controllers of the data described above.
+Mozilla Corporation and Duck Duck Go, LLC are based in the United States. Both companies state that they participate in the EU–U.S. Data Privacy Framework (EU adequacy decision), and both offer Standard Contractual Clauses as described in their respective privacy notices.
+
+Search suggestions go to whichever built-in engine you selected. Ecosia GmbH is based in Germany. Google LLC, Microsoft Corporation (Bing), and Brave Software, Inc. are based in the United States. Each provider is an independent controller of the text it receives. Their notices:
+
+- [Google Privacy Policy](https://policies.google.com/privacy)
+- [Microsoft Privacy Statement](https://privacy.microsoft.com/privacystatement)
+- [Brave Privacy Policy](https://brave.com/privacy/)
+- [Ecosia Privacy Policy](https://www.ecosia.org/privacy)
+- DuckDuckGo is already linked in section 5.2
+
+Please refer to those policies for how they handle a suggestion query.
 
 ---
 
@@ -111,7 +139,7 @@ If you are in the EU/EEA, you have the right to:
 - Access (Art. 15), rectification (Art. 16), erasure (Art. 17), restriction of processing (Art. 18), data portability (Art. 20), and objection (Art. 21)
 - Lodge a complaint with a supervisory authority — in Germany, the Unabhängiges Landeszentrum für Datenschutz Schleswig-Holstein ([ULD](https://www.datenschutzzentrum.de)) or the Federal Commissioner ([BfDI](https://www.bfdi.bund.de))
 
-Because the developer holds **no data about you** (nothing ever reaches him), most requests concern data held by **Apple, Google, Mozilla, or DuckDuckGo** — please direct such requests to those companies. Anything genuinely local to the app you control yourself: sign out or delete the app.
+Because the developer holds **no data about you** (nothing ever reaches him), most requests concern data held by **Apple, Google, Mozilla, DuckDuckGo, or the search engine you selected** — please direct such requests to those companies. Anything genuinely local to the app you control yourself: sign out or delete the app.
 
 Questions or objections: Support@Kjell.cc
 

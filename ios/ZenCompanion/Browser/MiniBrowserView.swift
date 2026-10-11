@@ -127,7 +127,8 @@ struct MiniBrowserView: View {
                     displayCornerRadius: displayCornerRadius,
                     onBeginAddressEdit: beginAddressEditing,
                     onCancel: cancelAddressEditing,
-                    onSubmit: submitAddress
+                    onSubmit: submitAddress,
+                    onPickSuggestion: pickSuggestion
                 )
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityHidden(pageKeyboard)
@@ -325,13 +326,24 @@ private extension MiniBrowserView {
     }
 
     private func submitAddress() {
+        // Resolve first. Closing the field clears the "just submitted" latch,
+        // and a text change in between must not start a suggest request.
+        model.submitAddress()
+        endAddressEditing()
+    }
+
+    private func pickSuggestion(_ suggestion: String) {
+        model.selectSuggestion(suggestion)
+        endAddressEditing()
+    }
+
+    private func endAddressEditing() {
         if isAddressFocused {
             isAddressFocused = false
         } else {
             editingAddress = false
             startsInSearch = false
         }
-        model.submitAddress()
     }
 
     // MARK: - Pin Refusal Toast

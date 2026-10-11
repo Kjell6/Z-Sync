@@ -75,6 +75,13 @@ final class MiniBrowserModel {
 
     // MARK: Address field
     var addressText: String = ""
+    /// Suggestions for the text being typed. Empty hides the list.
+    var suggestions: [String] = []
+    /// Set while a suggestion was just chosen or the field was submitted, so
+    /// the text change that follows does not send another suggest request.
+    @ObservationIgnored private var suggestionsSuspended = false
+    @ObservationIgnored private var suggestionTask: Task<Void, Never>?
+    @ObservationIgnored private var suggestionGeneration = 0
 
     // MARK: Pin banner
     var showPinBanner = false
@@ -102,6 +109,8 @@ final class MiniBrowserModel {
     private let searchEngine: SearchEngineProviding
     private let haptics: HapticsPlaying
     private let preferences: PreferencesStoring
+    private let suggestionClient: SearchSuggestionFetching
+    private let suggestionDebounce: Duration
 
     init(
         initialURL: URL?,
@@ -109,7 +118,9 @@ final class MiniBrowserModel {
         urlOpener: URLOpening = AppServices.urlOpener,
         searchEngine: SearchEngineProviding = AppServices.searchEngine,
         haptics: HapticsPlaying = AppServices.haptics,
-        preferences: PreferencesStoring = AppServices.preferences
+        preferences: PreferencesStoring = AppServices.preferences,
+        suggestionClient: SearchSuggestionFetching = LiveSearchSuggestionClient(),
+        suggestionDebounce: Duration = SearchSuggestions.debounce
     ) {
         self.initialURL = initialURL
         self.pinWriter = pinWriter
@@ -117,6 +128,8 @@ final class MiniBrowserModel {
         self.searchEngine = searchEngine
         self.haptics = haptics
         self.preferences = preferences
+        self.suggestionClient = suggestionClient
+        self.suggestionDebounce = suggestionDebounce
     }
 
     /// The persisted "save shared tabs as" choice. AppGroup first, standard
@@ -275,12 +288,72 @@ final class MiniBrowserModel {
     // MARK: - Address field intents
 
     func submitAddress() {
+        suggestionsSuspended = true
+        cancelSuggestionRequest()
         guard let url = BrowserInput.resolve(addressText, engine: searchEngine.current) else { return }
         load(url: url)
     }
 
+    /// A tapped suggestion uses the same resolution as the submit button.
+    /// An http(s) address loads directly; anything else is a search.
+    func selectSuggestion(_ suggestion: String) {
+        suggestionsSuspended = true
+        cancelSuggestionRequest()
+        addressText = suggestion
+        guard let url = BrowserInput.resolve(suggestion, engine: searchEngine.current) else { return }
+        load(url: url)
+    }
+
+    /// Asks for suggestions when [isEditing] and the text is a search query.
+    /// A URL, blank text, a custom engine, or a closed field sends nothing.
+    func refreshSuggestions(isEditing: Bool) {
+        if !isEditing || suggestionsSuspended {
+            if !isEditing { suggestionsSuspended = false }
+            cancelSuggestionRequest()
+            return
+        }
+        cancelSuggestionRequest()
+        guard let url = SearchSuggestions.requestURL(for: addressText, engine: searchEngine.current) else {
+            return
+        }
+        let generation = suggestionGeneration
+        let client = suggestionClient
+        let debounce = suggestionDebounce
+        suggestionTask = Task {
+            if debounce > .zero {
+                try? await Task.sleep(for: debounce)
+            }
+            guard !Task.isCancelled, generation == suggestionGeneration else { return }
+            do {
+                let data = try await client.fetch(url)
+                guard !Task.isCancelled, generation == suggestionGeneration else { return }
+                suggestions = SearchSuggestions.parse(data)
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled, generation == suggestionGeneration else { return }
+                suggestions = []
+            }
+        }
+    }
+
+    /// Test seam. Production never waits on the suggest request.
+    func waitForSuggestions() async {
+        await suggestionTask?.value
+    }
+
     func clearAddressText() {
         addressText = ""
+        refreshSuggestions(isEditing: true)
+    }
+
+    private func cancelSuggestionRequest() {
+        suggestionTask?.cancel()
+        suggestionTask = nil
+        suggestionGeneration += 1
+        if !suggestions.isEmpty {
+            suggestions = []
+        }
     }
 
     /// Drops the previous page's title when the document changes.
@@ -484,4 +557,35 @@ final class MiniBrowserModel {
             self.themeColor = nil
         }
     }
+}
+
+/// Loads one suggest response. Failures throw; the model turns them into an empty list.
+protocol SearchSuggestionFetching: Sendable {
+    func fetch(_ url: URL) async throws -> Data
+}
+
+/// Ephemeral session: suggest requests do not send or store browser cookies.
+struct LiveSearchSuggestionClient: SearchSuggestionFetching {
+    func fetch(_ url: URL) async throws -> Data {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 4
+        request.setValue("application/json, text/javascript, */*", forHTTPHeaderField: "Accept")
+        let (data, response) = try await SearchSuggestionSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+        return data
+    }
+}
+
+private enum SearchSuggestionSession {
+    static let shared: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 4
+        config.timeoutIntervalForResource = 4
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.httpShouldSetCookies = false
+        config.httpCookieAcceptPolicy = .never
+        return URLSession(configuration: config)
+    }()
 }

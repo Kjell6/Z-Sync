@@ -27,6 +27,7 @@ struct MiniBrowserChrome: View {
     var onBeginAddressEdit: () -> Void
     var onCancel: () -> Void
     var onSubmit: () -> Void
+    var onPickSuggestion: (String) -> Void
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -64,6 +65,10 @@ struct MiniBrowserChrome: View {
                 // in the hierarchy, so after closing nothing on the page received taps.
                 expandedContent
             }
+            if addressEditing, !model.suggestions.isEmpty {
+                suggestionList
+                    .transition(.identity)
+            }
             if addressEditing {
                 inputComposer
                     .transition(.identity)
@@ -92,12 +97,55 @@ struct MiniBrowserChrome: View {
                     .frame(height: 0.5)
             }
         }
+        .onChange(of: model.addressText) { _, _ in
+            model.refreshSuggestions(isEditing: addressEditing)
+        }
+        .onChange(of: addressEditing) { _, editing in
+            model.refreshSuggestions(isEditing: editing)
+        }
         .animation(chromeAnimation, value: model.canGoForward)
         .animation(chromeAnimation, value: addressEditing)
         .animation(chromeAnimation, value: model.addressText.isEmpty)
     }
 
     // MARK: - Compact row
+
+    /// Suggestions sit in the same glass, above the field. No second surface.
+    private var suggestionList: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(model.suggestions.enumerated()), id: \.offset) { index, suggestion in
+                Button {
+                    onPickSuggestion(suggestion)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Palette.ink(scheme).opacity(0.45))
+                            .frame(width: 22, height: 22)
+                        Text(suggestion)
+                            .font(.system(size: 16, weight: .medium, design: .rounded))
+                            .foregroundStyle(Palette.ink(scheme))
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.horizontal, 20)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                    .overlay(alignment: .bottom) {
+                        if index < model.suggestions.count - 1 {
+                            Rectangle()
+                                .fill(Color.primary.opacity(0.08))
+                                .frame(height: 0.5)
+                                .padding(.leading, 52)
+                        }
+                    }
+                }
+                .buttonStyle(SuggestionPressStyle())
+            }
+        }
+        .padding(.top, 6)
+        .accessibilityElement(children: .contain)
+    }
 
     /// Keyboard composer. One field and cancel, with even air above the keys.
     /// Not the navigation row with a sheet radius pasted on.
@@ -615,5 +663,16 @@ private struct CardPressStyle: ButtonStyle {
             .scaleEffect(!reduceMotion && configuration.isPressed ? 0.97 : 1)
             .opacity(configuration.isPressed ? 0.72 : 1)
             .animation(reduceMotion ? nil : .spring(response: 0.22, dampingFraction: 0.75), value: configuration.isPressed)
+    }
+}
+
+/// Highlight on touch-down. The row stays full width, so it does not scale.
+private struct SuggestionPressStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(configuration.isPressed ? Color.primary.opacity(0.08) : Color.clear)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.08), value: configuration.isPressed)
     }
 }

@@ -13,7 +13,9 @@ final class MiniBrowserModelTests: XCTestCase {
         initialURL: URL?,
         engine: FakeSearchEngine = FakeSearchEngine(),
         writer: FakePinWriter = FakePinWriter(),
-        preferences: FakePreferences? = nil
+        preferences: FakePreferences? = nil,
+        suggestions: RecordingSuggestionClient = RecordingSuggestionClient(),
+        suggestionDebounce: Duration = .zero
     ) -> (MiniBrowserModel, FakePinWriter) {
         let model = MiniBrowserModel(
             initialURL: initialURL,
@@ -21,7 +23,9 @@ final class MiniBrowserModelTests: XCTestCase {
             urlOpener: FakeURLOpener(),
             searchEngine: engine,
             haptics: FakeHaptics(),
-            preferences: preferences ?? FakePreferences()
+            preferences: preferences ?? FakePreferences(),
+            suggestionClient: suggestions,
+            suggestionDebounce: suggestionDebounce
         )
         return (model, writer)
     }
@@ -356,6 +360,99 @@ final class MiniBrowserModelTests: XCTestCase {
 
         XCTAssertNil(model.pinNotice)
     }
+
+    // MARK: - Suggestions
+
+    func testURLInputDoesNotRequestSuggestions() async {
+        let client = RecordingSuggestionClient()
+        let (model, _) = makeModel(initialURL: nil, suggestions: client)
+
+        let urls = [
+            "https://example.com/private",
+            "http://example.com/foo bar",
+            "example.com",
+            "   \n",
+            "mailto:support@kjell.cc",
+        ]
+        for text in urls {
+            model.addressText = text
+            model.refreshSuggestions(isEditing: true)
+            await model.waitForSuggestions()
+        }
+
+        XCTAssertTrue(client.requested.isEmpty)
+        XCTAssertTrue(model.suggestions.isEmpty)
+    }
+
+    func testSearchQueryRequestsSuggestionsAndParsesThem() async {
+        let client = RecordingSuggestionClient()
+        client.body = Data(#"["zen",["zen browser","zen browser download"]]"#.utf8)
+        let (model, _) = makeModel(initialURL: nil, suggestions: client)
+        model.addressText = "zen browser"
+        model.refreshSuggestions(isEditing: true)
+        await model.waitForSuggestions()
+
+        XCTAssertEqual(client.requested.count, 1)
+        let items = URLComponents(url: client.requested[0], resolvingAgainstBaseURL: false)?.queryItems
+        XCTAssertEqual(items?.first { $0.name == "q" }?.value, "zen browser")
+        XCTAssertEqual(model.suggestions, ["zen browser", "zen browser download"])
+    }
+
+    func testChangingToAURLCancelsThePendingQuery() async {
+        let client = RecordingSuggestionClient()
+        let (model, _) = makeModel(initialURL: nil, suggestions: client, suggestionDebounce: .zero)
+        model.addressText = "hello"
+        model.refreshSuggestions(isEditing: true)
+        // Still on the main actor, so the first request has not started.
+        // Replacing it with a URL must cancel it before any request leaves.
+        model.addressText = "https://secret.example/path"
+        model.refreshSuggestions(isEditing: true)
+        for _ in 0..<10 {
+            await Task.yield()
+        }
+
+        XCTAssertTrue(client.requested.isEmpty)
+        XCTAssertTrue(model.suggestions.isEmpty)
+    }
+
+    func testSuggestionFailureShowsNoList() async {
+        let client = RecordingSuggestionClient()
+        client.error = URLError(.notConnectedToInternet)
+        let (model, _) = makeModel(initialURL: nil, suggestions: client)
+        model.addressText = "hello"
+        model.refreshSuggestions(isEditing: true)
+        await model.waitForSuggestions()
+
+        XCTAssertEqual(client.requested.count, 1)
+        XCTAssertTrue(model.suggestions.isEmpty)
+    }
+
+    func testCustomEngineDoesNotRequestSuggestions() async {
+        let client = RecordingSuggestionClient()
+        let engine = FakeSearchEngine()
+        engine.current = ZenCompanion.SearchEngine(
+            id: "kagi",
+            displayName: "Kagi",
+            template: "https://kagi.com/search?q={query}",
+            isBuiltIn: false
+        )
+        let (model, _) = makeModel(initialURL: nil, engine: engine, suggestions: client)
+        model.addressText = "hello"
+        model.refreshSuggestions(isEditing: true)
+        await model.waitForSuggestions()
+
+        XCTAssertTrue(client.requested.isEmpty)
+    }
+
+    func testClosedFieldDoesNotRequestSuggestions() async {
+        let client = RecordingSuggestionClient()
+        let (model, _) = makeModel(initialURL: nil, suggestions: client)
+        model.addressText = "hello"
+        model.refreshSuggestions(isEditing: false)
+        await model.waitForSuggestions()
+
+        XCTAssertTrue(client.requested.isEmpty)
+    }
 }
 
 // MARK: - Fakes
@@ -402,6 +499,29 @@ private final class FakeSearchEngine: SearchEngineProviding {
 
     var current: ZenCompanion.SearchEngine = .duckDuckGo
     var custom: [ZenCompanion.SearchEngine] = []
+}
+
+final class RecordingSuggestionClient: SearchSuggestionFetching, @unchecked Sendable {
+    private let lock = NSLock()
+    private var urls: [URL] = []
+    var body = Data("[]".utf8)
+    var error: Error?
+
+    var requested: [URL] {
+        lock.lock()
+        defer { lock.unlock() }
+        return urls
+    }
+
+    func fetch(_ url: URL) async throws -> Data {
+        lock.lock()
+        urls.append(url)
+        let failure = error
+        let payload = body
+        lock.unlock()
+        if let failure { throw failure }
+        return payload
+    }
 }
 
 @MainActor

@@ -215,6 +215,29 @@ fun MiniBrowserScreen(
                     onProgressChange = viewModel::onProgressChange,
                 )
 
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = state.isAddressFocused && state.suggestions.isNotEmpty(),
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier.align(Alignment.TopCenter),
+                ) {
+                    SearchSuggestionList(
+                        suggestions = state.suggestions,
+                        isDark = isDark,
+                        background = animatedBgColor,
+                        onColor = onBgColor,
+                        onVariant = onVariantBgColor,
+                        onSelect = { suggestion ->
+                            val target = viewModel.selectSuggestion(suggestion)
+                            if (target.isNotEmpty()) {
+                                webView?.loadUrl(target)
+                            }
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+                        },
+                    )
+                }
+
                 // Deferred Space Pinning Banner (Floats above footer)
                 androidx.compose.animation.AnimatedVisibility(
                     visible = state.showPinBanner,

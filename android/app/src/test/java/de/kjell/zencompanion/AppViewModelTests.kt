@@ -461,6 +461,8 @@ private class FakeBrowserRepository(
         renamed += id to label
     }
 
+    override suspend fun moveTab(id: String, spaceId: String, folderId: String?) = Unit
+
     override fun isDemo(): Boolean = demo
 
     override fun saveKind(): SaveKind = SaveKind.PINNED

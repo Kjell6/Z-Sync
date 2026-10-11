@@ -482,6 +482,179 @@ class ConflictSafeSyncTests {
         assertEquals("Other", retry.getString("title"))
     }
 
+    // MARK: moveTab
+
+    @Test
+    fun moveIntoFolderRewritesTabAndBothParents() {
+        val server = ConflictServer(keys, syncKeys)
+        server.seedSpace("space-1", children = listOf("t1", "keep"))
+        server.seedFolder("folder-1", workspaceUuid = "space-1", children = listOf("inside"))
+        server.putRecord("folder-1", namedFolder(server, "folder-1", "Docs"))
+        server.seedTab("t1", "space-1", staticLabel = "Keep")
+        server.putRecord("t1", titledTab(server, "t1", "Page", "https://page.example"))
+
+        runBlocking { SpacesSyncService.moveTab(client(server), "t1", "space-1", "folder-1") }
+
+        val posts = server.requests.filter { it.method == "POST" }
+        assertEquals(1, posts.size)
+        assertTrue(server.requests.none { it.method == "PUT" })
+        val batch = server.batch(posts.single())
+        assertEquals(listOf("t1", "space-1", "folder-1"), batch.map { it.getString("id") })
+        val tab = batch.first { it.getString("id") == "t1" }.getJSONObject("data")
+        assertEquals("folder-1", tab.getString("folderId"))
+        assertEquals("Page", tab.getString("title"))
+        assertEquals("https://page.example", tab.getString("url"))
+        assertEquals("Keep", tab.getString("staticLabel"))
+        assertEquals("space-1", tab.getString("workspaceUuid"))
+        assertEquals(listOf("keep"), server.children(batch, "space-1"))
+        assertEquals(listOf("inside", "t1"), server.children(batch, "folder-1"))
+        assertEquals("Docs", batch.first { it.getString("id") == "folder-1" }.getJSONObject("data").getString("name"))
+    }
+
+    @Test
+    fun moveBackToRootClearsFolderId() {
+        val server = ConflictServer(keys, syncKeys)
+        server.seedSpace("space-1", children = listOf("keep"))
+        server.seedFolder("folder-1", workspaceUuid = "space-1", children = listOf("t1", "inside"))
+        server.seedTab("t1", "space-1", staticLabel = "Keep")
+        val tab = server.cleartext("t1")!!
+        tab.getJSONObject("data").put("folderId", "folder-1").put("title", "Page").put("url", "https://page.example")
+        server.putRecord("t1", tab)
+
+        runBlocking { SpacesSyncService.moveTab(client(server), "t1", "space-1", null) }
+
+        val batch = server.batch(server.requests.single { it.method == "POST" })
+        assertEquals(listOf("t1", "folder-1", "space-1"), batch.map { it.getString("id") })
+        val data = batch.first { it.getString("id") == "t1" }.getJSONObject("data")
+        assertTrue(data.isNull("folderId"))
+        assertEquals("Page", data.getString("title"))
+        assertEquals("https://page.example", data.getString("url"))
+        assertEquals("Keep", data.getString("staticLabel"))
+        assertEquals(listOf("inside"), server.children(batch, "folder-1"))
+        assertEquals(listOf("keep", "t1"), server.children(batch, "space-1"))
+    }
+
+    @Test
+    fun moveToCurrentPlaceDoesNotPost() {
+        val server = ConflictServer(keys, syncKeys)
+        server.seedSpace("space-1", children = listOf("rooted"))
+        server.seedFolder("folder-1", workspaceUuid = "space-1", children = listOf("t1"))
+        server.seedTab("t1", "space-1")
+        val tab = server.cleartext("t1")!!
+        tab.getJSONObject("data").put("folderId", "folder-1")
+        server.putRecord("t1", tab)
+        server.seedTab("rooted", "space-1")
+
+        runBlocking {
+            SpacesSyncService.moveTab(client(server), "t1", "space-1", "folder-1")
+            SpacesSyncService.moveTab(client(server), "rooted", "space-1", "")
+        }
+
+        assertTrue(server.requests.none { it.method == "POST" || it.method == "PUT" })
+    }
+
+    @Test
+    fun moveNormalTabDoesNotPost() {
+        val server = ConflictServer(keys, syncKeys)
+        server.seedSpace("space-1", children = listOf("normal-1"))
+        server.seedFolder("folder-1", workspaceUuid = "space-1", children = listOf("inside"))
+        server.seedNormalTab("normal-1", "space-1")
+
+        runBlocking { SpacesSyncService.moveTab(client(server), "normal-1", "space-1", "folder-1") }
+
+        assertTrue(server.requests.none { it.method == "POST" || it.method == "PUT" })
+        assertFalse(server.cleartext("normal-1")!!.getJSONObject("data").has("folderId"))
+        assertEquals(listOf("inside"), server.children("folder-1"))
+    }
+
+    @Test
+    fun moveToForeignFolderFallsBackToRoot() {
+        val server = ConflictServer(keys, syncKeys)
+        server.seedSpace("space-1", children = listOf("keep"))
+        server.seedFolder("folder-1", workspaceUuid = "space-1", children = listOf("t1", "inside"))
+        server.seedFolder("foreign", workspaceUuid = "other-space", children = listOf("foreign-child"))
+        server.seedTab("t1", "space-1", staticLabel = "Keep")
+        val tab = server.cleartext("t1")!!
+        tab.getJSONObject("data").put("folderId", "folder-1")
+        server.putRecord("t1", tab)
+        server.seedTab("rooted", "space-1")
+
+        runBlocking { SpacesSyncService.moveTab(client(server), "t1", "space-1", "foreign") }
+
+        val batch = server.batch(server.requests.single { it.method == "POST" })
+        assertEquals(listOf("t1", "folder-1", "space-1"), batch.map { it.getString("id") })
+        assertTrue(batch.first { it.getString("id") == "t1" }.getJSONObject("data").isNull("folderId"))
+        assertEquals(listOf("inside"), server.children(batch, "folder-1"))
+        assertEquals(listOf("keep", "t1"), server.children(batch, "space-1"))
+        assertEquals(listOf("foreign-child"), server.children("foreign"))
+
+        server.requests.clear()
+        runBlocking { SpacesSyncService.moveTab(client(server), "rooted", "space-1", "foreign") }
+        assertTrue(server.requests.none { it.method == "POST" || it.method == "PUT" })
+    }
+
+    @Test
+    fun moveRetriesAfter412PreservingOtherFields() {
+        val server = ConflictServer(keys, syncKeys)
+        server.seedSpace("space-1", children = listOf("t1", "keep"))
+        server.seedFolder("folder-1", workspaceUuid = "space-1", children = listOf("inside"))
+        server.putRecord("folder-1", namedFolder(server, "folder-1", "Docs"))
+        server.seedTab("t1", "space-1", staticLabel = "Keep")
+        server.putRecord("t1", titledTab(server, "t1", "Page", "https://page.example"))
+        var desktopWrote = false
+        server.onBeforeRequest = { request ->
+            if (!desktopWrote && request.method == "POST") {
+                desktopWrote = true
+                val tab = server.cleartext("t1")!!
+                tab.getJSONObject("data")
+                    .put("title", "Other")
+                    .put("url", "https://other.example")
+                server.putRecord("t1", tab)
+                val folder = server.cleartext("folder-1")!!
+                folder.getJSONObject("data")
+                    .put("name", "Renamed")
+                    .put("children", JSONArray(listOf("inside", "extra")))
+                server.putRecord("folder-1", folder)
+                val space = server.cleartext("space-1")!!
+                space.getJSONObject("data").put("children", JSONArray(listOf("t1", "keep", "sibling")))
+                server.putRecord("space-1", space)
+                server.desktopSetTabTitle("t1", "Other")
+            }
+        }
+
+        runBlocking { SpacesSyncService.moveTab(client(server), "t1", "space-1", "folder-1") }
+
+        val posts = server.requests.filter { it.method == "POST" }
+        assertEquals(2, posts.size)
+        val first = server.batch(posts[0])
+        assertEquals("Page", first.first { it.getString("id") == "t1" }.getJSONObject("data").getString("title"))
+        assertEquals(listOf("keep"), server.children(first, "space-1"))
+
+        val retry = server.batch(posts[1])
+        val retryTab = retry.first { it.getString("id") == "t1" }.getJSONObject("data")
+        assertEquals("Other", retryTab.getString("title"))
+        assertEquals("https://other.example", retryTab.getString("url"))
+        assertEquals("Keep", retryTab.getString("staticLabel"))
+        assertEquals("folder-1", retryTab.getString("folderId"))
+        assertEquals("space-1", retryTab.getString("workspaceUuid"))
+        val retryFolder = retry.first { it.getString("id") == "folder-1" }.getJSONObject("data")
+        assertEquals("Renamed", retryFolder.getString("name"))
+        assertEquals(listOf("inside", "extra", "t1"), server.children(retry, "folder-1"))
+        assertEquals(listOf("keep", "sibling"), server.children(retry, "space-1"))
+    }
+
+    private fun namedFolder(server: ConflictServer, id: String, name: String): JSONObject {
+        val record = server.cleartext(id)!!
+        record.getJSONObject("data").put("name", name)
+        return record
+    }
+
+    private fun titledTab(server: ConflictServer, id: String, title: String, url: String): JSONObject {
+        val record = server.cleartext(id)!!
+        record.getJSONObject("data").put("title", title).put("url", url)
+        return record
+    }
+
     // MARK: Crypto/keys bootstrap
 
     @Test

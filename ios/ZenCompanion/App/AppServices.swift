@@ -63,6 +63,7 @@ protocol SpacesRepository {
     func deleteCachedSnapshot()
     func deleteTab(id: String) async throws
     func renameTab(id: String, label: String) async throws
+    func moveTab(id: String, toFolder folderId: String?, in spaceId: String) async throws
 }
 
 struct LiveSpacesRepository: SpacesRepository {
@@ -75,6 +76,9 @@ struct LiveSpacesRepository: SpacesRepository {
     func deleteTab(id: String) async throws { try await SpacesSyncService.deleteTab(id: id) }
     func renameTab(id: String, label: String) async throws {
         try await SpacesSyncService.renameTab(id: id, label: label)
+    }
+    func moveTab(id: String, toFolder folderId: String?, in spaceId: String) async throws {
+        try await SpacesSyncService.moveTab(id: id, toFolder: folderId, in: spaceId)
     }
 }
 

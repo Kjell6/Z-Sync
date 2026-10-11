@@ -102,6 +102,77 @@ final class TabRenameTests: XCTestCase {
         XCTAssertEqual(folderTab(nestedRenamed, id: "t2")?.staticLabel, "Docs")
     }
 
+    func testMoveIsOfferedOnlyOnRenamablePinnedRows() {
+        XCTAssertFalse(TabMove.offersMove(renames: true, isNormalTab: true))
+        XCTAssertTrue(TabMove.offersMove(renames: true, isNormalTab: false))
+        XCTAssertFalse(TabMove.offersMove(renames: false, isNormalTab: false))
+    }
+
+    func testMoveDestinationsMarkCurrentPlace() {
+        let folders = [
+            PinDestinationModel.FolderEntry(folderId: "outer", name: "Outer", depth: 0),
+            PinDestinationModel.FolderEntry(folderId: "inner", name: "Inner", depth: 1),
+        ]
+        let atRoot = TabMove.destinations(spaceName: "Space", folders: folders, currentFolderId: nil)
+        XCTAssertEqual(atRoot.map(\.folderId), [nil, "outer", "inner"])
+        XCTAssertTrue(atRoot[0].isCurrent)
+        XCTAssertEqual(atRoot[2].depth, 1)
+        XCTAssertFalse(atRoot[2].isCurrent)
+        XCTAssertFalse(TabMove.shouldWrite(currentFolderId: nil, selectedFolderId: ""))
+        XCTAssertFalse(TabMove.shouldWrite(currentFolderId: nil, selectedFolderId: nil))
+        XCTAssertTrue(TabMove.shouldWrite(currentFolderId: nil, selectedFolderId: "outer"))
+
+        let nested = TabMove.destinations(spaceName: "Space", folders: folders, currentFolderId: "inner")
+        XCTAssertTrue(nested[2].isCurrent)
+        XCTAssertFalse(nested[0].isCurrent)
+        XCTAssertFalse(TabMove.shouldWrite(currentFolderId: "inner", selectedFolderId: "inner"))
+        XCTAssertTrue(TabMove.shouldWrite(currentFolderId: "inner", selectedFolderId: nil))
+    }
+
+    func testCacheMovePlacesPinnedTabInNestedFolderAndBack() {
+        let tab = ZenTab(id: "t1", url: "https://a.example", title: "Page", staticLabel: "Keep")
+        let inner = ZenFolder(id: "inner", name: "Inner")
+        let outer = ZenFolder(id: "outer", name: "Outer", subfolders: [inner])
+        let snapshot = ZenSnapshot(
+            spaces: [ZenSpace(id: "s1", name: "Space", pinned: [.tab(tab), .folder(outer)])],
+            fetchedAt: Date(timeIntervalSince1970: 0)
+        )
+
+        let moved = SpacesSyncEdits.moving(id: "t1", folderId: "inner", in: "s1", snapshot: snapshot)
+        XCTAssertNil(pinnedTab(moved, id: "t1"))
+        XCTAssertEqual(nestedTab(moved, folderId: "inner", tabId: "t1")?.staticLabel, "Keep")
+        XCTAssertNotEqual(moved.fetchedAt, snapshot.fetchedAt)
+
+        let rooted = SpacesSyncEdits.moving(id: "t1", folderId: nil, in: "s1", snapshot: moved)
+        XCTAssertEqual(pinnedTab(rooted, id: "t1")?.staticLabel, "Keep")
+        XCTAssertNil(nestedTab(rooted, folderId: "inner", tabId: "t1"))
+    }
+
+    func testCacheMoveLeavesNormalTabAndSamePlace() {
+        let normal = ZenTab(id: "n1", url: "https://n.example", title: "Normal")
+        let pinned = ZenTab(id: "t1", url: "https://a.example", title: "Page", staticLabel: "Keep")
+        let snapshot = ZenSnapshot(
+            spaces: [
+                ZenSpace(
+                    id: "s1",
+                    name: "Space",
+                    pinned: [.folder(ZenFolder(id: "f1", name: "Folder", tabs: [pinned]))],
+                    tabs: [.tab(normal)]
+                ),
+            ],
+            fetchedAt: Date(timeIntervalSince1970: 0)
+        )
+
+        let normalMoved = SpacesSyncEdits.moving(id: "n1", folderId: "f1", in: "s1", snapshot: snapshot)
+        XCTAssertEqual(normalMoved.fetchedAt, snapshot.fetchedAt)
+        XCTAssertEqual(normalMoved.spaces.first?.tabs.first?.id, "n1")
+        XCTAssertNil(folderTab(normalMoved, id: "n1"))
+
+        let same = SpacesSyncEdits.moving(id: "t1", folderId: "f1", in: "s1", snapshot: snapshot)
+        XCTAssertEqual(same.fetchedAt, snapshot.fetchedAt)
+        XCTAssertEqual(folderTab(same, id: "t1")?.staticLabel, "Keep")
+    }
+
     private func pinnedTab(_ snapshot: ZenSnapshot, id: String) -> ZenTab? {
         snapshot.spaces.first?.pinned.compactMap { item -> ZenTab? in
             if case .tab(let tab) = item, tab.id == id { return tab }
@@ -116,6 +187,21 @@ final class TabRenameTests: XCTestCase {
             }
             return nil
         }.first
+    }
+
+    private func nestedTab(_ snapshot: ZenSnapshot, folderId: String, tabId: String) -> ZenTab? {
+        func search(_ folders: [ZenFolder]) -> ZenTab? {
+            for folder in folders {
+                if folder.id == folderId { return folder.tabs.first { $0.id == tabId } }
+                if let found = search(folder.subfolders ?? []) { return found }
+            }
+            return nil
+        }
+        let folders = snapshot.spaces.first?.pinned.compactMap { item -> ZenFolder? in
+            if case .folder(let folder) = item { return folder }
+            return nil
+        } ?? []
+        return search(folders)
     }
 
     private func splitMember(_ snapshot: ZenSnapshot, id: String) -> ZenTab? {

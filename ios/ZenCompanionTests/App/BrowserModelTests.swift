@@ -409,6 +409,8 @@ private final class FakeSpacesRepository: SpacesRepository {
         }
     }
 
+    func moveTab(id: String, toFolder folderId: String?, in spaceId: String) async throws {}
+
     func releaseRefresh() {
         refreshContinuation?.resume()
         refreshContinuation = nil

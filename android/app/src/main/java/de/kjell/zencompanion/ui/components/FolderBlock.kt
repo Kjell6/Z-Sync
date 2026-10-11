@@ -48,6 +48,9 @@ fun FolderBlock(
     folder: ZenSpaces.ZenFolder,
     onDeleteTab: (String) -> Unit,
     onRenameTab: (String, String) -> Unit = { _, _ -> },
+    onMoveTab: (String, String?) -> Unit = { _, _ -> },
+    spaceName: String = "",
+    moveFolders: List<PinDestinationModel.FolderEntry> = emptyList(),
     onOpenUrl: ((String, String?) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -123,8 +126,12 @@ fun FolderBlock(
                         tab = tab,
                         deletable = true,
                         modifier = Modifier.fillMaxWidth(),
+                        currentFolderId = folder.id,
+                        spaceName = spaceName,
+                        moveFolders = moveFolders,
                         onDelete = { onDeleteTab(tab.id) },
                         onRename = { label -> onRenameTab(tab.id, label) },
+                        onMove = { folderId -> onMoveTab(tab.id, folderId) },
                         onOpenUrl = onOpenUrl,
                     )
                 }
@@ -133,6 +140,9 @@ fun FolderBlock(
                         folder = subfolder,
                         onDeleteTab = onDeleteTab,
                         onRenameTab = onRenameTab,
+                        onMoveTab = onMoveTab,
+                        spaceName = spaceName,
+                        moveFolders = moveFolders,
                         onOpenUrl = onOpenUrl,
                     )
                 }

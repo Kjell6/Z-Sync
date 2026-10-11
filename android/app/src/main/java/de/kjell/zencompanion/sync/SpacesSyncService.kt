@@ -870,6 +870,204 @@ object SpacesSyncService {
         return JSONObject().put("id", id).put("kind", "tab").put("data", data)
     }
 
+    /**
+     * Moves a pinned tab into a folder of the same space, or back to the space
+     * root when [folderId] is null. Sets or clears `folderId` on the tab and
+     * rewrites `children` on the old and new parent. A normal tab is left
+     * untouched. The current place is not written.
+     */
+    suspend fun moveTab(context: Context, id: String, spaceId: String, folderId: String?) {
+        val target = normalizeFolderId(folderId)
+        if (AccountStore.isDemo(context)) {
+            SnapshotCache.moveCachedTab(id, target, spaceId, System.currentTimeMillis())
+            AppEvents.emitSnapshotStale()
+            return
+        }
+        val client = AccountStore.connect(context)
+        moveTab(client = client, id = id, spaceId = spaceId, folderId = target)
+    }
+
+    suspend fun moveTab(client: SyncClient, id: String, spaceId: String, folderId: String?) {
+        val target = normalizeFolderId(folderId)
+        val wrote = withContext(Dispatchers.IO) {
+            if (SyncSafety.safeSyncEnabled) {
+                moveTabSafe(client, id, spaceId, target)
+            } else {
+                moveTabLegacy(client, id, spaceId, target)
+            }
+        }
+        if (!wrote) return
+        SnapshotCache.moveCachedTab(id, target, spaceId, System.currentTimeMillis())
+        AppEvents.emitSnapshotStale()
+    }
+
+    /**
+     * Conflict-safe move: one consistent read, then a conditional POST of the
+     * tab plus the old and new parent. A 412 re-reads and reapplies only this
+     * move, so concurrent edits to other fields survive. Retry once.
+     */
+    private fun moveTabSafe(
+        client: SyncClient,
+        id: String,
+        spaceId: String,
+        folderId: String?,
+    ): Boolean {
+        var read = client.getCollectionWithMetadata(collection)
+        var incoming = decryptedFrom(client, read.records)
+        var attempted = false
+        fun batchFor(list: List<IncomingCleartext>): List<JSONObject> =
+            when (val plan = movePlan(id, folderId, spaceId, list)) {
+                MovePlan.Missing -> throw SyncError.Conflict("move '$id': tab record not found")
+                MovePlan.Unchanged -> emptyList()
+                is MovePlan.Writes -> plan.records
+            }
+        var batch = batchFor(incoming)
+        if (batch.isEmpty()) return false
+        attempted = true
+        var outcome = client.postRecords(collection, batch, read.lastModified)
+        if (outcome is PostOutcome.PreconditionFailed) {
+            read = client.getCollectionWithMetadata(collection)
+            incoming = decryptedFrom(client, read.records)
+            batch = batchFor(incoming)
+            outcome = if (batch.isEmpty()) {
+                return attempted
+            } else {
+                client.postRecords(collection, batch, read.lastModified)
+            }
+        }
+        when (outcome) {
+            is PostOutcome.Applied -> return true
+            is PostOutcome.PreconditionFailed ->
+                throw SyncError.Conflict("move '$id': conditional write lost the race twice")
+            is PostOutcome.PartialFailure ->
+                throw SyncError.Conflict("move '$id': batch rejected (${failureSummary(outcome)})")
+        }
+    }
+
+    /** Legacy move: the same edit as the safe path, via unconditional PUTs. Mirrors [renameTabLegacy]. */
+    private fun moveTabLegacy(
+        client: SyncClient,
+        id: String,
+        spaceId: String,
+        folderId: String?,
+    ): Boolean {
+        val incoming = decryptedCollection(client)
+        when (val plan = movePlan(id, folderId, spaceId, incoming)) {
+            MovePlan.Missing -> throw SyncError.Conflict("move '$id': tab record not found")
+            MovePlan.Unchanged -> return false
+            is MovePlan.Writes -> {
+                for (record in plan.records) {
+                    client.putRecord(collection = collection, id = record.getString("id"), obj = record)
+                }
+                return true
+            }
+        }
+    }
+
+    private sealed class MovePlan {
+        data object Missing : MovePlan()
+        data object Unchanged : MovePlan()
+        data class Writes(val records: List<JSONObject>) : MovePlan()
+    }
+
+    /**
+     * Tab `folderId` plus the old and new parent's `children`. A folder that
+     * does not belong to [spaceId] falls back to the space root (SPEC §3.5),
+     * so a tab never lands in another space's folder. An already-current
+     * place produces no writes.
+     */
+    private fun movePlan(
+        id: String,
+        folderId: String?,
+        spaceId: String,
+        incoming: List<IncomingCleartext>,
+    ): MovePlan {
+        val tab = incoming.firstOrNull { it.id == id } ?: return MovePlan.Missing
+        if (tab.kind != "tab") return MovePlan.Missing
+        if (isNormalTab(tab.data)) return MovePlan.Unchanged
+        val owner = ZenSpaces.optStringOrNull(tab.data, "workspaceUuid")
+        if (owner != null && owner != spaceId) return MovePlan.Unchanged
+
+        val current = currentFolderId(tab.data)
+        val target = resolveMoveFolder(folderId, spaceId, incoming)
+        val targetFolderId = target?.folderId
+        if (current == targetFolderId) return MovePlan.Unchanged
+
+        val tabData = JSONObject(tab.data.toString())
+        tabData.put("folderId", targetFolderId ?: JSONObject.NULL)
+        val writes = mutableListOf(JSONObject().put("id", id).put("kind", "tab").put("data", tabData))
+
+        val oldParent = parentRecord(current, spaceId, incoming)
+        val newParent = parentRecord(targetFolderId, spaceId, incoming)
+        if (oldParent != null && newParent != null && oldParent.id == newParent.id) {
+            childrenWrite(oldParent) { children ->
+                SpacesSyncEdits.union(SpacesSyncEdits.removing(id, children), listOf(id))
+            }?.let { writes.add(it) }
+        } else {
+            if (oldParent != null) {
+                childrenWrite(oldParent) { SpacesSyncEdits.removing(id, it) }?.let { writes.add(it) }
+            }
+            if (newParent != null) {
+                childrenWrite(newParent) { SpacesSyncEdits.union(it, listOf(id)) }?.let { writes.add(it) }
+            }
+        }
+        return MovePlan.Writes(writes)
+    }
+
+    /** The folder record for a same-space target, or null when the move lands on the space root. */
+    private fun resolveMoveFolder(
+        folderId: String?,
+        spaceId: String,
+        incoming: List<IncomingCleartext>,
+    ): ResolvedFolder? {
+        val requested = normalizeFolderId(folderId) ?: return null
+        val match = incoming.firstOrNull { rec ->
+            rec.kind == "folder" &&
+                isTargetFolder(requested, rec.data) &&
+                rec.data.optString("workspaceUuid") == spaceId
+        } ?: return null
+        val matched = currentFolderId(match.data) ?: return null
+        return ResolvedFolder(match, matched)
+    }
+
+    private class ResolvedFolder(val record: IncomingCleartext, val folderId: String)
+
+    /** Folder parent when [folderId] is set, otherwise the space record. */
+    private fun parentRecord(
+        folderId: String?,
+        spaceId: String,
+        incoming: List<IncomingCleartext>,
+    ): IncomingCleartext? {
+        if (folderId != null) {
+            return incoming.firstOrNull { rec ->
+                rec.kind == "folder" &&
+                    isTargetFolder(folderId, rec.data) &&
+                    rec.data.optString("workspaceUuid") == spaceId
+            }
+        }
+        return incoming.firstOrNull { it.id == spaceId && it.kind == "space" }
+    }
+
+    private fun childrenWrite(
+        record: IncomingCleartext,
+        transform: (List<String>) -> List<String>,
+    ): JSONObject? {
+        if (record.kind != "space" && record.kind != "folder") return null
+        val children = stringList(record.data.optJSONArray("children"))
+        val next = transform(children)
+        if (next == children) return null
+        val data = JSONObject(record.data.toString())
+        data.put("children", jsonArray(next))
+        return JSONObject().put("id", record.id).put("kind", record.kind).put("data", data)
+    }
+
+    private fun isNormalTab(data: JSONObject): Boolean = ZenSpaces.parseFlag(data, "pinned") == false
+
+    private fun currentFolderId(data: JSONObject): String? =
+        ZenSpaces.optStringOrNull(data, "folderId")?.takeIf { it.isNotEmpty() }
+
+    private fun normalizeFolderId(folderId: String?): String? = folderId?.takeIf { it.isNotEmpty() }
+
     internal fun normalizedStaticLabel(raw: String?): String? {
         val trimmed = raw?.trim().orEmpty()
         return trimmed.ifEmpty { null }

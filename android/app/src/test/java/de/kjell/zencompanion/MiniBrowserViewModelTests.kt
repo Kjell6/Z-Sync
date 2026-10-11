@@ -309,6 +309,8 @@ private class FakeMiniBrowserRepository(
 
     override suspend fun renameTab(id: String, label: String) = Unit
 
+    override suspend fun moveTab(id: String, spaceId: String, folderId: String?) = Unit
+
     override fun isDemo(): Boolean = false
 
     override fun saveKind(): SaveKind = saveKind

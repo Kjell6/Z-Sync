@@ -39,6 +39,7 @@ internal fun SpacesPager(
     onSelect: (Int) -> Unit,
     onDeleteTab: (String) -> Unit,
     onRenameTab: (String, String) -> Unit,
+    onMoveTab: (String, String, String?) -> Unit,
     onOpenUrl: (String, String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -109,6 +110,7 @@ internal fun SpacesPager(
             pagerState = pagerState,
             onDeleteTab = onDeleteTab,
             onRenameTab = onRenameTab,
+            onMoveTab = { tabId, folderId -> onMoveTab(tabId, spaces[index].id, folderId) },
             onOpenUrl = onOpenUrl,
         )
     }
@@ -172,6 +174,7 @@ internal fun SpacePageContainer(
     pagerState: PagerState,
     onDeleteTab: (String) -> Unit,
     onRenameTab: (String, String) -> Unit,
+    onMoveTab: (String, String?) -> Unit,
     onOpenUrl: (String, String?) -> Unit,
 ) {
     var pageWidthPx by remember { mutableStateOf(0f) }
@@ -211,6 +214,7 @@ internal fun SpacePageContainer(
             space = space,
             onDeleteTab = onDeleteTab,
             onRenameTab = onRenameTab,
+            onMoveTab = onMoveTab,
             onOpenUrl = onOpenUrl,
         )
     }

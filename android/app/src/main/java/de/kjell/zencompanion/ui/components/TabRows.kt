@@ -10,12 +10,16 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -24,6 +28,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -224,16 +229,30 @@ fun TabRow(
     deletable: Boolean,
     modifier: Modifier = Modifier,
     deleting: Boolean = false,
+    /** Normal (unpinned) tabs never carry a `folderId`, so they rename but do not move. */
+    isNormalTab: Boolean = false,
+    /** Null when the tab sits at the space root. Marked in the picker and not written. */
+    currentFolderId: String? = null,
+    spaceName: String = "",
+    moveFolders: List<PinDestinationModel.FolderEntry> = emptyList(),
     onDelete: () -> Unit = {},
     onRename: (String) -> Unit = {},
+    onMove: (String?) -> Unit = {},
     onOpenUrl: ((String, String?) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     var menuOpen by remember { mutableStateOf(false) }
     var showRename by remember { mutableStateOf(false) }
+    var showMove by remember { mutableStateOf(false) }
     val deleteText = stringResource(R.string.tabs_delete)
     val renameText = stringResource(R.string.tabs_rename)
+    val moveText = stringResource(R.string.tabs_move)
     val titleText = displayTitle(tab)
+    val folderFallback = stringResource(R.string.tabs_folder)
+    val rootFallback = stringResource(R.string.share_workspace)
+    val moveDestinations = TabMove.destinations(spaceName, moveFolders, currentFolderId)
+    val offersMove = TabMove.offersMove(renames = true, isNormalTab = isNormalTab) &&
+        moveDestinations.any { !it.isCurrent }
 
     Surface(
         color = Color.Transparent,
@@ -254,6 +273,7 @@ fun TabRow(
             .semantics {
                 customActions = buildList {
                     add(CustomAccessibilityAction(renameText) { showRename = true; true })
+                    if (offersMove) add(CustomAccessibilityAction(moveText) { showMove = true; true })
                     if (deletable) add(CustomAccessibilityAction(deleteText) { onDelete(); true })
                 }
             },
@@ -310,6 +330,28 @@ fun TabRow(
                     showRename = true
                 },
             )
+            if (offersMove) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            moveText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.DriveFileMove,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    },
+                    onClick = {
+                        menuOpen = false
+                        showMove = true
+                    },
+                )
+            }
             if (deletable) {
                 DropdownMenuItem(
                     text = {
@@ -347,6 +389,20 @@ fun TabRow(
             },
         )
     }
+
+    if (showMove) {
+        MoveTabDialog(
+            destinations = moveDestinations,
+            currentFolderId = currentFolderId,
+            folderFallback = folderFallback,
+            rootFallback = rootFallback,
+            onDismiss = { showMove = false },
+            onConfirm = { folderId ->
+                showMove = false
+                if (TabMove.shouldWrite(currentFolderId, folderId)) onMove(folderId)
+            },
+        )
+    }
 }
 
 @Composable
@@ -371,6 +427,70 @@ internal fun RenameTabDialog(
         confirmButton = {
             TextButton(onClick = { onConfirm(draft) }) {
                 Text(stringResource(R.string.tabs_rename))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_cancel))
+            }
+        },
+    )
+}
+
+@Composable
+private fun MoveTabDialog(
+    destinations: List<TabMove.Destination>,
+    currentFolderId: String?,
+    folderFallback: String,
+    rootFallback: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String?) -> Unit,
+) {
+    var selected by remember { mutableStateOf(TabMove.normalize(currentFolderId)) }
+    val canConfirm = TabMove.shouldWrite(currentFolderId, selected)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.tabs_move_title)) },
+        text = {
+            Column(
+                Modifier
+                    .heightIn(max = 360.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                for (destination in destinations) {
+                    val trimmed = destination.name.trim()
+                    val name = when {
+                        trimmed.isNotEmpty() -> trimmed
+                        destination.folderId == null -> rootFallback
+                        else -> folderFallback
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selected = destination.folderId }
+                            .padding(start = (destination.depth * 16).dp),
+                    ) {
+                        RadioButton(
+                            selected = TabMove.samePlace(selected, destination.folderId),
+                            onClick = { selected = destination.folderId },
+                        )
+                        Text(
+                            text = name,
+                            style = MaterialTheme.typography.bodyLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = canConfirm,
+                onClick = { if (canConfirm) onConfirm(TabMove.normalize(selected)) },
+            ) {
+                Text(stringResource(R.string.tabs_move_confirm))
             }
         },
         dismissButton = {

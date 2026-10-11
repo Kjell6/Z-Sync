@@ -6,13 +6,21 @@ struct TabRow: View {
     let tab: ZenTab
     let scheme: ColorScheme
     var deletable: Bool
+    /// Normal (unpinned) tabs never carry a `folderId`, so they rename but do not move.
+    var isNormalTab: Bool = false
+    /// Nil when the tab sits at the space root. Marked in the picker and not written.
+    var currentFolderId: String? = nil
+    var spaceName: String = ""
+    var moveFolders: [PinDestinationModel.FolderEntry] = []
     var onOpen: () -> Void = {}
     var onDelete: () async -> Void = {}
     var onRename: (String) async -> Void = { _ in }
+    var onMove: (String?) async -> Void = { _ in }
 
     @State private var deleting = false
     @State private var showingRename = false
     @State private var renameDraft = ""
+    @State private var showingMove = false
 
     var body: some View {
         Button(action: onOpen) {
@@ -38,6 +46,13 @@ struct TabRow: View {
             } label: {
                 Label(String(localized: "tabs.rename"), systemImage: "pencil")
             }
+            if offersMove {
+                Button {
+                    showingMove = true
+                } label: {
+                    Label(String(localized: "tabs.move"), systemImage: "folder")
+                }
+            }
             if deletable {
                 Button(role: .destructive) {
                     Task { await remove() }
@@ -54,7 +69,55 @@ struct TabRow: View {
                 Task { await onRename(value) }
             }
         }
+        .confirmationDialog(
+            String(localized: "tabs.move_title"),
+            isPresented: $showingMove,
+            titleVisibility: .visible
+        ) {
+            ForEach(moveDestinations) { destination in
+                Button(moveButtonTitle(destination)) {
+                    guard TabMove.shouldWrite(
+                        currentFolderId: currentFolderId,
+                        selectedFolderId: destination.folderId
+                    ) else { return }
+                    let folderId = destination.folderId
+                    Task { await onMove(folderId) }
+                }
+                .disabled(destination.isCurrent)
+            }
+            Button("common.cancel", role: .cancel) {}
+        }
         .accessibilityHint(Text(tab.url))
+    }
+
+    /// Pinned and folder rows that have somewhere else to land. A root tab in a
+    /// space with no folders has only its current place, so the action stays hidden.
+    private var offersMove: Bool {
+        guard TabMove.offersMove(renames: true, isNormalTab: isNormalTab) else { return false }
+        return moveDestinations.contains { !$0.isCurrent }
+    }
+
+    private var moveDestinations: [TabMove.Destination] {
+        TabMove.destinations(
+            spaceName: spaceName,
+            folders: moveFolders,
+            currentFolderId: currentFolderId
+        )
+    }
+
+    private func moveButtonTitle(_ destination: TabMove.Destination) -> String {
+        let trimmed = destination.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name: String
+        if !trimmed.isEmpty {
+            name = trimmed
+        } else if destination.folderId == nil {
+            name = String(localized: "share.workspace")
+        } else {
+            name = String(localized: "tabs.folder")
+        }
+        let indent = String(repeating: "– ", count: destination.depth)
+        let mark = destination.isCurrent ? " ✓" : ""
+        return indent + name + mark
     }
 
     private var renameSeed: String {

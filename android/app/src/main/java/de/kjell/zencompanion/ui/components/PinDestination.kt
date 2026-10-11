@@ -69,3 +69,53 @@ object PinDestinationModel {
         return search(foldersIn(space))?.name
     }
 }
+
+/**
+ * Where a pinned tab may be moved inside its own space. Normal tabs never
+ * carry a `folderId`, and rows that do not rename (splits) do not move.
+ * Mirrors the Swift `TabMove`.
+ */
+object TabMove {
+    data class Destination(
+        /** Null is the space root. */
+        val folderId: String?,
+        val name: String,
+        val depth: Int,
+        val isCurrent: Boolean,
+    )
+
+    /** Move is offered only on rows that already rename, and never on a normal tab. */
+    fun offersMove(renames: Boolean, isNormalTab: Boolean): Boolean = renames && !isNormalTab
+
+    fun normalize(folderId: String?): String? = folderId?.takeIf { it.isNotEmpty() }
+
+    fun samePlace(currentFolderId: String?, selectedFolderId: String?): Boolean =
+        normalize(currentFolderId) == normalize(selectedFolderId)
+
+    /** Selecting the current place must not write. */
+    fun shouldWrite(currentFolderId: String?, selectedFolderId: String?): Boolean =
+        !samePlace(currentFolderId, selectedFolderId)
+
+    /** Space root first, then this space's folders depth-first (nested included). */
+    fun destinations(
+        spaceName: String,
+        folders: List<PinDestinationModel.FolderEntry>,
+        currentFolderId: String?,
+    ): List<Destination> {
+        val current = normalize(currentFolderId)
+        val rows = mutableListOf(
+            Destination(folderId = null, name = spaceName, depth = 0, isCurrent = current == null),
+        )
+        for (folder in folders) {
+            rows.add(
+                Destination(
+                    folderId = folder.folderId,
+                    name = folder.name,
+                    depth = folder.depth,
+                    isCurrent = folder.folderId == current,
+                ),
+            )
+        }
+        return rows
+    }
+}

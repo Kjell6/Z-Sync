@@ -102,6 +102,7 @@ interface BrowserRepository {
     ): SpacesSyncService.AddTabOutcome
     suspend fun deleteTab(id: String)
     suspend fun renameTab(id: String, label: String)
+    suspend fun moveTab(id: String, spaceId: String, folderId: String?)
     fun isDemo(): Boolean
     /** Global pinned/normal choice for newly saved tabs. */
     fun saveKind(): SaveKind
@@ -134,6 +135,10 @@ internal class AndroidBrowserRepository(private val context: Context) : BrowserR
 
     override suspend fun renameTab(id: String, label: String) = withContext(Dispatchers.IO) {
         SpacesSyncService.renameTab(context, id, label)
+    }
+
+    override suspend fun moveTab(id: String, spaceId: String, folderId: String?) = withContext(Dispatchers.IO) {
+        SpacesSyncService.moveTab(context, id, spaceId, folderId)
     }
 
     override fun isDemo(): Boolean = AccountStore.isDemo(context)
@@ -577,6 +582,23 @@ class AppViewModel(
         )
         viewModelScope.launch {
             runCatching { browserRepository.renameTab(id, label) }
+        }
+    }
+
+    fun moveTab(id: String, spaceId: String, folderId: String?) {
+        // Optimistic: the tab changes place before the conditional write and
+        // the follow-up reload. A failed write self-corrects on the next reload.
+        _browser.value = _browser.value.copy(
+            snapshot = SpacesSyncCacheOps.moveTab(
+                _browser.value.snapshot,
+                id,
+                folderId,
+                spaceId,
+                System.currentTimeMillis(),
+            ),
+        )
+        viewModelScope.launch {
+            runCatching { browserRepository.moveTab(id, spaceId, folderId) }
         }
     }
 

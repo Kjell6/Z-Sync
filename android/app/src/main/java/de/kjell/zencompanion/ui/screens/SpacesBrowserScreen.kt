@@ -52,6 +52,7 @@ fun SpacesBrowserScreen(
     onRefresh: () -> Unit,
     onDeleteTab: (String) -> Unit,
     onRenameTab: (String, String) -> Unit,
+    onMoveTab: (String, String, String?) -> Unit,
     onOpenAccount: () -> Unit,
     onOpenBrowser: (url: String?, title: String?) -> Unit = { _, _ -> },
     onOpenActivity: () -> Unit = {},
@@ -155,6 +156,7 @@ fun SpacesBrowserScreen(
                             onSelect = onSelectSpace,
                             onDeleteTab = onDeleteTab,
                             onRenameTab = onRenameTab,
+                            onMoveTab = onMoveTab,
                             onOpenUrl = { url, title -> onOpenBrowser(url, title) },
                             modifier = Modifier.fillMaxSize(),
                         )

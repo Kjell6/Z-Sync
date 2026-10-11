@@ -180,6 +180,7 @@ private final class FakeSessionSpaces: SpacesRepository {
     func deleteCachedSnapshot() { cached = nil }
     func deleteTab(id: String) async throws {}
     func renameTab(id: String, label: String) async throws {}
+    func moveTab(id: String, toFolder folderId: String?, in spaceId: String) async throws {}
 }
 
 @MainActor

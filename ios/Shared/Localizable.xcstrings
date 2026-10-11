@@ -1157,6 +1157,26 @@
         }
       }
     },
+    "tabs.move" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move to folder"
+          }
+        }
+      }
+    },
+    "tabs.move_title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move to folder"
+          }
+        }
+      }
+    },
     "tabs.rename" : {
       "localizations" : {
         "en" : {

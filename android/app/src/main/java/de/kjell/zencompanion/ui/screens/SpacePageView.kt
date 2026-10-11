@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.components.FolderBlock
+import de.kjell.zencompanion.ui.components.PinDestinationModel
 import de.kjell.zencompanion.ui.components.SplitRow
 import de.kjell.zencompanion.ui.components.TabRow
 import de.kjell.zencompanion.ui.components.ZenIconView
@@ -43,9 +44,12 @@ internal fun SpacePageView(
     space: ZenSpaces.ZenSpace,
     onDeleteTab: (String) -> Unit,
     onRenameTab: (String, String) -> Unit,
+    onMoveTab: (String, String?) -> Unit = { _, _ -> },
     onOpenUrl: (String, String?) -> Unit,
 ) {
     val fallbackName = stringResource(R.string.share_workspace)
+    val moveSpaceName = space.name.ifEmpty { fallbackName }
+    val moveFolders = PinDestinationModel.folderEntries(space)
     val listState = rememberLazyListState()
 
     val showTopStroke by remember {
@@ -95,8 +99,12 @@ internal fun SpacePageView(
                                 tab = item.tab,
                                 deletable = true,
                                 modifier = Modifier.padding(horizontal = 20.dp),
+                                currentFolderId = null,
+                                spaceName = moveSpaceName,
+                                moveFolders = moveFolders,
                                 onDelete = { onDeleteTab(item.id) },
                                 onRename = { label -> onRenameTab(item.tab.id, label) },
+                                onMove = { folderId -> onMoveTab(item.tab.id, folderId) },
                                 onOpenUrl = onOpenUrl,
                             )
                         }
@@ -108,6 +116,9 @@ internal fun SpacePageView(
                                 folder = item.folder,
                                 onDeleteTab = onDeleteTab,
                                 onRenameTab = onRenameTab,
+                                onMoveTab = onMoveTab,
+                                spaceName = moveSpaceName,
+                                moveFolders = moveFolders,
                                 onOpenUrl = onOpenUrl,
                                 modifier = Modifier.padding(horizontal = 20.dp),
                             )
@@ -150,6 +161,7 @@ internal fun SpacePageView(
                                     tab = item.tab,
                                     deletable = true,
                                     modifier = Modifier.padding(horizontal = 20.dp),
+                                    isNormalTab = true,
                                     onDelete = { onDeleteTab(item.id) },
                                     onRename = { label -> onRenameTab(item.tab.id, label) },
                                     onOpenUrl = onOpenUrl,
@@ -174,6 +186,9 @@ internal fun SpacePageView(
                                     folder = item.folder,
                                     onDeleteTab = onDeleteTab,
                                     onRenameTab = onRenameTab,
+                                    onMoveTab = onMoveTab,
+                                    spaceName = moveSpaceName,
+                                    moveFolders = moveFolders,
                                     onOpenUrl = onOpenUrl,
                                     modifier = Modifier.padding(horizontal = 20.dp),
                                 )

@@ -62,6 +62,9 @@
     <string name="pin_folder_menu">Pin to Folder…</string>
     <string name="tabs_delete">Delete tab</string>
     <string name="tabs_rename">Rename</string>
+    <string name="tabs_move">Move to folder</string>
+    <string name="tabs_move_title">Move to folder</string>
+    <string name="tabs_move_confirm">Move</string>
     <string name="tabs_rename_title">Rename tab</string>
     <string name="tabs_rename_placeholder">Tab name</string>
     <string name="tabs_unsplit">Unsplit tabs</string>

@@ -134,6 +134,11 @@ object SnapshotCache {
         cache(SpacesSyncCacheOps.renameTab(current, tabId, staticLabel, fetchedAtMillis))
     }
 
+    fun moveCachedTab(tabId: String, folderId: String?, spaceId: String, fetchedAtMillis: Long) {
+        val current = cachedSnapshotShared ?: return
+        cache(SpacesSyncCacheOps.moveTab(current, tabId, folderId, spaceId, fetchedAtMillis))
+    }
+
     fun expandCachedSplit(splitId: String, fetchedAtMillis: Long) {
         val current = cachedSnapshotShared ?: return
         cache(SpacesSyncCacheOps.expandSplit(current, splitId, fetchedAtMillis))
@@ -279,6 +284,108 @@ internal object SpacesSyncCacheOps {
 
     private fun renameOne(tab: ZenSpaces.ZenTab, tabId: String, staticLabel: String?): ZenSpaces.ZenTab =
         if (tab.id == tabId) tab.copy(staticLabel = staticLabel) else tab
+
+    /**
+     * Local cache after moving a pinned tab into a folder of the same space,
+     * or back to the space root when [folderId] is null. Normal tabs (the
+     * `tabs` bucket) stay put. The current place is left unchanged.
+     */
+    fun moveTab(
+        snapshot: ZenSpaces.ZenSnapshot,
+        tabId: String,
+        folderId: String?,
+        spaceId: String,
+        fetchedAtMillis: Long,
+    ): ZenSpaces.ZenSnapshot {
+        val target = folderId?.takeIf { it.isNotEmpty() }
+        var changed = false
+        val spaces = snapshot.spaces.map { space ->
+            if (space.id != spaceId) return@map space
+            when (val place = pinnedPlace(tabId, space.pinned)) {
+                PinnedPlace.Missing -> space
+                PinnedPlace.Root -> if (target == null) space else relocate(space, tabId, target).also { changed = true }
+                is PinnedPlace.Folder ->
+                    if (place.id == target) space else relocate(space, tabId, target).also { changed = true }
+            }
+        }
+        if (!changed) return snapshot
+        return snapshot.copy(spaces = spaces, fetchedAtMillis = fetchedAtMillis)
+    }
+
+    private sealed class PinnedPlace {
+        data object Missing : PinnedPlace()
+        data object Root : PinnedPlace()
+        data class Folder(val id: String) : PinnedPlace()
+    }
+
+    private fun pinnedPlace(tabId: String, items: List<ZenSpaces.ZenItem>): PinnedPlace {
+        for (item in items) {
+            when (item) {
+                is ZenSpaces.ZenItem.Tab -> if (item.tab.id == tabId) return PinnedPlace.Root
+                is ZenSpaces.ZenItem.Folder -> pinnedPlace(tabId, item.folder)?.let { return it }
+                is ZenSpaces.ZenItem.Split -> Unit
+            }
+        }
+        return PinnedPlace.Missing
+    }
+
+    private fun pinnedPlace(tabId: String, folder: ZenSpaces.ZenFolder): PinnedPlace? {
+        if (folder.tabs.any { it.id == tabId }) return PinnedPlace.Folder(folder.id)
+        for (nested in folder.subfolders.orEmpty()) {
+            pinnedPlace(tabId, nested)?.let { return it }
+        }
+        return null
+    }
+
+    private fun relocate(
+        space: ZenSpaces.ZenSpace,
+        tabId: String,
+        folderId: String?,
+    ): ZenSpaces.ZenSpace {
+        val pinned = space.pinned.toMutableList()
+        val tab = extractPinnedTab(pinned, tabId) ?: return space
+        if (folderId != null && insertRecursively(pinned, tab, folderId)) {
+            return space.copy(pinned = pinned)
+        }
+        pinned.add(ZenSpaces.ZenItem.Tab(tab))
+        return space.copy(pinned = pinned)
+    }
+
+    private fun extractPinnedTab(items: MutableList<ZenSpaces.ZenItem>, tabId: String): ZenSpaces.ZenTab? {
+        for (index in items.indices) {
+            when (val item = items[index]) {
+                is ZenSpaces.ZenItem.Tab -> if (item.tab.id == tabId) {
+                    items.removeAt(index)
+                    return item.tab
+                }
+                is ZenSpaces.ZenItem.Folder -> {
+                    val extracted = extractFromFolder(item.folder, tabId) ?: continue
+                    items[index] = ZenSpaces.ZenItem.Folder(extracted.folder)
+                    return extracted.tab
+                }
+                is ZenSpaces.ZenItem.Split -> Unit
+            }
+        }
+        return null
+    }
+
+    private class Extracted(val folder: ZenSpaces.ZenFolder, val tab: ZenSpaces.ZenTab)
+
+    private fun extractFromFolder(folder: ZenSpaces.ZenFolder, tabId: String): Extracted? {
+        val direct = folder.tabs.indexOfFirst { it.id == tabId }
+        if (direct >= 0) {
+            val tabs = folder.tabs.toMutableList()
+            val tab = tabs.removeAt(direct)
+            return Extracted(folder.copy(tabs = tabs), tab)
+        }
+        val subs = folder.subfolders?.toMutableList() ?: return null
+        for (index in subs.indices) {
+            val extracted = extractFromFolder(subs[index], tabId) ?: continue
+            subs[index] = extracted.folder
+            return Extracted(folder.copy(subfolders = subs), extracted.tab)
+        }
+        return null
+    }
 
     fun removeTab(
         snapshot: ZenSpaces.ZenSnapshot,

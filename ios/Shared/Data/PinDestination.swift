@@ -68,6 +68,61 @@ enum PinDestinationModel {
     }
 }
 
+/// Where a pinned tab may be moved inside its own space. Normal tabs never
+/// carry a `folderId`, and rows that do not rename (splits) do not move.
+enum TabMove {
+    struct Destination: Equatable, Identifiable {
+        /// Nil is the space root.
+        let folderId: String?
+        let name: String
+        /// Folder nesting depth from the tree walk. The space-root row is 0.
+        let depth: Int
+        let isCurrent: Bool
+
+        var id: String { folderId ?? "" }
+    }
+
+    /// Move is offered only on rows that already rename, and never on a normal tab.
+    static func offersMove(renames: Bool, isNormalTab: Bool) -> Bool {
+        renames && !isNormalTab
+    }
+
+    static func normalize(_ folderId: String?) -> String? {
+        guard let folderId, !folderId.isEmpty else { return nil }
+        return folderId
+    }
+
+    static func samePlace(currentFolderId: String?, selectedFolderId: String?) -> Bool {
+        normalize(currentFolderId) == normalize(selectedFolderId)
+    }
+
+    /// Selecting the current place must not write.
+    static func shouldWrite(currentFolderId: String?, selectedFolderId: String?) -> Bool {
+        !samePlace(currentFolderId: currentFolderId, selectedFolderId: selectedFolderId)
+    }
+
+    /// Space root first, then this space's folders depth-first (nested included).
+    static func destinations(
+        spaceName: String,
+        folders: [PinDestinationModel.FolderEntry],
+        currentFolderId: String?
+    ) -> [Destination] {
+        let current = normalize(currentFolderId)
+        var rows = [
+            Destination(folderId: nil, name: spaceName, depth: 0, isCurrent: current == nil),
+        ]
+        for folder in folders {
+            rows.append(Destination(
+                folderId: folder.folderId,
+                name: folder.name,
+                depth: folder.depth,
+                isCurrent: folder.folderId == current
+            ))
+        }
+        return rows
+    }
+}
+
 /// Native context-menu button for choosing a pin destination. Uses UIKit's
 /// `UIContextMenuInteraction` directly (instead of SwiftUI `Menu`) so hosts
 /// get `onMenuWillOpen` / `onMenuDidDismiss` lifecycle callbacks (e.g. to

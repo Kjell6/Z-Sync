@@ -868,6 +868,219 @@ enum SpacesSyncService {
         NotificationCenter.default.post(name: .zenCompanionSnapshotStale, object: nil)
     }
 
+    /// Moves a pinned tab into a folder of the same space, or back to the space
+    /// root when `folderId` is nil. Sets or clears `folderId` on the tab and
+    /// rewrites `children` on the old and new parent. A normal tab is left
+    /// untouched. The current place is not written.
+    static func moveTab(id: String, toFolder folderId: String?, in spaceId: String) async throws {
+        let target = TabMove.normalize(folderId)
+        if AccountStore.isDemo {
+            if let cached = cachedSnapshot() {
+                cache(SpacesSyncEdits.moving(id: id, folderId: target, in: spaceId, snapshot: cached))
+            }
+            NotificationCenter.default.post(name: .zenCompanionSnapshotStale, object: nil)
+            return
+        }
+        let client = try await AccountStore.connect()
+        try await moveTab(client: client, id: id, toFolder: target, in: spaceId)
+    }
+
+    static func moveTab(
+        client: SyncClient,
+        id: String,
+        toFolder folderId: String?,
+        in spaceId: String
+    ) async throws {
+        let target = TabMove.normalize(folderId)
+        let wrote: Bool
+        if safeSyncEnabled {
+            wrote = try await moveTabConflictSafe(client: client, id: id, folderId: target, spaceId: spaceId)
+        } else {
+            wrote = try await moveTabLegacy(client: client, id: id, folderId: target, spaceId: spaceId)
+        }
+        guard wrote else { return }
+        if let cached = cachedSnapshot() {
+            cache(SpacesSyncEdits.moving(id: id, folderId: target, in: spaceId, snapshot: cached))
+        }
+        NotificationCenter.default.post(name: .zenCompanionSnapshotStale, object: nil)
+    }
+
+    /// Conflict-safe move: one consistent read, then a conditional POST of the
+    /// tab plus the old and new parent. A 412 re-reads and reapplies only this
+    /// move, so concurrent edits to other fields survive. Retry once.
+    private static func moveTabConflictSafe(
+        client: SyncClient,
+        id: String,
+        folderId: String?,
+        spaceId: String
+    ) async throws -> Bool {
+        var attempted = false
+        for attempt in 0..<2 {
+            let (records, lastModified) = try await client.getCollectionWithMetadata(collection: collection)
+            let incoming = await decryptedCleartexts(client: client, records: records)
+            switch movePlan(id: id, folderId: folderId, spaceId: spaceId, incoming: incoming) {
+            case .missing:
+                throw SyncError.conflict
+            case .unchanged:
+                return attempted
+            case .writes(let writes):
+                attempted = true
+                let outcome = try await client.postRecords(
+                    collection: collection,
+                    records: writes,
+                    ifUnmodifiedSince: lastModified
+                )
+                switch outcome {
+                case .applied:
+                    return true
+                case .preconditionFailed:
+                    if attempt == 1 { throw SyncError.conflict }
+                case .partialFailure:
+                    throw SyncError.conflict
+                }
+            }
+        }
+        throw SyncError.conflict
+    }
+
+    /// Legacy move: the same parent/tab edit as the safe path, uploaded with
+    /// unconditional PUTs and no retry. Mirrors `renameTabLegacy`.
+    private static func moveTabLegacy(
+        client: SyncClient,
+        id: String,
+        folderId: String?,
+        spaceId: String
+    ) async throws -> Bool {
+        let incoming = try await decryptedCollection(client: client)
+        switch movePlan(id: id, folderId: folderId, spaceId: spaceId, incoming: incoming) {
+        case .missing:
+            throw SyncError.conflict
+        case .unchanged:
+            return false
+        case .writes(let writes):
+            for write in writes {
+                try await client.putRecord(collection: collection, id: write.id, object: write.cleartext)
+            }
+            return true
+        }
+    }
+
+    private enum MovePlan {
+        case missing
+        case unchanged
+        case writes([SyncWriteRecord])
+    }
+
+    /// Tab `folderId` plus the old and new parent's `children`. A folder that
+    /// does not belong to [spaceId] falls back to the space root (SPEC §3.5),
+    /// so a tab never lands in another space's folder. An already-current
+    /// place produces no writes.
+    private static func movePlan(
+        id: String,
+        folderId: String?,
+        spaceId: String,
+        incoming: [IncomingCleartext]
+    ) -> MovePlan {
+        guard let tab = incoming.first(where: { $0.id == id }), tab.kind == "tab" else {
+            return .missing
+        }
+        if isNormalTab(tab.data) { return .unchanged }
+        if let owner = tab.data["workspaceUuid"] as? String, !owner.isEmpty, owner != spaceId {
+            return .unchanged
+        }
+
+        let current = nonEmptyFolderId(tab.data["folderId"])
+        let target = resolveMoveFolder(folderId: folderId, spaceId: spaceId, incoming: incoming)
+        let targetFolderId = target?.folderId
+        if current == targetFolderId { return .unchanged }
+
+        var tabData = tab.data
+        tabData["folderId"] = targetFolderId ?? NSNull()
+        var writes = [rewrittenWrite(id: id, kind: "tab", data: tabData)]
+
+        let oldParent = parentRecord(folderId: current, spaceId: spaceId, incoming: incoming)
+        let newParent = parentRecord(folderId: targetFolderId, spaceId: spaceId, incoming: incoming)
+        if let oldParent, let newParent, oldParent.id == newParent.id {
+            if let combined = childrenWrite(oldParent, transform: { children in
+                SpacesSyncEdits.union(SpacesSyncEdits.removing(id, from: children), [id])
+            }) {
+                writes.append(combined)
+            }
+        } else {
+            if let oldParent, let removed = childrenWrite(oldParent, transform: {
+                SpacesSyncEdits.removing(id, from: $0)
+            }) {
+                writes.append(removed)
+            }
+            if let newParent, let added = childrenWrite(newParent, transform: {
+                SpacesSyncEdits.union($0, [id])
+            }) {
+                writes.append(added)
+            }
+        }
+        return .writes(writes)
+    }
+
+    /// The folder record for a same-space target, or nil when the move lands
+    /// on the space root (explicit root, or a folder that fails §3.5).
+    private static func resolveMoveFolder(
+        folderId: String?,
+        spaceId: String,
+        incoming: [IncomingCleartext]
+    ) -> (record: IncomingCleartext, folderId: String)? {
+        // `folderId` is already a String?. Do not pass it through the Any?
+        // helper: Swift boxes the optional, and `as? String` then misses it.
+        guard let requested = folderId, !requested.isEmpty else { return nil }
+        guard let match = incoming.first(where: { rec in
+            rec.kind == "folder"
+                && isTargetFolder(folderId: requested, data: rec.data)
+                && (rec.data["workspaceUuid"] as? String) == spaceId
+        }), let matched = nonEmptyFolderId(match.data["folderId"]) else {
+            return nil
+        }
+        return (match, matched)
+    }
+
+    /// Folder parent when `folderId` is set, otherwise the space record.
+    private static func parentRecord(
+        folderId: String?,
+        spaceId: String,
+        incoming: [IncomingCleartext]
+    ) -> IncomingCleartext? {
+        if let folderId {
+            return incoming.first { rec in
+                rec.kind == "folder"
+                    && isTargetFolder(folderId: folderId, data: rec.data)
+                    && (rec.data["workspaceUuid"] as? String) == spaceId
+            }
+        }
+        return incoming.first { $0.id == spaceId && $0.kind == "space" }
+    }
+
+    private static func childrenWrite(
+        _ record: IncomingCleartext,
+        transform: ([String]) -> [String]
+    ) -> SyncWriteRecord? {
+        guard record.kind == "space" || record.kind == "folder" else { return nil }
+        var data = record.data
+        let children = data["children"] as? [String] ?? []
+        let next = transform(children)
+        guard next != children else { return nil }
+        data["children"] = next
+        return rewrittenWrite(id: record.id, kind: record.kind ?? "", data: data)
+    }
+
+    private static func isNormalTab(_ data: [String: Any]) -> Bool {
+        if let pinned = data["pinned"] as? Bool { return !pinned }
+        if let pinned = data["pinned"] as? String { return pinned == "false" || pinned == "0" }
+        return false
+    }
+
+    private static func nonEmptyFolderId(_ value: Any?) -> String? {
+        guard let string = value as? String, !string.isEmpty else { return nil }
+        return string
+    }
+
     /// Conflict-safe rename: one consistent read, then a conditional POST of
     /// the tab record with only `staticLabel` changed. A 412 re-reads and
     /// reapplies the label on the fresh record so concurrent field edits
@@ -1470,6 +1683,104 @@ enum SpacesSyncService {
         var next = tab
         next.staticLabel = staticLabel
         return next
+    }
+
+    /// Local cache after moving a pinned tab into a folder of the same space,
+    /// or back to the space root when `folderId` is nil. Normal tabs (the
+    /// `tabs` bucket) stay put. The current place is left unchanged.
+    static func moving(
+        id: String,
+        folderId: String?,
+        in spaceId: String,
+        snapshot: ZenSnapshot
+    ) -> ZenSnapshot {
+        guard let spaceIndex = snapshot.spaces.firstIndex(where: { $0.id == spaceId }) else {
+            return snapshot
+        }
+        let target = TabMove.normalize(folderId)
+        var space = snapshot.spaces[spaceIndex]
+        switch pinnedPlace(of: id, in: space.pinned) {
+        case .missing:
+            return snapshot
+        case .root where target == nil:
+            return snapshot
+        case .folder(let current) where current == target:
+            return snapshot
+        case .root, .folder:
+            break
+        }
+        var pinned = space.pinned
+        guard let tab = extractPinnedTab(id: id, from: &pinned) else { return snapshot }
+        if let target, insertRecursively(tab, folderId: target, into: &pinned) {
+            space.pinned = pinned
+        } else {
+            pinned.append(.tab(tab))
+            space.pinned = pinned
+        }
+        var next = snapshot
+        next.spaces[spaceIndex] = space
+        next.fetchedAt = Date()
+        return next
+    }
+
+    private enum PinnedPlace {
+        case missing
+        case root
+        case folder(String)
+    }
+
+    private static func pinnedPlace(of tabId: String, in items: [ZenItem]) -> PinnedPlace {
+        for item in items {
+            switch item {
+            case .tab(let tab) where tab.id == tabId:
+                return .root
+            case .folder(let folder):
+                if let nested = pinnedPlace(of: tabId, in: folder) { return nested }
+            default:
+                continue
+            }
+        }
+        return .missing
+    }
+
+    private static func pinnedPlace(of tabId: String, in folder: ZenFolder) -> PinnedPlace? {
+        if folder.tabs.contains(where: { $0.id == tabId }) { return .folder(folder.id) }
+        for nested in folder.subfolders ?? [] {
+            if let place = pinnedPlace(of: tabId, in: nested) { return place }
+        }
+        return nil
+    }
+
+    private static func extractPinnedTab(id: String, from items: inout [ZenItem]) -> ZenTab? {
+        for index in items.indices {
+            switch items[index] {
+            case .tab(let tab) where tab.id == id:
+                items.remove(at: index)
+                return tab
+            case .folder(var folder):
+                if let tab = extractPinnedTab(id: id, from: &folder) {
+                    items[index] = .folder(folder)
+                    return tab
+                }
+            default:
+                continue
+            }
+        }
+        return nil
+    }
+
+    private static func extractPinnedTab(id: String, from folder: inout ZenFolder) -> ZenTab? {
+        if let index = folder.tabs.firstIndex(where: { $0.id == id }) {
+            return folder.tabs.remove(at: index)
+        }
+        var nested = folder.subfolders ?? []
+        for index in nested.indices {
+            if let tab = extractPinnedTab(id: id, from: &nested[index]) {
+                folder.subfolders = nested.isEmpty ? nil : nested
+                return tab
+            }
+        }
+        return nil
     }
 
     /// Local cache after deleting a tab (or collapsing a split that lost a member).

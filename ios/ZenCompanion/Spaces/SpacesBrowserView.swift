@@ -160,6 +160,9 @@ struct SpacesBrowserView: View {
                                             },
                                             onRenameTab: { id, label in
                                                 await model.renameTab(id: id, label: label)
+                                            },
+                                            onMoveTab: { id, folderId in
+                                                await model.moveTab(id: id, toFolder: folderId, in: space.id)
                                             }
                                         )
                                         .frame(width: width, height: height)
@@ -444,6 +447,9 @@ struct FolderBlock: View {
     var onOpenTab: (ZenTab) -> Void = { _ in }
     var onDeleteTab: (String) async -> Void = { _ in }
     var onRenameTab: (String, String) async -> Void = { _, _ in }
+    var onMoveTab: (String, String?) async -> Void = { _, _ in }
+    var spaceName: String = ""
+    var moveFolders: [PinDestinationModel.FolderEntry] = []
     /// True when rendered inside another folder's expanded content. The
     /// parent already applies the level indent via `.padding(.leading, 20)`,
     /// so a nested block must not add its own horizontal padding — otherwise
@@ -481,9 +487,13 @@ struct FolderBlock: View {
                         tab: tab,
                         scheme: scheme,
                         deletable: true,
+                        currentFolderId: folder.id,
+                        spaceName: spaceName,
+                        moveFolders: moveFolders,
                         onOpen: { onOpenTab(tab) },
                         onDelete: { await onDeleteTab(tab.id) },
-                        onRename: { label in await onRenameTab(tab.id, label) }
+                        onRename: { label in await onRenameTab(tab.id, label) },
+                        onMove: { folderId in await onMoveTab(tab.id, folderId) }
                     )
                     .padding(.leading, 20)
                     .transition(.opacity.combined(with: .move(edge: .top)))
@@ -495,6 +505,9 @@ struct FolderBlock: View {
                         onOpenTab: onOpenTab,
                         onDeleteTab: onDeleteTab,
                         onRenameTab: onRenameTab,
+                        onMoveTab: onMoveTab,
+                        spaceName: spaceName,
+                        moveFolders: moveFolders,
                         isNested: true
                     )
                     .padding(.leading, 20)

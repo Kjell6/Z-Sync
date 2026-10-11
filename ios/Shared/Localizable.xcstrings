@@ -609,7 +609,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Needs \"Include unpinned tabs\" in your desktop browser's Settings → Sync."
+            "value" : "Turn on “Include unpinned tabs” in Zen’s Settings → Sync to pin as normal tabs."
           }
         }
       }
@@ -716,7 +716,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Saved as pinned tab — normal tabs are off on your desktop."
+            "value" : "Saved as pinned tab — turn on “Include unpinned tabs” in Zen’s Settings → Sync to pin as normal tabs."
           }
         }
       }

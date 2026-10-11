@@ -88,7 +88,7 @@
     <string name="share_save_normal">Save Tab</string>
     <string name="share_saved_title">Saved</string>
     <string name="share_saved_detail">Tab saved in %1$s</string>
-    <string name="save_fallback_normal_off">Saved as pinned tab — normal tabs are off on your desktop.</string>
+    <string name="save_fallback_normal_off">Saved as pinned tab — turn on “Include unpinned tabs” in Zen’s Settings → Sync to pin as normal tabs.</string>
     <string name="share_signed_out_title">Sign in to Z-Sync</string>
     <string name="share_signed_out_detail">Open the app once and sign in with your Mozilla account.</string>
     <string name="share_failed_title">Not saved</string>
@@ -130,7 +130,7 @@
     <string name="settings_save_kind">Save shared tabs as</string>
     <string name="settings_save_kind_pinned">Pinned tab</string>
     <string name="settings_save_kind_normal">Normal tab</string>
-    <string name="settings_save_kind_normal_hint">Needs \"Include unpinned tabs\" in your desktop browser\'s Settings → Sync.</string>
+    <string name="settings_save_kind_normal_hint">Turn on “Include unpinned tabs” in Zen’s Settings → Sync to pin as normal tabs.</string>
     <string name="settings_toolbar">Toolbar position</string>
     <string name="settings_toolbar_top">Top</string>
     <string name="settings_toolbar_bottom">Bottom</string>

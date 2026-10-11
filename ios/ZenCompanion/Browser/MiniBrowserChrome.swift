@@ -3,9 +3,10 @@ import SwiftUI
 /// Bottom browser chrome. The page ends where this bar begins.
 ///
 /// Android port (`MiniBrowserChrome` / `MiniBrowserFooter`): one bottom strip.
-/// Collapsed, the page ends where the strip begins. Expanded, and while
-/// typing, the strip draws over the page and keeps the screen bottom, so the
-/// page does not move. While typing the glass continues behind the keyboard.
+/// Collapsed, the page ends where the strip begins. Expanded, and while the
+/// address field is editing, the strip draws over the page and keeps the
+/// screen bottom, so the page does not move. Address glass continues behind
+/// the keyboard. A page field does not lift this strip.
 /// Those sheets are short, so their top corners stay under the display radius.
 /// Buttons match the home action bar: `Palette.lift`, 16pt continuous corners.
 /// The material behind them is one untinted glass surface.

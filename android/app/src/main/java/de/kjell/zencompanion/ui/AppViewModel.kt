@@ -598,7 +598,10 @@ class AppViewModel(
             ),
         )
         viewModelScope.launch {
+            // Put the tab back where the server has it instead of showing a
+            // move that never happened.
             runCatching { browserRepository.moveTab(id, spaceId, folderId) }
+                .onFailure { if (it !is CancellationException) reload() }
         }
     }
 

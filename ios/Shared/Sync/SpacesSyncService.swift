@@ -898,10 +898,11 @@ enum SpacesSyncService {
         } else {
             wrote = try await moveTabLegacy(client: client, id: id, folderId: target, spaceId: spaceId)
         }
-        guard wrote else { return }
-        if let cached = cachedSnapshot() {
+        if wrote, let cached = cachedSnapshot() {
             cache(SpacesSyncEdits.moving(id: id, folderId: target, in: spaceId, snapshot: cached))
         }
+        // Reload even when nothing was written: the screen already moved the
+        // tab, and a target the server resolved to the root must snap back.
         NotificationCenter.default.post(name: .zenCompanionSnapshotStale, object: nil)
     }
 
@@ -998,25 +999,19 @@ enum SpacesSyncService {
         tabData["folderId"] = targetFolderId ?? NSNull()
         var writes = [rewrittenWrite(id: id, kind: "tab", data: tabData)]
 
-        let oldParent = parentRecord(folderId: current, spaceId: spaceId, incoming: incoming)
+        // Take the tab out of every parent that lists it, as delete does. Looking
+        // the old folder up by workspaceUuid misses folders without one (optional,
+        // SPEC §3.5), and the tab would then show in both places.
         let newParent = parentRecord(folderId: targetFolderId, spaceId: spaceId, incoming: incoming)
-        if let oldParent, let newParent, oldParent.id == newParent.id {
-            if let combined = childrenWrite(oldParent, transform: { children in
-                SpacesSyncEdits.union(SpacesSyncEdits.removing(id, from: children), [id])
-            }) {
-                writes.append(combined)
-            }
-        } else {
-            if let oldParent, let removed = childrenWrite(oldParent, transform: {
-                SpacesSyncEdits.removing(id, from: $0)
-            }) {
+        for parent in incoming where parent.id != newParent?.id {
+            if let removed = childrenWrite(parent, transform: { SpacesSyncEdits.removing(id, from: $0) }) {
                 writes.append(removed)
             }
-            if let newParent, let added = childrenWrite(newParent, transform: {
-                SpacesSyncEdits.union($0, [id])
-            }) {
-                writes.append(added)
-            }
+        }
+        if let newParent, let added = childrenWrite(newParent, transform: { children in
+            SpacesSyncEdits.union(SpacesSyncEdits.removing(id, from: children), [id])
+        }) {
+            writes.append(added)
         }
         return .writes(writes)
     }
@@ -1063,7 +1058,9 @@ enum SpacesSyncService {
     ) -> SyncWriteRecord? {
         guard record.kind == "space" || record.kind == "folder" else { return nil }
         var data = record.data
-        let children = data["children"] as? [String] ?? []
+        // Keep the string entries; `as? [String]` turns a list with one null
+        // into [] and the write would drop every other child (SPEC §7.5).
+        let children = (data["children"] as? [Any])?.compactMap { $0 as? String } ?? []
         let next = transform(children)
         guard next != children else { return nil }
         data["children"] = next

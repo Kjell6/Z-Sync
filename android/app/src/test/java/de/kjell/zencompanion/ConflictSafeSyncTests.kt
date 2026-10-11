@@ -535,6 +535,26 @@ class ConflictSafeSyncTests {
     }
 
     @Test
+    fun moveOutOfFolderWithoutWorkspaceUuidRemovesItThere() {
+        val server = ConflictServer(keys, syncKeys)
+        server.seedSpace("space-1", children = listOf("keep"))
+        server.seedFolder("folder-1", workspaceUuid = "space-1", children = listOf("t1", "inside"))
+        val folder = server.cleartext("folder-1")!!
+        folder.getJSONObject("data").remove("workspaceUuid")
+        server.putRecord("folder-1", folder)
+        server.seedTab("t1", "space-1")
+        val tab = server.cleartext("t1")!!
+        tab.getJSONObject("data").put("folderId", "folder-1")
+        server.putRecord("t1", tab)
+
+        runBlocking { SpacesSyncService.moveTab(client(server), "t1", "space-1", null) }
+
+        val batch = server.batch(server.requests.single { it.method == "POST" })
+        assertEquals(listOf("inside"), server.children(batch, "folder-1"))
+        assertEquals(listOf("keep", "t1"), server.children(batch, "space-1"))
+    }
+
+    @Test
     fun moveToCurrentPlaceDoesNotPost() {
         val server = ConflictServer(keys, syncKeys)
         server.seedSpace("space-1", children = listOf("rooted"))

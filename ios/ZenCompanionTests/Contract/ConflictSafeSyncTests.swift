@@ -1015,6 +1015,60 @@ final class ConflictSafeSyncTests: XCTestCase {
         XCTAssertEqual(try recordData(bso(records, id: "space-1"))["children"] as? [String], ["keep", "t1"])
     }
 
+    func testMoveOutOfFolderWithoutWorkspaceUuidRemovesItThere() async throws {
+        let server = MutableSyncServer()
+        try seed(server, id: "space-1", kind: "space", data: [
+            "uuid": "space-1",
+            "name": "Space",
+            "children": ["keep"],
+        ])
+        try seed(server, id: "folder-1", kind: "folder", data: [
+            "folderId": "folder-1",
+            "name": "Docs",
+            "children": ["t1", "inside"],
+        ])
+        try seed(server, id: "t1", kind: "tab", data: [
+            "tabId": "t1",
+            "url": "https://page.example",
+            "workspaceUuid": "space-1",
+            "folderId": "folder-1",
+        ])
+        let client = makeClient(transport: server)
+
+        try await SpacesSyncService.moveTab(client: client, id: "t1", toFolder: nil, in: "space-1")
+
+        let records = try postRecords(postRequests(server)[0])
+        XCTAssertEqual(try recordData(bso(records, id: "folder-1"))["children"] as? [String], ["inside"])
+        XCTAssertEqual(try recordData(bso(records, id: "space-1"))["children"] as? [String], ["keep", "t1"])
+    }
+
+    func testMoveKeepsChildrenNextToANullEntry() async throws {
+        let server = MutableSyncServer()
+        try seed(server, id: "space-1", kind: "space", data: [
+            "uuid": "space-1",
+            "name": "Space",
+            "children": ["t1", "keep", NSNull()],
+        ])
+        try seed(server, id: "folder-1", kind: "folder", data: [
+            "folderId": "folder-1",
+            "name": "Docs",
+            "workspaceUuid": "space-1",
+            "children": ["inside"],
+        ])
+        try seed(server, id: "t1", kind: "tab", data: [
+            "tabId": "t1",
+            "url": "https://page.example",
+            "workspaceUuid": "space-1",
+        ])
+        let client = makeClient(transport: server)
+
+        try await SpacesSyncService.moveTab(client: client, id: "t1", toFolder: "folder-1", in: "space-1")
+
+        let records = try postRecords(postRequests(server)[0])
+        XCTAssertEqual(try recordData(bso(records, id: "space-1"))["children"] as? [String], ["keep"])
+        XCTAssertEqual(try recordData(bso(records, id: "folder-1"))["children"] as? [String], ["inside", "t1"])
+    }
+
     func testMoveToCurrentPlaceDoesNotPost() async throws {
         let server = MutableSyncServer()
         try seed(server, id: "space-1", kind: "space", data: [

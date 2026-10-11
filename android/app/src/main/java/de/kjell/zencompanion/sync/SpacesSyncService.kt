@@ -896,8 +896,9 @@ object SpacesSyncService {
                 moveTabLegacy(client, id, spaceId, target)
             }
         }
-        if (!wrote) return
-        SnapshotCache.moveCachedTab(id, target, spaceId, System.currentTimeMillis())
+        if (wrote) SnapshotCache.moveCachedTab(id, target, spaceId, System.currentTimeMillis())
+        // Reload even when nothing was written: the screen already moved the
+        // tab, and a target the server resolved to the root must snap back.
         AppEvents.emitSnapshotStale()
     }
 
@@ -997,19 +998,17 @@ object SpacesSyncService {
         tabData.put("folderId", targetFolderId ?: JSONObject.NULL)
         val writes = mutableListOf(JSONObject().put("id", id).put("kind", "tab").put("data", tabData))
 
-        val oldParent = parentRecord(current, spaceId, incoming)
+        // Take the tab out of every parent that lists it, as delete does. Looking
+        // the old folder up by workspaceUuid misses folders without one (optional,
+        // SPEC §3.5), and the tab would then show in both places.
         val newParent = parentRecord(targetFolderId, spaceId, incoming)
-        if (oldParent != null && newParent != null && oldParent.id == newParent.id) {
-            childrenWrite(oldParent) { children ->
+        incoming.filter { it.id != newParent?.id }.forEach { parent ->
+            childrenWrite(parent) { SpacesSyncEdits.removing(id, it) }?.let { writes.add(it) }
+        }
+        newParent?.let { parent ->
+            childrenWrite(parent) { children ->
                 SpacesSyncEdits.union(SpacesSyncEdits.removing(id, children), listOf(id))
             }?.let { writes.add(it) }
-        } else {
-            if (oldParent != null) {
-                childrenWrite(oldParent) { SpacesSyncEdits.removing(id, it) }?.let { writes.add(it) }
-            }
-            if (newParent != null) {
-                childrenWrite(newParent) { SpacesSyncEdits.union(it, listOf(id)) }?.let { writes.add(it) }
-            }
         }
         return MovePlan.Writes(writes)
     }

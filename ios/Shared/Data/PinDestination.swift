@@ -123,6 +123,68 @@ enum TabMove {
     }
 }
 
+/// The "Pin to Folder…" submenu, shared with moving a tab inside one space.
+///
+/// Rendered shape, per space: the space name first (its icon, no checkmark —
+/// the root marker lives on the main space list), then that space's folders
+/// as indented plain-text rows, outer folders before nested children. The
+/// current folder carries the menu checkmark. Declaration order is reversed
+/// because these context menus render children backwards.
+///
+/// `markRoot` puts the checkmark on the space row when the destination is the
+/// root. The pin menu leaves it off (`false`) because that marker is already
+/// on the space list. A move menu has no separate space list, so it passes
+/// `true` and the current place — root or folder — stays visible.
+enum PinDestinationMenus {
+    static func folderSubmenu(
+        spaces: [ZenSpace],
+        destination: PinDestination,
+        scheme: ColorScheme,
+        title: String,
+        image: UIImage? = UIImage(systemName: "folder.badge.plus"),
+        markRoot: Bool = false,
+        /// Move to folder wants the folder rows flipped: the menu paints
+        /// children backwards, so declaring them in snapshot order puts the
+        /// last folder under the space name. The pin menu leaves this off.
+        reverseFolders: Bool = false,
+        onSelect: @escaping (PinDestination) -> Void
+    ) -> UIMenu? {
+        var groups: [UIMenuElement] = []
+        for space in spaces.reversed() {
+            let entries = PinDestinationModel.folderEntries(in: space)
+            guard !entries.isEmpty else { continue }
+            // Pin menu: folders are declared reversed and the space name last,
+            // because that menu paints children backwards (space, then folders).
+            // Move to folder paints in declaration order, so the space name is
+            // declared first and the flipped folder rows follow it.
+            let declared = reverseFolders ? entries : entries.reversed()
+            let folderRows: [UIMenuElement] = declared.map { entry in
+                let indent = String(repeating: "\u{2003}\u{2003}", count: entry.depth)
+                let name = entry.name.isEmpty ? String(localized: "tabs.folder") : entry.name
+                let isSelected = space.id == destination.spaceId && destination.folderId == entry.folderId
+                return UIAction(
+                    title: indent + name,
+                    state: isSelected ? .on : .off
+                ) { _ in
+                    onSelect(PinDestination(spaceId: space.id, folderId: entry.folderId))
+                }
+            }
+            let atRoot = destination.folderId?.isEmpty ?? true
+            let spaceRow = UIAction(
+                title: space.name,
+                image: SpaceMenuIcon.image(for: space.icon, scheme: scheme),
+                state: (markRoot && space.id == destination.spaceId && atRoot) ? .on : .off
+            ) { _ in
+                onSelect(PinDestination(spaceId: space.id))
+            }
+            let rows = reverseFolders ? [spaceRow] + folderRows : folderRows + [spaceRow]
+            groups.append(UIMenu(options: .displayInline, children: rows))
+        }
+        guard !groups.isEmpty else { return nil }
+        return UIMenu(title: title, image: image, children: groups)
+    }
+}
+
 /// Native context-menu button for choosing a pin destination. Uses UIKit's
 /// `UIContextMenuInteraction` directly (instead of SwiftUI `Menu`) so hosts
 /// get `onMenuWillOpen` / `onMenuDidDismiss` lifecycle callbacks (e.g. to
@@ -281,45 +343,21 @@ struct PinDestinationMenuButton: UIViewRepresentable {
             }
             let spaceSection = UIMenu(options: .displayInline, children: spaceActions)
 
-            // Folder submenu. Declared reversed → renders forward. Hidden for
-            // normal-tab saves, which ignore the folder.
-            var folderGroups: [UIMenuElement] = []
-            if parent.allowsFolders {
-                for space in parent.spaces.reversed() {
-                    let entries = PinDestinationModel.folderEntries(in: space)
-                    guard !entries.isEmpty else { continue }
-                    // Declared [folders reversed, header] → renders [header, folders].
-                    var group: [UIMenuElement] = entries.reversed().map { entry in
-                        let indent = String(repeating: "\u{2003}\u{2003}", count: entry.depth)
-                        let name = entry.name.isEmpty ? String(localized: "tabs.folder") : entry.name
-                        let isSelected = space.id == destination.spaceId && destination.folderId == entry.folderId
-                        return UIAction(
-                            title: indent + name,
-                            state: isSelected ? .on : .off
-                        ) { [weak self] _ in
-                            self?.parent.onSelect(PinDestination(spaceId: space.id, folderId: entry.folderId))
-                        }
-                    }
-                    // Space header (no checkmark). Declared last → renders first.
-                    group.append(UIAction(
-                        title: space.name,
-                        image: SpaceMenuIcon.image(for: space.icon, scheme: parent.scheme)
-                    ) { [weak self] _ in
-                        self?.parent.onSelect(PinDestination(spaceId: space.id))
-                    })
-                    folderGroups.append(UIMenu(options: .displayInline, children: group))
-                }
-            }
-
             // Main menu. Declared [folder submenu, divider section, spaces]
-            // → renders [spaces, divider, folder submenu].
+            // → renders [spaces, divider, folder submenu]. The folder submenu
+            // is the same menu a tab uses to move inside its space.
             var children: [UIMenuElement] = []
-            if !folderGroups.isEmpty {
-                children.append(UIMenu(
-                    title: String(localized: "pin.folder_menu"),
-                    image: UIImage(systemName: "folder.badge.plus"),
-                    children: folderGroups
-                ))
+            if parent.allowsFolders,
+               let folders = PinDestinationMenus.folderSubmenu(
+                spaces: parent.spaces,
+                destination: destination,
+                scheme: parent.scheme,
+                title: String(localized: "pin.folder_menu"),
+                onSelect: { [weak self] chosen in
+                    self?.parent.onSelect(chosen)
+                }
+               ) {
+                children.append(folders)
             }
             children.append(spaceSection)
             return UIMenu(children: children)
@@ -332,7 +370,7 @@ struct PinDestinationMenuButton: UIViewRepresentable {
 /// creates an internal `UIContextMenuInteraction` whose delegate is the
 /// button itself — overriding these methods is the reliable way to learn
 /// when the menu opens and closes.
-final class PinMenuButton: UIButton {
+class PinMenuButton: UIButton {
     weak var coordinator: PinDestinationMenuButton.Coordinator?
     var isMenuPresented = false
 

@@ -116,8 +116,7 @@ private struct SpacePageView: View {
                                     scheme: scheme,
                                     deletable: true,
                                     currentFolderId: nil,
-                                    spaceName: moveSpaceName,
-                                    moveFolders: moveFolders,
+                                    moveSpace: space,
                                     onOpen: { onOpenTab(tab) },
                                     onDelete: { await onDeleteTab(tab.id) },
                                     onRename: { label in await onRenameTab(tab.id, label) },
@@ -132,8 +131,7 @@ private struct SpacePageView: View {
                                     onDeleteTab: onDeleteTab,
                                     onRenameTab: onRenameTab,
                                     onMoveTab: onMoveTab,
-                                    spaceName: moveSpaceName,
-                                    moveFolders: moveFolders
+                                    moveSpace: space
                                 )
                             case .split(let split):
                                 SplitRow(
@@ -190,8 +188,7 @@ private struct SpacePageView: View {
                                         onDeleteTab: onDeleteTab,
                                         onRenameTab: onRenameTab,
                                         onMoveTab: onMoveTab,
-                                        spaceName: moveSpaceName,
-                                        moveFolders: moveFolders
+                                        moveSpace: space
                                     )
                                 }
                             }
@@ -286,11 +283,4 @@ private struct SpacePageView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var moveFolders: [PinDestinationModel.FolderEntry] {
-        PinDestinationModel.folderEntries(in: space)
-    }
-
-    private var moveSpaceName: String {
-        space.name.isEmpty ? String(localized: "share.workspace") : space.name
-    }
 }

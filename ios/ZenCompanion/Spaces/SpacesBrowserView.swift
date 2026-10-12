@@ -448,8 +448,7 @@ struct FolderBlock: View {
     var onDeleteTab: (String) async -> Void = { _ in }
     var onRenameTab: (String, String) async -> Void = { _, _ in }
     var onMoveTab: (String, String?) async -> Void = { _, _ in }
-    var spaceName: String = ""
-    var moveFolders: [PinDestinationModel.FolderEntry] = []
+    var moveSpace: ZenSpace? = nil
     /// True when rendered inside another folder's expanded content. The
     /// parent already applies the level indent via `.padding(.leading, 20)`,
     /// so a nested block must not add its own horizontal padding — otherwise
@@ -488,8 +487,7 @@ struct FolderBlock: View {
                         scheme: scheme,
                         deletable: true,
                         currentFolderId: folder.id,
-                        spaceName: spaceName,
-                        moveFolders: moveFolders,
+                        moveSpace: moveSpace,
                         onOpen: { onOpenTab(tab) },
                         onDelete: { await onDeleteTab(tab.id) },
                         onRename: { label in await onRenameTab(tab.id, label) },
@@ -506,8 +504,7 @@ struct FolderBlock: View {
                         onDeleteTab: onDeleteTab,
                         onRenameTab: onRenameTab,
                         onMoveTab: onMoveTab,
-                        spaceName: spaceName,
-                        moveFolders: moveFolders,
+                        moveSpace: moveSpace,
                         isNested: true
                     )
                     .padding(.leading, 20)

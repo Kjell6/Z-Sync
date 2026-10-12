@@ -417,7 +417,13 @@ final class BrowserModel {
         // Optimistic: the tab changes place before the conditional write and
         // the follow-up reload. A failed write self-corrects on the next reload.
         snapshot = SpacesSyncEdits.moving(id: id, folderId: folderId, in: spaceId, snapshot: snapshot)
-        try? await repository.moveTab(id: id, toFolder: folderId, in: spaceId)
+        do {
+            try await repository.moveTab(id: id, toFolder: folderId, in: spaceId)
+        } catch {
+            // Put the tab back where the server has it instead of showing a
+            // move that never happened.
+            await reload()
+        }
     }
 
     private static func isCancellation(_ error: Error) -> Bool {

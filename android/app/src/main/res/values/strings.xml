@@ -63,6 +63,7 @@
     <string name="tabs_delete">Delete tab</string>
     <string name="tabs_rename">Rename</string>
     <string name="tabs_move">Move to folder</string>
+    <string name="tabs_pin">Pin</string>
     <string name="tabs_move_title">Move to folder</string>
     <string name="tabs_move_confirm">Move</string>
     <string name="tabs_rename_title">Rename tab</string>

@@ -1177,6 +1177,16 @@
         }
       }
     },
+    "tabs.pin" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pin"
+          }
+        }
+      }
+    },
     "tabs.rename" : {
       "localizations" : {
         "en" : {

@@ -103,6 +103,7 @@ interface BrowserRepository {
     suspend fun deleteTab(id: String)
     suspend fun renameTab(id: String, label: String)
     suspend fun moveTab(id: String, spaceId: String, folderId: String?)
+    suspend fun pinTab(id: String, spaceId: String)
     fun isDemo(): Boolean
     /** Global pinned/normal choice for newly saved tabs. */
     fun saveKind(): SaveKind
@@ -139,6 +140,10 @@ internal class AndroidBrowserRepository(private val context: Context) : BrowserR
 
     override suspend fun moveTab(id: String, spaceId: String, folderId: String?) = withContext(Dispatchers.IO) {
         SpacesSyncService.moveTab(context, id, spaceId, folderId)
+    }
+
+    override suspend fun pinTab(id: String, spaceId: String) = withContext(Dispatchers.IO) {
+        SpacesSyncService.pinTab(context, id, spaceId)
     }
 
     override fun isDemo(): Boolean = AccountStore.isDemo(context)
@@ -601,6 +606,26 @@ class AppViewModel(
             // Put the tab back where the server has it instead of showing a
             // move that never happened.
             runCatching { browserRepository.moveTab(id, spaceId, folderId) }
+                .onFailure { if (it !is CancellationException) reload() }
+        }
+    }
+
+    fun pinTab(id: String, spaceId: String) {
+        // Optimistic: the row leaves the normal section and reappears at the
+        // space root of the pinned section before the conditional write. A
+        // failed write self-corrects on the next reload.
+        _browser.value = _browser.value.copy(
+            snapshot = SpacesSyncCacheOps.pinTab(
+                _browser.value.snapshot,
+                id,
+                spaceId,
+                System.currentTimeMillis(),
+            ),
+        )
+        viewModelScope.launch {
+            // Put the tab back in the normal section instead of showing a pin
+            // that never happened.
+            runCatching { browserRepository.pinTab(id, spaceId) }
                 .onFailure { if (it !is CancellationException) reload() }
         }
     }

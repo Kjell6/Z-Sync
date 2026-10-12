@@ -426,6 +426,20 @@ final class BrowserModel {
         }
     }
 
+    func pinTab(id: String, in spaceId: String) async {
+        // Optimistic: the row leaves the normal section and reappears at the
+        // space root of the pinned section before the conditional write. A
+        // failed write self-corrects on the next reload.
+        snapshot = SpacesSyncEdits.pinning(id: id, in: spaceId, snapshot: snapshot)
+        do {
+            try await repository.pinTab(id: id, in: spaceId)
+        } catch {
+            // Put the tab back in the normal section instead of showing a pin
+            // that never happened.
+            await reload()
+        }
+    }
+
     private static func isCancellation(_ error: Error) -> Bool {
         if error is CancellationError { return true }
         if let urlError = error as? URLError, urlError.code == .cancelled { return true }

@@ -18,6 +18,7 @@ struct SpacePageContainer: View {
     var onDeleteTab: (String) async -> Void = { _ in }
     var onRenameTab: (String, String) async -> Void = { _, _ in }
     var onMoveTab: (String, String?) async -> Void = { _, _ in }
+    var onPinTab: (String) async -> Void = { _ in }
 
     var body: some View {
         GeometryReader { pageGeo in
@@ -58,7 +59,8 @@ struct SpacePageContainer: View {
                     onOpenTab: { tab in onOpenTab(tab, space) },
                     onDeleteTab: onDeleteTab,
                     onRenameTab: onRenameTab,
-                    onMoveTab: onMoveTab
+                    onMoveTab: onMoveTab,
+                    onPinTab: onPinTab
                 )
             }
             .frame(width: containerWidth)
@@ -77,6 +79,7 @@ private struct SpacePageView: View {
     var onDeleteTab: (String) async -> Void = { _ in }
     var onRenameTab: (String, String) async -> Void = { _, _ in }
     var onMoveTab: (String, String?) async -> Void = { _, _ in }
+    var onPinTab: (String) async -> Void = { _ in }
 
     @State private var containerHeight: CGFloat = 0
     @State private var contentHeight: CGFloat = 0
@@ -169,7 +172,8 @@ private struct SpacePageView: View {
                                         isNormalTab: true,
                                         onOpen: { onOpenTab(tab) },
                                         onDelete: { await onDeleteTab(tab.id) },
-                                        onRename: { label in await onRenameTab(tab.id, label) }
+                                        onRename: { label in await onRenameTab(tab.id, label) },
+                                        onPin: { await onPinTab(tab.id) }
                                     )
                                     .padding(.horizontal, 20)
                                 case .split(let split):

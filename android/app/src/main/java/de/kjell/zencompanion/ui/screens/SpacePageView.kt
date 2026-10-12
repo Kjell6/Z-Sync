@@ -45,6 +45,7 @@ internal fun SpacePageView(
     onDeleteTab: (String) -> Unit,
     onRenameTab: (String, String) -> Unit,
     onMoveTab: (String, String?) -> Unit = { _, _ -> },
+    onPinTab: (String) -> Unit = {},
     onOpenUrl: (String, String?) -> Unit,
 ) {
     val fallbackName = stringResource(R.string.share_workspace)
@@ -164,6 +165,7 @@ internal fun SpacePageView(
                                     isNormalTab = true,
                                     onDelete = { onDeleteTab(item.id) },
                                     onRename = { label -> onRenameTab(item.tab.id, label) },
+                                    onPin = { onPinTab(item.tab.id) },
                                     onOpenUrl = onOpenUrl,
                                 )
                             }

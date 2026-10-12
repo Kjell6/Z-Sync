@@ -139,6 +139,11 @@ object SnapshotCache {
         cache(SpacesSyncCacheOps.moveTab(current, tabId, folderId, spaceId, fetchedAtMillis))
     }
 
+    fun pinCachedTab(tabId: String, spaceId: String, fetchedAtMillis: Long) {
+        val current = cachedSnapshotShared ?: return
+        cache(SpacesSyncCacheOps.pinTab(current, tabId, spaceId, fetchedAtMillis))
+    }
+
     fun expandCachedSplit(splitId: String, fetchedAtMillis: Long) {
         val current = cachedSnapshotShared ?: return
         cache(SpacesSyncCacheOps.expandSplit(current, splitId, fetchedAtMillis))
@@ -385,6 +390,35 @@ internal object SpacesSyncCacheOps {
             return Extracted(folder.copy(subfolders = subs), extracted.tab)
         }
         return null
+    }
+
+    /**
+     * Local cache after pinning a normal tab: the row leaves the normal
+     * (`tabs`) bucket and reappears at the space root of the pinned section,
+     * keeping every displayed field. A tab that is not in the normal bucket
+     * leaves the snapshot untouched.
+     */
+    fun pinTab(
+        snapshot: ZenSpaces.ZenSnapshot,
+        tabId: String,
+        spaceId: String,
+        fetchedAtMillis: Long,
+    ): ZenSpaces.ZenSnapshot {
+        var changed = false
+        val spaces = snapshot.spaces.map { space ->
+            if (space.id != spaceId) return@map space
+            val tabs = space.tabs.toMutableList()
+            val index = tabs.indexOfFirst { it is ZenSpaces.ZenItem.Tab && it.tab.id == tabId }
+            if (index < 0) return@map space
+            val tab = (tabs.removeAt(index) as ZenSpaces.ZenItem.Tab).tab
+            changed = true
+            space.copy(
+                pinned = space.pinned + ZenSpaces.ZenItem.Tab(tab),
+                tabs = tabs,
+            )
+        }
+        if (!changed) return snapshot
+        return snapshot.copy(spaces = spaces, fetchedAtMillis = fetchedAtMillis)
     }
 
     fun removeTab(

@@ -903,6 +903,120 @@ object SpacesSyncService {
     }
 
     /**
+     * Turns a normal (unpinned) tab into a pinned tab at its space root: sets
+     * `pinned`, clears `folderId`, and moves the id out of any folder's
+     * `children` into the space's. Every other field is kept. A tab that is
+     * already pinned is left untouched (the action is only offered on normal
+     * tabs).
+     */
+    suspend fun pinTab(context: Context, id: String, spaceId: String) {
+        if (AccountStore.isDemo(context)) {
+            SnapshotCache.pinCachedTab(id, spaceId, System.currentTimeMillis())
+            AppEvents.emitSnapshotStale()
+            return
+        }
+        val client = AccountStore.connect(context)
+        pinTab(client = client, id = id, spaceId = spaceId)
+    }
+
+    suspend fun pinTab(client: SyncClient, id: String, spaceId: String) {
+        val wrote = withContext(Dispatchers.IO) {
+            if (SyncSafety.safeSyncEnabled) {
+                pinTabSafe(client, id, spaceId)
+            } else {
+                pinTabLegacy(client, id, spaceId)
+            }
+        }
+        if (wrote) SnapshotCache.pinCachedTab(id, spaceId, System.currentTimeMillis())
+        // Reload even when nothing was written: the screen already moved the
+        // row, and a tab the server would not pin must snap back.
+        AppEvents.emitSnapshotStale()
+    }
+
+    /**
+     * Conflict-safe pin: one consistent read, then a conditional POST of the
+     * tab plus the parent `children` rewrites. A 412 re-reads and reapplies
+     * only this pin, so concurrent edits to other fields survive. Retry once.
+     */
+    private fun pinTabSafe(client: SyncClient, id: String, spaceId: String): Boolean {
+        var read = client.getCollectionWithMetadata(collection)
+        var incoming = decryptedFrom(client, read.records)
+        var attempted = false
+        fun batchFor(list: List<IncomingCleartext>): List<JSONObject> =
+            when (val plan = pinPlan(id, spaceId, list)) {
+                MovePlan.Missing -> throw SyncError.Conflict("pin '$id': tab record not found")
+                MovePlan.Unchanged -> emptyList()
+                is MovePlan.Writes -> plan.records
+            }
+        var batch = batchFor(incoming)
+        if (batch.isEmpty()) return false
+        attempted = true
+        var outcome = client.postRecords(collection, batch, read.lastModified)
+        if (outcome is PostOutcome.PreconditionFailed) {
+            read = client.getCollectionWithMetadata(collection)
+            incoming = decryptedFrom(client, read.records)
+            batch = batchFor(incoming)
+            outcome = if (batch.isEmpty()) {
+                return attempted
+            } else {
+                client.postRecords(collection, batch, read.lastModified)
+            }
+        }
+        when (outcome) {
+            is PostOutcome.Applied -> return true
+            is PostOutcome.PreconditionFailed ->
+                throw SyncError.Conflict("pin '$id': conditional write lost the race twice")
+            is PostOutcome.PartialFailure ->
+                throw SyncError.Conflict("pin '$id': batch rejected (${failureSummary(outcome)})")
+        }
+    }
+
+    /** Legacy pin: the same edit as the safe path, via unconditional PUTs. Mirrors [moveTabLegacy]. */
+    private fun pinTabLegacy(client: SyncClient, id: String, spaceId: String): Boolean {
+        val incoming = decryptedCollection(client)
+        when (val plan = pinPlan(id, spaceId, incoming)) {
+            MovePlan.Missing -> throw SyncError.Conflict("pin '$id': tab record not found")
+            MovePlan.Unchanged -> return false
+            is MovePlan.Writes -> {
+                for (record in plan.records) {
+                    client.putRecord(collection = collection, id = record.getString("id"), obj = record)
+                }
+                return true
+            }
+        }
+    }
+
+    /**
+     * The tab's `pinned` flag, its cleared `folderId`, and the parent
+     * `children` rewrites that move the id out of any folder and into the
+     * space record. A tab that is already pinned is left untouched, so the
+     * action never pretends a write happened.
+     */
+    private fun pinPlan(id: String, spaceId: String, incoming: List<IncomingCleartext>): MovePlan {
+        val tab = incoming.firstOrNull { it.id == id } ?: return MovePlan.Missing
+        if (tab.kind != "tab") return MovePlan.Missing
+        if (!isNormalTab(tab.data)) return MovePlan.Unchanged
+        val owner = ZenSpaces.optStringOrNull(tab.data, "workspaceUuid")
+        if (owner != null && owner != spaceId) return MovePlan.Unchanged
+
+        val tabData = JSONObject(tab.data.toString())
+        tabData.put("pinned", true)
+        tabData.put("folderId", JSONObject.NULL)
+        val writes = mutableListOf(JSONObject().put("id", id).put("kind", "tab").put("data", tabData))
+
+        // A normal tab usually already sits in the space `children`, so the
+        // order-preserving union is then a no-op and only the tab is written.
+        val newParent = parentRecord(null, spaceId, incoming)
+        incoming.filter { it.id != newParent?.id }.forEach { parent ->
+            childrenWrite(parent) { SpacesSyncEdits.removing(id, it) }?.let { writes.add(it) }
+        }
+        newParent?.let { parent ->
+            childrenWrite(parent) { SpacesSyncEdits.union(it, listOf(id)) }?.let { writes.add(it) }
+        }
+        return MovePlan.Writes(writes)
+    }
+
+    /**
      * Conflict-safe move: one consistent read, then a conditional POST of the
      * tab plus the old and new parent. A 412 re-reads and reapplies only this
      * move, so concurrent edits to other fields survive. Retry once.

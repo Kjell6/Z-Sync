@@ -906,6 +906,96 @@ enum SpacesSyncService {
         NotificationCenter.default.post(name: .zenCompanionSnapshotStale, object: nil)
     }
 
+    /// Turns a normal (unpinned) tab into a pinned tab at its space root: sets
+    /// `pinned`, clears `folderId`, and moves the id out of any folder's
+    /// `children` into the space's. Every other field is kept. A tab that is
+    /// already pinned is left untouched (the action is only offered on normal
+    /// tabs).
+    static func pinTab(id: String, in spaceId: String) async throws {
+        if AccountStore.isDemo {
+            if let cached = cachedSnapshot() {
+                cache(SpacesSyncEdits.pinning(id: id, in: spaceId, snapshot: cached))
+            }
+            NotificationCenter.default.post(name: .zenCompanionSnapshotStale, object: nil)
+            return
+        }
+        let client = try await AccountStore.connect()
+        try await pinTab(client: client, id: id, in: spaceId)
+    }
+
+    static func pinTab(client: SyncClient, id: String, in spaceId: String) async throws {
+        let wrote: Bool
+        if safeSyncEnabled {
+            wrote = try await pinTabConflictSafe(client: client, id: id, in: spaceId)
+        } else {
+            wrote = try await pinTabLegacy(client: client, id: id, in: spaceId)
+        }
+        if wrote, let cached = cachedSnapshot() {
+            cache(SpacesSyncEdits.pinning(id: id, in: spaceId, snapshot: cached))
+        }
+        // Reload even when nothing was written: the screen already moved the
+        // row, and a tab the server would not pin must snap back.
+        NotificationCenter.default.post(name: .zenCompanionSnapshotStale, object: nil)
+    }
+
+    /// Conflict-safe pin: one consistent read, then a conditional POST of the
+    /// tab plus the parent `children` rewrites. A 412 re-reads and reapplies
+    /// only this pin, so concurrent edits to other fields survive. Retry once.
+    private static func pinTabConflictSafe(
+        client: SyncClient,
+        id: String,
+        in spaceId: String
+    ) async throws -> Bool {
+        var attempted = false
+        for attempt in 0..<2 {
+            let (records, lastModified) = try await client.getCollectionWithMetadata(collection: collection)
+            let incoming = await decryptedCleartexts(client: client, records: records)
+            switch pinPlan(id: id, spaceId: spaceId, incoming: incoming) {
+            case .missing:
+                throw SyncError.conflict
+            case .unchanged:
+                return attempted
+            case .writes(let writes):
+                attempted = true
+                let outcome = try await client.postRecords(
+                    collection: collection,
+                    records: writes,
+                    ifUnmodifiedSince: lastModified
+                )
+                switch outcome {
+                case .applied:
+                    return true
+                case .preconditionFailed:
+                    if attempt == 1 { throw SyncError.conflict }
+                case .partialFailure:
+                    throw SyncError.conflict
+                }
+            }
+        }
+        throw SyncError.conflict
+    }
+
+    /// Legacy pin: the same edit as the safe path, uploaded with unconditional
+    /// PUTs and no retry. Mirrors `moveTabLegacy`.
+    private static func pinTabLegacy(
+        client: SyncClient,
+        id: String,
+        in spaceId: String
+    ) async throws -> Bool {
+        let incoming = try await decryptedCollection(client: client)
+        switch pinPlan(id: id, spaceId: spaceId, incoming: incoming) {
+        case .missing:
+            throw SyncError.conflict
+        case .unchanged:
+            return false
+        case .writes(let writes):
+            for write in writes {
+                try await client.putRecord(collection: collection, id: write.id, object: write.cleartext)
+            }
+            return true
+        }
+    }
+
     /// Conflict-safe move: one consistent read, then a conditional POST of the
     /// tab plus the old and new parent. A 412 re-reads and reapplies only this
     /// move, so concurrent edits to other fields survive. Retry once.
@@ -1010,6 +1100,44 @@ enum SpacesSyncService {
         }
         if let newParent, let added = childrenWrite(newParent, transform: { children in
             SpacesSyncEdits.union(SpacesSyncEdits.removing(id, from: children), [id])
+        }) {
+            writes.append(added)
+        }
+        return .writes(writes)
+    }
+
+    /// The tab's `pinned` flag, its cleared `folderId`, and the parent
+    /// `children` rewrites that move the id out of any folder and into the
+    /// space record. A tab that is already pinned is left untouched, so the
+    /// action never pretends a write happened.
+    private static func pinPlan(
+        id: String,
+        spaceId: String,
+        incoming: [IncomingCleartext]
+    ) -> MovePlan {
+        guard let tab = incoming.first(where: { $0.id == id }), tab.kind == "tab" else {
+            return .missing
+        }
+        if !isNormalTab(tab.data) { return .unchanged }
+        if let owner = tab.data["workspaceUuid"] as? String, !owner.isEmpty, owner != spaceId {
+            return .unchanged
+        }
+
+        var tabData = tab.data
+        tabData["pinned"] = true
+        tabData["folderId"] = NSNull()
+        var writes = [rewrittenWrite(id: id, kind: "tab", data: tabData)]
+
+        // A normal tab usually already sits in the space `children`, so the
+        // order-preserving union is then a no-op and only the tab is written.
+        let newParent = parentRecord(folderId: nil, spaceId: spaceId, incoming: incoming)
+        for parent in incoming where parent.id != newParent?.id {
+            if let removed = childrenWrite(parent, transform: { SpacesSyncEdits.removing(id, from: $0) }) {
+                writes.append(removed)
+            }
+        }
+        if let newParent, let added = childrenWrite(newParent, transform: { children in
+            SpacesSyncEdits.union(children, [id])
         }) {
             writes.append(added)
         }
@@ -1680,6 +1808,32 @@ enum SpacesSyncService {
         var next = tab
         next.staticLabel = staticLabel
         return next
+    }
+
+    /// Local cache after pinning a normal tab: the row leaves the normal
+    /// (`tabs`) bucket and reappears at the space root of the pinned section,
+    /// keeping every displayed field. A tab that is not in the normal bucket
+    /// leaves the snapshot untouched.
+    static func pinning(id: String, in spaceId: String, snapshot: ZenSnapshot) -> ZenSnapshot {
+        guard let spaceIndex = snapshot.spaces.firstIndex(where: { $0.id == spaceId }) else {
+            return snapshot
+        }
+        var space = snapshot.spaces[spaceIndex]
+        guard let tab = extractNormalTab(id: id, from: &space.tabs) else { return snapshot }
+        space.pinned.append(.tab(tab))
+        var next = snapshot
+        next.spaces[spaceIndex] = space
+        next.fetchedAt = Date()
+        return next
+    }
+
+    private static func extractNormalTab(id: String, from items: inout [ZenItem]) -> ZenTab? {
+        guard let index = items.firstIndex(where: { item in
+            if case .tab(let tab) = item { return tab.id == id }
+            return false
+        }) else { return nil }
+        guard case .tab(let tab) = items.remove(at: index) else { return nil }
+        return tab
     }
 
     /// Local cache after moving a pinned tab into a folder of the same space,

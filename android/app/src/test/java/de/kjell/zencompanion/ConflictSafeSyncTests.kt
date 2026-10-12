@@ -675,6 +675,109 @@ class ConflictSafeSyncTests {
         return record
     }
 
+    // MARK: pinTab
+
+    @Test
+    fun pinNormalTabAtRootPostsPinnedRecordAndKeepsFields() {
+        val server = ConflictServer(keys, syncKeys)
+        server.seedSpace("space-1", children = listOf("normal-1", "keep"))
+        server.seedNormalTab("normal-1", "space-1", staticLabel = "Keep")
+
+        runBlocking { SpacesSyncService.pinTab(client(server), "normal-1", "space-1") }
+
+        val posts = server.requests.filter { it.method == "POST" }
+        assertEquals(1, posts.size)
+        assertTrue(server.requests.none { it.method == "PUT" })
+        val batch = server.batch(posts.single())
+        assertEquals(listOf("normal-1"), batch.map { it.getString("id") })
+        val data = batch.single().getJSONObject("data")
+        assertEquals(true, data.getBoolean("pinned"))
+        assertTrue(data.isNull("folderId"))
+        assertEquals("normal-1", data.getString("title"))
+        assertEquals("https://tab.example/normal-1", data.getString("url"))
+        assertEquals("Keep", data.getString("staticLabel"))
+        assertEquals("space-1", data.getString("workspaceUuid"))
+    }
+
+    @Test
+    fun pinNormalTabInFolderMovesItToSpaceChildren() {
+        val server = ConflictServer(keys, syncKeys)
+        server.seedSpace("space-1", children = listOf("keep"))
+        server.seedFolder("folder-1", workspaceUuid = "space-1", children = listOf("inside", "normal-1"))
+        server.seedNormalTab("normal-1", "space-1", folderId = "folder-1")
+
+        runBlocking { SpacesSyncService.pinTab(client(server), "normal-1", "space-1") }
+
+        val batch = server.batch(server.requests.single { it.method == "POST" })
+        assertEquals(
+            setOf("normal-1", "folder-1", "space-1"),
+            batch.map { it.getString("id") }.toSet(),
+        )
+        val tab = batch.first { it.getString("id") == "normal-1" }.getJSONObject("data")
+        assertEquals(true, tab.getBoolean("pinned"))
+        assertTrue(tab.isNull("folderId"))
+        assertEquals(listOf("inside"), server.children(batch, "folder-1"))
+        assertEquals(listOf("keep", "normal-1"), server.children(batch, "space-1"))
+    }
+
+    @Test
+    fun pinAlreadyPinnedTabDoesNotPost() {
+        val server = ConflictServer(keys, syncKeys)
+        server.seedSpace("space-1", children = listOf("pin-1"))
+        server.seedTab("pin-1", "space-1")
+
+        runBlocking { SpacesSyncService.pinTab(client(server), "pin-1", "space-1") }
+
+        assertTrue(server.requests.none { it.method == "POST" })
+        assertTrue(server.requests.none { it.method == "PUT" })
+    }
+
+    @Test
+    fun pinSecondPreconditionFailureThrowsConflictAndLeavesCache() {
+        val server = ConflictServer(keys, syncKeys)
+        server.seedSpace("space-1", children = listOf("normal-1"))
+        server.seedNormalTab("normal-1", "space-1")
+        SnapshotCache.cache(
+            ZenSpaces.ZenSnapshot(
+                spaces = listOf(
+                    ZenSpaces.ZenSpace(
+                        id = "space-1",
+                        name = "Space",
+                        icon = null,
+                        containerGuid = null,
+                        theme = null,
+                        pinned = emptyList(),
+                        tabs = listOf(
+                            ZenSpaces.ZenItem.Tab(
+                                ZenSpaces.ZenTab(id = "normal-1", url = "https://tab.example/normal-1", title = "Normal"),
+                            ),
+                        ),
+                    ),
+                ),
+                essentials = emptyMap(),
+                fetchedAtMillis = 0L,
+            ),
+        )
+        server.onBeforeRequest = { request ->
+            if (request.method == "POST") server.desktopSetTabTitle("normal-1", "Other")
+        }
+
+        try {
+            runBlocking { SpacesSyncService.pinTab(client(server), "normal-1", "space-1") }
+            fail("expected SyncError.Conflict")
+        } catch (expected: SyncError.Conflict) {
+            // expected
+        }
+
+        assertEquals(2, server.requests.count { it.method == "POST" })
+        val cached = SnapshotCache.cachedSnapshotShared!!.spaces.first()
+        assertEquals(
+            listOf("normal-1"),
+            cached.tabs.filterIsInstance<ZenSpaces.ZenItem.Tab>().map { it.tab.id },
+        )
+        assertTrue(cached.pinned.isEmpty())
+    }
+
     // MARK: Crypto/keys bootstrap
 
     @Test
@@ -989,21 +1092,26 @@ private class ConflictServer(
     }
 
     /** Seeds an unpinned (`pinned:false`) tab record. */
-    fun seedNormalTab(id: String, spaceId: String) {
+    fun seedNormalTab(
+        id: String,
+        spaceId: String,
+        staticLabel: String? = null,
+        folderId: String? = null,
+    ) {
+        val data = JSONObject()
+            .put("tabId", id)
+            .put("url", "https://tab.example/$id")
+            .put("title", id)
+            .put("workspaceUuid", spaceId)
+            .put("pinned", false)
+        if (staticLabel != null) data.put("staticLabel", staticLabel)
+        if (folderId != null) data.put("folderId", folderId)
         putRecord(
             id,
             JSONObject()
                 .put("id", id)
                 .put("kind", "tab")
-                .put(
-                    "data",
-                    JSONObject()
-                        .put("tabId", id)
-                        .put("url", "https://tab.example/$id")
-                        .put("title", id)
-                        .put("workspaceUuid", spaceId)
-                        .put("pinned", false),
-                ),
+                .put("data", data),
         )
     }
 

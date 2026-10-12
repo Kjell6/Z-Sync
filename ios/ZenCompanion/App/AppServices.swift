@@ -64,6 +64,7 @@ protocol SpacesRepository {
     func deleteTab(id: String) async throws
     func renameTab(id: String, label: String) async throws
     func moveTab(id: String, toFolder folderId: String?, in spaceId: String) async throws
+    func pinTab(id: String, in spaceId: String) async throws
 }
 
 struct LiveSpacesRepository: SpacesRepository {
@@ -79,6 +80,9 @@ struct LiveSpacesRepository: SpacesRepository {
     }
     func moveTab(id: String, toFolder folderId: String?, in spaceId: String) async throws {
         try await SpacesSyncService.moveTab(id: id, toFolder: folderId, in: spaceId)
+    }
+    func pinTab(id: String, in spaceId: String) async throws {
+        try await SpacesSyncService.pinTab(id: id, in: spaceId)
     }
 }
 

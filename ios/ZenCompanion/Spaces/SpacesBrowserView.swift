@@ -163,6 +163,9 @@ struct SpacesBrowserView: View {
                                             },
                                             onMoveTab: { id, folderId in
                                                 await model.moveTab(id: id, toFolder: folderId, in: space.id)
+                                            },
+                                            onPinTab: { id in
+                                                await model.pinTab(id: id, in: space.id)
                                             }
                                         )
                                         .frame(width: width, height: height)

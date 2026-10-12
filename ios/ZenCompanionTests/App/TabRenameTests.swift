@@ -173,6 +173,29 @@ final class TabRenameTests: XCTestCase {
         XCTAssertEqual(folderTab(same, id: "t1")?.staticLabel, "Keep")
     }
 
+    func testCachePinMovesNormalTabToPinnedRootKeepingFields() {
+        let normal = ZenTab(id: "n1", url: "https://n.example", title: "Normal", staticLabel: "Keep")
+        let pinned = ZenTab(id: "t1", url: "https://a.example", title: "Pinned")
+        let snapshot = ZenSnapshot(
+            spaces: [
+                ZenSpace(id: "s1", name: "Space", pinned: [.tab(pinned)], tabs: [.tab(normal)]),
+            ],
+            fetchedAt: Date(timeIntervalSince1970: 0)
+        )
+
+        let pinnedSnapshot = SpacesSyncEdits.pinning(id: "n1", in: "s1", snapshot: snapshot)
+        XCTAssertEqual(pinnedSnapshot.spaces.first?.tabs.map(\.id), [])
+        XCTAssertEqual(pinnedSnapshot.spaces.first?.pinned.map(\.id), ["t1", "n1"])
+        XCTAssertEqual(pinnedTab(pinnedSnapshot, id: "n1")?.staticLabel, "Keep")
+        XCTAssertEqual(pinnedTab(pinnedSnapshot, id: "n1")?.url, "https://n.example")
+        XCTAssertNotEqual(pinnedSnapshot.fetchedAt, snapshot.fetchedAt)
+
+        // A tab that is not in the normal bucket (already pinned) is untouched.
+        let same = SpacesSyncEdits.pinning(id: "t1", in: "s1", snapshot: snapshot)
+        XCTAssertEqual(same.fetchedAt, snapshot.fetchedAt)
+        XCTAssertEqual(same.spaces.first?.tabs.map(\.id), ["n1"])
+    }
+
     private func pinnedTab(_ snapshot: ZenSnapshot, id: String) -> ZenTab? {
         snapshot.spaces.first?.pinned.compactMap { item -> ZenTab? in
             if case .tab(let tab) = item, tab.id == id { return tab }

@@ -17,6 +17,8 @@ struct TabRow: View {
     var onDelete: () async -> Void = {}
     var onRename: (String) async -> Void = { _ in }
     var onMove: (String?) async -> Void = { _ in }
+    /// Pins the tab to its space root. Only offered on normal tabs.
+    var onPin: () async -> Void = {}
 
     @State private var deleting = false
     @State private var showingRename = false
@@ -40,6 +42,13 @@ struct TabRow: View {
         }
         .buttonStyle(PressedButtonStyle())
         .contextMenu {
+            if isNormalTab {
+                Button {
+                    Task { await onPin() }
+                } label: {
+                    Label(String(localized: "tabs.pin"), systemImage: "pin")
+                }
+            }
             Button {
                 renameDraft = renameSeed
                 showingRename = true

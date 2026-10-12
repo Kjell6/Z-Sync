@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -251,6 +252,8 @@ fun TabRow(
     onDelete: () -> Unit = {},
     onRename: (String) -> Unit = {},
     onMove: (String?) -> Unit = {},
+    /** Pins a normal tab to its space root. Only offered when [isNormalTab]. */
+    onPin: () -> Unit = {},
     onOpenUrl: ((String, String?) -> Unit)? = null,
 ) {
     val context = LocalContext.current
@@ -260,6 +263,7 @@ fun TabRow(
     val deleteText = stringResource(R.string.tabs_delete)
     val renameText = stringResource(R.string.tabs_rename)
     val moveText = stringResource(R.string.tabs_move)
+    val pinText = stringResource(R.string.tabs_pin)
     val titleText = displayTitle(tab)
     val folderFallback = stringResource(R.string.tabs_folder)
     val rootFallback = stringResource(R.string.share_workspace)
@@ -289,6 +293,7 @@ fun TabRow(
             )
             .semantics {
                 customActions = buildList {
+                    if (isNormalTab) add(CustomAccessibilityAction(pinText) { onPin(); true })
                     add(CustomAccessibilityAction(renameText) { showRename = true; true })
                     if (offersMove) add(CustomAccessibilityAction(moveText) { showMove = true; true })
                     if (deletable) add(CustomAccessibilityAction(deleteText) { onDelete(); true })
@@ -327,6 +332,28 @@ fun TabRow(
         }
 
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            if (isNormalTab) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            pinText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.PushPin,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    },
+                    onClick = {
+                        menuOpen = false
+                        onPin()
+                    },
+                )
+            }
             DropdownMenuItem(
                 text = {
                     Text(

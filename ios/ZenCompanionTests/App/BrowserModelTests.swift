@@ -356,6 +356,38 @@ final class BrowserModelTests: XCTestCase {
         XCTAssertNil(pinnedTab(model.snapshot, id: "t1")?.staticLabel)
     }
 
+    // MARK: - Pin
+
+    func testPinTabMovesRowToPinnedSectionAndForwardsWrite() async {
+        let repo = FakeSpacesRepository()
+        let model = makeModel(repo)
+        model.snapshot = ZenCompanion.ZenSnapshot(
+            spaces: [
+                ZenCompanion.ZenSpace(
+                    id: "s1",
+                    name: "One",
+                    tabs: [.tab(ZenCompanion.ZenTab(
+                        id: "n1",
+                        url: "https://n.example",
+                        title: "Normal",
+                        staticLabel: "Keep"
+                    ))]
+                ),
+            ],
+            fetchedAt: Date(timeIntervalSince1970: 0)
+        )
+
+        await model.pinTab(id: "n1", in: "s1")
+
+        let space = model.snapshot.spaces.first
+        XCTAssertEqual(space?.tabs.map(\.id), [])
+        XCTAssertEqual(space?.pinned.map(\.id), ["n1"])
+        XCTAssertEqual(pinnedTab(model.snapshot, id: "n1")?.staticLabel, "Keep")
+        XCTAssertEqual(repo.pinnedTabs.count, 1)
+        XCTAssertEqual(repo.pinnedTabs.first?.id, "n1")
+        XCTAssertEqual(repo.pinnedTabs.first?.spaceId, "s1")
+    }
+
     private func pinnedTab(_ snapshot: ZenCompanion.ZenSnapshot, id: String) -> ZenCompanion.ZenTab? {
         snapshot.spaces.first?.pinned.compactMap { item -> ZenCompanion.ZenTab? in
             if case .tab(let tab) = item { return tab }
@@ -373,6 +405,7 @@ private final class FakeSpacesRepository: SpacesRepository {
     private(set) var refreshCount = 0
     private(set) var deletedTabIds: [String] = []
     private(set) var renamedTabs: [(id: String, label: String)] = []
+    private(set) var pinnedTabs: [(id: String, spaceId: String)] = []
     var blockRefresh = false
     private(set) var didBlockRefresh = false
     private var refreshContinuation: CheckedContinuation<Void, Never>?
@@ -410,6 +443,10 @@ private final class FakeSpacesRepository: SpacesRepository {
     }
 
     func moveTab(id: String, toFolder folderId: String?, in spaceId: String) async throws {}
+
+    func pinTab(id: String, in spaceId: String) async throws {
+        pinnedTabs.append((id, spaceId))
+    }
 
     func releaseRefresh() {
         refreshContinuation?.resume()

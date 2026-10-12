@@ -1250,6 +1250,144 @@ final class ConflictSafeSyncTests: XCTestCase {
         XCTAssertEqual(try recordData(bso(retry, id: "space-1"))["children"] as? [String], ["keep", "sibling"])
     }
 
+    // MARK: - pinTab
+
+    /// A normal tab at the space root becomes pinned: `pinned:true`, clear
+    /// `folderId`, every other field kept, and — since the id already sits in
+    /// the space `children` — only the tab record is written.
+    func testPinNormalTabAtRootWritesPinnedRecordAndKeepsFields() async throws {
+        let server = MutableSyncServer()
+        try seed(server, id: "space-1", kind: "space", data: [
+            "uuid": "space-1",
+            "name": "Space",
+            "children": ["normal-1", "keep"],
+        ])
+        try seed(server, id: "normal-1", kind: "tab", data: [
+            "tabId": "normal-1",
+            "url": "https://normal.example",
+            "title": "Normal",
+            "staticLabel": "Keep",
+            "workspaceUuid": "space-1",
+            "pinned": false,
+        ])
+        let client = makeClient(transport: server)
+
+        try await SpacesSyncService.pinTab(client: client, id: "normal-1", in: "space-1")
+
+        let posts = postRequests(server)
+        XCTAssertEqual(posts.count, 1, "pin must be a single conditional POST")
+        XCTAssertTrue(server.requests.filter { $0.method == "PUT" }.isEmpty)
+        let records = try postRecords(posts[0])
+        XCTAssertEqual(records.compactMap { $0["id"] as? String }, ["normal-1"])
+        let data = try recordData(bso(records, id: "normal-1"))
+        XCTAssertEqual(data["pinned"] as? Bool, true)
+        XCTAssertTrue(data["folderId"] is NSNull, "pin lands at the space root")
+        XCTAssertEqual(data["title"] as? String, "Normal")
+        XCTAssertEqual(data["url"] as? String, "https://normal.example")
+        XCTAssertEqual(data["staticLabel"] as? String, "Keep")
+        XCTAssertEqual(data["workspaceUuid"] as? String, "space-1")
+    }
+
+    /// A normal tab that sat in a folder is pulled out of the folder's
+    /// `children` and added to the space's, all in the same conditional POST.
+    func testPinNormalTabInFolderMovesItToSpaceChildren() async throws {
+        let server = MutableSyncServer()
+        try seed(server, id: "space-1", kind: "space", data: [
+            "uuid": "space-1",
+            "name": "Space",
+            "children": ["keep"],
+        ])
+        try seed(server, id: "folder-1", kind: "folder", data: [
+            "folderId": "folder-1",
+            "workspaceUuid": "space-1",
+            "children": ["inside", "normal-1"],
+        ])
+        try seed(server, id: "normal-1", kind: "tab", data: [
+            "tabId": "normal-1",
+            "url": "https://normal.example",
+            "workspaceUuid": "space-1",
+            "folderId": "folder-1",
+            "pinned": false,
+        ])
+        let client = makeClient(transport: server)
+
+        try await SpacesSyncService.pinTab(client: client, id: "normal-1", in: "space-1")
+
+        let records = try postRecords(try XCTUnwrap(postRequests(server).first))
+        XCTAssertEqual(Set(records.compactMap { $0["id"] as? String }), ["normal-1", "folder-1", "space-1"])
+        let tab = try recordData(bso(records, id: "normal-1"))
+        XCTAssertEqual(tab["pinned"] as? Bool, true)
+        XCTAssertTrue(tab["folderId"] is NSNull)
+        XCTAssertEqual(try recordData(bso(records, id: "folder-1"))["children"] as? [String], ["inside"])
+        XCTAssertEqual(try recordData(bso(records, id: "space-1"))["children"] as? [String], ["keep", "normal-1"])
+    }
+
+    /// An already pinned tab is not rewritten: the action is only offered on
+    /// normal tabs, so a stray call must be a no-op, not a spurious write.
+    func testPinAlreadyPinnedTabDoesNotPost() async throws {
+        let server = MutableSyncServer()
+        try seed(server, id: "space-1", kind: "space", data: [
+            "uuid": "space-1",
+            "name": "Space",
+            "children": ["pin-1"],
+        ])
+        try seed(server, id: "pin-1", kind: "tab", data: [
+            "tabId": "pin-1",
+            "url": "https://pin.example",
+            "workspaceUuid": "space-1",
+        ])
+        let client = makeClient(transport: server)
+
+        try await SpacesSyncService.pinTab(client: client, id: "pin-1", in: "space-1")
+
+        XCTAssertTrue(postRequests(server).isEmpty, "an already pinned tab must not be written")
+        XCTAssertTrue(server.requests.filter { $0.method == "PUT" }.isEmpty)
+    }
+
+    /// A pin that loses the conditional race twice surfaces as
+    /// `SyncError.conflict` and leaves the cached snapshot untouched, so the
+    /// row snaps back instead of pretending the write happened.
+    func testPinSecondPreconditionFailureThrowsConflictAndLeavesCache() async throws {
+        let server = MutableSyncServer()
+        try seed(server, id: "space-1", kind: "space", data: [
+            "uuid": "space-1",
+            "name": "Space",
+            "children": ["normal-1"],
+        ])
+        try seed(server, id: "normal-1", kind: "tab", data: [
+            "tabId": "normal-1",
+            "url": "https://normal.example",
+            "workspaceUuid": "space-1",
+            "pinned": false,
+        ])
+        SpacesSyncService.cache(ZenSnapshot(
+            spaces: [ZenSpace(
+                id: "space-1",
+                name: "Space",
+                tabs: [.tab(ZenTab(id: "normal-1", url: "https://normal.example", title: "Normal"))]
+            )],
+            fetchedAt: Date(timeIntervalSince1970: 0)
+        ))
+        server.beforeWrite = { request in
+            if request.method == "POST" { server.bumpCollection("spaces") }
+        }
+        let client = makeClient(transport: server)
+
+        do {
+            try await SpacesSyncService.pinTab(client: client, id: "normal-1", in: "space-1")
+            XCTFail("expected SyncError.conflict")
+        } catch let error as SyncError {
+            guard case .conflict = error else {
+                return XCTFail("expected SyncError.conflict, got \(error)")
+            }
+        }
+
+        XCTAssertEqual(postRequests(server).count, 2, "the retry must not loop")
+        let cached = try XCTUnwrap(SpacesSyncService.cachedSnapshot()?.space(id: "space-1"))
+        XCTAssertEqual(cached.tabs.map(\.id), ["normal-1"], "a failed pin must not move the row")
+        XCTAssertTrue(cached.pinned.isEmpty)
+    }
+
     // MARK: - Helpers
 
     private func makeCreds() -> TokenServerCreds {

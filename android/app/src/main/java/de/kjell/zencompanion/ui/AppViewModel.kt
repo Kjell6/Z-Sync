@@ -155,8 +155,8 @@ data class PreferencesState(
     val essentialsGrouping: ZenSpaces.EssentialsGrouping = ZenSpaces.EssentialsGrouping.AUTOMATIC,
     /** Pinned (default) or normal tab for tabs saved from share/mini browser. */
     val saveKind: SaveKind = SaveKind.PINNED,
-    /** Where the action bar sits: above the essentials grid (default) or below the switcher. */
-    val toolbarPlacement: ToolbarPlacement = ToolbarPlacement.TOP,
+    /** Where the action bar sits: below the switcher (default) or above the essentials grid. */
+    val toolbarPlacement: ToolbarPlacement = ToolbarPlacement.BOTTOM,
 )
 
 /**

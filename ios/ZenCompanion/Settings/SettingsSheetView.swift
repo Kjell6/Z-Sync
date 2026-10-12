@@ -406,15 +406,17 @@ struct SettingsSheet: View {
                         .liftCard(scheme)
                     }
 
-                    // MARK: - 3. Footer Attributions & Disclaimer
+                    // MARK: - 3. Footer Disclaimer & Attributions
+                    // The disclaimer leads: it is the legal notice, so it sits
+                    // above the icon attribution and reads one step larger.
                     VStack(spacing: 6) {
+                        Text("home.disclaimer")
+                            .font(.system(size: 13, weight: .regular, design: .rounded))
+                            .foregroundStyle(Palette.ink(scheme).opacity(0.4))
+
                         Text("home.license_attribution")
                             .font(.system(size: 11, weight: .regular, design: .rounded))
                             .foregroundStyle(Palette.ink(scheme).opacity(0.35))
-
-                        Text("home.disclaimer")
-                            .font(.system(size: 10.5, weight: .regular, design: .rounded))
-                            .foregroundStyle(Palette.ink(scheme).opacity(0.28))
                     }
                     .multilineTextAlignment(.center)
                     .padding(.top, 6)

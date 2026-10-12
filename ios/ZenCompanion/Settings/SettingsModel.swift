@@ -42,7 +42,7 @@ final class SettingsModel {
         }
     }
 
-    /// Where the spaces screen's action bar sits: top (default) or bottom.
+    /// Where the spaces screen's action bar sits: bottom (default) or top.
     var toolbarPlacement: ToolbarPlacement {
         didSet {
             guard toolbarPlacement != oldValue else { return }
@@ -97,7 +97,7 @@ final class SettingsModel {
         return .pinned
     }
 
-    /// AppGroup first, standard defaults fallback, `.top` default.
+    /// AppGroup first, standard defaults fallback, `.bottom` default.
     private static func loadToolbarPlacement(_ preferences: PreferencesStoring) -> ToolbarPlacement {
         let key = PreferenceKeys.toolbarPlacement
         if let raw = preferences.string(key, scope: .appGroup), let value = ToolbarPlacement(rawValue: raw) {
@@ -106,7 +106,7 @@ final class SettingsModel {
         if let raw = preferences.string(key, scope: .standard), let value = ToolbarPlacement(rawValue: raw) {
             return value
         }
-        return .top
+        return .bottom
     }
 
     /// Validates and appends a custom engine, selecting it on success.

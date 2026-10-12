@@ -7,9 +7,10 @@ import Foundation
 /// the settings sheet. Lives in `App` because both the spaces screen and the
 /// settings feature read it.
 enum ToolbarPlacement: String, CaseIterable, Identifiable, Equatable {
-    /// Above the essentials grid. Default and unchanged from earlier builds.
+    /// Above the essentials grid.
     case top
-    /// Below the space switcher, above the disclaimer.
+    /// Below the space switcher, above the bottom edge. Default: the dock is
+    /// the shorter arrangement and sits where the thumb already is.
     case bottom
 
     var id: String { rawValue }

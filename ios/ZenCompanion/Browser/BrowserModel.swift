@@ -64,7 +64,7 @@ final class BrowserModel {
         self.toolbarPlacement = Self.loadToolbarPlacement(preferences)
     }
 
-    /// AppGroup first, standard defaults fallback, `.top` default.
+    /// AppGroup first, standard defaults fallback, `.bottom` default.
     private static func loadToolbarPlacement(_ preferences: PreferencesStoring) -> ToolbarPlacement {
         let key = PreferenceKeys.toolbarPlacement
         if preferences.hasObject(key, scope: .appGroup),
@@ -76,7 +76,7 @@ final class BrowserModel {
            let value = ToolbarPlacement(rawValue: raw) {
             return value
         }
-        return .top
+        return .bottom
     }
 
     // MARK: - Derived state
@@ -124,7 +124,7 @@ final class BrowserModel {
         return .automatic
     }
 
-    /// Where the action bar renders: the user's choice, else `.top`.
+    /// Where the action bar renders: the user's choice, else `.bottom`.
     ///
     /// Stored rather than re-read from `preferences` on every access so the
     /// spaces screen re-renders the moment the settings sheet changes it,

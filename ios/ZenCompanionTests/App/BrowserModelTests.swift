@@ -246,8 +246,8 @@ final class BrowserModelTests: XCTestCase {
     }
     // MARK: - Toolbar placement
 
-    func testToolbarPlacementDefaultsToTopAndPrefersAppGroup() {
-        XCTAssertEqual(makeModel(FakeSpacesRepository()).toolbarPlacement, .top)
+    func testToolbarPlacementDefaultsToBottomAndPrefersAppGroup() {
+        XCTAssertEqual(makeModel(FakeSpacesRepository()).toolbarPlacement, .bottom)
 
         let appGroupWins = FakePreferences()
         appGroupWins.setString(ToolbarPlacement.bottom.rawValue, PreferenceKeys.toolbarPlacement, scope: .standard)
@@ -269,16 +269,16 @@ final class BrowserModelTests: XCTestCase {
         let prefs = FakePreferences()
         prefs.setString("sideways", PreferenceKeys.toolbarPlacement, scope: .appGroup)
 
-        XCTAssertEqual(makeModel(FakeSpacesRepository(), preferences: prefs).toolbarPlacement, .top)
+        XCTAssertEqual(makeModel(FakeSpacesRepository(), preferences: prefs).toolbarPlacement, .bottom)
     }
 
     func testSetToolbarPlacementMirrorsChoiceWithoutPersisting() {
         let prefs = FakePreferences()
         let model = makeModel(FakeSpacesRepository(), preferences: prefs)
 
-        model.setToolbarPlacement(.bottom)
+        model.setToolbarPlacement(.top)
 
-        XCTAssertEqual(model.toolbarPlacement, .bottom)
+        XCTAssertEqual(model.toolbarPlacement, .top)
         // Persistence is SettingsModel's job; the browser model only mirrors.
         XCTAssertFalse(prefs.hasObject(PreferenceKeys.toolbarPlacement, scope: .appGroup))
         XCTAssertFalse(prefs.hasObject(PreferenceKeys.toolbarPlacement, scope: .standard))

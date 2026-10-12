@@ -184,16 +184,18 @@ internal fun SettingsAboutSection() {
             .fillMaxWidth()
             .padding(top = 8.dp),
     ) {
+        // The disclaimer leads: it is the legal notice, so it sits above the
+        // icon attribution and reads one step larger.
         Text(
-            text = stringResource(R.string.home_license_attribution),
-            style = MaterialTheme.typography.bodySmall,
+            text = stringResource(R.string.home_disclaimer),
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             textAlign = TextAlign.Center,
         )
         Text(
-            text = stringResource(R.string.home_disclaimer),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+            text = stringResource(R.string.home_license_attribution),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             textAlign = TextAlign.Center,
         )
     }

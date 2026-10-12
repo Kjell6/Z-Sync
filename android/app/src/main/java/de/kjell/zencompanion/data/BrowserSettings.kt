@@ -19,7 +19,7 @@ enum class SaveKind(val storageValue: String) {
 
 /**
  * Where the spaces screen's action bar (history, search, settings) sits:
- * above the essentials grid (default) or below the space switcher.
+ * above the essentials grid or below the space switcher (default).
  */
 enum class ToolbarPlacement(val storageValue: String) {
     TOP("top"),
@@ -28,7 +28,7 @@ enum class ToolbarPlacement(val storageValue: String) {
 
     companion object {
         fun fromStorage(value: String?): ToolbarPlacement =
-            entries.firstOrNull { it.storageValue == value } ?: TOP
+            entries.firstOrNull { it.storageValue == value } ?: BOTTOM
     }
 }
 
@@ -81,7 +81,7 @@ object BrowserSettings {
             .apply()
     }
 
-    /** Where the action bar sits; top when the user never chose. */
+    /** Where the action bar sits; bottom when the user never chose. */
     fun getToolbarPlacement(context: Context): ToolbarPlacement =
         ToolbarPlacement.fromStorage(
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

@@ -190,7 +190,7 @@ class AppViewModelTests {
     fun toolbarPlacementPersistsThroughPreferencesRepository() {
         val repository = AndroidPreferencesRepository(context)
 
-        assertEquals(ToolbarPlacement.TOP, repository.load().toolbarPlacement)
+        assertEquals(ToolbarPlacement.BOTTOM, repository.load().toolbarPlacement)
 
         repository.setToolbarPlacement(ToolbarPlacement.BOTTOM)
         assertEquals(ToolbarPlacement.BOTTOM, repository.load().toolbarPlacement)
@@ -201,8 +201,8 @@ class AppViewModelTests {
 
     @Test
     fun toolbarPlacementFromStorageIgnoresUnknownValue() {
-        assertEquals(ToolbarPlacement.TOP, ToolbarPlacement.fromStorage(null))
-        assertEquals(ToolbarPlacement.TOP, ToolbarPlacement.fromStorage("sideways"))
+        assertEquals(ToolbarPlacement.BOTTOM, ToolbarPlacement.fromStorage(null))
+        assertEquals(ToolbarPlacement.BOTTOM, ToolbarPlacement.fromStorage("sideways"))
         assertEquals(ToolbarPlacement.BOTTOM, ToolbarPlacement.fromStorage("bottom"))
     }
 

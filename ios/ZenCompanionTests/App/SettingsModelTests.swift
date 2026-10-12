@@ -14,8 +14,8 @@ final class SettingsModelTests: XCTestCase {
 
     // MARK: - Toolbar placement
 
-    func testToolbarPlacementDefaultsToTop() {
-        XCTAssertEqual(makeModel(FakePreferences()).toolbarPlacement, .top)
+    func testToolbarPlacementDefaultsToBottom() {
+        XCTAssertEqual(makeModel(FakePreferences()).toolbarPlacement, .bottom)
     }
 
     func testToolbarPlacementPrefersAppGroupThenStandard() {
@@ -32,24 +32,24 @@ final class SettingsModelTests: XCTestCase {
     func testToolbarPlacementIgnoresUnknownStoredValue() {
         let prefs = FakePreferences()
         prefs.setString("sideways", PreferenceKeys.toolbarPlacement, scope: .appGroup)
-        XCTAssertEqual(makeModel(prefs).toolbarPlacement, .top)
+        XCTAssertEqual(makeModel(prefs).toolbarPlacement, .bottom)
     }
 
     func testSettingToolbarPlacementPersistsToBothStores() {
         let prefs = FakePreferences()
         let model = makeModel(prefs)
 
-        model.toolbarPlacement = .bottom
+        model.toolbarPlacement = .top
 
-        XCTAssertEqual(prefs.string(PreferenceKeys.toolbarPlacement, scope: .appGroup), "bottom")
-        XCTAssertEqual(prefs.string(PreferenceKeys.toolbarPlacement, scope: .standard), "bottom")
+        XCTAssertEqual(prefs.string(PreferenceKeys.toolbarPlacement, scope: .appGroup), "top")
+        XCTAssertEqual(prefs.string(PreferenceKeys.toolbarPlacement, scope: .standard), "top")
     }
 
     func testSettingToolbarPlacementToSameValueDoesNotWrite() {
         let prefs = FakePreferences()
         let model = makeModel(prefs)
 
-        model.toolbarPlacement = .top
+        model.toolbarPlacement = .bottom
 
         XCTAssertFalse(prefs.hasObject(PreferenceKeys.toolbarPlacement, scope: .appGroup))
         XCTAssertFalse(prefs.hasObject(PreferenceKeys.toolbarPlacement, scope: .standard))

@@ -119,3 +119,13 @@ object TabMove {
         return rows
     }
 }
+
+/**
+ * Which rows offer the context-menu Pin action: only a normal (unpinned) tab
+ * — the wire `pinned == false` row under the divider. Pinned tabs, folders and
+ * splits keep just their existing actions. The sync plan mirrors this: pinning
+ * an already pinned tab produces no write. Mirrors the Swift `TabPin`.
+ */
+object TabPin {
+    fun offersPin(isNormalTab: Boolean): Boolean = isNormalTab
+}

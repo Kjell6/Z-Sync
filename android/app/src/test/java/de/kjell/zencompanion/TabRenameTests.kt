@@ -5,6 +5,7 @@ import de.kjell.zencompanion.sync.SpacesSyncService
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.components.PinDestinationModel
 import de.kjell.zencompanion.ui.components.TabMove
+import de.kjell.zencompanion.ui.components.TabPin
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -127,6 +128,12 @@ class TabRenameTests {
         assertFalse(TabMove.offersMove(renames = true, isNormalTab = true))
         assertTrue(TabMove.offersMove(renames = true, isNormalTab = false))
         assertFalse(TabMove.offersMove(renames = false, isNormalTab = false))
+    }
+
+    @Test
+    fun pinIsOfferedOnlyOnNormalTabs() {
+        assertTrue(TabPin.offersPin(isNormalTab = true))
+        assertFalse(TabPin.offersPin(isNormalTab = false))
     }
 
     @Test

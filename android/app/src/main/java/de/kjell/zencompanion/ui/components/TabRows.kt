@@ -293,7 +293,7 @@ fun TabRow(
             )
             .semantics {
                 customActions = buildList {
-                    if (isNormalTab) add(CustomAccessibilityAction(pinText) { onPin(); true })
+                    if (TabPin.offersPin(isNormalTab)) add(CustomAccessibilityAction(pinText) { onPin(); true })
                     add(CustomAccessibilityAction(renameText) { showRename = true; true })
                     if (offersMove) add(CustomAccessibilityAction(moveText) { showMove = true; true })
                     if (deletable) add(CustomAccessibilityAction(deleteText) { onDelete(); true })
@@ -332,7 +332,7 @@ fun TabRow(
         }
 
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-            if (isNormalTab) {
+            if (TabPin.offersPin(isNormalTab)) {
                 DropdownMenuItem(
                     text = {
                         Text(

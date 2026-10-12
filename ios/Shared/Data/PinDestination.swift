@@ -123,6 +123,16 @@ enum TabMove {
     }
 }
 
+/// Which rows offer the context-menu Pin action: only a normal (unpinned)
+/// tab — the wire `pinned == false` row under the divider. Pinned tabs,
+/// folders and splits keep just their existing actions. The sync plan mirrors
+/// this: pinning an already pinned tab produces no write.
+enum TabPin {
+    static func offersPin(isNormalTab: Bool) -> Bool {
+        isNormalTab
+    }
+}
+
 /// The "Pin to Folder…" submenu, shared with moving a tab inside one space.
 ///
 /// Rendered shape, per space: the space name first (its icon, no checkmark —

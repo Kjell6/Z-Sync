@@ -388,6 +388,31 @@ final class BrowserModelTests: XCTestCase {
         XCTAssertEqual(repo.pinnedTabs.first?.spaceId, "s1")
     }
 
+    func testPinTabReloadsAndSnapsBackWhenWriteFails() async {
+        let repo = FakeSpacesRepository()
+        let original = ZenCompanion.ZenSnapshot(
+            spaces: [
+                ZenCompanion.ZenSpace(
+                    id: "s1",
+                    name: "One",
+                    tabs: [.tab(ZenCompanion.ZenTab(id: "n1", url: "https://n.example", title: "Normal"))]
+                ),
+            ],
+            fetchedAt: Date(timeIntervalSince1970: 0)
+        )
+        repo.refreshResult = .success(original)
+        repo.pinError = URLError(.badServerResponse)
+        let model = makeModel(repo)
+        model.snapshot = original
+
+        await model.pinTab(id: "n1", in: "s1")
+
+        XCTAssertEqual(repo.pinnedTabs.count, 1)
+        XCTAssertEqual(repo.refreshCount, 1, "a failed pin must reload so the row snaps back")
+        XCTAssertEqual(model.snapshot.spaces.first?.tabs.map(\.id), ["n1"])
+        XCTAssertTrue(model.snapshot.spaces.first?.pinned.isEmpty ?? false)
+    }
+
     private func pinnedTab(_ snapshot: ZenCompanion.ZenSnapshot, id: String) -> ZenCompanion.ZenTab? {
         snapshot.spaces.first?.pinned.compactMap { item -> ZenCompanion.ZenTab? in
             if case .tab(let tab) = item { return tab }
@@ -412,6 +437,9 @@ private final class FakeSpacesRepository: SpacesRepository {
     var blockRename = false
     private(set) var didBlockRename = false
     private var renameContinuation: CheckedContinuation<Void, Never>?
+    /// When set, `pinTab` records the call and then throws it, so the model's
+    /// failure rollback can be exercised.
+    var pinError: Error?
 
     func cachedSnapshot() -> ZenCompanion.ZenSnapshot? { cached }
 
@@ -446,6 +474,7 @@ private final class FakeSpacesRepository: SpacesRepository {
 
     func pinTab(id: String, in spaceId: String) async throws {
         pinnedTabs.append((id, spaceId))
+        if let pinError { throw pinError }
     }
 
     func releaseRefresh() {

@@ -42,7 +42,7 @@ struct TabRow: View {
         }
         .buttonStyle(PressedButtonStyle())
         .contextMenu {
-            if isNormalTab {
+            if TabPin.offersPin(isNormalTab: isNormalTab) {
                 Button {
                     Task { await onPin() }
                 } label: {

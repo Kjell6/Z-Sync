@@ -108,6 +108,11 @@ final class TabRenameTests: XCTestCase {
         XCTAssertFalse(TabMove.offersMove(renames: false, isNormalTab: false))
     }
 
+    func testPinIsOfferedOnlyOnNormalTabs() {
+        XCTAssertTrue(TabPin.offersPin(isNormalTab: true))
+        XCTAssertFalse(TabPin.offersPin(isNormalTab: false))
+    }
+
     func testMoveDestinationsMarkCurrentPlace() {
         let folders = [
             PinDestinationModel.FolderEntry(folderId: "outer", name: "Outer", depth: 0),

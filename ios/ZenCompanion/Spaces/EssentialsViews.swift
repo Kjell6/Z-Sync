@@ -56,7 +56,7 @@ private struct EssentialTile: View {
 
     var body: some View {
         Button(action: onOpen) {
-            let shape = RoundedRectangle(cornerRadius: 13, style: .continuous)
+            let shape = RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous)
             ZStack {
                 shape
                     .fill(Palette.lift(scheme))
@@ -64,6 +64,7 @@ private struct EssentialTile: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: height)
+            .glassRim(cornerRadius: Palette.liftCornerRadius)
             .contentShape(shape)
         }
         .buttonStyle(SquircleButtonStyle())
@@ -89,10 +90,12 @@ private struct EssentialTile: View {
 }
 
 struct SquircleButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
-            .opacity(configuration.isPressed ? 0.85 : 1.0)
-            .animation(.spring(response: 0.25, dampingFraction: 0.75), value: configuration.isPressed)
+        configuration.label.pressedFeedback(
+            isPressed: configuration.isPressed,
+            reduceMotion: reduceMotion
+        )
     }
 }

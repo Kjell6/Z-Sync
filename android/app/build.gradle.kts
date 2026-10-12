@@ -20,8 +20,8 @@ android {
         applicationId = "de.kjell.zencompanion"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.4"
+        versionCode = 8
+        versionName = "1.4.1"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -104,6 +104,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
     implementation("androidx.security:security-crypto:1.1.0")
     implementation("com.google.android.play:review-ktx:2.0.2")
+    implementation("com.caverock:androidsvg-aar:1.4")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20260814")

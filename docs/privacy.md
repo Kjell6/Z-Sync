@@ -12,7 +12,7 @@ Z-Sync ("the app") is an independent mobile app. It lets you view the spaces and
 - Z-Sync has **no servers of its own**. The developer operates no backend, receives no analytics, and collects nothing for himself.
 - Your Mozilla sign-in happens **directly on Mozilla's website** inside the app. Credentials go to Mozilla only.
 - Sync content is **encrypted on your device** before it ever leaves it; Mozilla's servers store only ciphertext.
-- To display favicon previews, website domains are sent to **DuckDuckGo's icon service**. No account or personal data is attached.
+- To display favicon previews, the app asks **the website of the synced tab** for its own icon, sending the address without its query string. Only when a site offers no reachable icon does the bare domain go to Google's public favicon service (see section 5.2).
 - All remaining data stays **on your device**: Keychain / Android Keystore and local app storage.
 - Signing out or deleting the app removes that local data.
 
@@ -28,7 +28,7 @@ The app contains:
 - **No social plug-ins**
 - **No developer-operated endpoints** of any kind
 
-Nothing about you is transmitted to, stored by, or visible to the developer. Data that leaves the device goes only to Mozilla and DuckDuckGo as described below, so the app can function.
+Nothing about you is transmitted to, stored by, or visible to the developer. Data that leaves the device goes only to Mozilla, to the websites whose tabs you sync, and — solely as a favicon fallback — to Google as described below, so the app can function.
 
 ---
 
@@ -39,6 +39,7 @@ While you use the app, the following information is kept **only on your device**
 - **Mozilla account email and user ID** — iOS Keychain / Android EncryptedSharedPreferences (Keystore) — showing which account is connected
 - **Mozilla session token and account key (`kB`)** — same secure storage — re-authenticating with Sync so you don't log in every time
 - **Cached preview data** (space names, icons, themes; pinned-tab titles, URLs and icons) — local app storage (`spaces-cache.json`) — instant display while fresh data loads
+- **Cached website icons** (the image and the address it was loaded from) — the app's local cache — showing a synced tab again without downloading its page
 - **Preferences** (last selected space, cache timestamp) — local preferences — convenience
 
 Notes:
@@ -70,22 +71,33 @@ Your sync content (tab URLs, titles, space structure) is **encrypted on your dev
 
 Mozilla's own handling of your account data is governed by the [Mozilla Privacy Notice](https://www.mozilla.org/privacy/).
 
-### 5.2 DuckDuckGo icon service (favicon previews)
+### 5.2 Website icons (favicon previews)
 
-Tabs that have no built-in icon get their favicon fetched from `icons.duckduckgo.com`, operated by Duck Duck Go, LLC (USA).
+Tabs that have no built-in icon get their favicon from the website itself. The app does not use a search-engine favicon API as its normal path.
 
-- **Transmitted:** the website's domain (e.g. `example.org`) and your device IP address as part of any HTTPS request.
-- **Not transmitted:** account data, tab titles, your identity, anything else.
-- DuckDuckGo states it does not retain such requests or link them to individuals — see the [DuckDuckGo Privacy Policy](https://duckduckgo.com/privacy).
-- Some tabs carry a direct icon URL from your sync data; those images load from the respective website itself instead.
+The synced tab address is enough. The tab is not opened in a browser inside the app, and no cookies are sent. The app requests that address with the query string, the fragment, and any username or password removed, reads the icon links in the start of the document, and also tries `/favicon.ico`. An icon declared as SVG is downloaded and drawn on the device. A few products only publish the real icon inside a signed-in page (Google Calendar, Google Docs, Sheets, Slides and Forms, and Shopify admin). For those, the app requests the public icon file that product publishes, and skips the logged-out page.
 
-**Legal basis:** legitimate interest — Art. 6(1)(f) GDPR. Our interest is a usable interface in which entries are recognisable at a glance; this interest is not overridden by your rights because only bare domain names are processed, without identifiers, by a provider that does not build profiles. If you object to these lookups, contact us; removing the app stops all such requests.
+- **Transmitted:** that request, to the website or to the host that serves its icon, and your device IP address as part of any web request. A private or self-hosted dashboard is contacted from your device. An address on `localhost` is not requested, because that is the desktop, not the phone.
+- **Not transmitted:** the query string, account data, tab titles, or your identity.
+- Some tabs already carry a direct icon URL from sync. Those images load from that address.
+- The chosen icon address stays in the on-device cache, so the next launch does not download the page again.
+
+**Last resort:** a few sites publish no icon the app can reach — they answer a signed-in redirect, a `403`, or no icon link at all (for example Google AI Studio). Only for those, and only after every request above has failed, the app asks Google's public favicon service (`google.com/s2/favicons`) for the domain's icon.
+
+- **Transmitted to Google:** the bare domain and your IP address. Google's handling is governed by the [Google Privacy Policy](https://policies.google.com/privacy).
+- **Not transmitted:** the tab address, its query string, account data, or your identity.
+- This lookup never runs when the website itself already supplied an icon, and **never for a private or local address** (`localhost`, a LAN IP such as `192.168.x.x`, a `.local`/`.internal` name, or a single-name intranet host). Those stay on your network.
+- Icons — including ones drawn from SVG — are cached, so a later launch re-downloads neither the page nor the icon.
+
+**Legal basis:** legitimate interest — Art. 6(1)(f) GDPR. The interest is a usable interface in which entries are recognisable at a glance. Requests go first to a site you already have open in your browser, without an account identifier; the domain-only fallback runs only when that fails. If you object to these lookups, contact us; removing the app stops all such requests.
 
 ---
 
 ## 6. International data transfers
 
-Mozilla Corporation and Duck Duck Go, LLC are based in the United States. Both companies state that they participate in the EU–U.S. Data Privacy Framework (EU adequacy decision), and both offer Standard Contractual Clauses as described in their respective privacy notices. Please refer to their policies for details; they act as independent controllers of the data described above.
+Mozilla Corporation is based in the United States. Mozilla states that it participates in the EU–U.S. Data Privacy Framework (EU adequacy decision) and offers Standard Contractual Clauses as described in the [Mozilla Privacy Notice](https://www.mozilla.org/privacy/). Mozilla acts as an independent controller of the account and sync data described above.
+
+Favicon requests go from your device to the website of the synced tab, or to the host that website uses for its icon. A few Google and Shopify product icons are loaded from those companies' public icon files. When no icon can be reached from the site itself, a domain-only request goes to Google's public favicon service, as described in section 5.2. Where those hosts are, and how they handle the request, is each site's own matter. The requests do not include your account or the tab's query string.
 
 ---
 
@@ -111,7 +123,7 @@ If you are in the EU/EEA, you have the right to:
 - Access (Art. 15), rectification (Art. 16), erasure (Art. 17), restriction of processing (Art. 18), data portability (Art. 20), and objection (Art. 21)
 - Lodge a complaint with a supervisory authority — in Germany, the Unabhängiges Landeszentrum für Datenschutz Schleswig-Holstein ([ULD](https://www.datenschutzzentrum.de)) or the Federal Commissioner ([BfDI](https://www.bfdi.bund.de))
 
-Because the developer holds **no data about you** (nothing ever reaches him), most requests concern data held by **Apple, Google, Mozilla, or DuckDuckGo** — please direct such requests to those companies. Anything genuinely local to the app you control yourself: sign out or delete the app.
+Because the developer holds **no data about you** (nothing ever reaches him), most requests concern data held by **Apple, Google, or Mozilla**, or by a website whose icon the app loaded — please direct such requests to those companies. Anything genuinely local to the app you control yourself: sign out or delete the app.
 
 Questions or objections: Support@Kjell.cc
 
@@ -125,7 +137,8 @@ Z-Sync is a general-audience utility and does not knowingly process data of chil
 
 ## 11. Security measures
 
-- All network traffic uses TLS (HTTPS); plaintext connections to third parties are rejected by the platform's default transport security.
+- Connections to Mozilla use TLS (HTTPS).
+- A favicon request uses the scheme of the tab address. On iOS, unencrypted HTTP is allowed only on the local network, so a dashboard on your LAN can be reached; public sites still require HTTPS. On Android, the system blocks unencrypted HTTP, so a local dashboard needs HTTPS for its icon to load.
 - Sync payloads are end-to-end encrypted client-side before upload (section 5.1).
 - Long-lived secrets are held in the iOS Keychain (*ThisDeviceOnly*) or Android Keystore-backed encrypted preferences.
 - The iOS app ships a privacy manifest declaring no tracking (Apple `PrivacyInfo.xcprivacy`).

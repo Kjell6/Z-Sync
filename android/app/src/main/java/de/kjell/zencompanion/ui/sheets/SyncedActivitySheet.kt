@@ -2,21 +2,20 @@ package de.kjell.zencompanion.ui.sheets
 
 import android.text.format.DateUtils
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
@@ -40,7 +39,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -51,7 +49,9 @@ import de.kjell.zencompanion.favicon.FaviconResolver
 import de.kjell.zencompanion.sync.SyncedActivityService
 import de.kjell.zencompanion.ui.ActivityState
 import de.kjell.zencompanion.ui.components.Favicon
+import de.kjell.zencompanion.ui.theme.LiftCard
 import de.kjell.zencompanion.ui.theme.LocalZenColors
+import de.kjell.zencompanion.ui.theme.liftBorder
 import java.net.URL
 import java.util.Date
 
@@ -130,7 +130,8 @@ fun SyncedActivitySheet(
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
+                    .padding(horizontal = 20.dp)
+                    .border(liftBorder(), RoundedCornerShape(16.dp)),
             )
 
             when {
@@ -192,78 +193,51 @@ private fun ActivityList(
     val history = remember(activity, query) { filterHistory(activity?.history.orEmpty(), query) }
     val colors = LocalZenColors.current
 
-    LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(top = 8.dp, bottom = 32.dp),
-    ) {
-        if (history.isNotEmpty()) {
-            item(key = "h-history") {
-                SectionHeader(stringResource(R.string.activity_section_history))
-            }
-            // Card top cap
-            item(key = "history-card-top") {
-                Box(
-                    Modifier
-                        .padding(horizontal = 20.dp)
-                        .fillMaxWidth()
-                        .height(16.dp)
-                        .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                        .background(colors.lift),
-                )
-            }
+    if (history.isEmpty()) {
+        Text(
+            stringResource(R.string.activity_empty),
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.ink.copy(alpha = 0.5f),
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 32.dp, vertical = 48.dp),
+        )
+        return
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        SectionHeader(stringResource(R.string.activity_section_history))
+
+        // One card for the whole list, so the card chrome (fill + rim + corner)
+        // matches the Settings sheet instead of a flat run of rows.
+        LiftCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(horizontal = 20.dp),
+        ) {
             // One lazy item per row: a 400-entry history only composes what
             // is on screen instead of one giant card item.
-            history.forEachIndexed { index, entry ->
-                item(key = "hist-row-$index") {
-                    Column(
-                        Modifier
-                            .padding(horizontal = 20.dp)
-                            .background(colors.lift),
-                    ) {
-                        HistoryRow(entry = entry, onOpenUrl = onOpenUrl)
-                        if (index < history.size - 1) {
-                            HorizontalDivider(
-                                color = colors.ink.copy(alpha = 0.08f),
-                                modifier = Modifier.padding(start = 52.dp),
-                            )
-                        }
+            LazyColumn(Modifier.fillMaxSize()) {
+                itemsIndexed(history) { index, entry ->
+                    HistoryRow(entry = entry, onOpenUrl = onOpenUrl)
+                    if (index < history.size - 1) {
+                        HorizontalDivider(
+                            color = colors.ink.copy(alpha = 0.08f),
+                            modifier = Modifier.padding(start = 52.dp),
+                        )
                     }
                 }
             }
-            // Card bottom cap
-            item(key = "history-card-bottom") {
-                Box(
-                    Modifier
-                        .padding(horizontal = 20.dp)
-                        .fillMaxWidth()
-                        .height(16.dp)
-                        .clip(RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp))
-                        .background(colors.lift),
-                )
-            }
-            item(key = "history-footer") {
-                Text(
-                    stringResource(R.string.activity_history_footer),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.ink.copy(alpha = 0.35f),
-                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 10.dp),
-                )
-            }
         }
 
-        if (history.isEmpty()) {
-            item {
-                Text(
-                    stringResource(R.string.activity_empty),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = colors.ink.copy(alpha = 0.5f),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 32.dp, vertical = 48.dp),
-                )
-            }
-        }
+        Text(
+            stringResource(R.string.activity_history_footer),
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.ink.copy(alpha = 0.35f),
+            modifier = Modifier.padding(horizontal = 28.dp, vertical = 10.dp),
+        )
     }
 }
 

@@ -34,7 +34,7 @@ struct ZeroSpacesHelp: View {
                         .foregroundStyle(Palette.paper(scheme))
                         .background(Palette.ink(scheme), in: Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressedButtonStyle())
 
                 if reloading {
                     ProgressView()
@@ -47,9 +47,10 @@ struct ZeroSpacesHelp: View {
                             .padding(.horizontal, 20)
                             .padding(.vertical, 12)
                             .background(Palette.lift(scheme), in: Capsule())
+                            .glassRimCapsule()
                             .foregroundStyle(Palette.ink(scheme))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressedButtonStyle())
                 }
             }
         }
@@ -95,7 +96,7 @@ struct SyncSetupHint: View {
                 }
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressedButtonStyle())
 
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
@@ -104,20 +105,13 @@ struct SyncSetupHint: View {
                     .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressedButtonStyle())
             .accessibilityLabel(Text("common.dismiss"))
         }
         .padding(.leading, 12)
         .padding(.trailing, 6)
         .padding(.vertical, 10)
-        .background(
-            Palette.lift(scheme),
-            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Palette.ink(scheme).opacity(0.08), lineWidth: 1)
-        )
+        .liftCard(scheme)
     }
 }
 
@@ -181,7 +175,7 @@ struct SyncSetupSheet: View {
                             .foregroundStyle(Palette.paper(scheme))
                             .background(Palette.ink(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressedButtonStyle())
                 }
                 .padding(20)
             }
@@ -251,7 +245,7 @@ struct ShareExtensionTip: View {
                     .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressedButtonStyle())
             .accessibilityLabel(Text("common.dismiss"))
         }
         .padding(14)

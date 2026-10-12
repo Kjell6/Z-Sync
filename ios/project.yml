@@ -41,6 +41,9 @@ targets:
         CFBundleDevelopmentRegion: en
         UIRequiresFullScreen: true
         ITSAppUsesNonExemptEncryption: false
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSLocalNetworkUsageDescription: Z-Sync loads the icon of a synced tab from the tab's own address, which may be a device on your local network.
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UISupportedInterfaceOrientations~ipad:
@@ -61,8 +64,8 @@ targets:
         INFOPLIST_FILE: ZenCompanion/Info.plist
         CODE_SIGN_ENTITLEMENTS: ZenCompanion/ZenCompanion.entitlements
         GENERATE_INFOPLIST_FILE: false
-        MARKETING_VERSION: "1.4"
-        CURRENT_PROJECT_VERSION: "9"
+        MARKETING_VERSION: "1.4.1"
+        CURRENT_PROJECT_VERSION: "10"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies:
       - target: ShareExtension
@@ -89,6 +92,9 @@ targets:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         ITSAppUsesNonExemptEncryption: false
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSLocalNetworkUsageDescription: Z-Sync loads the icon of a synced tab from the tab's own address, which may be a device on your local network.
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
@@ -108,8 +114,8 @@ targets:
         INFOPLIST_FILE: ShareExtension/Info.plist
         CODE_SIGN_ENTITLEMENTS: ShareExtension/ShareExtension.entitlements
         GENERATE_INFOPLIST_FILE: false
-        MARKETING_VERSION: "1.4"
-        CURRENT_PROJECT_VERSION: "9"
+        MARKETING_VERSION: "1.4.1"
+        CURRENT_PROJECT_VERSION: "10"
         SKIP_INSTALL: true
   ZenCompanionTests:
     type: bundle.unit-test

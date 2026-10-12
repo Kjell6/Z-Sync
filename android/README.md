@@ -29,7 +29,7 @@ cd android
 
 (If `./gradlew` is missing, run `gradle wrapper --gradle-version 9.7.1` once.)
 
-Package: `de.kjell.zencompanion` · versionName `1.4` · versionCode `7` ·
+Package: `de.kjell.zencompanion` · versionName `1.4.1` · versionCode `8` ·
 minSdk 26 · targetSdk 36 · compileSdk 37 · portrait-only.
 
 Toolchain: Gradle 9.7.1 · AGP 9.4.1 · built-in Kotlin (Compose compiler plugin
@@ -44,8 +44,10 @@ android/
                  SpacesSyncService, ZenSpaces (wire format + snapshot model)
     data/        AccountStore (EncryptedSharedPreferences + Keystore),
                  SnapshotCache (spaces-cache.json), AppEvents
-    favicon/     FaviconResolver, FaviconDecoder (largest-ICO-frame),
-                 FaviconLoader (memory+disk cache, coalesced, 6-way prefetch)
+    favicon/     FaviconDiscovery, FaviconResolver, FaviconDecoder
+                 (largest-ICO-frame), SvgRasterizer (AndroidSVG),
+                 FaviconLoader (site icons, memory+disk+index,
+                 coalesced, 6-way prefetch)
     ui/
       theme/     Palette (paper/ink/coral/lift), Type (system font)
       motion/    Spring catalog: response r ↔ stiffness (2π/r)², reduce-motion
@@ -74,9 +76,14 @@ android/
 - **Secrets**: session token + kB live only in EncryptedSharedPreferences
   (Keystore-backed), excluded from backups. Token-server creds stay memory-
   only and refresh 45 s before expiry.
-- **Favicons**: direct sync URL else DuckDuckGo ip3; multi-frame ICOs decode
-  their largest frame; ~400-entry memory cache + disk cache + coalesced
-  in-flight fetches; placeholder is a plain gray rounded square.
+- **Favicons**: raster/ICO `data:` icons decode on device; otherwise the site's
+  own icon links (SVG included, drawn with AndroidSVG), else `/favicon.ico`; a
+  few signed-in products use a known public file. Only when a site yields no
+  icon at all (login redirect, 403, no link) does a domain-only lookup go to
+  Google's favicon service as a last resort. Multi-frame ICOs decode their
+  largest frame; a ~20 MB in-memory byte budget, a 40 MB disk cache with a
+  30-day TTL, and an index of the chosen icon URL; 6-way prefetch from the
+  synced snapshot; placeholder is a plain gray rounded square.
 - **Localization**: English-only, matching `Shared/Localizable.xcstrings`.
 - Reduce Motion (`Settings.Global.TRANSITION_ANIMATION_SCALE == 0`) snaps all
   springs but keeps layout identical.

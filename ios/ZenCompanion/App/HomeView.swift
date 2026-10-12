@@ -68,14 +68,14 @@ private struct SignInLandingView: View {
                         .foregroundStyle(Palette.paper(scheme))
                         .background(Palette.ink(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressedButtonStyle())
                 Button { model.presentSignInHelp() } label: {
                     Text("signin.help.link")
                         .font(.system(size: 13, weight: .medium, design: .rounded))
                         .foregroundStyle(Palette.ink(scheme).opacity(0.55))
                         .multilineTextAlignment(.center)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressedButtonStyle())
                 Link("legal.privacy", destination: Legal.publicPolicyURL)
                     .font(.system(size: 13, weight: .medium, design: .rounded))
                     .foregroundStyle(Palette.ink(scheme).opacity(0.45))
@@ -123,6 +123,7 @@ private struct SignInHelpSheet: View {
                         Text("signin.help.open_mozilla")
                             .font(.system(size: 16, weight: .medium, design: .rounded))
                     }
+                    .buttonStyle(PressedButtonStyle())
                     .padding(.top, 4)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

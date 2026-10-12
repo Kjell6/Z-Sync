@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.ui.theme.LocalZenColors
+import de.kjell.zencompanion.ui.theme.liftBorder
 
 /** Sync works but zero spaces: Zen Sync not enabled on desktop yet. */
 @Composable
@@ -114,10 +115,7 @@ internal fun SyncSetupHint(
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = LocalZenColors.current.lift,
-        border = androidx.compose.foundation.BorderStroke(
-            width = 1.dp,
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-        ),
+        border = liftBorder(),
         modifier = modifier,
     ) {
         Row(
@@ -127,8 +125,8 @@ internal fun SyncSetupHint(
             Row(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(12.dp))
                     .clickableNoIndication(onClick = onOpen)
+                    .clip(RoundedCornerShape(12.dp))
                     .padding(vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

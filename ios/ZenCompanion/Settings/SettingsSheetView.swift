@@ -65,7 +65,7 @@ struct SettingsSheet: View {
                             }
                             .padding(.horizontal, 16)
                             .frame(height: 54)
-                            .background(Palette.lift(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .liftCard(scheme)
 
                             // Right: Sign Out Icon-Only Card (Narrower, compact sleek card)
                             Button(role: .destructive) {
@@ -76,9 +76,10 @@ struct SettingsSheet: View {
                                     .foregroundStyle(Color.red)
                                     .offset(x: 2.5) // Shifts icon right so left and right edge margins are identical
                                     .frame(width: 44, height: 54)
-                                    .background(Color.red.opacity(scheme == .dark ? 0.15 : 0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                    .background(Color.red.opacity(scheme == .dark ? 0.15 : 0.08), in: RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous))
+                                    .glassRim(cornerRadius: Palette.liftCornerRadius)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(PressedButtonStyle())
                             .accessibilityLabel(Text("home.sign_out"))
                         }
 
@@ -137,7 +138,7 @@ struct SettingsSheet: View {
                                 .frame(minHeight: 54)
                                 .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(PressedButtonStyle())
 
                             Rectangle()
                                 .fill(Palette.ink(scheme).opacity(0.15))
@@ -159,7 +160,7 @@ struct SettingsSheet: View {
                             .padding(.horizontal, 16)
                             .frame(minHeight: 54)
                         }
-                        .background(Palette.lift(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .liftCard(scheme)
 
                         if normalTabsCapability != .absent {
                             VStack(spacing: 0) {
@@ -202,7 +203,7 @@ struct SettingsSheet: View {
                                 .padding(.horizontal, 16)
                                 .frame(minHeight: 54)
                             }
-                            .background(Palette.lift(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .liftCard(scheme)
                             .padding(.top, 8)
 
                             if normalTabsCapability == .disabled {
@@ -256,7 +257,7 @@ struct SettingsSheet: View {
                             .padding(.horizontal, 16)
                             .frame(minHeight: 54)
                         }
-                        .background(Palette.lift(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .liftCard(scheme)
                         .padding(.top, 8)
 
                         VStack(spacing: 0) {
@@ -284,9 +285,9 @@ struct SettingsSheet: View {
                                 .frame(minHeight: 54)
                                 .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(PressedButtonStyle())
                         }
-                        .background(Palette.lift(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .liftCard(scheme)
                         .padding(.top, 8)
                     }
 
@@ -342,9 +343,9 @@ struct SettingsSheet: View {
                                 .frame(minHeight: 52)
                                 .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(PressedButtonStyle())
                         }
-                        .background(Palette.lift(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .liftCard(scheme)
                     }
 
                     // MARK: - 4. About & Links
@@ -402,7 +403,7 @@ struct SettingsSheet: View {
                             .padding(.horizontal, 16)
                             .frame(minHeight: 52)
                         }
-                        .background(Palette.lift(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .liftCard(scheme)
                     }
 
                     // MARK: - 3. Footer Attributions & Disclaimer
@@ -486,7 +487,7 @@ private struct SearchEngineSettingsView: View {
                 }
             }
         }
-        .background(Palette.lift(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .liftCard(scheme)
     }
 
     private func engineRow(_ engine: SearchEngine) -> some View {
@@ -507,7 +508,7 @@ private struct SearchEngineSettingsView: View {
                 }
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressedButtonStyle())
 
             if !engine.isBuiltIn {
                 Button(role: .destructive) {
@@ -517,7 +518,7 @@ private struct SearchEngineSettingsView: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Color.red.opacity(0.8))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressedButtonStyle())
                 .accessibilityLabel(Text("Delete"))
             }
         }
@@ -547,8 +548,8 @@ private struct SearchEngineSettingsView: View {
             .frame(minHeight: 54)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .background(Palette.lift(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .buttonStyle(PressedButtonStyle())
+        .liftCard(scheme)
     }
 
 }
@@ -605,7 +606,7 @@ private struct AddSearchEngineView: View {
                 isURL: true
             )
         }
-        .background(Palette.lift(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .liftCard(scheme)
         .onChange(of: pastedURL) { _, newValue in
             guard let derived = SearchEngineTemplate.derive(fromPastedURL: newValue) else { return }
             draftTemplate = derived
@@ -629,7 +630,7 @@ private struct AddSearchEngineView: View {
                 isURL: true
             )
         }
-        .background(Palette.lift(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .liftCard(scheme)
     }
 
     private var addButton: some View {
@@ -648,7 +649,7 @@ private struct AddSearchEngineView: View {
                 .frame(height: 48)
                 .background(Palette.coral(scheme), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressedButtonStyle())
     }
 
     private var fieldDivider: some View {
@@ -755,7 +756,7 @@ private struct AdvancedSettingsView: View {
                     .padding(.horizontal, 16)
                     .frame(minHeight: 54)
                 }
-                .background(Palette.lift(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .liftCard(scheme)
 
                 Text("settings.essentials_grouping.caption")
                     .font(.system(size: 12, design: .rounded))

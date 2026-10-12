@@ -35,6 +35,7 @@ import de.kjell.zencompanion.ui.motion.DampingSharePicker
 import de.kjell.zencompanion.ui.motion.StiffnessSharePicker
 import de.kjell.zencompanion.ui.theme.LocalZenColors
 import de.kjell.zencompanion.ui.theme.ZenType
+import de.kjell.zencompanion.ui.theme.liftRim
 
 /** Capsule (fully-rounded pill) used by the share-style trigger. */
 private val Capsule = RoundedCornerShape(50)
@@ -67,6 +68,7 @@ internal fun ShareCapsulePicker(
             modifier = Modifier
                 .padding(top = 28.dp)
                 .background(colors.lift, Capsule)
+                .liftRim(Capsule)
                 .clickable {
                     onMenuWillOpen()
                     onSpaceMenuOpenChange(true)

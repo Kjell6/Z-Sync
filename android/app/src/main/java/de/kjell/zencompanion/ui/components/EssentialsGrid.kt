@@ -2,6 +2,7 @@ package de.kjell.zencompanion.ui.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,7 +29,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -39,6 +39,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.sync.ZenSpaces
+import de.kjell.zencompanion.ui.theme.liftBorder
+import de.kjell.zencompanion.ui.theme.pressFeedback
 
 /** Adaptive columns: 1-4 single row, 5-6 -> 3 cols, 7+ -> 4 cols. */
 internal fun columnCountFor(count: Int): Int = when (count) {
@@ -100,13 +102,18 @@ private fun EssentialTile(
     val renameText = stringResource(R.string.tabs_rename)
     var menuOpen by remember { mutableStateOf(false) }
     var showRename by remember { mutableStateOf(false) }
+    val zen = de.kjell.zencompanion.ui.theme.LocalZenColors.current
+    val shape = RoundedCornerShape(16.dp)
+    val source = remember { MutableInteractionSource() }
 
     Card(
         modifier = Modifier
+            .pressFeedback(source)
             .fillMaxWidth()
             .height(56.dp)
-            .clip(RoundedCornerShape(16.dp))
             .combinedClickable(
+                interactionSource = source,
+                indication = null,
                 onClick = {
                     if (onOpenUrl != null) {
                         onOpenUrl(tab.url, tab.displayTitle)
@@ -120,11 +127,12 @@ private fun EssentialTile(
                 contentDescription = label
                 customActions = listOf(CustomAccessibilityAction(renameText) { showRename = true; true })
             },
-        shape = RoundedCornerShape(16.dp),
+        shape = shape,
+        border = liftBorder(),
         colors = CardDefaults.cardColors(
             // Same lift color as the top-bar cards (iOS: Palette.lift) so all
             // tile backgrounds match across the screen.
-            containerColor = de.kjell.zencompanion.ui.theme.LocalZenColors.current.lift,
+            containerColor = zen.lift,
         ),
     ) {
         Box(

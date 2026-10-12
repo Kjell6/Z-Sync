@@ -6,7 +6,7 @@ import java.io.ByteArrayInputStream
 
 /**
  * Port of `FaviconDecoder` (Shared/ZenTheme.swift): picks the largest frame
- * so multi-resolution ICOs (DuckDuckGo) don't decode as a 16x16 smudge — or
+ * so multi-resolution ICOs don't decode as a 16x16 smudge — or
  * fail outright, which plain `BitmapFactory` does on some ICO payloads.
  *
  * The ICO directory parsing is pure and unit-tested on the JVM; only final

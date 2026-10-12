@@ -47,7 +47,9 @@ import de.kjell.zencompanion.data.SearchEngineValidation
 import de.kjell.zencompanion.data.ToolbarPlacement
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.PreferencesState
+import de.kjell.zencompanion.ui.theme.LiftCard
 import de.kjell.zencompanion.ui.theme.LocalZenColors
+import de.kjell.zencompanion.ui.theme.liftBorder
 
 import androidx.compose.foundation.shape.RoundedCornerShape
 
@@ -213,14 +215,10 @@ fun SettingsSheet(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     // Left Card: Email + Person icon (~56dp height)
-                    Card(
+                    LiftCard(
                         modifier = Modifier
                             .weight(1f)
                             .height(if (isDemo) 64.dp else 56.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        ),
-                        shape = MaterialTheme.shapes.medium,
                     ) {
                         Row(
                             modifier = Modifier
@@ -269,7 +267,8 @@ fun SettingsSheet(
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
                         ),
-                        shape = MaterialTheme.shapes.medium,
+                        shape = RoundedCornerShape(16.dp),
+                        border = liftBorder(),
                     ) {
                         Box(
                             modifier = Modifier.fillMaxSize(),

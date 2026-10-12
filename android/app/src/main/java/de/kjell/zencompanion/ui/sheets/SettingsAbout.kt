@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -28,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.BuildConfig
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.ui.screens.Legal
+import de.kjell.zencompanion.ui.theme.LiftCard
 import de.kjell.zencompanion.ui.theme.LocalZenColors
 
 @Composable
@@ -44,13 +43,7 @@ internal fun SettingsAboutSection() {
             modifier = Modifier.padding(start = 4.dp),
         )
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            ),
-            shape = MaterialTheme.shapes.medium,
-        ) {
+        LiftCard(modifier = Modifier.fillMaxWidth()) {
             Column {
                 // Feedback & Bug Reports
                 Row(
@@ -125,13 +118,7 @@ internal fun SettingsAboutSection() {
             modifier = Modifier.padding(start = 4.dp),
         )
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            ),
-            shape = MaterialTheme.shapes.medium,
-        ) {
+        LiftCard(modifier = Modifier.fillMaxWidth()) {
             Column {
                 // Privacy Policy
                 Row(

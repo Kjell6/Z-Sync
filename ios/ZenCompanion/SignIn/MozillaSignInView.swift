@@ -130,7 +130,7 @@ private struct NoticeBubble: View {
                     .padding(4)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressedButtonStyle())
             .accessibilityLabel(Text("common.close"))
         }
         .padding(12)

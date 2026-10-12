@@ -33,20 +33,21 @@ fun Favicon(
     urlString: String,
     modifier: Modifier = Modifier,
     directURL: String? = null,
+    dataURL: String? = null,
     size: Dp,
 ) {
-    val resolved = FaviconResolver.url(pageURL = urlString, directURL = directURL)
+    val cacheKey = FaviconResolver.cacheKey(pageURL = urlString, directURL = directURL, dataURL = dataURL)
     val colors = LocalZenColors.current
 
-    var image by remember(resolved) { mutableStateOf(resolved?.let { FaviconLoader.cached(it) }) }
-    LaunchedEffect(resolved) {
-        if (resolved == null) {
+    var image by remember(cacheKey) { mutableStateOf(cacheKey?.let { FaviconLoader.cached(it) }) }
+    LaunchedEffect(cacheKey) {
+        if (cacheKey == null) {
             image = null
             return@LaunchedEffect
         }
         // Cached icons are applied synchronously: no loader hop, no
         // placeholder flash when a pager page is rebuilt on a space switch.
-        image = FaviconLoader.cached(resolved) ?: FaviconLoader.image(resolved)
+        image = FaviconLoader.cached(cacheKey) ?: FaviconLoader.image(urlString, directURL, dataURL)
     }
 
     val shape = RoundedCornerShape(size * 0.22f)

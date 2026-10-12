@@ -25,8 +25,6 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SwapVert
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -52,6 +50,7 @@ import de.kjell.zencompanion.data.SearchEngines
 import de.kjell.zencompanion.data.ToolbarPlacement
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.PreferencesState
+import de.kjell.zencompanion.ui.theme.LiftCard
 import de.kjell.zencompanion.ui.theme.LocalZenColors
 
 @Composable
@@ -75,13 +74,7 @@ internal fun SettingsPreferencesSection(
             modifier = Modifier.padding(start = 4.dp),
         )
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            ),
-            shape = MaterialTheme.shapes.medium,
-        ) {
+        LiftCard(modifier = Modifier.fillMaxWidth()) {
             var menuExpanded by remember { mutableStateOf(false) }
             val selectedEngine = preferences.searchEngine
             val alwaysOpenExternally = preferences.alwaysOpenExternally
@@ -253,13 +246,7 @@ internal fun SettingsPreferencesSection(
 
         // Action bar placement: above the essentials grid or below the space
         // switcher. Own card, under "Save shared tabs as".
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            ),
-            shape = MaterialTheme.shapes.medium,
-        ) {
+        LiftCard(modifier = Modifier.fillMaxWidth()) {
             var placementMenuExpanded by remember { mutableStateOf(false) }
             val toolbarPlacement = preferences.toolbarPlacement
 
@@ -334,13 +321,7 @@ internal fun SettingsPreferencesSection(
         // Custom search engines: listed separately so they can be deleted
         // without opening the picker. Hidden until the user adds one.
         if (preferences.customSearchEngines.isNotEmpty()) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                ),
-                shape = MaterialTheme.shapes.medium,
-            ) {
+            LiftCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
                         text = stringResource(R.string.settings_search_engine_custom_section),
@@ -377,14 +358,10 @@ internal fun SettingsPreferencesSection(
         }
 
         // Own card: Advanced is unrelated to the preferences above.
-        Card(
+        LiftCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 8.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            ),
-            shape = MaterialTheme.shapes.medium,
         ) {
             Row(
                 modifier = Modifier
@@ -466,13 +443,7 @@ internal fun SettingsAdvancedScreen(
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                ),
-                shape = MaterialTheme.shapes.medium,
-            ) {
+            LiftCard(modifier = Modifier.fillMaxWidth()) {
                 Box(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier

@@ -38,7 +38,7 @@ struct TabRow: View {
             .padding(.vertical, 9)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressedButtonStyle())
         .contextMenu {
             Button {
                 renameDraft = renameSeed
@@ -255,7 +255,7 @@ private struct SplitCell: View {
             .padding(.vertical, 9)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressedButtonStyle())
         .accessibilityLabel(Text(tab.displayTitle))
         .accessibilityHint(Text(tab.url))
     }

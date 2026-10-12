@@ -53,7 +53,7 @@ struct SpaceSwitcher: View {
                                     .frame(width: itemSize, height: 40)
                                     .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(PressedButtonStyle())
                             .id(space.id)
                             .accessibilityLabel(Text(space.name.isEmpty ? String(localized: "share.workspace") : space.name))
                             .accessibilityAddTraits(isSelected ? [.isSelected] : [])

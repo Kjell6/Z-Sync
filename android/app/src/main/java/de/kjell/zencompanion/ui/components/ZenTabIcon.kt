@@ -47,6 +47,7 @@ fun ZenTabIcon(
             Favicon(
                 urlString = tab.url,
                 directURL = tab.iconURL,
+                dataURL = tab.icon?.trim()?.takeIf { it.startsWith("data:image/") },
                 size = size,
                 modifier = modifier,
             )

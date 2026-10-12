@@ -231,6 +231,20 @@ struct PinDestinationMenuButton: UIViewRepresentable {
         // presentation).
         button.showsMenuAsPrimaryAction = true
         button.menu = context.coordinator.makeMenu()
+        button.configurationUpdateHandler = { button in
+            let pressed = button.isHighlighted
+            let changes = { button.alpha = pressed ? 0.58 : 1 }
+            if UIAccessibility.isReduceMotionEnabled {
+                changes()
+            } else {
+                UIView.animate(
+                    withDuration: 0.08,
+                    delay: 0,
+                    options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseOut],
+                    animations: changes
+                )
+            }
+        }
         button.setContentHuggingPriority(.required, for: .horizontal)
         button.setContentCompressionResistancePriority(.required, for: .horizontal)
         updateButton(button, context: context)

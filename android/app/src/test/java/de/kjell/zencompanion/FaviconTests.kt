@@ -3,6 +3,7 @@ package de.kjell.zencompanion
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import de.kjell.zencompanion.favicon.FaviconDecoder
+import de.kjell.zencompanion.favicon.FaviconDiscovery
 import de.kjell.zencompanion.favicon.FaviconResolver
 import de.kjell.zencompanion.sync.ZenSpaces
 import org.junit.Assert.assertEquals
@@ -31,18 +32,23 @@ class FaviconResolverTests {
     }
 
     @Test
-    fun fallsBackToDuckDuckGoHost() {
-        assertEquals(
-            "https://icons.duckduckgo.com/ip3/news.ycombinator.com.ico",
-            FaviconResolver.url(pageURL = "https://news.ycombinator.com/item?id=1", directURL = null),
-        )
+    fun syncedURLDoesNotUseAnIconService() {
+        assertNull(FaviconResolver.url(pageURL = "https://news.ycombinator.com/item?id=1", directURL = null))
+        val document = FaviconDiscovery.documentURL("https://user:secret@news.ycombinator.com/item?id=1#c")
+        assertEquals("https://news.ycombinator.com/item", document.toString())
+        val urls = FaviconDiscovery.candidates(null, null, document!!)
+        assertEquals(listOf("https://news.ycombinator.com/favicon.ico"), urls)
+        assertTrue(urls.none { it.contains("duckduckgo") || it.contains("google.com/s2") })
     }
 
     @Test
     fun ignoresNonHTTPDirectURL() {
-        assertEquals(
-            "https://icons.duckduckgo.com/ip3/example.com.ico",
+        assertNull(
             FaviconResolver.url(pageURL = "https://example.com", directURL = "chrome://branding/content/icon.png"),
+        )
+        assertEquals(
+            "site:https://example.com",
+            FaviconResolver.cacheKey(pageURL = "https://example.com", directURL = "chrome://branding/content/icon.png"),
         )
     }
 
@@ -50,6 +56,63 @@ class FaviconResolverTests {
     fun nilWhenPageURLHasNoHost() {
         assertNull(FaviconResolver.url(pageURL = "not a url", directURL = null))
         assertNull(FaviconResolver.url(pageURL = "", directURL = null))
+    }
+
+    @Test
+    fun inlineDataIconOverridesRemoteLookup() {
+        val data =
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+        // The synced inline icon wins even when a direct URL is also present.
+        assertEquals(
+            "data:https://www.figma.com/design/x",
+            FaviconResolver.cacheKey(
+                pageURL = "https://www.figma.com/design/x",
+                directURL = "https://cdn.example/d.png",
+                dataURL = data,
+            ),
+        )
+        // Non-image static icons (emoji, chrome: refs) are not data icons.
+        assertEquals(
+            "site:https://static.example",
+            FaviconResolver.cacheKey(pageURL = "https://static.example", directURL = null, dataURL = "📱"),
+        )
+    }
+
+    @Test
+    fun dataIconTabIsFetchedEvenWhenMarkedStatic() {
+        val data =
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+        val dataTab = ZenSpaces.ZenTab(
+            id = "a",
+            url = "http://localhost:3456/?cols=5",
+            title = "Board",
+            icon = data,
+            hasStaticIcon = false,
+        )
+        val emojiTab = ZenSpaces.ZenTab(
+            id = "b",
+            url = "https://emoji.example",
+            title = "Emoji",
+            icon = "📱",
+            hasStaticIcon = true,
+        )
+        val snapshot = ZenSpaces.ZenSnapshot(
+            spaces = listOf(
+                ZenSpaces.ZenSpace(
+                    id = "s1",
+                    name = "Work",
+                    icon = null,
+                    containerGuid = null,
+                    theme = null,
+                    pinned = listOf(ZenSpaces.ZenItem.Tab(dataTab), ZenSpaces.ZenItem.Tab(emojiTab)),
+                ),
+            ),
+            essentials = emptyMap(),
+            fetchedAtMillis = 0,
+        )
+        val requests = FaviconResolver.requests(snapshot)
+        assertEquals(listOf("data:http://localhost:3456/?cols=5"), requests.map { it.cacheKey })
+        assertEquals(data, requests.first().dataURL)
     }
 
     @Test
@@ -81,17 +144,91 @@ class FaviconResolverTests {
             fetchedAtMillis = 0,
         )
 
-        val urls = FaviconResolver.urls(snapshot).toSet()
+        val keys = FaviconResolver.requests(snapshot).map { it.cacheKey }.toSet()
         assertEquals(
             setOf(
-                "https://icons.duckduckgo.com/ip3/example.com.ico",
-                "https://cdn.example/d.png",
-                "https://icons.duckduckgo.com/ip3/folder.example.ico",
-                "https://icons.duckduckgo.com/ip3/essential.example.ico",
+                "site:https://example.com",
+                "direct:https://cdn.example/d.png",
+                "site:https://folder.example",
+                "site:https://essential.example",
+            ),
+            keys,
+        )
+        assertFalse(keys.any { it.contains("static.example") })
+    }
+}
+
+class FaviconDiscoveryTests {
+    @Test
+    fun declaredIconsPreferTouchPNGAndKeepSVGLast() {
+        val html = """
+            <head>
+            <base href="https://cdn.example/app/">
+            <link rel="mask-icon" href="/mask.svg" color="#000">
+            <link rel="icon" type="image/svg+xml" href="icon.svg">
+            <link rel="apple-touch-icon" sizes="180x180" href="/touch.png">
+            <link rel="shortcut icon" href="//static.example/fav.ico">
+            <link rel="icon" href="plain.png" sizes="32x32">
+            </head>
+        """.trimIndent()
+        val page = java.net.URI("https://ticktick.com/home")
+        val urls = FaviconDiscovery.candidates(html, page, page)
+        assertEquals(
+            listOf(
+                "https://cdn.example/touch.png",
+                "https://cdn.example/app/plain.png",
+                "https://static.example/fav.ico",
+                "https://cdn.example/app/icon.svg",
+                "https://ticktick.com/favicon.ico",
             ),
             urls,
         )
-        assertFalse(urls.any { it.contains("static.example") })
+    }
+
+    @Test
+    fun svgIconDetection() {
+        assertTrue(FaviconDiscovery.isSvgIcon("https://variant.com/favicon-light.svg"))
+        assertTrue(FaviconDiscovery.isSvgIcon("https://x.com/favicon.svg?v=2"))
+        assertFalse(FaviconDiscovery.isSvgIcon("https://x.com/favicon.ico"))
+        assertFalse(FaviconDiscovery.isSvgIcon("https://cdn.example/app/plain.png"))
+    }
+
+    @Test
+    fun loginPageIconsAreIgnoredForCalendar() {
+        val html = "<head><link rel=\"icon\" href=\"https://www.google.com/favicon.ico\"></head>"
+        val page = java.net.URI("https://calendar.google.com/calendar/u/0/r")
+        val finalURL = java.net.URI("https://accounts.google.com/v3/signin/identifier")
+        val urls = FaviconDiscovery.candidates(html, finalURL, page)
+        assertEquals(
+            "https://calendar.google.com/googlecalendar/images/favicons_2020q4/calendar_31.ico",
+            urls.first(),
+        )
+        assertFalse(urls.contains("https://www.google.com/favicon.ico"))
+        assertTrue(urls.contains("https://calendar.google.com/favicon.ico"))
+    }
+
+    @Test
+    fun docsProductsUseTheirOwnIcon() {
+        val sheets = java.net.URI("https://docs.google.com/spreadsheets/d/abc")
+        val docs = java.net.URI("https://docs.google.com/document/d/abc")
+        assertEquals(
+            "https://ssl.gstatic.com/docs/spreadsheets/favicon3.ico",
+            FaviconDiscovery.candidates(null, null, sheets).first(),
+        )
+        assertEquals(
+            "https://ssl.gstatic.com/docs/documents/images/kix-favicon7.ico",
+            FaviconDiscovery.candidates(null, null, docs).first(),
+        )
+        assertEquals(
+            "site:https://docs.google.com/spreadsheets",
+            FaviconResolver.cacheKey("https://docs.google.com/spreadsheets/d/abc?usp=share", null),
+        )
+    }
+
+    @Test
+    fun loopbackIsNotFetched() {
+        assertTrue(FaviconDiscovery.isLoopback(java.net.URI("http://localhost:3000/board")))
+        assertFalse(FaviconDiscovery.isLoopback(java.net.URI("https://example.com")))
     }
 }
 

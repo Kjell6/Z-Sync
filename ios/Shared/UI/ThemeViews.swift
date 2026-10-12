@@ -162,7 +162,12 @@ struct ZenTabIcon: View {
                 .foregroundStyle(Palette.ink(scheme).opacity(0.55))
                 .frame(width: size, height: size)
         } else {
-            Favicon(urlString: tab.url, directURL: tab.iconURL, size: size)
+            Favicon(
+                urlString: tab.url,
+                directURL: tab.iconURL,
+                dataURL: FaviconResolver.usableDataURL(tab.icon),
+                size: size
+            )
         }
     }
 }

@@ -88,7 +88,7 @@ struct SpacesBrowserView: View {
 
                     if model.snapshot.spaces.isEmpty {
                         if placement == .top {
-                            actionBar(scheme: effectiveScheme)
+                            actionBar(scheme: effectiveScheme, placement: placement)
                         }
                         Spacer(minLength: 0)
                         if model.zeroSpaces {
@@ -102,11 +102,11 @@ struct SpacesBrowserView: View {
                         }
                         Spacer(minLength: 0)
                         if placement == .bottom {
-                            actionBar(scheme: effectiveScheme)
+                            actionBar(scheme: effectiveScheme, placement: placement)
                         }
                     } else {
                         if placement == .top {
-                            actionBar(scheme: effectiveScheme)
+                            actionBar(scheme: effectiveScheme, placement: placement)
                         }
 
                         if model.showSyncSetupHint {
@@ -194,15 +194,14 @@ struct SpacesBrowserView: View {
                             selectedIndex: $model.selectedIndex,
                             scheme: effectiveScheme
                         )
+                        // Bottom placement stacks the action bar under the
+                        // switcher, so the switcher only needs air when it is
+                        // the last row (top placement).
+                        .padding(.bottom, placement == .top ? 4 : 0)
 
                         if placement == .bottom {
-                            actionBar(scheme: effectiveScheme)
+                            actionBar(scheme: effectiveScheme, placement: placement)
                         }
-
-                        Text("home.disclaimer")
-                            .font(.system(size: 10.5, weight: .regular, design: .rounded))
-                            .foregroundStyle(Palette.ink(effectiveScheme).opacity(0.3))
-                            .padding(.bottom, 6)
                     }
                 }
             }
@@ -303,7 +302,7 @@ struct SpacesBrowserView: View {
     // above the essentials grid or below the space switcher, per
     // `model.toolbarPlacement`.
 
-    private func actionBar(scheme: ColorScheme) -> some View {
+    private func actionBar(scheme: ColorScheme, placement: ToolbarPlacement) -> some View {
         HStack(spacing: 12) {
             actionCard(systemName: "archivebox", accessibilityKey: "activity.title", scheme: scheme) {
                 activeSheet = .activity
@@ -318,8 +317,9 @@ struct SpacesBrowserView: View {
         .padding(.horizontal, 20)
         // Breathing room so the bar and the tile group beside it don't read as
         // one block: below the bar at the top placement (toward the essentials
-        // grid), toward the disclaimer at the bottom placement.
-        .padding(.bottom, 6)
+        // grid), toward the screen edge at the bottom placement, where it is
+        // the last row.
+        .padding(.bottom, placement == .bottom ? 4 : 6)
         // iPadOS 26 windowed mode puts the system window controls on the
         // window's top-leading corner; the bar makes room on the leading edge
         // so the Activity button stays reachable. No-op when the insets are

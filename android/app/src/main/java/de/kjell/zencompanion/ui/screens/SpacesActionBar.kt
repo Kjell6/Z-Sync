@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.ui.theme.LocalZenColors
@@ -44,6 +45,9 @@ internal fun ActionBar(
     onOpenBrowser: (url: String?, title: String?) -> Unit,
     onOpenActivity: () -> Unit,
     onOpenAccount: () -> Unit,
+    /** Gap below the bar: toward the essentials grid at the top placement,
+     * toward the screen edge when the bar is the last row. */
+    bottomPadding: Dp = 6.dp,
 ) {
     val zen = LocalZenColors.current
     // Same 16dp squircle corner as iOS Palette.liftCornerRadius.
@@ -53,7 +57,7 @@ internal fun ActionBar(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
-            .padding(bottom = 6.dp),
+            .padding(bottom = bottomPadding),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {

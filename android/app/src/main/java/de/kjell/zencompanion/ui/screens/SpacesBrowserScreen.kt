@@ -76,6 +76,8 @@ fun SpacesBrowserScreen(
             onOpenBrowser = onOpenBrowser,
             onOpenActivity = onOpenActivity,
             onOpenAccount = onOpenAccount,
+            // Toward the screen edge when the bar is the last row.
+            bottomPadding = if (toolbarPlacement == ToolbarPlacement.BOTTOM) 4.dp else 6.dp,
         )
     }
 
@@ -163,12 +165,15 @@ fun SpacesBrowserScreen(
                     }
                 }
 
-                // Bottom: Space Switcher (+ action bar when placed low) + disclaimer
+                // Bottom: Space Switcher (+ action bar when placed low). The
+                // disclaimer that used to sit here lives in Settings (About);
+                // repeating it on the home screen only cost a row of height.
                 if (spaces.isNotEmpty()) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .navigationBarsPadding(),
+                            .navigationBarsPadding()
+                            .padding(bottom = 4.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         SpaceSwitcher(
@@ -179,12 +184,6 @@ fun SpacesBrowserScreen(
                         if (toolbarPlacement == ToolbarPlacement.BOTTOM) {
                             actionBar()
                         }
-                        Text(
-                            text = stringResource(R.string.home_disclaimer),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                            modifier = Modifier.padding(bottom = 6.dp),
-                        )
                     }
                 } else {
                     if (toolbarPlacement == ToolbarPlacement.BOTTOM) {

@@ -80,7 +80,9 @@ struct SpaceSwitcher: View {
         }
         // Fixed height + clipped: the switcher can never push the parent
         // VStack wider than the screen, no matter how many spaces exist.
-        .frame(height: 56)
+        // 44 keeps the 40pt row plus a 2pt hair of air above and below — the
+        // old 56 reserved an extra 8pt band the bottom placement never used.
+        .frame(height: 44)
         .frame(maxWidth: .infinity, alignment: .center)
         .clipped()
         .animation(.spring(response: 0.25, dampingFraction: 0.8), value: selectedIndex)

@@ -127,7 +127,7 @@ private fun SwitcherItem(
     )
     Box(
         Modifier
-            .size(width = itemWidth, height = 44.dp)
+            .size(width = itemWidth, height = 40.dp)
             .alpha(opacity)
             .clickable(
                 onClick = onClick,

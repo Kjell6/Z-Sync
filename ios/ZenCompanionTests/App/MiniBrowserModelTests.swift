@@ -373,6 +373,23 @@ final class MiniBrowserModelTests: XCTestCase {
         ])
     }
 
+    func testReloadRetriesTheFailedAddressNotThePageUnderneath() {
+        let (model, _) = makeModel(initialURL: nil)
+        let webView = FakeWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        webView.stubbedURL = URL(string: "https://previous.example")
+        model.webView = webView
+        let slow = URL(string: "https://slow.example")!
+
+        model.loadDidFail(loadError(NSURLErrorTimedOut, failing: slow))
+        model.reload()
+        XCTAssertEqual(webView.loaded, [slow])
+        XCTAssertEqual(webView.reloads, 0)
+
+        model.pageDidCommit()
+        model.reload()
+        XCTAssertEqual(webView.reloads, 1)
+    }
+
     func testCrashKeepsThePageAddressAndReloadsIt() {
         let (model, _) = makeModel(initialURL: nil)
         let webView = FakeWebView(frame: .zero, configuration: WKWebViewConfiguration())
@@ -475,6 +492,7 @@ private final class FakeWebView: WKWebView {
     var stubbedCanGoBack = false
     private(set) var loaded: [URL] = []
     private(set) var wentBack = 0
+    private(set) var reloads = 0
 
     override var url: URL? { stubbedURL }
     override var canGoBack: Bool { stubbedCanGoBack }
@@ -486,6 +504,11 @@ private final class FakeWebView: WKWebView {
 
     override func goBack() -> WKNavigation? {
         wentBack += 1
+        return nil
+    }
+
+    override func reload() -> WKNavigation? {
+        reloads += 1
         return nil
     }
 }

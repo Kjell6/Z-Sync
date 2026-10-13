@@ -133,7 +133,13 @@ final class MiniBrowserModel {
     }
 
     func reload() {
-        webView?.reload()
+        // After a failed load the web view still holds the old page;
+        // reloading means trying the failed address again.
+        if pageError != nil {
+            retryFailedLoad()
+        } else {
+            webView?.reload()
+        }
     }
 
     func stopLoading() {

@@ -308,6 +308,106 @@ final class MiniBrowserModelTests: XCTestCase {
 
         XCTAssertNil(model.pinNotice)
     }
+
+    // MARK: - Error panel
+
+    private func loadError(_ code: Int, failing url: URL) -> NSError {
+        NSError(domain: NSURLErrorDomain, code: code, userInfo: [NSURLErrorFailingURLErrorKey: url])
+    }
+
+    func testFailedLoadShowsThePanelForTheFailedAddress() {
+        let (model, _) = makeModel(initialURL: nil)
+        let webView = FakeWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        webView.stubbedURL = URL(string: "https://previous.example")
+        model.webView = webView
+        model.currentURL = webView.stubbedURL
+        let typo = URL(string: "https://wikipeida.org")!
+
+        model.loadDidFail(loadError(NSURLErrorCannotFindHost, failing: typo))
+
+        XCTAssertEqual(model.pageError, .hostNotFound)
+        XCTAssertEqual(model.failedURL, typo)
+        // Safari and the address bar act on the address that failed, not the old page.
+        XCTAssertEqual(model.effectiveURL, typo)
+        model.pageErrorDidChange(isAddressFocused: false)
+        XCTAssertEqual(model.addressText, "wikipeida.org")
+        // The old page's address arriving late doesn't overwrite it.
+        model.currentURLDidChange(URL(string: "https://previous.example"), isAddressFocused: false)
+        XCTAssertEqual(model.addressText, "wikipeida.org")
+    }
+
+    func testCancelledLoadsShowNoPanel() {
+        let (model, _) = makeModel(initialURL: nil)
+        model.loadDidFail(loadError(NSURLErrorCancelled, failing: URL(string: "https://example.com")!))
+        model.loadDidFail(NSError(domain: "WebKitErrorDomain", code: 102))
+        XCTAssertNil(model.pageError)
+    }
+
+    func testCommitClearsThePanelAndRestoresTheAddress() {
+        let (model, _) = makeModel(initialURL: nil)
+        model.currentURL = URL(string: "https://previous.example")
+        model.loadDidFail(loadError(NSURLErrorTimedOut, failing: URL(string: "https://slow.example")!))
+        XCTAssertEqual(model.pageError, .notResponding)
+
+        model.pageDidCommit()
+        model.pageErrorDidChange(isAddressFocused: false)
+
+        XCTAssertNil(model.pageError)
+        XCTAssertNil(model.failedURL)
+        XCTAssertEqual(model.addressText, "previous.example")
+    }
+
+    func testRetryAndSearchLoadTheFailedAddress() {
+        let (model, _) = makeModel(initialURL: nil)
+        let webView = FakeWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        model.webView = webView
+        let typo = URL(string: "https://wikipeida.org/wiki/Aurora")!
+        model.loadDidFail(loadError(NSURLErrorCannotFindHost, failing: typo))
+
+        model.retryFailedLoad()
+        model.searchFailedHost()
+
+        XCTAssertEqual(webView.loaded, [
+            typo,
+            SearchEngine.duckDuckGo.searchURL(for: "wikipeida.org")!,
+        ])
+    }
+
+    func testCrashKeepsThePageAddressAndReloadsIt() {
+        let (model, _) = makeModel(initialURL: nil)
+        let webView = FakeWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        let page = URL(string: "https://maps.example/route")!
+        webView.stubbedURL = page
+        model.webView = webView
+
+        model.webContentProcessDidTerminate()
+        model.retryFailedLoad()
+
+        XCTAssertEqual(model.pageError, .crashed)
+        XCTAssertEqual(webView.loaded, [page])
+    }
+
+    func testGoBackRevealsTheOldPageOrClosesTheBrowser() {
+        let (model, _) = makeModel(initialURL: nil)
+        let webView = FakeWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        model.webView = webView
+        let bad = URL(string: "https://expired.example")!
+
+        // The failed load never replaced the page underneath.
+        webView.stubbedURL = URL(string: "https://previous.example")
+        model.loadDidFail(loadError(NSURLErrorServerCertificateHasBadDate, failing: bad))
+        XCTAssertFalse(model.leaveErrorPage())
+        XCTAssertNil(model.pageError)
+
+        // The browser opened straight onto the bad page: nothing to go back to.
+        webView.stubbedURL = bad
+        model.loadDidFail(loadError(NSURLErrorServerCertificateHasBadDate, failing: bad))
+        XCTAssertTrue(model.leaveErrorPage())
+
+        webView.stubbedCanGoBack = true
+        XCTAssertFalse(model.leaveErrorPage())
+        XCTAssertEqual(webView.wentBack, 1)
+    }
 }
 
 // MARK: - Fakes
@@ -372,6 +472,20 @@ private final class FakeHaptics: HapticsPlaying {
 
 private final class FakeWebView: WKWebView {
     var stubbedURL: URL?
+    var stubbedCanGoBack = false
+    private(set) var loaded: [URL] = []
+    private(set) var wentBack = 0
 
     override var url: URL? { stubbedURL }
+    override var canGoBack: Bool { stubbedCanGoBack }
+
+    override func load(_ request: URLRequest) -> WKNavigation? {
+        if let url = request.url { loaded.append(url) }
+        return nil
+    }
+
+    override func goBack() -> WKNavigation? {
+        wentBack += 1
+        return nil
+    }
 }

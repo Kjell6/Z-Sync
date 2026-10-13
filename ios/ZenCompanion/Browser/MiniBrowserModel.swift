@@ -24,6 +24,13 @@ final class MiniBrowserModel {
     // MARK: Address field
     var addressText: String = ""
 
+    // MARK: Error panel
+    /// Set while a panel covers the web view because the page couldn't load.
+    private(set) var pageError: BrowserPageError?
+    /// The address that failed. The address bar, Safari and the panel's
+    /// buttons act on it rather than on the page underneath.
+    private(set) var failedURL: URL?
+
     // MARK: Pin banner
     var showPinBanner = false
     var pinnedDestination = PinDestination(spaceId: "")
@@ -91,6 +98,9 @@ final class MiniBrowserModel {
     /// Precedence: live page URL → the web view's URL → the initial URL →
     /// whatever the address field currently resolves to.
     var effectiveURL: URL? {
+        if pageError != nil, let failedURL {
+            return failedURL
+        }
         if let current = currentURL {
             return current
         }
@@ -172,7 +182,9 @@ final class MiniBrowserModel {
 
     func currentURLDidChange(_ url: URL?, isAddressFocused: Bool) {
         if let url {
-            if !isAddressFocused {
+            // A failed load puts the old page's address back; the bar keeps
+            // showing the address that failed.
+            if !isAddressFocused && pageError == nil {
                 addressText = BrowserInput.displayText(for: url)
             }
             // Leaving the pinned page saves it now instead of letting the
@@ -195,6 +207,72 @@ final class MiniBrowserModel {
                 addressText = BrowserInput.displayText(for: url)
             }
         }
+    }
+
+    // MARK: - Error panel
+
+    /// A load failed before the page appeared.
+    func loadDidFail(_ error: Error) {
+        let nsError = error as NSError
+        guard let kind = BrowserPageError.forLoadFailure(domain: nsError.domain, code: nsError.code) else {
+            return
+        }
+        let failing = nsError.userInfo[NSURLErrorFailingURLErrorKey] as? URL
+            ?? (nsError.userInfo[NSURLErrorFailingURLStringErrorKey] as? String).flatMap(URL.init(string:))
+        pageError = kind
+        failedURL = failing ?? webView?.url ?? currentURL
+    }
+
+    func webContentProcessDidTerminate() {
+        pageError = .crashed
+        failedURL = webView?.url ?? currentURL
+    }
+
+    /// A new page replaced whatever failed.
+    func pageDidCommit() {
+        pageError = nil
+        failedURL = nil
+    }
+
+    /// Keeps the address bar on the failed address while the panel shows,
+    /// and back on the live page once it's gone.
+    func pageErrorDidChange(isAddressFocused: Bool) {
+        guard !isAddressFocused, let url = failedURL ?? currentURL else { return }
+        addressText = BrowserInput.displayText(for: url)
+    }
+
+    func retryFailedLoad() {
+        guard let failedURL else {
+            webView?.reload()
+            return
+        }
+        load(url: failedURL)
+    }
+
+    /// Searches for the host that couldn't be found, usually a typo.
+    func searchFailedHost() {
+        guard let failedURL,
+              let url = searchEngine.current.searchURL(for: failedURL.host ?? failedURL.absoluteString)
+        else { return }
+        load(url: url)
+    }
+
+    /// "Go back" on the panel. Returns true when the browser should close.
+    func leaveErrorPage() -> Bool {
+        let exit = BrowserPageError.exit(
+            currentURL: webView?.url,
+            failedURL: failedURL,
+            canGoBack: webView?.canGoBack ?? false
+        )
+        switch exit {
+        case .reveal:
+            pageDidCommit()
+        case .goBack:
+            goBack()
+        case .dismiss:
+            return true
+        }
+        return false
     }
 
     // MARK: - Pin save state machine

@@ -135,6 +135,12 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
             }
         }
 
+        func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+            DispatchQueue.main.async {
+                self.model.pageDidCommit()
+            }
+        }
+
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             DispatchQueue.main.async {
                 self.model.isLoading = false
@@ -177,6 +183,14 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
             DispatchQueue.main.async {
                 self.model.isLoading = false
+                self.model.loadDidFail(error)
+            }
+        }
+
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            DispatchQueue.main.async {
+                self.model.isLoading = false
+                self.model.webContentProcessDidTerminate()
             }
         }
     }

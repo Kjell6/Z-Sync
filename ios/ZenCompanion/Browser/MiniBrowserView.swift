@@ -1,16 +1,12 @@
 import SwiftUI
 import WebKit
 
-/// A clean, native iOS In-App Mini-Browser with genuine Liquid Glass material:
-/// - Minimalist Liquid Glass Address Pill (Height 48pt) with embedded progress bar
-/// - Round Liquid Glass "X" cancel button in focus mode
-/// - Native UIKit grouped ToolbarItemGroup (Back/Forward and Safari/Pin)
-/// - Pin button with instant tap (pin to current space) and long-press Menu without preview lift
-/// - Asynchronous background pinning with loading spinner and 2.5s auto-revert checkmark
-/// - Webview positioned strictly UNDER the pill (no content behind header, no progressive blur)
-/// - Entire Sheet adopts the adaptive website theme color
-/// - Real HTTPS vs Insecure (HTTP) security indicator
-/// - Edge-to-edge WKWebView with target="_blank" support
+/// In-app mini-browser. Collapsed, the page ends where the bottom bar begins.
+/// The open menu and the address composer draw over the page, so the page
+/// itself does not move. The address composer keeps running down to the
+/// screen bottom, behind the keys (`MiniBrowserChrome`). A field on the page
+/// does not lift that bar: the keys cover it, and a checkmark above them
+/// closes the keyboard.
 struct MiniBrowserView: View {
     let initialURL: URL?
     let space: ZenSpace
@@ -20,12 +16,21 @@ struct MiniBrowserView: View {
     @Environment(\.colorScheme) private var scheme
     @State private var model: MiniBrowserModel
     @FocusState private var isAddressFocused: Bool
+    /// Composer is up. Separate from focus so the text field is created
+    /// before it becomes first responder, and removed only after it resigns.
+    @State private var editingAddress = false
     /// First-frame search chrome when opened from the search pill, so the
     /// sheet never animates unfocused → focused (X button, toolbar, alignment).
     @State private var startsInSearch: Bool
     /// Chrome springs stay off while the sheet presents, so the address bar
     /// rides the sheet instead of running a second animation.
     @State private var animateAddressChrome = false
+    /// Distance from the screen bottom to the top of the keyboard.
+    @State private var keyboardOverlap: CGFloat = 0
+    /// Home-indicator inset. The glass fills it; the buttons sit above it.
+    @State private var safeBottom: CGFloat = Self.windowSafeBottom()
+    /// Corner radius of the display this sheet is on.
+    @State private var displayCornerRadius: CGFloat = DisplayCornerRadius.points()
 
     init(
         initialURL: URL?,
@@ -42,8 +47,28 @@ struct MiniBrowserView: View {
         _startsInSearch = State(initialValue: initialURL == nil)
     }
 
-    /// Keyboard focus or the search-open first paint.
-    private var addressEditing: Bool { isAddressFocused || startsInSearch }
+    /// Keyboard focus, the tap that opens the composer, or the search-open first paint.
+    private var addressEditing: Bool { editingAddress || isAddressFocused || startsInSearch }
+
+    /// Space inside the glass, below the controls. The address composer
+    /// includes the keyboard height, so the same glass continues behind the
+    /// keys. A page field does not: the bar stays on the screen bottom.
+    private var chromeContentBottomInset: CGFloat {
+        if addressEditing, keyboardOverlap > 1 { return keyboardOverlap + 16 }
+        return safeBottom + 8
+    }
+
+    /// Webpage or find field, not the address composer.
+    private var pageKeyboard: Bool {
+        MiniBrowserTools.showsPageKeyboardDone(
+            keyboardOverlap: keyboardOverlap,
+            addressEditing: addressEditing
+        )
+    }
+
+    /// Height of the collapsed bar. The page always reserves exactly this, so
+    /// opening the menu or the keyboard does not push the page up.
+    private var collapsedBarHeight: CGFloat { 10 + 44 + safeBottom + 8 }
 
     private var defaultBackground: Color {
         scheme == .dark ? Color(uiColor: .systemBackground) : Color.white
@@ -58,191 +83,88 @@ struct MiniBrowserView: View {
 
         NavigationStack {
             ZStack(alignment: .bottom) {
-                ZStack(alignment: .top) {
-                    // 1. Entire Sheet Background
-                    sheetBackground
-                        .ignoresSafeArea()
-
-                    // 2. Main Vertical Stack: Header on top, Web View full-bleed below
-                    VStack(spacing: 0) {
-                        // Top Header (Liquid Glass Address Pill)
-                        HStack(spacing: 10) {
-                            // Liquid Glass Address Pill
-                            HStack(spacing: 10) {
-                                // Security / Search Indicator
-                                securityIcon
-
-                                // Address & Search Text
-                                TextField("browser.search_placeholder", text: $model.addressText)
-                                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                    .textInputAutocapitalization(.never)
-                                    .autocorrectionDisabled()
-                                    .keyboardType(.webSearch)
-                                    .submitLabel(.go)
-                                    .multilineTextAlignment(addressEditing ? .leading : .center)
-                                    .focused($isAddressFocused)
-                                    .onSubmit {
-                                        submitAddress()
-                                    }
-                                    .frame(maxWidth: .infinity)
-
-                                // Stable Trailing Icon Container (Clear button when editing, Reload/Stop otherwise)
-                                ZStack {
-                                    if addressEditing && !model.addressText.isEmpty {
-                                        Button {
-                                            model.clearAddressText()
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .font(.system(size: 16))
-                                                .foregroundStyle(.secondary)
-                                                .frame(width: 36, height: 44)
-                                                .contentShape(Rectangle())
-                                        }
-                                        .buttonStyle(.plain)
-                                        .transition(.scale.combined(with: .opacity))
-                                    } else if !addressEditing {
-                                        Button {
-                                            if model.isLoading {
-                                                model.stopLoading()
-                                            } else {
-                                                model.reload()
-                                            }
-                                        } label: {
-                                            Image(systemName: model.isLoading ? "xmark" : "arrow.clockwise")
-                                                .font(.system(size: 16, weight: .semibold))
-                                                .foregroundStyle(.secondary)
-                                                .frame(width: 44, height: 44)
-                                                .contentShape(Rectangle())
-                                                .contentTransition(.symbolEffect(.replace))
-                                        }
-                                        .buttonStyle(.plain)
-                                        .transition(.scale.combined(with: .opacity))
-                                    }
-                                }
-                                .animation(
-                                    animateAddressChrome ? .spring(response: 0.25, dampingFraction: 0.85) : nil,
-                                    value: addressEditing
-                                )
-                                .animation(
-                                    animateAddressChrome ? .spring(response: 0.25, dampingFraction: 0.85) : nil,
-                                    value: model.addressText.isEmpty
-                                )
-                            }
-                            .padding(.leading, 14)
-                            .padding(.trailing, 4)
-                            .frame(height: 48)
-                            .frame(maxWidth: .infinity)
-                            .overlay(alignment: .bottom) {
-                                // Edge-to-edge progress bar strictly clipped inside the capsule
-                                if model.isLoading && !addressEditing {
-                                    GeometryReader { geo in
-                                        Rectangle()
-                                            .fill(Palette.coral(scheme))
-                                            .frame(width: geo.size.width * CGFloat(max(model.estimatedProgress, 0.05)), height: 2.5)
-                                            .animation(.linear(duration: 0.2), value: model.estimatedProgress)
-                                    }
-                                    .frame(height: 2.5)
-                                }
-                            }
-                            .clipShape(Capsule())
-                            .liquidGlassCapsule()
-
-                            // Round Liquid Glass Cancel "X" Button
-                            if addressEditing {
-                                Button {
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                                        if model.effectiveURL != nil {
-                                            isAddressFocused = false
-                                            startsInSearch = false
-                                        } else {
-                                            onDismiss()
-                                        }
-                                    }
-                                } label: {
-                                    Image(systemName: "xmark")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundStyle(Palette.coral(scheme))
-                                        .frame(width: 48, height: 48)
-                                        .liquidGlassCircle()
-                                }
-                                .buttonStyle(.plain)
-                                .transition(animateAddressChrome
-                                    ? .asymmetric(
-                                        insertion: .scale(scale: 0.8).combined(with: .opacity).combined(with: .move(edge: .trailing)),
-                                        removal: .scale(scale: 0.8).combined(with: .opacity).combined(with: .move(edge: .trailing))
-                                    )
-                                    : .identity
-                                )
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 16)
-                        .padding(.bottom, 12)
-                        .overlay(alignment: .bottom) {
-                            if #available(iOS 26.0, *) {
-                                EmptyView()
-                            } else {
-                                chromeStroke
-                            }
-                        }
-
-                        // iOS 26: full-bleed under glass; layout viewport is
-                        // shrunk via obscuredContentInsets. Older iOS: the
-                        // web view sits between the header and a full-width
-                        // bottom bar, separated by hairline strokes.
+                VStack(spacing: 0) {
+                    ZStack {
                         webPane
+
+                        if model.menuExpanded {
+                            // UIKit scrim, not a SwiftUI tap gesture. A SwiftUI
+                            // gesture left on top of the web view kept eating
+                            // touches after the menu closed.
+                            PageDismissScrim {
+                                withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+                                    model.collapseMenu()
+                                }
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .accessibilityLabel(Text("browser.close_menu"))
+                            .accessibilityAddTraits(.isButton)
+                        }
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    Color.clear
+                        .frame(height: collapsedBarHeight)
+                        .accessibilityHidden(true)
+                        .allowsHitTesting(false)
                 }
 
-                if model.showPinBanner {
-                    pinBanner
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 6)
-                } else if let notice = model.pinNotice {
+                if let notice = model.pinNotice {
                     pinNoticeToast(notice)
                         .padding(.horizontal, 20)
-                        .padding(.bottom, 6)
+                        .padding(.bottom, collapsedBarHeight + 8)
+                        .frame(maxWidth: .infinity)
+                }
+
+                MiniBrowserChrome(
+                    model: model,
+                    addressEditing: addressEditing,
+                    animateChrome: animateAddressChrome,
+                    isAddressFocused: $isAddressFocused,
+                    space: space,
+                    allSpaces: allSpaces,
+                    bottomInset: chromeContentBottomInset,
+                    displayCornerRadius: displayCornerRadius,
+                    onBeginAddressEdit: beginAddressEditing,
+                    onCancel: cancelAddressEditing,
+                    onSubmit: submitAddress
+                )
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityHidden(pageKeyboard)
+
+                if pageKeyboard {
+                    // Above the keys, trailing. Not inside the bar: the bar
+                    // stays on the screen bottom, under the keyboard.
+                    pageKeyboardDone
+                        .padding(.trailing, 20)
+                        .padding(.bottom, keyboardOverlap + 12)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .transition(.identity)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .background(sheetBackground.ignoresSafeArea())
+            .ignoresSafeArea(edges: .bottom)
+            .ignoresSafeArea(.keyboard)
+            .presentationBackground(sheetBackground)
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
+                let overlap = Self.keyboardOverlap(from: note)
+                withAnimation(Self.keyboardAnimation(from: note)) {
+                    keyboardOverlap = overlap
                 }
             }
             .animation(
                 animateAddressChrome ? .spring(response: 0.35, dampingFraction: 0.85) : nil,
                 value: addressEditing
             )
+            .animation(.spring(response: 0.38, dampingFraction: 0.86), value: model.pinNotice != nil)
             .animation(.easeInOut(duration: 0.25), value: model.themeColor)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)
-            .toolbar(addressEditing ? .hidden : .visible, for: .bottomBar)
-            .hiddenBottomScrollEdgeEffect()
-            .legacyBottomToolbarBackground(sheetBackground)
             .tint(Palette.ink(scheme))
-            .toolbar {
-                if #available(iOS 26.0, *) {
-                    ToolbarItemGroup(placement: .bottomBar) {
-                        ControlGroup {
-                            toolbarBackButton
-                            toolbarForwardButton
-                        }
-                        Spacer()
-                        ControlGroup {
-                            toolbarSafariButton
-                            toolbarPinButton
-                        }
-                    }
-                } else {
-                    ToolbarItemGroup(placement: .bottomBar) {
-                        toolbarBackButton
-                        toolbarForwardButton
-                        Spacer()
-                        toolbarSafariButton
-                        toolbarPinButton
-                    }
-                }
-            }
-            .presentationBackground(sheetBackground)
-            // Keyboard must not re-layout the address bar; it stays glued to the sheet.
-            .ignoresSafeArea(.keyboard)
-            .geometryGroup()
             .onAppear {
+                safeBottom = Self.windowSafeBottom()
+                displayCornerRadius = DisplayCornerRadius.points()
                 model.loadInitial()
                 if model.opensWithSearch {
                     isAddressFocused = true
@@ -255,12 +177,41 @@ struct MiniBrowserView: View {
             .onChange(of: model.currentURL) { _, newURL in
                 model.currentURLDidChange(newURL, isAddressFocused: isAddressFocused)
             }
+            .onChange(of: model.pinNotice) { _, notice in
+                // The refusal toast sits above the collapsed bar. An open
+                // sheet would cover it, so a notice closes the menu.
+                guard notice != nil, model.menuExpanded else { return }
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+                    model.collapseMenu()
+                }
+            }
             .onChange(of: isAddressFocused) { _, focused in
-                if !focused { startsInSearch = false }
-                model.addressFocusDidChange(focused)
-                if focused && !model.addressText.isEmpty {
+                if focused {
+                    model.collapseMenu()
+                    guard !model.addressText.isEmpty else { return }
+                    // Select after the keyboard has the field. Doing it in this
+                    // turn deadlocks UIKeyboardTaskQueue on the main thread.
                     DispatchQueue.main.async {
-                        UIApplication.shared.sendAction(#selector(UIResponder.selectAll(_:)), to: nil, from: nil, for: nil)
+                        guard isAddressFocused else { return }
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.selectAll(_:)),
+                            to: nil,
+                            from: nil,
+                            for: nil
+                        )
+                    }
+                } else {
+                    // Resign first. Remove the field and restore the short
+                    // label only after that update, so the text write cannot
+                    // hit a live editor.
+                    DispatchQueue.main.async {
+                        guard !isAddressFocused else { return }
+                        editingAddress = false
+                        startsInSearch = false
+                        DispatchQueue.main.async {
+                            guard !isAddressFocused else { return }
+                            model.restoreAddressDisplay()
+                        }
                     }
                 }
             }
@@ -268,181 +219,119 @@ struct MiniBrowserView: View {
                 model.commitPendingPinSave()
             }
         }
-        .geometryGroup()
     }
 
-    // MARK: - Security Indicator
-
-    private var securityIcon: some View {
-        ZStack {
-            // Non-focused Security Icon (Grey Lock / Insecure Warning / Globe)
-            Group {
-                if let url = model.currentURL {
-                    if url.scheme == "https" {
-                        Image(systemName: "lock.fill")
-                            .foregroundStyle(.secondary)
-                    } else if url.scheme == "http" {
-                        Image(systemName: "lock.slash.fill")
-                            .foregroundStyle(.orange)
-                    } else {
-                        Image(systemName: "globe")
-                            .foregroundStyle(.secondary)
-                    }
-                } else {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .opacity(addressEditing ? 0 : 1)
-            .scaleEffect(addressEditing ? 0.7 : 1.0)
-
-            // Focused Search Icon (Vibrant Coral Magnifying Glass)
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(Palette.coral(scheme))
-                .opacity(addressEditing ? 1 : 0)
-                .scaleEffect(addressEditing ? 1.0 : 0.7)
-        }
-        .font(.system(size: 15, weight: .semibold))
-        .frame(width: 20, height: 20)
-    }
-
-    // MARK: - Bottom chrome (iOS 26 glass ControlGroups vs native toolbar)
-
-    private var chromeStroke: some View {
-        Rectangle()
-            .fill(Palette.ink(scheme).opacity(0.12))
-            .frame(height: 0.5)
-            .frame(maxWidth: .infinity)
-    }
-
-    @ViewBuilder
+    /// The page stops at the bar. No extra viewport inset under the glass.
     private var webPane: some View {
-        let representable = MiniBrowserRepresentable(
+        MiniBrowserRepresentable(
             model: model,
-            // Overlay inset only for iOS 26 floating glass. On older iOS the
-            // native bottom bar already owns that space.
-            bottomBarVisible: {
-                if #available(iOS 26.0, *) { return !addressEditing }
-                return false
-            }()
+            bottomBarVisible: false,
+            bottomChromeHeight: 0
         )
-        if #available(iOS 26.0, *) {
-            representable.ignoresSafeArea(edges: .bottom)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private static func windowSafeBottom() -> CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)?
+            .safeAreaInsets.bottom ?? 0
+    }
+
+    private static func keyboardOverlap(from note: Notification) -> CGFloat {
+        guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
+            return 0
+        }
+        let screenHeight = (note.object as? UIScreen)?.bounds.height
+            ?? UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap(\.windows)
+                .first(where: \.isKeyWindow)?
+                .bounds.height
+            ?? 0
+        guard screenHeight > 0 else { return 0 }
+        return max(0, screenHeight - frame.minY)
+    }
+
+    private static func keyboardAnimation(from note: Notification) -> Animation {
+        let duration = note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.25
+        let raw = note.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? Int
+            ?? UIView.AnimationCurve.easeInOut.rawValue
+        switch UIView.AnimationCurve(rawValue: raw) {
+        case .linear:
+            return .linear(duration: duration)
+        case .easeIn:
+            return .easeIn(duration: duration)
+        case .easeOut:
+            return .easeOut(duration: duration)
+        default:
+            return .easeInOut(duration: duration)
+        }
+    }
+
+}
+
+private extension MiniBrowserView {
+    private func beginAddressEditing() {
+        // The full URL is written while the collapsed bar is still a label.
+        // The text field is created afterwards, already holding that string.
+        model.prepareAddressForEditing()
+        model.collapseMenu()
+        editingAddress = true
+    }
+
+    private func cancelAddressEditing() {
+        if model.effectiveURL != nil {
+            if isAddressFocused {
+                isAddressFocused = false
+            } else {
+                editingAddress = false
+                startsInSearch = false
+                model.restoreAddressDisplay()
+            }
         } else {
-            representable
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                onDismiss()
+            }
         }
     }
 
-    private var toolbarBackButton: some View {
-        Button {
-            model.goBack()
-        } label: {
-            Image(systemName: "chevron.backward")
-        }
-        .disabled(!model.canGoBack)
-        .accessibilityLabel(Text("browser.back"))
+    /// Closes the webpage keyboard. The address field is not first responder
+    /// in this state. WebKit sometimes ignores `endEditing`, so the responder
+    /// action always runs as well.
+    private func dismissPageKeyboard() {
+        _ = model.webView?.endEditing(true)
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
     }
 
-    private var toolbarForwardButton: some View {
-        Button {
-            model.goForward()
-        } label: {
-            Image(systemName: "chevron.forward")
+    /// One glass squircle over the page. A lift tile would disappear on a
+    /// white page; this control has no bar behind it.
+    private var pageKeyboardDone: some View {
+        Button(action: dismissPageKeyboard) {
+            Image(systemName: "checkmark")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Palette.ink(scheme))
+                .frame(width: 44, height: 44)
+                .liquidGlassCard(cornerRadius: Palette.liftCornerRadius)
         }
-        .disabled(!model.canGoForward)
-        .accessibilityLabel(Text("browser.forward"))
-    }
-
-    private var toolbarSafariButton: some View {
-        Button {
-            model.openCurrentInExternalBrowser()
-        } label: {
-            Image(systemName: "safari")
-                .symbolRenderingMode(.monochrome)
-        }
-        .disabled(model.effectiveURL == nil)
-        .accessibilityLabel(Text("browser.open_in_browser"))
-    }
-
-    private var toolbarPinButton: some View {
-        Button {
-            model.triggerPinBanner(spaces: allSpaces, fallbackSpace: space)
-        } label: {
-            Image(systemName: "pin")
-                .symbolRenderingMode(.monochrome)
-        }
-        .disabled(model.effectiveURL == nil)
-        .accessibilityLabel(Text("browser.pin_to_space"))
+        .buttonStyle(SquircleButtonStyle())
+        .accessibilityLabel(Text("common.done"))
     }
 
     private func submitAddress() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+        if isAddressFocused {
             isAddressFocused = false
+        } else {
+            editingAddress = false
             startsInSearch = false
         }
         model.submitAddress()
-    }
-
-    // MARK: - Pin Toast Banner View
-
-    @ViewBuilder
-    private var pinBanner: some View {
-        HStack(spacing: 0) {
-            // Left: Filled Pin Icon + "Pinned"
-            HStack(spacing: 8) {
-                Image(systemName: "pin.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Palette.onCoral(scheme))
-
-                Text(model.pinSaveKind == .pinned ? "browser.pinned" : "browser.saved_as_normal")
-                    .font(.system(size: 15.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Palette.onCoral(scheme))
-            }
-
-            Spacer(minLength: 14)
-
-            // Elegant subtle vertical divider
-            Rectangle()
-                .fill(Palette.onCoral(scheme).opacity(0.22))
-                .frame(width: 1, height: 22)
-                .padding(.horizontal, 12)
-
-            // Right: Destination picker (native menu, space + optional folder)
-            PinDestinationMenuButton(
-                destination: model.pinnedDestination,
-                spaces: allSpaces,
-                scheme: scheme,
-                titleSize: 15,
-                allowsFolders: model.pinSaveKind == .pinned,
-                inkColor: UIColor(Palette.onCoral(scheme)),
-                onSelect: { chosen in
-                    model.selectPinDestination(chosen)
-                },
-                onMenuWillOpen: {
-                    // Keep the banner alive while the picker is open.
-                    model.pinMenuWillOpen()
-                },
-                onMenuDidDismiss: {
-                    model.pinMenuDidDismiss()
-                }
-            )
-        }
-        .padding(.horizontal, 18)
-        .frame(height: 58)
-        .clipShape(Capsule())
-        .liquidGlassTintedCapsule(
-            Palette.coral(scheme),
-            glassVisible: !model.pinBannerGlassSuppressed
-        )
-        .shadow(color: Color.black.opacity(scheme == .dark ? 0.35 : 0.12), radius: 18, x: 0, y: 8)
-        .overlay(
-            Capsule()
-                .stroke(Palette.onCoral(scheme).opacity(0.14), lineWidth: 0.5)
-        )
-        .transition(.asymmetric(
-            insertion: .move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.95)),
-            removal: .move(edge: .bottom).combined(with: .opacity)
-        ))
     }
 
     // MARK: - Pin Refusal Toast
@@ -450,23 +339,18 @@ struct MiniBrowserView: View {
     private func pinNoticeToast(_ text: String) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "pin.slash.fill")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Palette.onCoral(scheme))
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.primary)
 
             Text(text)
-                .font(.system(size: 15.5, weight: .semibold, design: .rounded))
-                .foregroundStyle(Palette.onCoral(scheme))
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .foregroundStyle(.primary)
                 .lineLimit(2)
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 16)
         .frame(minHeight: 48)
-        .clipShape(Capsule())
-        .liquidGlassTintedCapsule(Palette.coral(scheme))
-        .shadow(color: Color.black.opacity(scheme == .dark ? 0.35 : 0.12), radius: 18, x: 0, y: 8)
-        .overlay(
-            Capsule()
-                .stroke(Palette.onCoral(scheme).opacity(0.14), lineWidth: 0.5)
-        )
+        .liquidGlassCapsule(interactive: true)
+        .floatingGlassShadow(scheme: scheme)
         .transition(.asymmetric(
             insertion: .move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.95)),
             removal: .move(edge: .bottom).combined(with: .opacity)

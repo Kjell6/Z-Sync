@@ -75,6 +75,90 @@ final class MiniBrowserModelTests: XCTestCase {
         XCTAssertNil(model.effectiveURL)
     }
 
+    // MARK: - Page menu tools
+
+    func testMenuOpensOnlyWhenAPageExists() {
+        let (model, _) = makeModel(initialURL: nil)
+        model.toggleMenu()
+        XCTAssertFalse(model.menuExpanded)
+
+        model.currentURL = URL(string: "https://example.com")
+        model.toggleMenu()
+        XCTAssertTrue(model.menuExpanded)
+        model.toggleMenu()
+        XCTAssertFalse(model.menuExpanded)
+    }
+
+    func testForwardButtonAppearsOnlyWhenForwardIsPossible() {
+        XCTAssertFalse(MiniBrowserTools.showsForwardButton(canGoForward: false, addressEditing: false))
+        XCTAssertTrue(MiniBrowserTools.showsForwardButton(canGoForward: true, addressEditing: false))
+        XCTAssertFalse(MiniBrowserTools.showsForwardButton(canGoForward: true, addressEditing: true))
+    }
+
+    func testPageKeyboardDoneStaysOffWhileEditingTheAddress() {
+        XCTAssertFalse(MiniBrowserTools.showsPageKeyboardDone(keyboardOverlap: 0, addressEditing: false))
+        XCTAssertFalse(MiniBrowserTools.showsPageKeyboardDone(keyboardOverlap: 1, addressEditing: false))
+        XCTAssertTrue(MiniBrowserTools.showsPageKeyboardDone(keyboardOverlap: 336, addressEditing: false))
+        XCTAssertFalse(MiniBrowserTools.showsPageKeyboardDone(keyboardOverlap: 336, addressEditing: true))
+    }
+
+    func testZoomClampsToHalfAndDouble() {
+        let (model, _) = makeModel(initialURL: nil)
+        XCTAssertEqual(model.pageZoom, 1, accuracy: 0.001)
+        XCTAssertEqual(MiniBrowserTools.zoomPercentLabel(1), "100%")
+
+        model.zoomIn()
+        XCTAssertEqual(model.pageZoom, 1.1, accuracy: 0.001)
+
+        model.setPageZoom(9)
+        XCTAssertEqual(model.pageZoom, MiniBrowserTools.zoomMax, accuracy: 0.001)
+        XCTAssertFalse(model.canZoomIn)
+        model.zoomIn()
+        XCTAssertEqual(model.pageZoom, MiniBrowserTools.zoomMax, accuracy: 0.001)
+
+        model.setPageZoom(0.01)
+        XCTAssertEqual(model.pageZoom, MiniBrowserTools.zoomMin, accuracy: 0.001)
+        XCTAssertFalse(model.canZoomOut)
+        XCTAssertEqual(MiniBrowserTools.zoomPercentLabel(model.pageZoom), "50%")
+    }
+
+    func testDesktopSiteTogglesWithoutAWebView() {
+        let (model, _) = makeModel(initialURL: URL(string: "https://example.com"))
+        XCTAssertFalse(model.requestsDesktopSite)
+        model.toggleDesktopSite()
+        XCTAssertTrue(model.requestsDesktopSite)
+        model.toggleDesktopSite()
+        XCTAssertFalse(model.requestsDesktopSite)
+    }
+
+    func testFindOnPageClosesTheMenu() {
+        let (model, _) = makeModel(initialURL: URL(string: "https://example.com")!)
+        model.currentURL = URL(string: "https://example.com")
+        model.toggleMenu()
+        model.presentFindOnPage()
+        XCTAssertFalse(model.menuExpanded)
+    }
+
+    func testCopyCurrentLink() {
+        let previous = UIPasteboard.general.url
+        defer { UIPasteboard.general.url = previous }
+
+        let (model, _) = makeModel(initialURL: nil)
+        XCTAssertFalse(model.copyCurrentLink())
+
+        let url = URL(string: "https://example.com/copied")!
+        model.currentURL = url
+        XCTAssertTrue(model.copyCurrentLink())
+        XCTAssertEqual(UIPasteboard.general.url, url)
+    }
+
+    func testPageHostUsesDisplayText() {
+        let (model, _) = makeModel(initialURL: nil)
+        XCTAssertEqual(model.pageHost, "")
+        model.currentURL = URL(string: "https://www.example.com/path")
+        XCTAssertEqual(model.pageHost, "www.example.com")
+    }
+
     // MARK: - Pin save
 
     func testPinSaveUsesSelectedTargetAndClearsPending() async {

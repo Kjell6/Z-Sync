@@ -1,4 +1,24 @@
 import SwiftUI
+import UIKit
+
+/// The display's own corner radius, in points. Read from the screen so the
+/// expanded bar matches the phone it is running on. Falls back only when the
+/// system does not publish a radius.
+enum DisplayCornerRadius {
+    static func points(for screen: UIScreen? = nil) -> CGFloat {
+        let screen = screen
+            ?? UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap(\.windows)
+                .first(where: \.isKeyWindow)?
+                .screen
+            ?? UIScreen.main
+        let selector = NSSelectorFromString("_displayCornerRadius")
+        guard screen.responds(to: selector) else { return 55 }
+        let value = screen.value(forKey: "_displayCornerRadius") as? CGFloat ?? 0
+        return value > 1 ? value : 55
+    }
+}
 
 // MARK: - Liquid Glass View Modifier Helper
 
@@ -28,15 +48,99 @@ extension View {
         }
     }
 
+    /// Untinted capsule. `interactive` is the same touch flex native glass
+    /// buttons get. `glassVisible == false` drops the glass layer: while a
+    /// native context menu is up, iOS 26 paints `glassEffect` as an opaque
+    /// white slab, so the pin banner falls back to a plain material.
     @ViewBuilder
-    func liquidGlassCapsule() -> some View {
+    func liquidGlassCapsule(interactive: Bool = false, glassVisible: Bool = true) -> some View {
         if #available(iOS 26.0, *) {
-            self.glassEffect(in: Capsule())
+            if glassVisible {
+                self.glassEffect(interactive ? .regular.interactive() : .regular, in: Capsule())
+            } else {
+                self.background(.regularMaterial, in: Capsule())
+            }
         } else {
             self
                 .background(.ultraThinMaterial, in: Capsule())
                 .overlay(
                     Capsule().strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.6)
+                )
+        }
+    }
+
+    /// Soft lift. No fill: the page stays what the glass samples.
+    func floatingGlassShadow(scheme: ColorScheme) -> some View {
+        shadow(
+            color: Color.black.opacity(scheme == .dark ? 0.35 : 0.16),
+            radius: 14,
+            x: 0,
+            y: 6
+        )
+    }
+
+    /// Full-width bottom bar. Bottom corners stay square so the glass is cut
+    /// off by the screen. `topRadius` is 0 while collapsed. The open menu and
+    /// the keyboard composer pass a radius smaller than the display corner.
+    ///
+    /// `glassVisible == false` drops the glass layer. iOS 26 paints
+    /// `glassEffect` as an opaque white slab while a context menu is up, and
+    /// through the menu's close. The pin row uses that only until the save
+    /// confirmation goes away.
+    @ViewBuilder
+    func liquidGlassBar(topRadius: CGFloat, glassVisible: Bool = true) -> some View {
+        let shape = UnevenRoundedRectangle(
+            topLeadingRadius: topRadius,
+            bottomLeadingRadius: 0,
+            bottomTrailingRadius: 0,
+            topTrailingRadius: topRadius,
+            style: .continuous
+        )
+        if #available(iOS 26.0, *) {
+            self
+                .background {
+                    // The plate must not take taps. On iOS 26 the effect keeps
+                    // a hit target the size of the open menu after it closes.
+                    if glassVisible {
+                        Color.clear
+                            .glassEffect(.regular, in: shape)
+                            .allowsHitTesting(false)
+                    } else {
+                        shape.fill(.regularMaterial)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .clipShape(shape)
+        } else {
+            self
+                .background {
+                    shape.fill(.ultraThinMaterial)
+                        .allowsHitTesting(false)
+                }
+                .clipShape(shape)
+                .overlay(
+                    shape.strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.6)
+                        .allowsHitTesting(false)
+                )
+        }
+    }
+
+    /// Untinted regular glass for the bottom browser card. One radius for the
+    /// collapsed bar and the expanded page menu, so the card reads as the same
+    /// surface while it grows. No tint: the sheet stays the system material.
+    @ViewBuilder
+    func liquidGlassCard(cornerRadius: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        if #available(iOS 26.0, *) {
+            self
+                .clipShape(shape)
+                .glassEffect(.regular, in: shape)
+        } else {
+            self
+                .background(.ultraThinMaterial, in: shape)
+                .clipShape(shape)
+                .overlay(
+                    shape.strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.6)
                 )
         }
     }

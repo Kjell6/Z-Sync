@@ -5,6 +5,8 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
     var model: MiniBrowserModel
     /// Native `.bottomBar` is visible (hidden while the address field is focused).
     var bottomBarVisible: Bool
+    /// Height of the floating glass above the home indicator, including keyboard lift.
+    var bottomChromeHeight: CGFloat = 0
 
     func makeCoordinator() -> Coordinator {
         Coordinator(model: model)
@@ -18,10 +20,12 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
+        webView.isFindInteractionEnabled = true
         webView.isOpaque = false
         webView.backgroundColor = .clear
         webView.scrollView.backgroundColor = .clear
         webView.bottomBarVisible = bottomBarVisible
+        webView.reservedBottomChrome = bottomChromeHeight
 
         // Paint under the translucent bar. Layout inset is `obscuredContentInsets`,
         // not scroll-view contentInset — contentInset would clip the background.
@@ -35,12 +39,18 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
 
         context.coordinator.setupObservers(for: webView)
         model.webView = webView
+        model.applyWebpagePreferences()
         return webView
     }
 
     func updateUIView(_ uiView: WKWebView, context: Context) {
         guard let webView = uiView as? MiniBrowserWebView else { return }
         webView.bottomBarVisible = bottomBarVisible
+        webView.reservedBottomChrome = bottomChromeHeight
+        if !webView.isUserInteractionEnabled {
+            webView.isUserInteractionEnabled = true
+        }
+        model.applyWebpagePreferences()
         webView.updateObscuredInsets()
     }
 
@@ -67,13 +77,19 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
             return nil
         }
 
-        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        func webView(
+            _ webView: WKWebView,
+            decidePolicyFor navigationAction: WKNavigationAction,
+            preferences: WKWebpagePreferences,
+            decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void
+        ) {
+            preferences.preferredContentMode = model.requestsDesktopSite ? .desktop : .mobile
             guard let url = navigationAction.request.url, !BrowserNavigationPolicy.loadsInWebView(url) else {
-                decisionHandler(.allow)
+                decisionHandler(.allow, preferences)
                 return
             }
             ExternalBrowser.open(url)
-            decisionHandler(.cancel)
+            decisionHandler(.cancel, preferences)
         }
 
         func setupObservers(for webView: WKWebView) {
@@ -173,6 +189,42 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
             DispatchQueue.main.async {
                 self.model.isLoading = false
             }
+        }
+    }
+}
+
+/// Tap catcher above the page while the menu is open. A plain UIKit view,
+/// removed with the menu, so it cannot leave a SwiftUI gesture on the web view.
+struct PageDismissScrim: UIViewRepresentable {
+    var onTap: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onTap: onTap)
+    }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+        view.isAccessibilityElement = true
+        view.accessibilityTraits = .button
+        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.tapped))
+        view.addGestureRecognizer(tap)
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.onTap = onTap
+    }
+
+    final class Coordinator: NSObject {
+        var onTap: () -> Void
+
+        init(onTap: @escaping () -> Void) {
+            self.onTap = onTap
+        }
+
+        @objc func tapped() {
+            onTap()
         }
     }
 }

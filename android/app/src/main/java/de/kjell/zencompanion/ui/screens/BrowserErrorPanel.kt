@@ -223,9 +223,9 @@ internal fun hasValidatedNetwork(manager: ConnectivityManager?): Boolean {
 }
 
 /**
- * Calls [onOnline] once the network comes back after having been down. A
- * network that already reads as working waits for a real change instead of
- * retrying in a loop.
+ * Calls [onOnline] once the network reaches the internet, including when it
+ * came back before the panel appeared. No loop: the panel only shows
+ * offline while there is no such network.
  */
 @Composable
 private fun RetryWhenOnline(onOnline: () -> Unit) {
@@ -234,21 +234,22 @@ private fun RetryWhenOnline(onOnline: () -> Unit) {
     DisposableEffect(Unit) {
         val manager = context.getSystemService(ConnectivityManager::class.java)
         val main = Handler(Looper.getMainLooper())
-        val wasDown = AtomicBoolean(!hasValidatedNetwork(manager))
+        val pending = AtomicBoolean(true)
         val callback = object : ConnectivityManager.NetworkCallback() {
-            override fun onLost(network: Network) {
-                wasDown.set(true)
-            }
-
             override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
                 if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) &&
-                    wasDown.getAndSet(false)
+                    pending.get()
                 ) {
-                    main.post { retry() }
+                    // Re-checked on the main thread: the panel may have gone
+                    // (new page, Go back) after this was posted.
+                    main.post { if (pending.getAndSet(false)) retry() }
                 }
             }
         }
         manager?.registerDefaultNetworkCallback(callback)
-        onDispose { manager?.unregisterNetworkCallback(callback) }
+        onDispose {
+            pending.set(false)
+            manager?.unregisterNetworkCallback(callback)
+        }
     }
 }

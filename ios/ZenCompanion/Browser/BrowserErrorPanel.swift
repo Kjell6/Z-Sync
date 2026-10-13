@@ -146,9 +146,10 @@ struct BrowserErrorPanel: View {
         .buttonStyle(PressedButtonStyle())
     }
 
-    /// True once the network comes back after having been down. The first
-    /// update is the current state, so a path that already reads as
-    /// satisfied waits for a real change instead of retrying in a loop.
+    /// True once the network is usable. A path that already reads as
+    /// satisfied counts too: it may have come back before the panel
+    /// appeared. The panel retries once per error, so a network that
+    /// reads as up but still fails can't loop.
     private static func connectionReturned() async -> Bool {
         let monitor = NWPathMonitor()
         let statuses = AsyncStream<NWPath.Status> { continuation in
@@ -159,13 +160,8 @@ struct BrowserErrorPanel: View {
             }
             monitor.start(queue: DispatchQueue(label: "de.kjell.zencompanion.connectivity"))
         }
-        var wasDown = false
-        for await status in statuses {
-            if status == .satisfied {
-                if wasDown { return true }
-            } else {
-                wasDown = true
-            }
+        for await status in statuses where status == .satisfied {
+            return true
         }
         return false
     }

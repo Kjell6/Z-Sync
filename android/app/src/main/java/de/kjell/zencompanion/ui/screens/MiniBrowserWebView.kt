@@ -5,10 +5,15 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.net.ConnectivityManager
 import android.net.Uri
+import android.net.http.SslError
 import android.os.Message
 import android.view.ViewGroup
+import android.webkit.RenderProcessGoneDetail
+import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -37,15 +42,24 @@ internal fun MiniBrowserWebView(
     onTextInputChange: (TextFieldValue) -> Unit,
     onTitleChange: (String) -> Unit,
     onProgressChange: (Float) -> Unit,
+    onPageStarted: () -> Unit,
+    onLoadFailed: (BrowserPageError, String) -> Unit,
+    onRendererGone: (String?) -> Unit,
 ) {
     // The factory runs once; read the focus through state so later page
     // loads see the current value instead of the one from creation time.
     val addressFocused by rememberUpdatedState(isAddressFocused)
     val textInputChange by rememberUpdatedState(onTextInputChange)
+    val onPageStart by rememberUpdatedState(onPageStarted)
+    val loadFailed by rememberUpdatedState(onLoadFailed)
+    val rendererGone by rememberUpdatedState(onRendererGone)
 
     // Native Android WebView
     AndroidView(
         factory = { ctx ->
+            // The page a tapped link is loading. A certificate error reports only
+            // its own address, and the WebView may still show the previous page.
+            var mainFrameRequest: String? = null
             WebView(ctx).apply {
                 layoutParams = ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -69,6 +83,9 @@ internal fun MiniBrowserWebView(
                 webViewClient = object : WebViewClient() {
                     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                         super.onPageStarted(view, url, favicon)
+                        // A failed load reports its error after this, so the
+                        // new page always starts without the old panel.
+                        onPageStart()
                         onLoadingChange(true)
                         onSiteThemeColorChange(null)
                         url?.let { onCurrentUrlChange(it) }
@@ -107,6 +124,33 @@ internal fun MiniBrowserWebView(
                         }
                     }
 
+                    override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                        super.onReceivedError(view, request, error)
+                        if (request?.isForMainFrame != true || error == null) return
+                        val kind = pageErrorFor(
+                            errorCode = error.errorCode,
+                            description = error.description?.toString(),
+                            isOnline = hasValidatedNetwork(ctx.getSystemService(ConnectivityManager::class.java)),
+                        ) ?: return
+                        loadFailed(kind, request.url.toString())
+                    }
+
+                    // The default cancels the load and shows nothing. Cancel too,
+                    // and explain it when the page itself is the bad one.
+                    override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
+                        handler?.cancel()
+                        val url = error?.url ?: return
+                        if (isPageCertificateError(url, listOf(view?.url, mainFrameRequest))) {
+                            loadFailed(BrowserPageError.INSECURE, url)
+                        }
+                    }
+
+                    // Without this the whole app dies with the page's renderer.
+                    override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
+                        rendererGone(view?.url)
+                        return true
+                    }
+
                     // Single-page apps change the URL without a page load.
                     override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
                         super.doUpdateVisitedHistory(view, url, isReload)
@@ -119,6 +163,7 @@ internal fun MiniBrowserWebView(
 
                     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                         if (view == null || request == null) return false
+                        if (request.isForMainFrame) mainFrameRequest = request.url.toString()
                         val context = view.context
                         val action = browserLinkAction(
                             scheme = request.url.scheme,
@@ -208,7 +253,7 @@ internal fun MiniBrowserWebView(
     )
 }
 
-private fun addressDisplay(url: String): String {
+internal fun addressDisplay(url: String): String {
     val host = runCatching { Uri.parse(url).host?.removePrefix("www.") }.getOrNull()
     return if (!host.isNullOrEmpty()) host else url
 }

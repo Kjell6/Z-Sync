@@ -38,6 +38,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
@@ -108,6 +110,8 @@ fun MiniBrowserScreen(
     }
 
     var webView by remember { mutableStateOf<WebView?>(null) }
+    // A crashed renderer takes its WebView with it; a new key builds a fresh one.
+    var webViewGeneration by remember { mutableIntStateOf(0) }
     val focusRequester = remember { FocusRequester() }
 
     SideEffect {
@@ -158,7 +162,13 @@ fun MiniBrowserScreen(
         }
     }
 
-    val effectiveUrl = webView?.url ?: state.currentUrl.ifEmpty { initialUrl ?: "" }
+    val effectiveUrl = state.failedUrl.takeIf { state.pageError != null && it.isNotEmpty() }
+        ?: webView?.url
+        ?: state.currentUrl.ifEmpty { initialUrl ?: "" }
+
+    fun load(url: String) {
+        if (url.isNotEmpty()) webView?.loadUrl(url)
+    }
     val defaultSurface = MaterialTheme.colorScheme.surface
     val targetBg = state.siteThemeColor ?: defaultSurface
     val animatedBgColor by animateColorAsState(
@@ -216,21 +226,62 @@ fun MiniBrowserScreen(
                     .weight(1f)
                     .fillMaxWidth(),
             ) {
-                MiniBrowserWebView(
-                    // A recreated WebView (theme or font change) reopens the
-                    // page the user was on, not the one the browser opened with.
-                    initialUrl = viewModel.restoredUrl(launchKey) ?: initialUrl,
-                    isAddressFocused = state.isAddressFocused,
-                    onWebViewCreated = { webView = it },
-                    onLoadingChange = viewModel::onLoadingChange,
-                    onSiteThemeColorChange = viewModel::onSiteThemeColorChange,
-                    onCurrentUrlChange = viewModel::onCurrentUrlChange,
-                    onCanGoBackChange = viewModel::onCanGoBackChange,
-                    onCanGoForwardChange = viewModel::onCanGoForwardChange,
-                    onTextInputChange = viewModel::onAddressTextChange,
-                    onTitleChange = viewModel::onCurrentTitleChange,
-                    onProgressChange = viewModel::onProgressChange,
-                )
+                key(webViewGeneration) {
+                    MiniBrowserWebView(
+                        // A recreated WebView (theme or font change) reopens the
+                        // page the user was on, not the one the browser opened with.
+                        // After a crash it waits for Reload instead.
+                        initialUrl = if (state.pageError == BrowserPageError.CRASHED) {
+                            null
+                        } else {
+                            viewModel.restoredUrl(launchKey) ?: initialUrl
+                        },
+                        isAddressFocused = state.isAddressFocused,
+                        onWebViewCreated = { webView = it },
+                        onLoadingChange = viewModel::onLoadingChange,
+                        onSiteThemeColorChange = viewModel::onSiteThemeColorChange,
+                        onCurrentUrlChange = viewModel::onCurrentUrlChange,
+                        onCanGoBackChange = viewModel::onCanGoBackChange,
+                        onCanGoForwardChange = viewModel::onCanGoForwardChange,
+                        onTextInputChange = viewModel::onAddressTextChange,
+                        onTitleChange = viewModel::onCurrentTitleChange,
+                        onProgressChange = viewModel::onProgressChange,
+                        onPageStarted = viewModel::clearPageError,
+                        onLoadFailed = viewModel::onPageLoadFailed,
+                        onRendererGone = { url ->
+                            viewModel.onPageLoadFailed(BrowserPageError.CRASHED, url ?: state.currentUrl)
+                            viewModel.onLoadingChange(false)
+                            webView = null
+                            webViewGeneration++
+                        },
+                    )
+                }
+
+                state.pageError?.let { error ->
+                    BrowserErrorPanel(
+                        error = error,
+                        host = addressDisplay(state.failedUrl),
+                        isLoading = state.isLoading,
+                        onRetry = {
+                            val target = state.failedUrl
+                            if (error == BrowserPageError.CRASHED) viewModel.clearPageError()
+                            load(target)
+                        },
+                        onSearch = { load(viewModel.searchForFailedHost()) },
+                        onOpenExternally = { openURLExternally(context, state.failedUrl) },
+                        onLeave = {
+                            val view = webView
+                            when (browserErrorExit(view?.url, state.failedUrl, view?.canGoBack() == true)) {
+                                BrowserErrorExit.REVEAL -> viewModel.revealPage(view?.url.orEmpty())
+                                BrowserErrorExit.GO_BACK -> view?.goBack()
+                                BrowserErrorExit.DISMISS -> {
+                                    viewModel.commitPendingPinSave()
+                                    onDismiss()
+                                }
+                            }
+                        },
+                    )
+                }
 
                 // Deferred Space Pinning Banner (Floats above footer)
                 androidx.compose.animation.AnimatedVisibility(
@@ -364,7 +415,8 @@ fun MiniBrowserScreen(
                 canGoBack = state.canGoBack,
                 canGoForward = state.canGoForward,
                 effectiveUrl = effectiveUrl,
-                canPin = allSpaces.isNotEmpty(),
+                // A page that failed to load has nothing worth pinning.
+                canPin = allSpaces.isNotEmpty() && state.pageError == null,
                 saveKind = state.saveKind,
                 onBgColor = onBgColor,
                 onVariantBgColor = onVariantBgColor,

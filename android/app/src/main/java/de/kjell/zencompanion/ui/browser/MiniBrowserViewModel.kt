@@ -11,7 +11,9 @@ import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.SaveKind
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.BrowserRepository
+import de.kjell.zencompanion.data.SearchEngines
 import de.kjell.zencompanion.ui.components.PinDestination
+import de.kjell.zencompanion.ui.screens.BrowserPageError
 import de.kjell.zencompanion.ui.screens.formatBrowserInput
 import de.kjell.zencompanion.util.FriendlyError
 import de.kjell.zencompanion.util.PageTitle
@@ -22,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.net.URI
 
 /**
  * Chrome and deferred-pin state for the mini browser (port of the state
@@ -58,6 +61,10 @@ class MiniBrowserViewModel(
         val saveKind: SaveKind = SaveKind.PINNED,
         /** Brief banner after a save: a pinned fallback or a failed write. */
         val notice: Notice? = null,
+        /** Set while a panel covers the page because it couldn't load. */
+        val pageError: BrowserPageError? = null,
+        /** The address that failed; the address bar and the panel act on it. */
+        val failedUrl: String = "",
     ) {
         /** Normal saves always target the space root, so folder rows are hidden. */
         val hideFolders: Boolean get() = saveKind == SaveKind.NORMAL
@@ -185,12 +192,53 @@ class MiniBrowserViewModel(
     }
 
     fun onCurrentTitleChange(title: String) {
+        // WebView's own error page has a title of its own.
+        if (_state.value.pageError != null) return
         val usable = PageTitle.usable(title, effectiveUrl()) ?: return
         _state.update { it.copy(currentTitle = usable) }
     }
 
     fun onSiteThemeColorChange(color: Color?) {
         _state.update { it.copy(siteThemeColor = color) }
+    }
+
+    // MARK: - Error panel
+
+    /** A main-frame load failed or the page crashed; the panel covers it. */
+    fun onPageLoadFailed(error: BrowserPageError, url: String) {
+        _state.update {
+            it.copy(
+                pageError = error,
+                failedUrl = url,
+                addressText = if (it.isAddressFocused) it.addressText else TextFieldValue(displayHost(url)),
+            )
+        }
+    }
+
+    /** A new load started, or the page underneath is shown again. */
+    fun clearPageError() {
+        if (_state.value.pageError == null) return
+        _state.update { it.copy(pageError = null, failedUrl = "") }
+    }
+
+    /**
+     * "Go back" when the failed load never replaced the page: the panel goes
+     * and the address bar returns to [url], the page underneath.
+     */
+    fun revealPage(url: String) {
+        clearPageError()
+        onCurrentUrlChange(url)
+        if (!_state.value.isAddressFocused) {
+            _state.update { it.copy(addressText = TextFieldValue(displayHost(url))) }
+        }
+    }
+
+    /** Search for the host that couldn't be found, usually a typo. */
+    fun searchForFailedHost(): String {
+        val failed = _state.value.failedUrl
+        if (failed.isEmpty()) return ""
+        val host = runCatching { URI(failed).host }.getOrNull()
+        return SearchEngines.current.formatQuery(if (host.isNullOrEmpty()) failed else host)
     }
 
     /**

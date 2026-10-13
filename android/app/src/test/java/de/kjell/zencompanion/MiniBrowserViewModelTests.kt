@@ -11,6 +11,7 @@ import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.BrowserRepository
 import de.kjell.zencompanion.ui.browser.MiniBrowserViewModel
 import de.kjell.zencompanion.ui.components.PinDestination
+import de.kjell.zencompanion.ui.screens.BrowserPageError
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -54,6 +55,50 @@ class MiniBrowserViewModelTests {
         spaces = spaces,
         currentSpaceId = "s1",
     )
+
+    @Test
+    fun aFailedLoadShowsThePanelForTheFailedAddress() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = newViewModel()
+        vm.onPageLoadFailed(BrowserPageError.HOST_NOT_FOUND, "https://wikipeida.org/")
+
+        assertEquals(BrowserPageError.HOST_NOT_FOUND, vm.state.value.pageError)
+        assertEquals("https://wikipeida.org/", vm.state.value.failedUrl)
+        // WebView's own error page title never becomes the page title.
+        vm.onCurrentTitleChange("Webpage not available")
+        assertEquals("Start", vm.state.value.currentTitle)
+    }
+
+    @Test
+    fun aNewLoadClearsThePanel() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = newViewModel()
+        vm.onPageLoadFailed(BrowserPageError.NOT_RESPONDING, "https://slow.example/")
+        vm.clearPageError()
+
+        assertNull(vm.state.value.pageError)
+        assertEquals("", vm.state.value.failedUrl)
+    }
+
+    @Test
+    fun revealingThePageUnderneathRestoresItsAddress() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = newViewModel()
+        vm.onPageLoadFailed(BrowserPageError.INSECURE, "https://expired.badssl.com/")
+        vm.onCurrentUrlChange("https://expired.badssl.com/")
+
+        vm.revealPage("https://example.com/")
+
+        assertNull(vm.state.value.pageError)
+        assertEquals("https://example.com/", vm.state.value.currentUrl)
+    }
+
+    @Test
+    fun searchUsesTheHostThatCouldNotBeFound() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = newViewModel()
+        assertEquals("", vm.searchForFailedHost())
+
+        vm.onPageLoadFailed(BrowserPageError.HOST_NOT_FOUND, "https://wikipeida.org/wiki/Aurora")
+
+        assertEquals(SearchEngines.current.formatQuery("wikipeida.org"), vm.searchForFailedHost())
+    }
 
     @Test
     fun submitAddressResolvesUrlsAndSearchQueries() = runTest(mainDispatcherRule.testDispatcher) {

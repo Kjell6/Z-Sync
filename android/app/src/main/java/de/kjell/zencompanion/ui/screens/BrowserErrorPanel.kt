@@ -3,6 +3,7 @@ package de.kjell.zencompanion.ui.screens
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.foundation.background
@@ -215,17 +216,30 @@ private fun BrowserPageError.message(host: String) = when (this) {
     BrowserPageError.CRASHED -> stringResource(R.string.browser_error_crashed_message)
 }
 
-/** True when the device has a network that reached the internet. */
+/**
+ * True when Wi-Fi, mobile data or another real network reached the
+ * internet. VPNs don't count: Android marks a VPN as validated even after
+ * the network under it is gone, so with Tailscale or similar on, airplane
+ * mode would read as online.
+ */
 internal fun hasValidatedNetwork(manager: ConnectivityManager?): Boolean {
-    val capabilities = manager?.getNetworkCapabilities(manager.activeNetwork) ?: return false
-    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-        capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    manager ?: return false
+    // allNetworks answers right away. Its replacement, a network callback,
+    // reports asynchronously, too late for a load that just failed.
+    @Suppress("DEPRECATION")
+    return manager.allNetworks.any { network ->
+        val capabilities = manager.getNetworkCapabilities(network) ?: return@any false
+        capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) &&
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+    }
 }
 
 /**
- * Calls [onOnline] once the network reaches the internet, including when it
- * came back before the panel appeared. No loop: the panel only shows
- * offline while there is no such network.
+ * Calls [onOnline] once a network reaches the internet, including when it
+ * came back before the panel appeared. VPNs don't count, as in
+ * [hasValidatedNetwork]. No loop: the panel only shows offline while there
+ * is no such network.
  */
 @Composable
 private fun RetryWhenOnline(onOnline: () -> Unit) {
@@ -236,17 +250,20 @@ private fun RetryWhenOnline(onOnline: () -> Unit) {
         val main = Handler(Looper.getMainLooper())
         val pending = AtomicBoolean(true)
         val callback = object : ConnectivityManager.NetworkCallback() {
-            override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
-                if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) &&
-                    pending.get()
-                ) {
+            override fun onAvailable(network: Network) {
+                if (pending.get()) {
                     // Re-checked on the main thread: the panel may have gone
                     // (new page, Go back) after this was posted.
                     main.post { if (pending.getAndSet(false)) retry() }
                 }
             }
         }
-        manager?.registerDefaultNetworkCallback(callback)
+        val request = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+            .build()
+        manager?.registerNetworkCallback(request, callback)
         onDispose {
             pending.set(false)
             manager?.unregisterNetworkCallback(callback)

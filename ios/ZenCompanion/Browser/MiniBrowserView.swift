@@ -53,8 +53,11 @@ struct MiniBrowserView: View {
         scheme == .dark ? Color(uiColor: .systemBackground) : Color.white
     }
 
+    /// The page's own color, or the error panel's while it covers the page:
+    /// the failed load leaves the previous page's color behind.
     private var sheetBackground: Color {
-        model.themeColor ?? defaultBackground
+        if model.pageError != nil { return Palette.paper(scheme) }
+        return model.themeColor ?? defaultBackground
     }
 
     var body: some View {

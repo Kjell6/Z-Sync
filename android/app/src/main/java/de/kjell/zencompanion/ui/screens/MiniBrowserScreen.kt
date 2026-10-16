@@ -170,7 +170,9 @@ fun MiniBrowserScreen(
         if (url.isNotEmpty()) webView?.loadUrl(url)
     }
     val defaultSurface = MaterialTheme.colorScheme.surface
-    val targetBg = state.siteThemeColor ?: defaultSurface
+    // The error panel sits on the surface color. The failed load leaves the
+    // previous page's color behind, so the bars ignore it while it shows.
+    val targetBg = state.siteThemeColor.takeIf { state.pageError == null } ?: defaultSurface
     val animatedBgColor by animateColorAsState(
         targetValue = targetBg,
         animationSpec = tween(300),

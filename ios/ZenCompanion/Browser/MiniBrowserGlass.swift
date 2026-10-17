@@ -40,6 +40,10 @@ extension View {
     /// The plate cannot reach outside its sheet: a seam along the bottom
     /// corners is fixed on the presentation instead (`presentationCornerRadius`
     /// on the browser sheet).
+    ///
+    /// `backdrop` is the app's paper rather than the page's color, so the bar
+    /// reads as app chrome and the open menu stays distinguishable from the
+    /// page behind it. The lift shadow does the rest of the separating.
     func browserBar(topRadius: CGFloat, backdrop: Color) -> some View {
         let shape = UnevenRoundedRectangle(
             topLeadingRadius: topRadius,
@@ -51,6 +55,7 @@ extension View {
         return self
             .background(shape.fill(backdrop).allowsHitTesting(false))
             .clipShape(shape)
+            .shadow(color: .black.opacity(0.18), radius: 12, y: -2)
             .overlay(
                 shape.strokeBorder(Color.primary.opacity(Palette.rimOpacity), lineWidth: Palette.rimWidth)
                     .allowsHitTesting(false)

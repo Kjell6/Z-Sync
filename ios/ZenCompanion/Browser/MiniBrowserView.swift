@@ -58,10 +58,9 @@ struct MiniBrowserView: View {
     }
 
     /// Air between the controls and the physical bottom. The home indicator
-    /// only occupies the bottom ~13pt, so trimming the safe area keeps the bar
-    /// slim without sliding the tiles under the gesture.
+    /// occupies the bottom of the safe area; the controls sit just above it.
     private var chromeBottomPadding: CGFloat {
-        max(12, safeBottom - 10)
+        max(12, safeBottom)
     }
 
     /// Webpage or find field, not the address composer.
@@ -99,13 +98,11 @@ struct MiniBrowserView: View {
         model.themeColor ?? defaultBackground
     }
 
-    /// The bar takes the page's own declared background color, so the page
-    /// decides whether the controls must be light or dark — not the system
-    /// theme. A white page that declares a dark `theme-color` (Reddit does)
-    /// gets a dark bar with light controls instead of dark-on-dark.
-    private var barScheme: ColorScheme {
-        guard let theme = model.themeColor else { return scheme }
-        return theme.isDarkBackground ? .dark : .light
+    /// The bar's own surface: the app's paper, not the page's color. The page
+    /// decides what it looks like, so a page-colored plate would disappear into
+    /// the page, and the open menu would be indistinguishable from it.
+    private var barBackground: Color {
+        Palette.paper(scheme)
     }
 
     var body: some View {
@@ -151,8 +148,7 @@ struct MiniBrowserView: View {
                         .padding(.horizontal, 20)
                         .padding(.bottom, collapsedBarHeight + 8)
                         .frame(maxWidth: .infinity)
-                        .environment(\.colorScheme, barScheme)
-                }
+                        }
 
                 MiniBrowserChrome(
                     model: model,
@@ -162,14 +158,13 @@ struct MiniBrowserView: View {
                     space: space,
                     allSpaces: allSpaces,
                     bottomInset: chromeContentBottomInset,
-                    barBackground: sheetBackground,
+                    barBackground: barBackground,
                     onBeginAddressEdit: beginAddressEditing,
                     onCancel: cancelAddressEditing,
                     onSubmit: submitAddress
                 )
                 .fixedSize(horizontal: false, vertical: true)
                 .offset(y: barCollapsed ? collapsedBarHeight : 0)
-                .environment(\.colorScheme, barScheme)
                 .accessibilityHidden(pageKeyboard || barCollapsed)
 
                 if pageKeyboard {
@@ -186,7 +181,7 @@ struct MiniBrowserView: View {
             .background(sheetBackground.ignoresSafeArea())
             .ignoresSafeArea(edges: .bottom)
             .ignoresSafeArea(.keyboard)
-            .presentationBackground(sheetBackground)
+            .presentationBackground(barBackground)
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
                 let overlap = Self.keyboardOverlap(from: note)
                 withAnimation(Self.keyboardAnimation(from: note)) {

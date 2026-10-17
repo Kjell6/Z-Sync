@@ -48,6 +48,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -112,19 +113,28 @@ internal fun MiniBrowserBar(
     onOpenExternal: () -> Unit,
     onPin: () -> Unit,
     onClose: () -> Unit,
-    barColor: Color,
     modifier: Modifier = Modifier,
 ) {
+    val zen = LocalZenColors.current
     val menuOpen = state.menuExpanded
-    val topRadius = if (menuOpen) 28.dp else 0.dp
+    val plateShape = RoundedCornerShape(topStart = if (menuOpen) 28.dp else 0.dp, topEnd = if (menuOpen) 28.dp else 0.dp)
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            // The open menu rounds its top like a sheet; collapsed stays cut.
-            .clip(RoundedCornerShape(topStart = topRadius, topEnd = topRadius))
-            .background(barColor),
+            // The app's paper, not the page's color: a page-colored plate
+            // disappears into the page, and the open menu with it.
+            .shadow(8.dp, plateShape, clip = false)
+            .clip(plateShape)
+            .background(zen.paper),
     ) {
+        // Top edge, so the plate reads as chrome even on a same-colored page.
+        Spacer(
+            Modifier
+                .fillMaxWidth()
+                .height(0.5.dp)
+                .background(zen.ink.copy(alpha = 0.10f)),
+        )
         if (menuOpen) {
             ExpandedMenu(
                 state = state,

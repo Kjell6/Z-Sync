@@ -242,6 +242,11 @@ struct SpacesBrowserView: View {
                 )
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+                // The sheet's own corner radius is larger than the display's,
+                // so a sliver of the app behind shows along the bottom corners
+                // where the bar should meet the screen edge. Keep the sheet
+                // radius below the display radius so the bar fills the corner.
+                .presentationCornerRadius(24)
             case .activity:
                 SyncedActivitySheet(
                     allSpaces: model.snapshot.spaces,

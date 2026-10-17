@@ -83,13 +83,15 @@ extension View {
     /// off by the screen. `topRadius` is 0 while collapsed. The open menu and
     /// the keyboard composer pass a radius smaller than the display corner.
     ///
-    /// One opaque plate of the page color, no glass layer: `glassEffect` on
-    /// iOS 26 draws its own specular edge, which read as a stroke down the
-    /// sides and along the bottom of the bar. The bar separates from the page
-    /// with the top hairline in `MiniBrowserChrome` instead.
+    /// One opaque plate of the page color: `glassEffect` drew a specular edge
+    /// around the whole plate, which read as a stroke, so the edge is now an
+    /// explicit hairline instead. The plate is the same in both states, so the
+    /// open menu keeps the bar's surface instead of turning glassy over the
+    /// page.
     ///
-    /// The plate is the same in both states, so the open menu keeps the bar's
-    /// surface instead of turning glassy as it grows up over the page.
+    /// The plate cannot reach past the sheet it is presented in: the corner
+    /// seam is fixed on the presentation instead (`presentationCornerRadius`
+    /// on the browser sheet).
     func browserBar(topRadius: CGFloat, backdrop: Color) -> some View {
         let shape = UnevenRoundedRectangle(
             topLeadingRadius: topRadius,
@@ -101,6 +103,10 @@ extension View {
         return self
             .background(shape.fill(backdrop).allowsHitTesting(false))
             .clipShape(shape)
+            .overlay(
+                shape.strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.6)
+                    .allowsHitTesting(false)
+            )
     }
 
     /// Untinted regular glass for the bottom browser card. One radius for the

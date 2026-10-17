@@ -246,6 +246,26 @@
         }
       }
     },
+    "browser.reader" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reader"
+          }
+        }
+      }
+    },
+    "browser.reader_unavailable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No article found on this page."
+          }
+        }
+      }
+    },
     "browser.reload" : {
       "localizations" : {
         "en" : {

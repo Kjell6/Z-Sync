@@ -48,6 +48,186 @@ enum MiniBrowserTools {
     }
 }
 
+/// One block of extracted article text, in document order.
+struct ReaderBlock: Equatable, Identifiable {
+    let id: Int
+    /// Lowercase source tag: "h1"…"h6", "p", "li", "blockquote", "pre".
+    let kind: String
+    let text: String
+}
+
+/// A page lifted into a plain reading view.
+struct ReaderArticle: Equatable {
+    let title: String
+    let site: String
+    let byline: String
+    let blocks: [ReaderBlock]
+}
+
+/// Finds the article on a page and returns it as text. The script runs inside
+/// the page, so it stays self-contained and ES5-only: WKWebView here and
+/// Android's WebView evaluate the same source.
+enum ReaderExtractor {
+    static let script = #"""
+    (function () {
+      var BLOCK_SELECTOR = 'h1,h2,h3,h4,h5,h6,p,li,blockquote,pre';
+      var NOISE = { NAV: 1, ASIDE: 1, FOOTER: 1, HEADER: 1, FORM: 1, BUTTON: 1 };
+      // Chrome headings that survive the noise filter but say nothing in a reader.
+      var JUNK_HEADINGS = { contents: 1, 'table of contents': 1, 'inhaltsverzeichnis': 1, inhalt: 1, menu: 1, navigation: 1 };
+
+      function textOf(el) {
+        if (!el) return '';
+        var raw = el.innerText;
+        if (raw === undefined || raw === null) raw = el.textContent || '';
+        return String(raw).replace(/\s+/g, ' ').trim();
+      }
+
+      function isVisible(el) {
+        try {
+          var s = window.getComputedStyle(el);
+          if (!s) return true;
+          if (s.display === 'none' || s.visibility === 'hidden') return false;
+          if (parseFloat(s.opacity) === 0) return false;
+        } catch (e) {}
+        return true;
+      }
+
+      function linkShare(el) {
+        var total = textOf(el).length;
+        if (total === 0) return 1;
+        var links = el.querySelectorAll('a');
+        var len = 0;
+        for (var i = 0; i < links.length; i++) len += textOf(links[i]).length;
+        return len / total;
+      }
+
+      function meta(selector) {
+        var el = document.querySelector(selector);
+        if (!el) return '';
+        var value = el.content !== undefined && el.content !== null ? el.content : textOf(el);
+        return String(value).replace(/\s+/g, ' ').trim();
+      }
+
+      var candidates = document.querySelectorAll('article, main, [role="main"], section, div, td');
+      var scored = [];
+      var longest = 0;
+      for (var i = 0; i < candidates.length; i++) {
+        var el = candidates[i];
+        if (!isVisible(el)) continue;
+        var length = textOf(el).length;
+        if (length < 300) continue;
+        var share = linkShare(el);
+        if (share > 0.6 && length < 2000) continue;
+        if (length > longest) longest = length;
+        scored.push({ el: el, length: length, score: length - 1.2 * length * share + 30 * el.querySelectorAll('p').length });
+      }
+      if (scored.length === 0) return null;
+
+      var winner = scored[0];
+      for (var s = 1; s < scored.length; s++) {
+        if (scored[s].score > winner.score) winner = scored[s];
+      }
+
+      // The whole page usually wins on raw text. Prefer the most nested
+      // container that still holds nearly all of it, so the article body wins
+      // over the shell around it.
+      var chosen = winner.el;
+      var deepest = -1;
+      for (var c = 0; c < scored.length; c++) {
+        if (scored[c].length < longest * 0.85) continue;
+        var depth = 0;
+        var node = scored[c].el;
+        while (node) { depth++; node = node.parentElement; }
+        if (depth > deepest) { deepest = depth; chosen = scored[c].el; }
+      }
+
+      function insideNoise(el) {
+        var p = el.parentElement;
+        while (p && p !== chosen) {
+          if (NOISE[(p.tagName || '').toUpperCase()]) return true;
+          p = p.parentElement;
+        }
+        return false;
+      }
+
+      function insideBlock(el) {
+        var p = el.parentElement;
+        while (p && p !== chosen) {
+          var tag = (p.tagName || '').toLowerCase();
+          if (tag === 'li' || tag === 'blockquote' || tag === 'pre' || tag === 'figcaption') return true;
+          p = p.parentElement;
+        }
+        return false;
+      }
+
+      var blocks = [];
+      var nodes = chosen.querySelectorAll(BLOCK_SELECTOR);
+      for (var b = 0; b < nodes.length; b++) {
+        var node = nodes[b];
+        if (!isVisible(node)) continue;
+        if (insideNoise(node) || insideBlock(node)) continue;
+        var text = textOf(node);
+        if (text.length < 2) continue;
+        if (linkShare(node) > 0.7) continue;
+        var tag = node.tagName.toLowerCase();
+        if (tag === 'h1' || tag === 'h2' || tag === 'h3') {
+          if (JUNK_HEADINGS[text.toLowerCase()]) continue;
+        }
+        blocks.push({ kind: tag, text: text });
+      }
+
+      var merged = [];
+      for (var m = 0; m < blocks.length; m++) {
+        var previous = merged[merged.length - 1];
+        if (previous && previous.text === blocks[m].text) continue;
+        merged.push(blocks[m]);
+      }
+      if (merged.length === 0) return null;
+
+      var title = meta('meta[property="og:title"]') || meta('meta[name="twitter:title"]');
+      if (!title) {
+        var heading = document.querySelector('h1');
+        title = heading ? textOf(heading) : '';
+      }
+      if (!title) title = String(document.title || '').trim();
+
+      var byline = meta('meta[name="author"]') || meta('meta[property="article:author"]');
+      if (!byline) {
+        var author = document.querySelector('[rel="author"], .author, .byline');
+        if (author) byline = textOf(author).slice(0, 80);
+      }
+
+      var site = meta('meta[property="og:site_name"]') || location.hostname.replace(/^www\./, '');
+
+      return { title: title, site: site, byline: byline, blocks: merged };
+    })()
+    """#
+
+    /// The script wrapped so the page hands back one JSON string.
+    static var jsonScript: String { "JSON.stringify(\(script))" }
+
+    /// Parses the page's payload. Nil means the page has no article to lift.
+    static func article(from payload: String?) -> ReaderArticle? {
+        guard let payload, let data = payload.data(using: .utf8),
+              let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        let entries = raw["blocks"] as? [[String: Any]] ?? []
+        let blocks = entries.enumerated().compactMap { index, entry -> ReaderBlock? in
+            guard let text = entry["text"] as? String, !text.isEmpty else { return nil }
+            return ReaderBlock(id: index, kind: (entry["kind"] as? String) ?? "p", text: text)
+        }
+        guard !blocks.isEmpty else { return nil }
+        return ReaderArticle(
+            title: (raw["title"] as? String) ?? "",
+            site: (raw["site"] as? String) ?? "",
+            byline: (raw["byline"] as? String) ?? "",
+            blocks: blocks
+        )
+    }
+}
+
+
 /// State owner for the mini-browser: web-view progress/URL state fed by KVO,
 /// the address field text, URL/search resolution and the pin-save banner state
 /// machine. Replaces the former `MiniBrowserState` + view state in
@@ -66,6 +246,11 @@ final class MiniBrowserModel {
 
     /// Expanded page menu on the bottom card.
     var menuExpanded = false
+    /// Reading view: the article lifted out of the page, or nil for the page
+    /// itself. The script below finds it; a page without an article returns nil.
+    private(set) var readerArticle: ReaderArticle?
+    /// A reader extraction is in flight (the row shows a spinner).
+    private(set) var readerLoading = false
     /// The page scrolled down far enough to tuck the bottom bar away. Fed by
     /// the web view; the view ANDs it with the states that must keep the bar
     /// (editing the address, an open menu, a live toast).
@@ -87,9 +272,11 @@ final class MiniBrowserModel {
     /// How the pending save will be written (pinned vs normal). Captured when
     /// the banner is triggered and kept honest against the capability.
     private(set) var pinSaveKind: SaveKind = .pinned
-    /// Short-lived refusal message when a pin cannot start (no spaces to
-    /// attach the page to). Rendered in the same bottom toast as the banner.
+    /// Short-lived message for a refusal or a dead end (no spaces to pin to,
+    /// no article to read). Rendered in the same bottom toast as the banner.
     var pinNotice: String?
+    /// SF Symbol shown with `pinNotice`.
+    private(set) var pinNoticeSymbol = "pin.slash.fill"
     /// Set once the banner's destination picker has been opened. While a
     /// native context menu is presented, iOS 26 renders `glassEffect` as an
     /// opaque white slab and it stays broken through the closing animation,
@@ -226,6 +413,45 @@ final class MiniBrowserModel {
         scrollHidesBar = hidden
     }
 
+    // MARK: - Reader
+
+    /// Toggles the reading view. Leaves the page loaded, so closing it is
+    /// instant and the page keeps its scroll position.
+    func toggleReader() {
+        if readerArticle != nil {
+            closeReader()
+            return
+        }
+        loadReader()
+    }
+
+    func closeReader() {
+        readerLoading = false
+        withAnimation(.easeInOut(duration: 0.2)) {
+            readerArticle = nil
+        }
+    }
+
+    private func loadReader() {
+        guard let webView, webView.url != nil, !readerLoading else { return }
+        readerLoading = true
+        webView.evaluateJavaScript(ReaderExtractor.jsonScript) { [weak self] result, _ in
+            guard let self else { return }
+            self.readerLoading = false
+            guard let article = ReaderExtractor.article(from: result as? String) else {
+                self.readerArticle = nil
+                self.showPinNotice(
+                    String(localized: "browser.reader_unavailable"),
+                    symbol: "doc.plaintext"
+                )
+                return
+            }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                self.readerArticle = article
+            }
+        }
+    }
+
     func setPageZoom(_ value: Double) {
         let next = MiniBrowserTools.clampedZoom(value)
         guard abs(next - pageZoom) > 0.001 else { return }
@@ -298,8 +524,11 @@ final class MiniBrowserModel {
     func updateCurrentURL(_ url: URL?) {
         if !PageTitle.sameDocument(currentURL, url) {
             pageTitle = ""
-            // A fresh document starts at the top with the bar in place.
+            // A fresh document starts at the top with the bar in place, and
+            // ends the reading view.
             scrollHidesBar = false
+            readerArticle = nil
+            readerLoading = false
         }
         currentURL = url
     }
@@ -386,8 +615,9 @@ final class MiniBrowserModel {
         showPinNotice(String(localized: "browser.pin_no_space"))
     }
 
-    private func showPinNotice(_ text: String, duration: TimeInterval = 4.0) {
+    private func showPinNotice(_ text: String, symbol: String = "pin.slash.fill", duration: TimeInterval = 4.0) {
         pinNotice = text
+        pinNoticeSymbol = symbol
         pinNoticeDismissTask?.cancel()
         pinNoticeDismissTask = Task {
             let nanoseconds = UInt64(duration * 1_000_000_000)

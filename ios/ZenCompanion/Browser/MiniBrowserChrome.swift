@@ -351,6 +351,8 @@ struct MiniBrowserChrome: View {
             VStack(spacing: 0) {
                 copyRow
                 rowDivider
+                readerRow
+                rowDivider
                 desktopRow
                 rowDivider
                 zoomRow
@@ -520,6 +522,40 @@ struct MiniBrowserChrome: View {
         }
         .buttonStyle(CardPressStyle())
         .disabled(model.effectiveURL == nil)
+    }
+
+    /// Lifts the article out of the page. Same shape as the other rows.
+    private var readerRow: some View {
+        Button {
+            model.toggleReader()
+            withAnimation(motion) {
+                model.collapseMenu()
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "doc.plaintext")
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: 24)
+                    .foregroundStyle(Color.primary)
+                Text("browser.reader")
+                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                    .foregroundStyle(Color.primary)
+                Spacer(minLength: 8)
+                if model.readerLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                } else if model.readerArticle != nil {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Palette.coral(scheme))
+                }
+            }
+            .padding(.horizontal, 10)
+            .frame(minHeight: 48)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(CardPressStyle())
+        .disabled(model.effectiveURL == nil || model.readerLoading)
     }
 
     private var desktopRow: some View {

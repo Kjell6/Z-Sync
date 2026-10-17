@@ -119,6 +119,13 @@ struct MiniBrowserView: View {
                     ZStack {
                         webPane
 
+                        if let article = model.readerArticle {
+                            ReaderView(article: article, scheme: scheme) {
+                                model.closeReader()
+                            }
+                            .transition(.opacity)
+                        }
+
                         if model.menuExpanded {
                             // UIKit scrim, not a SwiftUI tap gesture. A SwiftUI
                             // gesture left on top of the web view kept eating
@@ -375,7 +382,7 @@ private extension MiniBrowserView {
 
     private func pinNoticeToast(_ text: String) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: "pin.slash.fill")
+            Image(systemName: model.pinNoticeSymbol)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.primary)
 
@@ -392,5 +399,138 @@ private extension MiniBrowserView {
             insertion: .move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.95)),
             removal: .move(edge: .bottom).combined(with: .opacity)
         ))
+    }
+}
+
+// MARK: - Reading view
+
+/// The page as plain text. Covers the web pane and stops at the bar, so the
+/// browser controls stay where they are while reading.
+private struct ReaderView: View {
+    let article: ReaderArticle
+    let scheme: ColorScheme
+    var onClose: () -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                topBar
+
+                if !article.title.isEmpty {
+                    Text(article.title)
+                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .foregroundStyle(Palette.ink(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if !article.byline.isEmpty {
+                    Text(article.byline)
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundStyle(Palette.ink(scheme).opacity(0.5))
+                }
+
+                ForEach(blocks) { block in
+                    blockView(block)
+                }
+            }
+            .padding(.horizontal, 22)
+            .padding(.top, 14)
+            .padding(.bottom, 36)
+            .frame(maxWidth: 680, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+        .background(Palette.paper(scheme))
+        .accessibilityLabel(Text("browser.reader"))
+    }
+
+    /// The extracted body. A leading heading that just repeats the title is
+    /// dropped so the title is not printed twice.
+    private var blocks: [ReaderBlock] {
+        var items = article.blocks
+        while let first = items.first, first.kind == "h1" || first.kind == "h2" {
+            guard first.text.caseInsensitiveCompare(article.title) == .orderedSame else { break }
+            items.removeFirst()
+        }
+        return items
+    }
+
+    private var topBar: some View {
+        HStack(spacing: 10) {
+            Text(article.site.isEmpty ? article.title : article.site)
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .tracking(0.6)
+                .foregroundStyle(Palette.ink(scheme).opacity(0.45))
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.6))
+                    .frame(width: 32, height: 32)
+                    .background(Palette.lift(scheme), in: Circle())
+                    .glassRim(cornerRadius: 16)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(SquircleButtonStyle())
+            .accessibilityLabel(Text("common.done"))
+        }
+    }
+
+    @ViewBuilder
+    private func blockView(_ block: ReaderBlock) -> some View {
+        switch block.kind {
+        case "h1", "h2":
+            Text(block.text)
+                .font(.system(size: 20, weight: .semibold, design: .rounded))
+                .foregroundStyle(Palette.ink(scheme))
+                .padding(.top, 8)
+                .fixedSize(horizontal: false, vertical: true)
+        case "h3", "h4", "h5", "h6":
+            Text(block.text)
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .foregroundStyle(Palette.ink(scheme))
+                .padding(.top, 4)
+                .fixedSize(horizontal: false, vertical: true)
+        case "blockquote":
+            Text(block.text)
+                .font(.system(size: 16, design: .rounded))
+                .italic()
+                .foregroundStyle(Palette.ink(scheme).opacity(0.7))
+                .padding(.leading, 14)
+                .overlay(alignment: .leading) {
+                    Rectangle()
+                        .fill(Palette.coral(scheme).opacity(0.5))
+                        .frame(width: 2)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+        case "pre":
+            Text(block.text)
+                .font(.system(size: 13.5, design: .monospaced))
+                .foregroundStyle(Palette.ink(scheme).opacity(0.85))
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    Palette.lift(scheme),
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                )
+        case "li":
+            HStack(alignment: .firstTextBaseline, spacing: 9) {
+                Text(verbatim: "•")
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(Palette.coral(scheme).opacity(0.85))
+                Text(block.text)
+                    .font(.system(size: 17, design: .rounded))
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        default:
+            Text(block.text)
+                .font(.system(size: 17, design: .rounded))
+                .foregroundStyle(Palette.ink(scheme).opacity(0.9))
+                .lineSpacing(5)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }

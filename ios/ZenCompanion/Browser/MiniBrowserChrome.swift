@@ -157,9 +157,9 @@ struct MiniBrowserChrome: View {
         }
     }
 
-    /// Lift field shared by the navigation row and the keyboard composer.
+    /// Pill field shared by the navigation row and the keyboard composer.
     /// Collapsed, the whole pill is the button, so press-down scales the
-    /// shape the same way as the side tiles. The editor is not that button.
+    /// shape the same way as the side controls. The editor is not that button.
     @ViewBuilder
     private var addressCard: some View {
         if addressEditing {
@@ -200,19 +200,17 @@ struct MiniBrowserChrome: View {
 
     private func addressSurface<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         content()
-            .padding(.leading, 16)
+            .padding(.leading, 18)
             .padding(.trailing, 4)
             .frame(height: controlSide)
             .frame(maxWidth: .infinity)
-            .background(
-                Palette.lift(scheme),
-                in: RoundedRectangle(cornerRadius: tileRadius, style: .continuous)
-            )
-            .glassRim(cornerRadius: tileRadius)
-            .contentShape(RoundedRectangle(cornerRadius: tileRadius, style: .continuous))
+            .background(Palette.lift(scheme), in: Capsule())
+            .glassRimCapsule()
+            .contentShape(Capsule())
     }
 
-    /// Home action-bar tile: lift fill, squircle corners, 44pt side.
+    /// Bare icon control: no fill and no rim, so the glass strip behind it is
+    /// the only surface. The row reads lighter than the address pill.
     private func homeTile(
         systemName: String,
         label: LocalizedStringKey,
@@ -222,15 +220,10 @@ struct MiniBrowserChrome: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(tint ?? Palette.ink(scheme).opacity(enabled ? 0.75 : 0.35))
+                .font(.system(size: 19, weight: .medium))
+                .foregroundStyle(tint ?? Palette.ink(scheme).opacity(enabled ? 0.85 : 0.3))
                 .frame(width: controlSide, height: controlSide)
-                .background(
-                    Palette.lift(scheme),
-                    in: RoundedRectangle(cornerRadius: tileRadius, style: .continuous)
-                )
-                .glassRim(cornerRadius: tileRadius)
-                .contentShape(RoundedRectangle(cornerRadius: tileRadius, style: .continuous))
+                .contentShape(Rectangle())
                 .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(SquircleButtonStyle())

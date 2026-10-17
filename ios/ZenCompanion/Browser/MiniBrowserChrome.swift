@@ -40,6 +40,10 @@ struct MiniBrowserChrome: View {
     private let tileRadius: CGFloat = Palette.liftCornerRadius
     private let controlSide: CGFloat = 44
 
+    /// Side control corner: noticeably rounder than the app's 16pt tiles, but
+    /// still square enough to leave a flat edge (not a circle).
+    private var controlCornerRadius: CGFloat { controlSide * 0.45 }
+
     private var motion: Animation {
         reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.38, dampingFraction: 0.86)
     }
@@ -202,8 +206,8 @@ struct MiniBrowserChrome: View {
             .contentShape(Capsule())
     }
 
-    /// Side control: a flat circle, so it echoes the pill in the middle
-    /// instead of the squircle the app uses for tiles.
+    /// Side control: a squircle that stays rounder than the app's tiles, so the
+    /// row and the address pill read as one family.
     private func homeTile(
         systemName: String,
         label: LocalizedStringKey,
@@ -216,9 +220,12 @@ struct MiniBrowserChrome: View {
                 .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(tint ?? Palette.ink(scheme).opacity(enabled ? 0.75 : 0.35))
                 .frame(width: controlSide, height: controlSide)
-                .background(Palette.lift(scheme), in: Circle())
-                .glassRim(cornerRadius: controlSide / 2)
-                .contentShape(Circle())
+                .background(
+                    Palette.lift(scheme),
+                    in: RoundedRectangle(cornerRadius: controlCornerRadius, style: .continuous)
+                )
+                .glassRim(cornerRadius: controlCornerRadius)
+                .contentShape(RoundedRectangle(cornerRadius: controlCornerRadius, style: .continuous))
                 .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(SquircleButtonStyle())

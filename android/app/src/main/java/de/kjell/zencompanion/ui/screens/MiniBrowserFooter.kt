@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
@@ -49,6 +49,8 @@ internal fun MiniBrowserFooter(
     // Same tint as the address pill in the top bar, so the round controls and
     // the pill read as one family.
     val controlBg = if (isDark) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.06f)
+    // Rounder than the app's tiles, still a square with a flat edge (not a circle).
+    val controlShape = RoundedCornerShape(22.dp)
 
     // Footer Toolbar (Adaptive theme color, 0dp tonal elevation to prevent reddish surfaceTint)
     Surface(
@@ -77,7 +79,7 @@ internal fun MiniBrowserFooter(
                     IconButton(
                         onClick = { webView?.goBack() },
                         enabled = canGoBack,
-                        modifier = Modifier.background(controlBg, CircleShape),
+                        modifier = Modifier.background(controlBg, controlShape),
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
@@ -89,7 +91,7 @@ internal fun MiniBrowserFooter(
                     IconButton(
                         onClick = { webView?.goForward() },
                         enabled = canGoForward,
-                        modifier = Modifier.background(controlBg, CircleShape),
+                        modifier = Modifier.background(controlBg, controlShape),
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
@@ -108,7 +110,7 @@ internal fun MiniBrowserFooter(
                             }
                         },
                         enabled = effectiveUrl.isNotEmpty(),
-                        modifier = Modifier.background(controlBg, CircleShape),
+                        modifier = Modifier.background(controlBg, controlShape),
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
@@ -120,7 +122,7 @@ internal fun MiniBrowserFooter(
                     IconButton(
                         onClick = onPin,
                         enabled = canPin && effectiveUrl.isNotEmpty(),
-                        modifier = Modifier.background(controlBg, CircleShape),
+                        modifier = Modifier.background(controlBg, controlShape),
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.PushPin,
@@ -137,7 +139,7 @@ internal fun MiniBrowserFooter(
 
                     IconButton(
                         onClick = onClose,
-                        modifier = Modifier.background(controlBg, CircleShape),
+                        modifier = Modifier.background(controlBg, controlShape),
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Close,

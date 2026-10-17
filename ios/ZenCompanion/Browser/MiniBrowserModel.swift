@@ -277,11 +277,6 @@ final class MiniBrowserModel {
     var pinNotice: String?
     /// SF Symbol shown with `pinNotice`.
     private(set) var pinNoticeSymbol = "pin.slash.fill"
-    /// Set once the banner's destination picker has been opened. While a
-    /// native context menu is presented, iOS 26 renders `glassEffect` as an
-    /// opaque white slab and it stays broken through the closing animation,
-    /// so the banner drops to its plain brand fill for the rest of its run.
-    private(set) var pinBannerGlassSuppressed = false
 
     @ObservationIgnored private var pinBannerDismissTask: Task<Void, Never>?
     @ObservationIgnored private var pinNoticeDismissTask: Task<Void, Never>?
@@ -580,7 +575,6 @@ final class MiniBrowserModel {
         pinNoticeDismissTask?.cancel()
         pinNotice = nil
         pinSaveKind = saveKind
-        pinBannerGlassSuppressed = false
         if pinnedDestination.spaceId.isEmpty
             || !spaces.contains(where: { $0.id == pinnedDestination.spaceId }) {
             pinnedDestination = PinDestination(
@@ -644,7 +638,6 @@ final class MiniBrowserModel {
     /// Keep the banner alive while the picker is open.
     func pinMenuWillOpen() {
         pinBannerDismissTask?.cancel()
-        pinBannerGlassSuppressed = true
     }
 
     func pinMenuDidDismiss() {

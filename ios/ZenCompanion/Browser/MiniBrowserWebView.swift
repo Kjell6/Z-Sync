@@ -1,39 +1,23 @@
 import WebKit
 import UIKit
 
-/// WKWebView that paints full-bleed under app chrome while shrinking the *layout*
-/// viewport by the overlapping bottom toolbar — the iOS 26 Safari mechanism
-/// (`obscuredContentInsets`). Overriding `safeAreaInsets` does not do this:
-/// WebKit does not map that override onto `position: fixed` or the layout viewport.
+/// WKWebView for the mini-browser: the web content, nothing else.
+///
+/// The page stops where the bar begins (the bar is an opaque plate, so there is
+/// nothing to paint under it). The layout viewport therefore ends at the web
+/// view's own frame, and no `obscuredContentInsets` bookkeeping is needed.
+///
+/// What is left is WebKit's own chrome: the bottom scroll-edge pocket on
+/// iOS 26, and the iPhone Prev/Next/Done accessory bar that can otherwise stack
+/// under our toolbar.
 @MainActor
 final class MiniBrowserWebView: WKWebView {
-    /// Bottom toolbar is visible (hidden while the address field is focused).
-    var bottomBarVisible: Bool = true {
-        didSet {
-            guard bottomBarVisible != oldValue else { return }
-            updateObscuredInsets()
-        }
-    }
-
-    /// Distance from this web view's bottom edge to the top of the floating
-    /// chrome. The overlay already includes the home-indicator area. The page
-    /// paints under the chrome; this only shrinks the layout viewport.
-    var reservedBottomChrome: CGFloat = 0 {
-        didSet {
-            guard abs(reservedBottomChrome - oldValue) > 0.5 else { return }
-            updateObscuredInsets()
-        }
-    }
-
-    private var appliedBottomInset: CGFloat = -1
-
     override var inputAccessoryView: UIView? { nil }
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
         hideBottomScrollEdgeEffect()
         hideWebKitFormAccessory(includingWindow: true)
-        updateObscuredInsets()
     }
 
     /// Matches SwiftUI `scrollEdgeEffectHidden(true, for: .bottom)` on the
@@ -47,7 +31,6 @@ final class MiniBrowserWebView: WKWebView {
     override func layoutSubviews() {
         super.layoutSubviews()
         hideWebKitFormAccessory(includingWindow: false)
-        updateObscuredInsets()
     }
 
     /// WKContentView (not WKWebView) owns the iPhone Prev/Next/Done bar.
@@ -73,112 +56,6 @@ final class MiniBrowserWebView: WKWebView {
             return
         }
         view.subviews.forEach { hideFormAccessoryChrome(in: $0) }
-    }
-
-    override func safeAreaInsetsDidChange() {
-        super.safeAreaInsetsDidChange()
-        updateObscuredInsets()
-    }
-
-    func updateObscuredInsets() {
-        applyObscuredBottomInset(computedBottomObscuredInset())
-    }
-
-    private func computedBottomObscuredInset() -> CGFloat {
-        let homeIndicator = super.safeAreaInsets.bottom
-        if reservedBottomChrome > 1 {
-            // Measured from this view's bottom edge. Do not add the home
-            // indicator again: the chrome already sits in that area.
-            return reservedBottomChrome
-        }
-        guard bottomBarVisible else { return 0 }
-
-        // Measured overlap with the real toolbar, if it is reachable in the hierarchy.
-        if let overlap = overlappingBottomChromeHeight() {
-            return max(homeIndicator, overlap)
-        }
-
-        // No reachable bar: assume the iOS 26 floating bar with the home indicator
-        // already included in the overlap estimate. Much smaller than the old
-        // `homeIndicator + 49pt` fallback, which left a large gap.
-        return max(homeIndicator, Self.floatingToolbarHeight)
-    }
-
-    /// Height of a compact iOS 26 floating toolbar (without the home indicator).
-    private static let floatingToolbarHeight: CGFloat = 44
-
-    /// Vertical overlap between this web view and the app's bottom chrome, in the
-    /// web view's coordinate space (same space `obscuredContentInsets` uses).
-    private func overlappingBottomChromeHeight() -> CGFloat? {
-        guard let window else { return nil }
-        let webFrame = convert(bounds, to: window)
-        guard webFrame.height > 1 else { return nil }
-
-        var best: CGFloat?
-
-        func consider(_ view: UIView) {
-            guard !view.isHidden, view.alpha > 0.05 else { return }
-            let name = NSStringFromClass(type(of: view))
-            let isBar = view is UIToolbar
-                || view is UITabBar
-                || name.contains("UIToolbar")
-                || (name.contains("Toolbar") && !name.contains("NavigationBar") && !name.contains("WK"))
-            guard isBar else { return }
-
-            let frame = view.convert(view.bounds, to: window)
-            guard frame.intersects(webFrame) else { return }
-            let overlap = webFrame.maxY - frame.minY
-            guard overlap > 20, overlap < 200 else { return }
-            best = max(best ?? 0, overlap)
-        }
-
-        func walk(_ view: UIView) {
-            if view is WKWebView { return }
-            consider(view)
-            for subview in view.subviews {
-                walk(subview)
-            }
-        }
-
-        var responder: UIResponder? = self
-        var searchRoot: UIView = window
-        while let current = responder {
-            if let nav = current as? UINavigationController {
-                if let toolbar = nav.toolbar, !nav.isToolbarHidden {
-                    // The navigation controller's toolbar is *the* bar that overlaps
-                    // us; measure it directly so its height wins over any other
-                    // chrome found from the window root.
-                    consider(toolbar)
-                }
-                searchRoot = nav.view
-                break
-            }
-            if let vc = current as? UIViewController {
-                searchRoot = vc.navigationController?.view ?? vc.view
-            }
-            responder = current.next
-        }
-        walk(searchRoot)
-        return best
-    }
-
-    private func applyObscuredBottomInset(_ bottom: CGFloat) {
-        let inset = max(0, bottom.rounded())
-        guard bounds.height > inset + 8 else { return }
-        guard abs(inset - appliedBottomInset) > 0.5 else { return }
-
-        let edges = UIEdgeInsets(top: 0, left: 0, bottom: inset, right: 0)
-        if #available(iOS 26.0, *) {
-            obscuredContentInsets = edges
-        } else {
-            // Must not exceed safeAreaInsets or WebKit ignores/throws the call.
-            // This API only feeds svh/lvh — it does not move position:fixed.
-            let safeBottom = super.safeAreaInsets.bottom
-            let clamped = UIEdgeInsets(top: 0, left: 0, bottom: min(inset, safeBottom), right: 0)
-            setMinimumViewportInset(clamped, maximumViewportInset: clamped)
-        }
-        scrollView.verticalScrollIndicatorInsets.bottom = inset
-        appliedBottomInset = inset
     }
 }
 

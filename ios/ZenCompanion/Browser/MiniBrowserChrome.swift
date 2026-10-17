@@ -5,11 +5,13 @@ import SwiftUI
 /// Android port (`MiniBrowserChrome` / `MiniBrowserFooter`): one bottom strip.
 /// Collapsed, the page ends where the strip begins. Expanded, and while the
 /// address field is editing, the strip draws over the page and keeps the
-/// screen bottom, so the page does not move. Address glass continues behind
+/// screen bottom, so the page does not move. The address composer runs behind
 /// the keyboard. A page field does not lift this strip.
-/// Those sheets are short, so their top corners stay under the display radius.
-/// Buttons match the home action bar: `Palette.lift`, 16pt continuous corners.
-/// The material behind them is one untinted glass surface.
+///
+/// One opaque plate of the page color behind everything (`browserBar`), so the
+/// bar and the open menu are the same surface. Controls use the app's tile
+/// language: `Palette.lift`, the address field as a pill, the side controls as
+/// circles.
 struct MiniBrowserChrome: View {
     var model: MiniBrowserModel
     var addressEditing: Bool
@@ -18,14 +20,12 @@ struct MiniBrowserChrome: View {
     let space: ZenSpace
     let allSpaces: [ZenSpace]
     /// Space under the controls. Includes the home indicator while the keyboard
-    /// is hidden, so the glass runs to the physical bottom and the buttons sit
+    /// is hidden, so the plate runs to the physical bottom and the buttons sit
     /// above the indicator.
     var bottomInset: CGFloat
-    /// Opaque page color under the material. Same in both states, so the open
-    /// menu keeps the bar's surface instead of turning glassy over the page.
+    /// Opaque page color of the plate. Same in both states, so the open menu
+    /// keeps the bar's surface instead of turning glassy over the page.
     var barBackground: Color
-    /// Display corner radius. Short sheets use less than this.
-    var displayCornerRadius: CGFloat
     /// Collapsed URL label was tapped. The field does not exist yet.
     var onBeginAddressEdit: () -> Void
     var onCancel: () -> Void
@@ -53,12 +53,9 @@ struct MiniBrowserChrome: View {
     /// Expanded menu and the typing composer round the top. Collapsed stays cut.
     private var roundsSheetTop: Bool { menuOpen || addressEditing }
 
-    /// The display corner (~55pt) is too round for the open menu. The keyboard
-    /// composer is taller, so its top corner can be rounder than the menu.
-    private var sheetTopRadius: CGFloat {
-        let cap: CGFloat = addressEditing ? 40 : 32
-        return min(cap, displayCornerRadius)
-    }
+    /// The open menu keeps a tighter corner than the sheet around it; the
+    /// taller keyboard composer can afford a rounder one.
+    private var sheetTopRadius: CGFloat { addressEditing ? 40 : 32 }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -88,13 +85,6 @@ struct MiniBrowserChrome: View {
             topRadius: roundsSheetTop ? sheetTopRadius : 0,
             backdrop: barBackground
         )
-        .overlay(alignment: .top) {
-            if !roundsSheetTop {
-                Rectangle()
-                    .fill(Color.primary.opacity(0.12))
-                    .frame(height: 0.5)
-            }
-        }
         .animation(chromeAnimation, value: model.canGoForward)
         .animation(chromeAnimation, value: addressEditing)
         .animation(chromeAnimation, value: model.addressText.isEmpty)
@@ -344,7 +334,7 @@ struct MiniBrowserChrome: View {
 
     // MARK: - Expanded menu
 
-    /// Grows inside the same full-width glass. The bar's top corners, not this
+    /// Grows inside the same full-width plate. The bar's top corners, not this
     /// content, carry the reduced sheet radius.
     private var expandedContent: some View {
         VStack(spacing: 0) {

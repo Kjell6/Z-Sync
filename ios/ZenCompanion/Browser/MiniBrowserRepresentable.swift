@@ -3,10 +3,6 @@ import WebKit
 
 struct MiniBrowserRepresentable: UIViewRepresentable {
     var model: MiniBrowserModel
-    /// Native `.bottomBar` is visible (hidden while the address field is focused).
-    var bottomBarVisible: Bool
-    /// Height of the floating glass above the home indicator, including keyboard lift.
-    var bottomChromeHeight: CGFloat = 0
 
     func makeCoordinator() -> Coordinator {
         Coordinator(model: model)
@@ -24,18 +20,13 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
         webView.isOpaque = false
         webView.backgroundColor = .clear
         webView.scrollView.backgroundColor = .clear
-        webView.bottomBarVisible = bottomBarVisible
-        webView.reservedBottomChrome = bottomChromeHeight
 
-        // Paint under the translucent bar. Layout inset is `obscuredContentInsets`,
-        // not scroll-view contentInset — contentInset would clip the background.
+        // The page fills the web view exactly: no auto-insets, no scroll-view
+        // content inset, no indicator inset.
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.contentInset = .zero
         webView.scrollView.automaticallyAdjustsScrollIndicatorInsets = false
         webView.scrollView.scrollIndicatorInsets = .zero
-        if #available(iOS 26.0, *) {
-            webView.scrollView.bottomEdgeEffect.isHidden = true
-        }
 
         context.coordinator.setupObservers(for: webView)
         model.webView = webView
@@ -45,13 +36,10 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
 
     func updateUIView(_ uiView: WKWebView, context: Context) {
         guard let webView = uiView as? MiniBrowserWebView else { return }
-        webView.bottomBarVisible = bottomBarVisible
-        webView.reservedBottomChrome = bottomChromeHeight
         if !webView.isUserInteractionEnabled {
             webView.isUserInteractionEnabled = true
         }
         model.applyWebpagePreferences()
-        webView.updateObscuredInsets()
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {

@@ -265,23 +265,19 @@ final class MiniBrowserModelTests: XCTestCase {
         XCTAssertTrue(writer.saved.isEmpty)
     }
 
-    func testPinBannerGlassSuppressedOnceDestinationPickerOpened() {
+    func testDestinationPickerKeepsTheBannerAlive() {
         let (model, _) = makeModel(initialURL: URL(string: "https://pin.example/page")!)
 
         model.triggerPinBanner(spaces: [space("a")], fallbackSpace: space("a"))
-        XCTAssertFalse(model.pinBannerGlassSuppressed)
+        XCTAssertTrue(model.showPinBanner)
 
+        // Opening the destination picker cancels the auto-dismiss, and closing
+        // it only restarts the timer: the banner stays up either way.
         model.pinMenuWillOpen()
-        XCTAssertTrue(model.pinBannerGlassSuppressed)
+        XCTAssertTrue(model.showPinBanner)
 
-        // Stays suppressed after the menu closes: iOS 26 keeps rendering the
-        // glass as an opaque slab through the closing animation.
         model.pinMenuDidDismiss()
-        XCTAssertTrue(model.pinBannerGlassSuppressed)
-
-        // A fresh banner (new pin tap) brings the glass back.
-        model.triggerPinBanner(spaces: [space("a")], fallbackSpace: space("a"))
-        XCTAssertFalse(model.pinBannerGlassSuppressed)
+        XCTAssertTrue(model.showPinBanner)
     }
 
     // MARK: - Save kind (normal tabs)

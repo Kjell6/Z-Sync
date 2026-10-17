@@ -28,10 +28,8 @@ struct MiniBrowserView: View {
     @State private var animateAddressChrome = false
     /// Distance from the screen bottom to the top of the keyboard.
     @State private var keyboardOverlap: CGFloat = 0
-    /// Home-indicator inset. The glass fills it; the buttons sit above it.
+    /// Home-indicator inset. The plate fills it; the buttons sit above it.
     @State private var safeBottom: CGFloat = Self.windowSafeBottom()
-    /// Corner radius of the display this sheet is on.
-    @State private var displayCornerRadius: CGFloat = DisplayCornerRadius.points()
 
     init(
         initialURL: URL?,
@@ -51,8 +49,8 @@ struct MiniBrowserView: View {
     /// Keyboard focus, the tap that opens the composer, or the search-open first paint.
     private var addressEditing: Bool { editingAddress || isAddressFocused || startsInSearch }
 
-    /// Space inside the glass, below the controls. The address composer
-    /// includes the keyboard height, so the same glass continues behind the
+    /// Space inside the plate, below the controls. The address composer
+    /// includes the keyboard height, so the same plate continues behind the
     /// keys. A page field does not: the bar stays on the screen bottom.
     private var chromeContentBottomInset: CGFloat {
         if addressEditing, keyboardOverlap > 1 { return keyboardOverlap + 16 }
@@ -101,10 +99,10 @@ struct MiniBrowserView: View {
         model.themeColor ?? defaultBackground
     }
 
-    /// The bar is glass over the page's own background, so the page decides
-    /// whether the controls must be light or dark — not the system theme. A
-    /// white page that declares a dark `theme-color` (Reddit does) gets a dark
-    /// bar with light controls instead of dark-on-dark.
+    /// The bar takes the page's own declared background color, so the page
+    /// decides whether the controls must be light or dark — not the system
+    /// theme. A white page that declares a dark `theme-color` (Reddit does)
+    /// gets a dark bar with light controls instead of dark-on-dark.
     private var barScheme: ColorScheme {
         guard let theme = model.themeColor else { return scheme }
         return theme.isDarkBackground ? .dark : .light
@@ -165,7 +163,6 @@ struct MiniBrowserView: View {
                     allSpaces: allSpaces,
                     bottomInset: chromeContentBottomInset,
                     barBackground: sheetBackground,
-                    displayCornerRadius: displayCornerRadius,
                     onBeginAddressEdit: beginAddressEditing,
                     onCancel: cancelAddressEditing,
                     onSubmit: submitAddress
@@ -208,7 +205,6 @@ struct MiniBrowserView: View {
             .tint(Palette.ink(scheme))
             .onAppear {
                 safeBottom = Self.windowSafeBottom()
-                displayCornerRadius = DisplayCornerRadius.points()
                 model.loadInitial()
                 if model.opensWithSearch {
                     isAddressFocused = true
@@ -265,14 +261,11 @@ struct MiniBrowserView: View {
         }
     }
 
-    /// The page stops at the bar. No extra viewport inset under the glass.
+    /// The page stops at the bar: the plate is opaque, so there is nothing to
+    /// paint under it and no viewport inset to reserve.
     private var webPane: some View {
-        MiniBrowserRepresentable(
-            model: model,
-            bottomBarVisible: false,
-            bottomChromeHeight: 0
-        )
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        MiniBrowserRepresentable(model: model)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private static func windowSafeBottom() -> CGFloat {

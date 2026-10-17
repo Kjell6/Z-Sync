@@ -98,11 +98,17 @@ struct MiniBrowserView: View {
         model.themeColor ?? defaultBackground
     }
 
-    /// The bar's own surface: the app's paper, not the page's color. The page
-    /// decides what it looks like, so a page-colored plate would disappear into
-    /// the page, and the open menu would be indistinguishable from it.
+    /// The bar's surface: the page's own color, nudged a touch darker or
+    /// lighter so the plate is visible against it while still reading as the
+    /// site's color. Without a theme color, the system background is nudged.
     private var barBackground: Color {
-        Palette.paper(scheme)
+        (model.themeColor ?? defaultBackground).nudgedForBar() ?? sheetBackground
+    }
+
+    /// The bar is nearly the page's color, so the page decides whether the
+    /// controls must be light or dark — not the system theme.
+    private var barScheme: ColorScheme {
+        barBackground.isDarkBackground ? .dark : .light
     }
 
     var body: some View {
@@ -148,7 +154,8 @@ struct MiniBrowserView: View {
                         .padding(.horizontal, 20)
                         .padding(.bottom, collapsedBarHeight + 8)
                         .frame(maxWidth: .infinity)
-                        }
+                        .environment(\.colorScheme, barScheme)
+                }
 
                 MiniBrowserChrome(
                     model: model,
@@ -165,6 +172,7 @@ struct MiniBrowserView: View {
                 )
                 .fixedSize(horizontal: false, vertical: true)
                 .offset(y: barCollapsed ? collapsedBarHeight : 0)
+                .environment(\.colorScheme, barScheme)
                 .accessibilityHidden(pageKeyboard || barCollapsed)
 
                 if pageKeyboard {

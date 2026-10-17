@@ -62,6 +62,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -81,6 +82,7 @@ import de.kjell.zencompanion.ui.browser.ReaderExtractor
 import de.kjell.zencompanion.ui.components.PinDestinationPicker
 import de.kjell.zencompanion.ui.components.openURLExternally
 import de.kjell.zencompanion.ui.theme.LocalZenColors
+import de.kjell.zencompanion.ui.theme.ZenTheme
 import de.kjell.zencompanion.ui.theme.ZenType
 import de.kjell.zencompanion.util.Haptics
 import de.kjell.zencompanion.util.PageTitle
@@ -242,6 +244,10 @@ fun MiniBrowserScreen(
         state.findVisible ||
         state.readerArticle != null
 
+    // The page's color for the backdrop, nudged for the bar's plate.
+    val barColor = animatedBgColor.nudgedForBar()
+    val barIsDark = barColor.luminance() < 0.5f
+
     Surface(
         modifier = modifier.fillMaxSize(),
         color = animatedBgColor,
@@ -285,9 +291,11 @@ fun MiniBrowserScreen(
                     )
                 }
                 if (state.findVisible) {
+                    ZenTheme(darkTheme = barIsDark) {
                     MiniBrowserFindBar(
                         query = state.findQuery,
                         progress = state.findProgress,
+                        barColor = barColor,
                         onQueryChange = viewModel::setFindQuery,
                         onNext = { webView?.findNext(true) },
                         onPrevious = { webView?.findNext(false) },
@@ -296,6 +304,7 @@ fun MiniBrowserScreen(
                             viewModel.closeFind()
                         },
                     )
+                    }
                 }
 
                 // Deferred Space Pinning Banner (floats above the bar). Fully
@@ -334,6 +343,7 @@ fun MiniBrowserScreen(
                 exit = slideOutVertically(targetOffsetY = { it }) +
                     shrinkVertically(shrinkTowards = Alignment.Top),
             ) {
+                ZenTheme(darkTheme = barIsDark) {
                 MiniBrowserBar(
                     state = state,
                     viewModel = viewModel,
@@ -381,7 +391,9 @@ fun MiniBrowserScreen(
                         viewModel.commitPendingPinSave()
                         onDismiss()
                     },
+                    barColor = barColor,
                 )
+                }
             }
         }
     }
@@ -505,6 +517,7 @@ private fun NoticeBanner(text: String) {
 private fun MiniBrowserFindBar(
     query: String,
     progress: String?,
+    barColor: Color,
     onQueryChange: (String) -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,

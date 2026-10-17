@@ -54,6 +54,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
@@ -71,6 +72,20 @@ import de.kjell.zencompanion.ui.browser.MiniBrowserZoom
 import de.kjell.zencompanion.ui.theme.LocalZenColors
 import de.kjell.zencompanion.ui.theme.ZenType
 import de.kjell.zencompanion.ui.theme.liftBorder
+
+/**
+ * The bar sits on the page's own color, nudged away from it so the plate is
+ * visible: a touch darker on light colors, a touch lighter on dark ones.
+ */
+internal fun Color.nudgedForBar(amount: Float = 0.08f): Color {
+    val target = if (luminance() < 0.5f) 1f else 0f
+    return Color(
+        red = red + (target - red) * amount,
+        green = green + (target - green) * amount,
+        blue = blue + (target - blue) * amount,
+        alpha = alpha,
+    )
+}
 
 /** Side controls: rounder than the app's tiles, still square with a flat edge. */
 private val ControlShape = RoundedCornerShape(20.dp)
@@ -113,27 +128,27 @@ internal fun MiniBrowserBar(
     onOpenExternal: () -> Unit,
     onPin: () -> Unit,
     onClose: () -> Unit,
+    barColor: Color,
     modifier: Modifier = Modifier,
 ) {
-    val zen = LocalZenColors.current
     val menuOpen = state.menuExpanded
     val plateShape = RoundedCornerShape(topStart = if (menuOpen) 28.dp else 0.dp, topEnd = if (menuOpen) 28.dp else 0.dp)
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            // The app's paper, not the page's color: a page-colored plate
-            // disappears into the page, and the open menu with it.
+            // The page's own color, nudged by the caller so the plate stays
+            // visible against it; the lift shadow does the rest.
             .shadow(8.dp, plateShape, clip = false)
             .clip(plateShape)
-            .background(zen.paper),
+            .background(barColor),
     ) {
         // Top edge, so the plate reads as chrome even on a same-colored page.
         Spacer(
             Modifier
                 .fillMaxWidth()
                 .height(0.5.dp)
-                .background(zen.ink.copy(alpha = 0.10f)),
+                .background(LocalZenColors.current.ink.copy(alpha = 0.10f)),
         )
         if (menuOpen) {
             ExpandedMenu(

@@ -79,20 +79,18 @@ extension View {
         )
     }
 
-    /// Full-width bottom bar. Bottom corners stay square so the glass is cut
+    /// Full-width bottom bar. Bottom corners stay square so the plate is cut
     /// off by the screen. `topRadius` is 0 while collapsed. The open menu and
     /// the keyboard composer pass a radius smaller than the display corner.
     ///
-    /// `backdrop` is the opaque page color under the material. It is the same
-    /// in both states, so the bar and the open menu are one surface: the menu
-    /// does not turn glassy as it grows up over the page.
+    /// One opaque plate of the page color, no glass layer: `glassEffect` on
+    /// iOS 26 draws its own specular edge, which read as a stroke down the
+    /// sides and along the bottom of the bar. The bar separates from the page
+    /// with the top hairline in `MiniBrowserChrome` instead.
     ///
-    /// `glassVisible == false` drops the glass layer. iOS 26 paints
-    /// `glassEffect` as an opaque white slab while a context menu is up, and
-    /// through the menu's close. The pin row uses that only until the save
-    /// confirmation goes away.
-    @ViewBuilder
-    func liquidGlassBar(topRadius: CGFloat, backdrop: Color, glassVisible: Bool = true) -> some View {
+    /// The plate is the same in both states, so the open menu keeps the bar's
+    /// surface instead of turning glassy as it grows up over the page.
+    func browserBar(topRadius: CGFloat, backdrop: Color) -> some View {
         let shape = UnevenRoundedRectangle(
             topLeadingRadius: topRadius,
             bottomLeadingRadius: 0,
@@ -100,38 +98,9 @@ extension View {
             topTrailingRadius: topRadius,
             style: .continuous
         )
-        if #available(iOS 26.0, *) {
-            self
-                .background {
-                    // The plate must not take taps. On iOS 26 the effect keeps
-                    // a hit target the size of the open menu after it closes.
-                    ZStack {
-                        shape.fill(backdrop)
-                        if glassVisible {
-                            Color.clear
-                                .glassEffect(.regular, in: shape)
-                        } else {
-                            shape.fill(.regularMaterial)
-                        }
-                    }
-                    .allowsHitTesting(false)
-                }
-                .clipShape(shape)
-        } else {
-            self
-                .background {
-                    ZStack {
-                        shape.fill(backdrop)
-                        shape.fill(.ultraThinMaterial)
-                    }
-                    .allowsHitTesting(false)
-                }
-                .clipShape(shape)
-                .overlay(
-                    shape.strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.6)
-                        .allowsHitTesting(false)
-                )
-        }
+        return self
+            .background(shape.fill(backdrop).allowsHitTesting(false))
+            .clipShape(shape)
     }
 
     /// Untinted regular glass for the bottom browser card. One radius for the

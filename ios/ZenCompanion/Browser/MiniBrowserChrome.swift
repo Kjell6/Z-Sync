@@ -84,10 +84,9 @@ struct MiniBrowserChrome: View {
         // Hug the controls. A flexible height here becomes a full-screen hit
         // target once the menu has opened, and taps stop reaching the page.
         .fixedSize(horizontal: false, vertical: true)
-        .liquidGlassBar(
+        .browserBar(
             topRadius: roundsSheetTop ? sheetTopRadius : 0,
-            backdrop: barBackground,
-            glassVisible: !(model.showPinBanner && model.pinBannerGlassSuppressed)
+            backdrop: barBackground
         )
         .overlay(alignment: .top) {
             if !roundsSheetTop {

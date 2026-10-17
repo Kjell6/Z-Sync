@@ -157,6 +157,7 @@ struct MiniBrowserView: View {
                     space: space,
                     allSpaces: allSpaces,
                     bottomInset: chromeContentBottomInset,
+                    barBackground: sheetBackground,
                     displayCornerRadius: displayCornerRadius,
                     onBeginAddressEdit: beginAddressEditing,
                     onCancel: cancelAddressEditing,

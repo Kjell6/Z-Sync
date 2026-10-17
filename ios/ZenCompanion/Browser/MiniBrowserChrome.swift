@@ -21,6 +21,9 @@ struct MiniBrowserChrome: View {
     /// is hidden, so the glass runs to the physical bottom and the buttons sit
     /// above the indicator.
     var bottomInset: CGFloat
+    /// Opaque page color under the material. Same in both states, so the open
+    /// menu keeps the bar's surface instead of turning glassy over the page.
+    var barBackground: Color
     /// Display corner radius. Short sheets use less than this.
     var displayCornerRadius: CGFloat
     /// Collapsed URL label was tapped. The field does not exist yet.
@@ -83,6 +86,7 @@ struct MiniBrowserChrome: View {
         .fixedSize(horizontal: false, vertical: true)
         .liquidGlassBar(
             topRadius: roundsSheetTop ? sheetTopRadius : 0,
+            backdrop: barBackground,
             glassVisible: !(model.showPinBanner && model.pinBannerGlassSuppressed)
         )
         .overlay(alignment: .top) {

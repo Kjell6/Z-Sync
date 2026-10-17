@@ -83,12 +83,16 @@ extension View {
     /// off by the screen. `topRadius` is 0 while collapsed. The open menu and
     /// the keyboard composer pass a radius smaller than the display corner.
     ///
+    /// `backdrop` is the opaque page color under the material. It is the same
+    /// in both states, so the bar and the open menu are one surface: the menu
+    /// does not turn glassy as it grows up over the page.
+    ///
     /// `glassVisible == false` drops the glass layer. iOS 26 paints
     /// `glassEffect` as an opaque white slab while a context menu is up, and
     /// through the menu's close. The pin row uses that only until the save
     /// confirmation goes away.
     @ViewBuilder
-    func liquidGlassBar(topRadius: CGFloat, glassVisible: Bool = true) -> some View {
+    func liquidGlassBar(topRadius: CGFloat, backdrop: Color, glassVisible: Bool = true) -> some View {
         let shape = UnevenRoundedRectangle(
             topLeadingRadius: topRadius,
             bottomLeadingRadius: 0,
@@ -101,21 +105,26 @@ extension View {
                 .background {
                     // The plate must not take taps. On iOS 26 the effect keeps
                     // a hit target the size of the open menu after it closes.
-                    if glassVisible {
-                        Color.clear
-                            .glassEffect(.regular, in: shape)
-                            .allowsHitTesting(false)
-                    } else {
-                        shape.fill(.regularMaterial)
-                            .allowsHitTesting(false)
+                    ZStack {
+                        shape.fill(backdrop)
+                        if glassVisible {
+                            Color.clear
+                                .glassEffect(.regular, in: shape)
+                        } else {
+                            shape.fill(.regularMaterial)
+                        }
                     }
+                    .allowsHitTesting(false)
                 }
                 .clipShape(shape)
         } else {
             self
                 .background {
-                    shape.fill(.ultraThinMaterial)
-                        .allowsHitTesting(false)
+                    ZStack {
+                        shape.fill(backdrop)
+                        shape.fill(.ultraThinMaterial)
+                    }
+                    .allowsHitTesting(false)
                 }
                 .clipShape(shape)
                 .overlay(

@@ -209,8 +209,8 @@ struct MiniBrowserChrome: View {
             .contentShape(Capsule())
     }
 
-    /// Bare icon control: no fill and no rim, so the glass strip behind it is
-    /// the only surface. The row reads lighter than the address pill.
+    /// Side control: a flat circle, so it echoes the pill in the middle
+    /// instead of the squircle the app uses for tiles.
     private func homeTile(
         systemName: String,
         label: LocalizedStringKey,
@@ -220,10 +220,12 @@ struct MiniBrowserChrome: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 19, weight: .medium))
-                .foregroundStyle(tint ?? Palette.ink(scheme).opacity(enabled ? 0.85 : 0.3))
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(tint ?? Palette.ink(scheme).opacity(enabled ? 0.75 : 0.35))
                 .frame(width: controlSide, height: controlSide)
-                .contentShape(Rectangle())
+                .background(Palette.lift(scheme), in: Circle())
+                .glassRim(cornerRadius: controlSide / 2)
+                .contentShape(Circle())
                 .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(SquircleButtonStyle())

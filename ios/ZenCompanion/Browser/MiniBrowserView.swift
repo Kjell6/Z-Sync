@@ -101,6 +101,15 @@ struct MiniBrowserView: View {
         model.themeColor ?? defaultBackground
     }
 
+    /// The bar is glass over the page's own background, so the page decides
+    /// whether the controls must be light or dark — not the system theme. A
+    /// white page that declares a dark `theme-color` (Reddit does) gets a dark
+    /// bar with light controls instead of dark-on-dark.
+    private var barScheme: ColorScheme {
+        guard let theme = model.themeColor else { return scheme }
+        return theme.isDarkBackground ? .dark : .light
+    }
+
     var body: some View {
         @Bindable var model = model
 
@@ -137,6 +146,7 @@ struct MiniBrowserView: View {
                         .padding(.horizontal, 20)
                         .padding(.bottom, collapsedBarHeight + 8)
                         .frame(maxWidth: .infinity)
+                        .environment(\.colorScheme, barScheme)
                 }
 
                 MiniBrowserChrome(
@@ -154,6 +164,7 @@ struct MiniBrowserView: View {
                 )
                 .fixedSize(horizontal: false, vertical: true)
                 .offset(y: barCollapsed ? collapsedBarHeight : 0)
+                .environment(\.colorScheme, barScheme)
                 .accessibilityHidden(pageKeyboard || barCollapsed)
 
                 if pageKeyboard {

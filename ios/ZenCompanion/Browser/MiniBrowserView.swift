@@ -14,6 +14,7 @@ struct MiniBrowserView: View {
     var onDismiss: () -> Void
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var model: MiniBrowserModel
     @FocusState private var isAddressFocused: Bool
     /// Composer is up. Separate from focus so the text field is created
@@ -55,7 +56,14 @@ struct MiniBrowserView: View {
     /// keys. A page field does not: the bar stays on the screen bottom.
     private var chromeContentBottomInset: CGFloat {
         if addressEditing, keyboardOverlap > 1 { return keyboardOverlap + 16 }
-        return safeBottom + 8
+        return chromeBottomPadding
+    }
+
+    /// Air between the controls and the physical bottom. The home indicator
+    /// only occupies the bottom ~13pt, so trimming the safe area keeps the bar
+    /// slim without sliding the tiles under the gesture.
+    private var chromeBottomPadding: CGFloat {
+        max(12, safeBottom - 10)
     }
 
     /// Webpage or find field, not the address composer.
@@ -68,7 +76,22 @@ struct MiniBrowserView: View {
 
     /// Height of the collapsed bar. The page always reserves exactly this, so
     /// opening the menu or the keyboard does not push the page up.
-    private var collapsedBarHeight: CGFloat { 10 + 44 + safeBottom + 8 }
+    private var collapsedBarHeight: CGFloat { 8 + 44 + chromeBottomPadding }
+
+    /// The bar tucks away while the page scrolls down and returns on the way
+    /// up. Editing the address, an open menu and a live toast keep it in place.
+    private var barCollapsed: Bool {
+        guard model.scrollHidesBar,
+              !addressEditing,
+              !model.menuExpanded,
+              !pageKeyboard,
+              model.pinNotice == nil else { return false }
+        return true
+    }
+
+    private var barMotion: Animation {
+        reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.35, dampingFraction: 0.86)
+    }
 
     private var defaultBackground: Color {
         scheme == .dark ? Color(uiColor: .systemBackground) : Color.white
@@ -104,7 +127,7 @@ struct MiniBrowserView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                     Color.clear
-                        .frame(height: collapsedBarHeight)
+                        .frame(height: barCollapsed ? 0 : collapsedBarHeight)
                         .accessibilityHidden(true)
                         .allowsHitTesting(false)
                 }
@@ -130,7 +153,8 @@ struct MiniBrowserView: View {
                     onSubmit: submitAddress
                 )
                 .fixedSize(horizontal: false, vertical: true)
-                .accessibilityHidden(pageKeyboard)
+                .offset(y: barCollapsed ? collapsedBarHeight : 0)
+                .accessibilityHidden(pageKeyboard || barCollapsed)
 
                 if pageKeyboard {
                     // Above the keys, trailing. Not inside the bar: the bar
@@ -157,6 +181,7 @@ struct MiniBrowserView: View {
                 animateAddressChrome ? .spring(response: 0.35, dampingFraction: 0.85) : nil,
                 value: addressEditing
             )
+            .animation(barMotion, value: barCollapsed)
             .animation(.spring(response: 0.38, dampingFraction: 0.86), value: model.pinNotice != nil)
             .animation(.easeInOut(duration: 0.25), value: model.themeColor)
             .navigationBarTitleDisplayMode(.inline)

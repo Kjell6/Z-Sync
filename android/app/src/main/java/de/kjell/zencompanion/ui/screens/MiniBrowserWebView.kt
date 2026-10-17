@@ -35,6 +35,7 @@ internal fun MiniBrowserWebView(
     onTextInputChange: (TextFieldValue) -> Unit,
     onTitleChange: (String) -> Unit,
     onProgressChange: (Float) -> Unit,
+    onScrollChange: (scrollY: Int) -> Unit,
 ) {
     // Native Android WebView
     AndroidView(
@@ -167,6 +168,9 @@ internal fun MiniBrowserWebView(
                 val loadTarget = formatBrowserInput(initialUrl ?: "")
                 if (loadTarget.isNotEmpty()) {
                     loadUrl(loadTarget)
+                }
+                setOnScrollChangeListener { _, _, scrollY, _, _ ->
+                    onScrollChange(scrollY)
                 }
                 onWebViewCreated(this)
             }

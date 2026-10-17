@@ -95,7 +95,34 @@ fun MiniBrowserScreen(
     )
     val state by viewModel.state.collectAsState()
 
+    // Scroll-driven footer: tucks away on the way down, returns on the way up.
+    var barHidden by remember { mutableStateOf(false) }
+    var lastScrollY by remember { mutableStateOf(0) }
+    var scrollDownRun by remember { mutableStateOf(0) }
+    val onPageScroll: (Int) -> Unit = { scrollY ->
+        val delta = scrollY - lastScrollY
+        lastScrollY = scrollY
+        when {
+            // A short page, or the top of a long one, always keeps the bar.
+            scrollY <= 40 -> {
+                scrollDownRun = 0
+                barHidden = false
+            }
+            delta > 0 -> {
+                scrollDownRun += delta
+                if (scrollDownRun > 24 && scrollY > 80) barHidden = true
+            }
+            delta < -2 -> {
+                scrollDownRun = 0
+                barHidden = false
+            }
+        }
+    }
+
     LaunchedEffect(launchKey) {
+        barHidden = false
+        scrollDownRun = 0
+        lastScrollY = 0
         viewModel.startNewLaunch(
             launchKey = launchKey,
             initialUrl = initialUrl,
@@ -107,6 +134,7 @@ fun MiniBrowserScreen(
 
     var webView by remember { mutableStateOf<WebView?>(null) }
     val focusRequester = remember { FocusRequester() }
+
 
     SideEffect {
         viewModel.documentTitle = documentTitle@{
@@ -213,6 +241,7 @@ fun MiniBrowserScreen(
                     onTextInputChange = viewModel::onAddressTextChange,
                     onTitleChange = viewModel::onCurrentTitleChange,
                     onProgressChange = viewModel::onProgressChange,
+                    onScrollChange = onPageScroll,
                 )
 
                 // Deferred Space Pinning Banner (Floats above footer)
@@ -333,26 +362,32 @@ fun MiniBrowserScreen(
                 }
             }
 
-            MiniBrowserFooter(
-                animatedBgColor = animatedBgColor,
-                isDark = isDark,
-                webView = webView,
-                canGoBack = state.canGoBack,
-                canGoForward = state.canGoForward,
-                effectiveUrl = effectiveUrl,
-                canPin = allSpaces.isNotEmpty(),
-                saveKind = state.saveKind,
-                onBgColor = onBgColor,
-                onVariantBgColor = onVariantBgColor,
-                onPin = {
-                    Haptics.perform(context, Haptics.Kind.CONFIRM)
-                    viewModel.triggerPinBanner()
-                },
-                onClose = {
-                    viewModel.commitPendingPinSave()
-                    onDismiss()
-                },
-            )
+            androidx.compose.animation.AnimatedVisibility(
+                visible = !barHidden || state.isAddressFocused || state.showPinBanner,
+                enter = slideInVertically(initialOffsetY = { it }),
+                exit = slideOutVertically(targetOffsetY = { it }),
+            ) {
+                MiniBrowserFooter(
+                    animatedBgColor = animatedBgColor,
+                    isDark = isDark,
+                    webView = webView,
+                    canGoBack = state.canGoBack,
+                    canGoForward = state.canGoForward,
+                    effectiveUrl = effectiveUrl,
+                    canPin = allSpaces.isNotEmpty(),
+                    saveKind = state.saveKind,
+                    onBgColor = onBgColor,
+                    onVariantBgColor = onVariantBgColor,
+                    onPin = {
+                        Haptics.perform(context, Haptics.Kind.CONFIRM)
+                        viewModel.triggerPinBanner()
+                    },
+                    onClose = {
+                        viewModel.commitPendingPinSave()
+                        onDismiss()
+                    },
+                )
+            }
         }
     }
 }

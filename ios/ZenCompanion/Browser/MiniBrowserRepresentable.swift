@@ -63,6 +63,12 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
         private var backObservation: NSKeyValueObservation?
         private var forwardObservation: NSKeyValueObservation?
         private var themeColorObservation: NSKeyValueObservation?
+        private var scrollObservation: NSKeyValueObservation?
+        /// Last vertical offset, to read the scroll direction.
+        private var lastScrollY: CGFloat = 0
+        /// Downward travel since the last direction change. Hides the bar only
+        /// after a committed scroll, not on the first jitter.
+        private var scrollDownRun: CGFloat = 0
 
         init(model: MiniBrowserModel) {
             self.model = model
@@ -138,12 +144,52 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
                     }
                 }
             }
+
+            // KVO, not `scrollView.delegate`: WebKit owns that delegate and
+            // replacing it breaks its own scrolling.
+            scrollObservation = webView.scrollView.observe(\.contentOffset, options: [.new]) { [weak self] scrollView, _ in
+                let y = scrollView.contentOffset.y
+                let viewport = scrollView.bounds.height
+                let content = scrollView.contentSize.height
+                DispatchQueue.main.async {
+                    self?.updateBarVisibility(scrollY: y, viewport: viewport, contentHeight: content)
+                }
+            }
+        }
+
+        /// Tucks the bottom bar away once the page has scrolled down and
+        /// brings it back as soon as the page scrolls up again. A short page,
+        /// or the very top of a long one, always keeps the bar.
+        private func updateBarVisibility(scrollY: CGFloat, viewport: CGFloat, contentHeight: CGFloat) {
+            let maxY = contentHeight - viewport
+            let delta = scrollY - lastScrollY
+            lastScrollY = scrollY
+
+            guard maxY > 60, scrollY > 40 else {
+                scrollDownRun = 0
+                model.setScrollHidesBar(false)
+                return
+            }
+
+            if delta > 0.5 {
+                scrollDownRun += delta
+                if scrollDownRun > 24, scrollY > 80 {
+                    model.setScrollHidesBar(true)
+                }
+            } else if delta < -2 {
+                scrollDownRun = 0
+                model.setScrollHidesBar(false)
+            }
         }
 
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
             DispatchQueue.main.async {
                 self.model.isLoading = true
             }
+            // A new document starts at the top: drop the previous page's
+            // scroll history so the bar's first decision is not carried over.
+            lastScrollY = 0
+            scrollDownRun = 0
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

@@ -72,7 +72,7 @@ struct MiniBrowserChrome: View {
                     .padding(.horizontal, 20)
                     // Option rows are 48pt with the label centered, so the air
                     // between two labels is about 24pt. 8pt read as too tight.
-                    .padding(.top, menuOpen ? 24 : 10)
+                    .padding(.top, menuOpen ? 24 : 8)
                     .padding(.bottom, bottomInset)
                     .transition(.identity)
             }

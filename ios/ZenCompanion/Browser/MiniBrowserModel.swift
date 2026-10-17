@@ -66,6 +66,10 @@ final class MiniBrowserModel {
 
     /// Expanded page menu on the bottom card.
     var menuExpanded = false
+    /// The page scrolled down far enough to tuck the bottom bar away. Fed by
+    /// the web view; the view ANDs it with the states that must keep the bar
+    /// (editing the address, an open menu, a live toast).
+    private(set) var scrollHidesBar = false
     /// Session-only. Navigations request the desktop version of the site.
     var requestsDesktopSite = false
     /// 1.0 is 100%. Always inside `MiniBrowserTools` limits.
@@ -215,6 +219,13 @@ final class MiniBrowserModel {
         menuExpanded = false
     }
 
+    /// Scroll-driven bar visibility. No-op when the value is unchanged so a
+    /// long scroll does not re-render on every frame.
+    func setScrollHidesBar(_ hidden: Bool) {
+        guard scrollHidesBar != hidden else { return }
+        scrollHidesBar = hidden
+    }
+
     func setPageZoom(_ value: Double) {
         let next = MiniBrowserTools.clampedZoom(value)
         guard abs(next - pageZoom) > 0.001 else { return }
@@ -287,6 +298,8 @@ final class MiniBrowserModel {
     func updateCurrentURL(_ url: URL?) {
         if !PageTitle.sameDocument(currentURL, url) {
             pageTitle = ""
+            // A fresh document starts at the top with the bar in place.
+            scrollHidesBar = false
         }
         currentURL = url
     }

@@ -239,3 +239,140 @@ public enum SearchEngineTemplate {
         return label.prefix(1).uppercased() + label.dropFirst()
     }
 }
+
+// MARK: - Search suggestions
+
+/// Public suggest endpoint of a built-in engine. Custom engines have none:
+/// they only store a search template, so typing must not leave the device.
+struct SearchSuggestEndpoint: Equatable, Sendable {
+    /// Absolute URL without a query string.
+    var base: String
+    /// Query-parameter name. Bing uses `query`; the others use `q`.
+    var queryName: String
+    /// Extra parameters required by that endpoint's public format.
+    var extra: [String: String]
+
+    func url(for query: String) -> URL? {
+        guard var components = URLComponents(string: base) else { return nil }
+        var items = [URLQueryItem(name: queryName, value: query)]
+        for key in extra.keys.sorted() {
+            items.append(URLQueryItem(name: key, value: extra[key]))
+        }
+        components.queryItems = items
+        // URLQueryItem leaves "+" as is, and the engines read it as a space:
+        // "c++" would ask for "c".
+        components.percentEncodedQuery = components.percentEncodedQuery?
+            .replacingOccurrences(of: "+", with: "%2B")
+        return components.url
+    }
+}
+
+extension SearchEngine {
+    /// Suggest endpoint checked against the live service on 2026-10-11.
+    /// `nil` for a custom engine and for any built-in id we do not recognise.
+    var suggestEndpoint: SearchSuggestEndpoint? {
+        guard isBuiltIn else { return nil }
+        switch id {
+        case "duckduckgo":
+            // `type=list` is what returns the OpenSearch array. Without it the
+            // same host answers with `[{"phrase":…}]`.
+            return SearchSuggestEndpoint(
+                base: "https://duckduckgo.com/ac/",
+                queryName: "q",
+                extra: ["type": "list"]
+            )
+        case "google":
+            // `client=firefox` is the JSON array. Other clients answer with JSONP.
+            return SearchSuggestEndpoint(
+                base: "https://suggestqueries.google.com/complete/search",
+                queryName: "q",
+                extra: ["client": "firefox"]
+            )
+        case "ecosia":
+            return SearchSuggestEndpoint(
+                base: "https://ac.ecosia.org/autocomplete",
+                queryName: "q",
+                extra: ["type": "list"]
+            )
+        case "brave":
+            return SearchSuggestEndpoint(
+                base: "https://search.brave.com/api/suggest",
+                queryName: "q",
+                extra: [:]
+            )
+        case "bing":
+            return SearchSuggestEndpoint(
+                base: "https://www.bing.com/osjson.aspx",
+                queryName: "query",
+                extra: [:]
+            )
+        default:
+            return nil
+        }
+    }
+}
+
+/// When to ask for suggestions, and how to read the answer.
+///
+/// All five built-ins answered, on 2026-10-11, with one JSON array whose
+/// second element is the suggestion strings:
+/// `["typed query", ["first", "second", …]]`.
+/// Google appends further elements after that list. They are ignored.
+enum SearchSuggestions {
+    /// The glass sheet sits over the page. Eight rows fill the thumb zone
+    /// without covering the whole screen. Longer answers are cut, not scrolled.
+    static let limit = 8
+
+    /// Wait after the last keystroke before a request leaves the device.
+    static let debounce: Duration = .milliseconds(200)
+
+    /// Where a tapped suggestion goes. Suggestions are search phrases, so
+    /// "node.js" searches instead of opening https://node.js. Only an explicit
+    /// http(s) address loads directly.
+    static func target(of suggestion: String, engine: SearchEngine) -> URL? {
+        let lower = suggestion.lowercased()
+        if lower.hasPrefix("http://") || lower.hasPrefix("https://") {
+            return URL(string: suggestion)
+        }
+        return engine.searchURL(for: suggestion)
+    }
+
+    /// URL to request, or nil when nothing may be sent: blank text, a web
+    /// address, or an engine with no suggest endpoint.
+    static func requestURL(for raw: String, engine: SearchEngine) -> URL? {
+        let query = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty, !isDirectNavigation(query) else { return nil }
+        return engine.suggestEndpoint?.url(for: query)
+    }
+
+    /// True when submitting this text would open an address rather than a search.
+    /// A URL must not be forwarded to the suggest endpoint.
+    static func isDirectNavigation(_ query: String) -> Bool {
+        if query.range(of: #"^[A-Za-z][A-Za-z0-9+.-]*:"#, options: .regularExpression) != nil {
+            return true
+        }
+        if let scheme = URL(string: query)?.scheme, !scheme.isEmpty {
+            return true
+        }
+        return query.contains(".") && query.rangeOfCharacter(from: .whitespacesAndNewlines) == nil
+    }
+
+    /// Suggestion strings, or an empty list when the body is not the array above.
+    static func parse(_ data: Data) -> [String] {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [Any],
+              root.count >= 2,
+              let items = root[1] as? [Any] else {
+            return []
+        }
+        var seen = Set<String>()
+        var results: [String] = []
+        for item in items {
+            guard let text = item as? String else { continue }
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, seen.insert(trimmed).inserted else { continue }
+            results.append(trimmed)
+            if results.count == limit { break }
+        }
+        return results
+    }
+}

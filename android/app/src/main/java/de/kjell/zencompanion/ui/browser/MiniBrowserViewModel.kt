@@ -7,6 +7,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import de.kjell.zencompanion.data.SaveKind
+import de.kjell.zencompanion.data.SearchEngines
+import de.kjell.zencompanion.data.SearchSuggestions
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.BrowserRepository
 import de.kjell.zencompanion.ui.components.PinDestination
@@ -30,6 +32,8 @@ class MiniBrowserViewModel(
     initialTitle: String?,
     spaces: List<ZenSpaces.ZenSpace>,
     currentSpaceId: String,
+    private val suggestionClient: SearchSuggestionClient = LiveSearchSuggestionClient(),
+    private val suggestionDebounceMs: Long = SearchSuggestions.DEBOUNCE_MS,
 ) : ViewModel() {
 
     private var initialUrl: String? = initialUrl
@@ -55,6 +59,8 @@ class MiniBrowserViewModel(
         val saveKind: SaveKind = SaveKind.PINNED,
         /** True while a requested normal save fell back to a pinned record. */
         val fallbackNotice: Boolean = false,
+        /** Suggestions for the text being typed. Empty hides the list. */
+        val suggestions: List<String> = emptyList(),
     ) {
         /** Normal saves always target the space root, so folder rows are hidden. */
         val hideFolders: Boolean get() = saveKind == SaveKind.NORMAL
@@ -76,7 +82,10 @@ class MiniBrowserViewModel(
 
     private var pinBannerJob: Job? = null
     private var fallbackNoticeJob: Job? = null
+    private var suggestionJob: Job? = null
     private var hasPendingPinSave = false
+    /** Set after a pick or submit so the following text write does not suggest. */
+    private var suggestionsSuspended = false
 
     /**
      * Live `document.title` from the WebView. The screen installs this.
@@ -104,6 +113,8 @@ class MiniBrowserViewModel(
         this.currentSpaceId = currentSpaceId
         pinBannerJob?.cancel()
         fallbackNoticeJob?.cancel()
+        suggestionJob?.cancel()
+        suggestionsSuspended = false
         hasPendingPinSave = false
         _state.value = State(
             currentUrl = initialUrl.orEmpty(),
@@ -118,18 +129,22 @@ class MiniBrowserViewModel(
 
     fun onAddressTextChange(value: TextFieldValue) {
         _state.update { it.copy(addressText = value) }
+        refreshSuggestions()
     }
 
     fun onAddressFocusChange(focused: Boolean) {
         if (focused == _state.value.isAddressFocused) return
+        if (!focused) suggestionsSuspended = false
         _state.update {
             it.copy(
                 isAddressFocused = focused,
+                suggestions = if (focused) it.suggestions else emptyList(),
                 addressText = TextFieldValue(
                     text = if (focused) effectiveUrl() else displayHost(effectiveUrl()),
                 ),
             )
         }
+        if (focused) refreshSuggestions() else suggestionJob?.cancel()
     }
 
     fun onLoadingChange(loading: Boolean) {
@@ -168,7 +183,63 @@ class MiniBrowserViewModel(
      * Resolves raw address input to a fully-qualified URL (or search URL).
      * The caller loads the returned value; empty means nothing to load.
      */
-    fun submitAddress(input: String): String = formatBrowserInput(input)
+    fun submitAddress(input: String): String {
+        suggestionsSuspended = true
+        suggestionJob?.cancel()
+        _state.update { it.copy(suggestions = emptyList()) }
+        return formatBrowserInput(input)
+    }
+
+    /**
+     * A tapped suggestion searches; only an explicit http(s) address loads
+     * directly (see [SearchSuggestions.target]).
+     */
+    fun selectSuggestion(suggestion: String): String {
+        suggestionsSuspended = true
+        suggestionJob?.cancel()
+        _state.update {
+            it.copy(
+                suggestions = emptyList(),
+                addressText = TextFieldValue(suggestion),
+            )
+        }
+        return SearchSuggestions.target(suggestion, SearchEngines.current)
+    }
+
+    /**
+     * Asks for suggestions while the field is focused and the text is a search
+     * query. A URL, blank text, a custom engine, or a closed field sends nothing.
+     * Errors and empty answers clear the list.
+     */
+    private fun refreshSuggestions() {
+        suggestionJob?.cancel()
+        if (suggestionsSuspended || !_state.value.isAddressFocused) {
+            _state.update { it.copy(suggestions = emptyList()) }
+            return
+        }
+        val raw = _state.value.addressText.text
+        val url = SearchSuggestions.requestUrl(raw, SearchEngines.current)
+        if (url == null) {
+            _state.update { it.copy(suggestions = emptyList()) }
+            return
+        }
+        suggestionJob = viewModelScope.launch {
+            if (suggestionDebounceMs > 0) delay(suggestionDebounceMs)
+            val body = try {
+                suggestionClient.fetch(url)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
+            if (body == null) {
+                _state.update { it.copy(suggestions = emptyList()) }
+                return@launch
+            }
+            if (_state.value.addressText.text != raw || !_state.value.isAddressFocused) return@launch
+            _state.update { it.copy(suggestions = SearchSuggestions.parse(body)) }
+        }
+    }
 
     /** Back precedence: menus → address focus → web history → dismiss. */
     fun onBackPressed(webViewCanGoBack: Boolean): BackAction = when {

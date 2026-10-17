@@ -238,11 +238,11 @@ class MiniBrowserViewModelTests {
         assertEquals(SaveKind.NORMAL, repository.added[0].kind)
         assertEquals("s2", repository.added[0].spaceId)
         assertNull(repository.added[0].folderId)
-        assertTrue(vm.state.value.fallbackNotice)
+        assertEquals(R.string.save_fallback_normal_off, vm.state.value.noticeRes)
 
-        advanceTimeBy(6_000)
+        advanceTimeBy(4_000)
         runCurrent()
-        assertFalse(vm.state.value.fallbackNotice)
+        assertNull(vm.state.value.noticeRes)
 
         // Drain the banner timer still scheduled from the trigger.
         advanceTimeBy(5_000)

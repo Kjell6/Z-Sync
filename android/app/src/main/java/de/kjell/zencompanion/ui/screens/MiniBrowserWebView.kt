@@ -6,8 +6,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
-import android.os.Message
 import android.view.ViewGroup
+import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -15,17 +15,25 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.viewinterop.AndroidView
 import de.kjell.zencompanion.ui.components.openURLExternally
 
+/** Chrome-like desktop user agent for the "Request Desktop Site" toggle. */
+private const val DesktopUserAgent =
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
+        "(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
+
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 internal fun MiniBrowserWebView(
     initialUrl: String?,
     isAddressFocused: Boolean,
+    desktopSite: Boolean,
+    textZoomPercent: Int,
     onWebViewCreated: (WebView) -> Unit,
     onLoadingChange: (Boolean) -> Unit,
     onSiteThemeColorChange: (Color?) -> Unit,
@@ -36,8 +44,11 @@ internal fun MiniBrowserWebView(
     onTitleChange: (String) -> Unit,
     onProgressChange: (Float) -> Unit,
     onScrollChange: (scrollY: Int) -> Unit,
+    onFindResult: (active: Int, total: Int) -> Unit,
 ) {
-    // Native Android WebView
+    // The factory runs once; read the live focus flag instead of the first value.
+    val focused = rememberUpdatedState(isAddressFocused)
+
     AndroidView(
         factory = { ctx ->
             WebView(ctx).apply {
@@ -60,6 +71,8 @@ internal fun MiniBrowserWebView(
                     setSupportMultipleWindows(true)
                     javaScriptCanOpenWindowsAutomatically = true
                 }
+                // The stock user agent, restored when desktop mode is turned off.
+                tag = settings.userAgentString
                 webViewClient = object : WebViewClient() {
                     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                         super.onPageStarted(view, url, favicon)
@@ -75,7 +88,7 @@ internal fun MiniBrowserWebView(
                         onLoadingChange(false)
                         url?.let {
                             onCurrentUrlChange(it)
-                            if (!isAddressFocused) {
+                            if (!focused.value) {
                                 val host = runCatching { Uri.parse(it).host?.removePrefix("www.") }.getOrNull()
                                 val display = if (!host.isNullOrEmpty()) host else it
                                 onTextInputChange(TextFieldValue(text = display))
@@ -103,6 +116,7 @@ internal fun MiniBrowserWebView(
                                 onSiteThemeColorChange(parsed)
                             }
                         }
+                        view?.evaluateJavascript(SCROLL_BINDING_SCRIPT, null)
                     }
 
                     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
@@ -130,54 +144,55 @@ internal fun MiniBrowserWebView(
                     override fun onReceivedTitle(view: WebView?, title: String?) {
                         title?.let { onTitleChange(it) }
                     }
-
-                    override fun onCreateWindow(
-                        view: WebView,
-                        isDialog: Boolean,
-                        isUserGesture: Boolean,
-                        resultMsg: Message,
-                    ): Boolean {
-                        // Only a tap may replace the page. Windows a page opens on its own are dropped.
-                        if (!isUserGesture) return false
-                        val hit = view.hitTestResult
-                        val destination = tappedLinkUrl(hit.type, hit.extra)
-                        if (destination != null) {
-                            view.loadUrl(destination)
-                            return false
-                        }
-                        val transport = resultMsg.obj as? WebView.WebViewTransport ?: return false
-                        val popup = WebView(view.context)
-                        popup.settings.javaScriptEnabled = true
-                        popup.webViewClient = object : WebViewClient() {
-                            override fun shouldOverrideUrlLoading(
-                                popupView: WebView,
-                                request: WebResourceRequest,
-                            ): Boolean {
-                                val next = sameTabUrl(request.url?.toString()) ?: return false
-                                view.loadUrl(next)
-                                popupView.post { popupView.destroy() }
-                                return true
-                            }
-                        }
-                        transport.webView = popup
-                        resultMsg.sendToTarget()
-                        return true
-                    }
                 }
+
+                setFindListener { active, total, _ -> onFindResult(active, total) }
+                // A WebView scrolls its content internally, so its own
+                // `setOnScrollChangeListener` never fires. The page reports its
+                // scroll offset instead; only that int crosses the bridge.
+                addJavascriptInterface(
+                    ScrollBridge { scrollY -> post { onScrollChange(scrollY) } },
+                    SCROLL_BRIDGE_NAME,
+                )
 
                 val loadTarget = formatBrowserInput(initialUrl ?: "")
                 if (loadTarget.isNotEmpty()) {
                     loadUrl(loadTarget)
                 }
-                setOnScrollChangeListener { _, _, scrollY, _, _ ->
-                    onScrollChange(scrollY)
-                }
                 onWebViewCreated(this)
+            }
+        },
+        update = { view ->
+            view.settings.textZoom = textZoomPercent
+            val defaultUserAgent = view.tag as? String
+            val desired = if (desktopSite) DesktopUserAgent else defaultUserAgent
+            if (desired != null && view.settings.userAgentString != desired) {
+                view.settings.userAgentString = desired
+                view.reload()
             }
         },
         modifier = Modifier.fillMaxSize(),
     )
 }
+
+/** Receives the page's scroll offset. Called on a WebView thread. */
+private class ScrollBridge(private val onScroll: (Int) -> Unit) {
+    @JavascriptInterface
+    fun update(scrollY: Int) = onScroll(scrollY)
+}
+
+private const val SCROLL_BRIDGE_NAME = "ZenScroll"
+
+/** Binds the page's scroll offset to the bridge once per document. */
+private const val SCROLL_BINDING_SCRIPT = """
+    (function() {
+      if (window.__zenScrollBound) return;
+      window.__zenScrollBound = true;
+      window.addEventListener('scroll', function() {
+        try { ZenScroll.update(Math.round(window.scrollY)); } catch (e) {}
+      }, { passive: true });
+    })()
+"""
 
 @Suppress("DEPRECATION")
 private fun resolveHandlerPackage(context: Context, uri: Uri): String? =

@@ -25,7 +25,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -54,6 +57,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,6 +67,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -73,7 +78,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import android.app.Activity
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.BrowserRepository
@@ -248,17 +255,50 @@ fun MiniBrowserScreen(
     val barColor = animatedBgColor.nudgedForBar()
     val barIsDark = barColor.luminance() < 0.5f
 
+    // Status bar strip and top chrome take the plate colour, so the strip
+    // matches the bar instead of the raw page colour.
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as? Activity)?.window ?: return@SideEffect
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !barIsDark
+                isAppearanceLightNavigationBars = !barIsDark
+            }
+        }
+    }
+
+    val navigationBarInset = WindowInsets.navigationBars
+        .asPaddingValues()
+        .calculateBottomPadding()
+    val collapsedBarHeight = CollapsedBarHeightBase + navigationBarInset
+    val reservedBottom by animateDpAsState(
+        targetValue = if (barVisible) collapsedBarHeight else 0.dp,
+        label = "barReserve",
+    )
+
     Surface(
         modifier = modifier.fillMaxSize(),
-        color = animatedBgColor,
+        color = barColor,
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
                 .imePadding(),
         ) {
-            // Page pane: the page ends where the bar begins.
+            Column(Modifier.fillMaxSize()) {
+                ZenTheme(darkTheme = barIsDark) {
+                    MiniBrowserTopBar(
+                        barColor = barColor,
+                        onClose = {
+                            viewModel.commitPendingPinSave()
+                            onDismiss()
+                        },
+                    )
+                }
+            // Page pane: the page ends where the collapsed bar begins. The open
+            // menu draws over the page instead of pushing it up.
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -336,63 +376,61 @@ fun MiniBrowserScreen(
                 }
             }
 
+                Spacer(Modifier.height(reservedBottom))
+            }
+
             AnimatedVisibility(
                 visible = barVisible,
-                enter = slideInVertically(initialOffsetY = { it }) +
-                    expandVertically(expandFrom = Alignment.Top),
-                exit = slideOutVertically(targetOffsetY = { it }) +
-                    shrinkVertically(shrinkTowards = Alignment.Top),
+                enter = slideInVertically(initialOffsetY = { it }),
+                exit = slideOutVertically(targetOffsetY = { it }),
+                modifier = Modifier.align(Alignment.BottomCenter),
             ) {
                 ZenTheme(darkTheme = barIsDark) {
-                MiniBrowserBar(
-                    state = state,
-                    viewModel = viewModel,
-                    effectiveUrl = effectiveUrl,
-                    addressText = state.addressText,
-                    onAddressTextChange = viewModel::onAddressTextChange,
-                    focusRequester = focusRequester,
-                    onAddressFocusedChange = viewModel::onAddressFocusChange,
-                    onBeginAddressEdit = {
-                        viewModel.collapseMenu()
-                        focusRequester.requestFocus()
-                    },
-                    onCancelAddressEdit = {
-                        focusManager.clearFocus()
-                        keyboardController?.hide()
-                    },
-                    onSubmitAddress = { input ->
-                        val target = viewModel.submitAddress(input)
-                        if (target.isNotEmpty()) {
-                            webView?.loadUrl(target)
-                        }
-                        focusManager.clearFocus()
-                        keyboardController?.hide()
-                    },
-                    onBack = { webView?.goBack() },
-                    onForward = { webView?.goForward() },
-                    onReload = { webView?.reload() },
-                    onStop = { webView?.stopLoading() },
-                    onCopyLink = {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                        if (clipboard != null && effectiveUrl.isNotEmpty()) {
-                            clipboard.setPrimaryClip(ClipData.newPlainText("URL", effectiveUrl))
-                            Haptics.perform(context, Haptics.Kind.SELECTION)
-                            viewModel.confirmCopied()
-                        }
-                    },
-                    onFind = { viewModel.openFind() },
-                    onShare = { shareUrl(context, effectiveUrl, state.currentTitle) },
-                    onOpenExternal = { openURLExternally(context, effectiveUrl) },
-                    onPin = {
-                        Haptics.perform(context, Haptics.Kind.CONFIRM)
-                        viewModel.triggerPinBanner()
-                    },
-                    onClose = {
-                        viewModel.commitPendingPinSave()
-                        onDismiss()
-                    },
-                    barColor = barColor,
-                )
+                    MiniBrowserBar(
+                        state = state,
+                        viewModel = viewModel,
+                        effectiveUrl = effectiveUrl,
+                        addressText = state.addressText,
+                        onAddressTextChange = viewModel::onAddressTextChange,
+                        focusRequester = focusRequester,
+                        onAddressFocusedChange = viewModel::onAddressFocusChange,
+                        onBeginAddressEdit = {
+                            viewModel.collapseMenu()
+                            focusRequester.requestFocus()
+                        },
+                        onCancelAddressEdit = {
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+                        },
+                        onSubmitAddress = { input ->
+                            val target = viewModel.submitAddress(input)
+                            if (target.isNotEmpty()) {
+                                webView?.loadUrl(target)
+                            }
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+                        },
+                        onBack = { webView?.goBack() },
+                        onForward = { webView?.goForward() },
+                        onReload = { webView?.reload() },
+                        onStop = { webView?.stopLoading() },
+                        onCopyLink = {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                            if (clipboard != null && effectiveUrl.isNotEmpty()) {
+                                clipboard.setPrimaryClip(ClipData.newPlainText("URL", effectiveUrl))
+                                Haptics.perform(context, Haptics.Kind.SELECTION)
+                                viewModel.confirmCopied()
+                            }
+                        },
+                        onFind = { viewModel.openFind() },
+                        onShare = { shareUrl(context, effectiveUrl, state.currentTitle) },
+                        onOpenExternal = { openURLExternally(context, effectiveUrl) },
+                        onPin = {
+                            Haptics.perform(context, Haptics.Kind.CONFIRM)
+                            viewModel.triggerPinBanner()
+                        },
+                        barColor = barColor,
+                    )
                 }
             }
         }
@@ -587,7 +625,7 @@ private fun FindStep(
     Box(
         modifier = Modifier
             .size(36.dp)
-            .clickable(onClick = onClick),
+            .barClickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(

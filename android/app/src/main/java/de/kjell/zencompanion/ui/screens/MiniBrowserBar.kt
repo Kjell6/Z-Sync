@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,6 +46,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -72,6 +74,7 @@ import de.kjell.zencompanion.ui.browser.MiniBrowserZoom
 import de.kjell.zencompanion.ui.theme.LocalZenColors
 import de.kjell.zencompanion.ui.theme.ZenType
 import de.kjell.zencompanion.ui.theme.liftBorder
+import de.kjell.zencompanion.ui.theme.pressFeedback
 
 /**
  * The bar sits on the page's own color, nudged away from it so the plate is
@@ -85,6 +88,24 @@ internal fun Color.nudgedForBar(amount: Float = 0.08f): Color {
         blue = blue + (target - blue) * amount,
         alpha = alpha,
     )
+}
+
+/**
+ * The app's press feel: shrink and dim while the finger is down, no ripple. The
+ * default ripple draws a dark rectangle over the control's square bounds, which
+ * does not match the action bar and the tiles.
+ */
+@Composable
+internal fun Modifier.barClickable(enabled: Boolean = true, onClick: () -> Unit): Modifier {
+    val source = remember { MutableInteractionSource() }
+    return this
+        .pressFeedback(source)
+        .clickable(
+            interactionSource = source,
+            indication = null,
+            enabled = enabled,
+            onClick = onClick,
+        )
 }
 
 /** Side controls: rounder than the app's tiles, still square with a flat edge. */
@@ -127,7 +148,6 @@ internal fun MiniBrowserBar(
     onShare: () -> Unit,
     onOpenExternal: () -> Unit,
     onPin: () -> Unit,
-    onClose: () -> Unit,
     barColor: Color,
     modifier: Modifier = Modifier,
 ) {
@@ -159,7 +179,6 @@ internal fun MiniBrowserBar(
                 onShare = onShare,
                 onOpenExternal = onOpenExternal,
                 onPin = onPin,
-                onClose = onClose,
             )
         }
 
@@ -195,6 +214,49 @@ internal fun MiniBrowserBar(
         Spacer(Modifier.navigationBarsPadding())
     }
 }
+
+/**
+ * Slim strip above the page: the app's chrome color plus the one explicit way
+ * out of the mini-browser (Android has no swipe-to-dismiss sheet).
+ */
+@Composable
+internal fun MiniBrowserTopBar(barColor: Color, onClose: () -> Unit) {
+    val zen = LocalZenColors.current
+    Column(Modifier.fillMaxWidth().background(barColor)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Spacer(Modifier.weight(1f))
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(zen.lift, ControlShape)
+                    .border(liftBorder(), ControlShape)
+                    .barClickable(onClick = onClose),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Close,
+                    contentDescription = stringResource(R.string.browser_close),
+                    tint = zen.ink.copy(alpha = 0.75f),
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
+        Spacer(
+            Modifier
+                .fillMaxWidth()
+                .height(0.5.dp)
+                .background(zen.ink.copy(alpha = 0.10f)),
+        )
+    }
+}
+
+/** Height of the collapsed bar, so the page can reserve exactly that much. */
+internal val CollapsedBarHeightBase: androidx.compose.ui.unit.Dp = 8.dp + ControlSide + 10.dp
 
 // MARK: - Collapsed row
 
@@ -272,7 +334,7 @@ private fun ControlButton(
             .size(ControlSide)
             .background(zen.lift, ControlShape)
             .border(liftBorder(), ControlShape)
-            .clickable(enabled = enabled, onClick = onClick),
+            .barClickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -302,7 +364,7 @@ private fun AddressPill(
             .height(ControlSide)
             .background(zen.lift, CircleShape)
             .border(liftBorder(), CircleShape)
-            .clickable(onClick = onTap),
+            .barClickable(onClick = onTap),
     ) {
         Row(
             modifier = Modifier
@@ -330,7 +392,7 @@ private fun AddressPill(
                     tint = zen.ink.copy(alpha = 0.55f),
                     modifier = Modifier
                         .size(36.dp)
-                        .clickable(onClick = if (isLoading) onStop else onReload)
+                        .barClickable(onClick = if (isLoading) onStop else onReload)
                         .padding(8.dp),
                 )
             }
@@ -439,7 +501,7 @@ private fun ComposerRow(
                     tint = zen.ink.copy(alpha = 0.6f),
                     modifier = Modifier
                         .size(36.dp)
-                        .clickable { onAddressTextChange(TextFieldValue("", selection = TextRange.Zero)) }
+                        .barClickable { onAddressTextChange(TextFieldValue("", selection = TextRange.Zero)) }
                         .padding(9.dp),
                 )
             }
@@ -465,7 +527,6 @@ private fun ExpandedMenu(
     onShare: () -> Unit,
     onOpenExternal: () -> Unit,
     onPin: () -> Unit,
-    onClose: () -> Unit,
 ) {
     val zen = LocalZenColors.current
     Column(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 10.dp)) {
@@ -587,13 +648,6 @@ private fun ExpandedMenu(
             )
         }
 
-        RowDivider()
-        MenuRow(
-            icon = Icons.Outlined.Close,
-            title = stringResource(R.string.browser_close),
-            tint = MaterialTheme.colorScheme.error,
-            onClick = onClose,
-        )
     }
 }
 
@@ -608,7 +662,7 @@ private fun MenuRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .barClickable(onClick = onClick)
             .padding(horizontal = 18.dp)
             .height(RowHeight),
         verticalAlignment = Alignment.CenterVertically,
@@ -656,7 +710,7 @@ private fun ZoomStep(
     Box(
         modifier = Modifier
             .size(32.dp)
-            .clickable(enabled = enabled, onClick = onClick),
+            .barClickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -683,7 +737,7 @@ private fun RowScope.MenuTile(
             .height(TileHeight)
             .background(zen.lift, TileShape)
             .border(liftBorder(), TileShape)
-            .clickable(onClick = onClick),
+            .barClickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {

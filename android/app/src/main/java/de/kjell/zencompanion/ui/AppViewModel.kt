@@ -9,6 +9,7 @@ import de.kjell.zencompanion.data.AccountStore
 import de.kjell.zencompanion.data.AppEvents
 import de.kjell.zencompanion.data.BrowserSettings
 import de.kjell.zencompanion.data.DemoCatalog
+import de.kjell.zencompanion.data.EssentialsColumns
 import de.kjell.zencompanion.data.SaveKind
 import de.kjell.zencompanion.data.SearchEngine
 import de.kjell.zencompanion.data.SearchEngines
@@ -163,6 +164,8 @@ data class PreferencesState(
     val customSearchEngines: List<SearchEngine> = emptyList(),
     val alwaysOpenExternally: Boolean = false,
     val essentialsGrouping: ZenSpaces.EssentialsGrouping = ZenSpaces.EssentialsGrouping.AUTOMATIC,
+    /** How many essentials share one grid row: adaptive (default) or a fixed 1-5. */
+    val essentialsColumns: EssentialsColumns = EssentialsColumns.AUTOMATIC,
     /** Pinned (default) or normal tab for tabs saved from share/mini browser. */
     val saveKind: SaveKind = SaveKind.PINNED,
     /** Where the action bar sits: below the switcher (default) or above the essentials grid. */
@@ -181,6 +184,7 @@ interface PreferencesRepository {
     fun setCustomSearchEngines(engines: List<SearchEngine>)
     fun setAlwaysOpenExternally(enabled: Boolean)
     fun setEssentialsGrouping(grouping: ZenSpaces.EssentialsGrouping)
+    fun setEssentialsColumns(columns: EssentialsColumns)
     fun setSaveKind(kind: SaveKind)
     fun setToolbarPlacement(placement: ToolbarPlacement)
     fun setOpenIntoSearch(enabled: Boolean)
@@ -202,6 +206,7 @@ internal class AndroidPreferencesRepository(private val context: Context) : Pref
         essentialsGrouping = ZenSpaces.EssentialsGrouping.fromStorage(
             BrowserSettings.getEssentialsGrouping(context),
         ),
+        essentialsColumns = BrowserSettings.getEssentialsColumns(context),
         saveKind = BrowserSettings.getSaveKind(context),
         toolbarPlacement = BrowserSettings.getToolbarPlacement(context),
         openIntoSearch = BrowserSettings.getOpenIntoSearch(context),
@@ -216,6 +221,9 @@ internal class AndroidPreferencesRepository(private val context: Context) : Pref
 
     override fun setEssentialsGrouping(grouping: ZenSpaces.EssentialsGrouping) =
         BrowserSettings.setEssentialsGrouping(context, grouping.storageValue)
+
+    override fun setEssentialsColumns(columns: EssentialsColumns) =
+        BrowserSettings.setEssentialsColumns(context, columns)
 
     override fun setSaveKind(kind: SaveKind) = BrowserSettings.setSaveKind(context, kind)
 
@@ -755,6 +763,11 @@ class AppViewModel(
     fun setEssentialsGrouping(grouping: ZenSpaces.EssentialsGrouping) {
         preferencesRepository.setEssentialsGrouping(grouping)
         _preferences.value = _preferences.value.copy(essentialsGrouping = grouping)
+    }
+
+    fun setEssentialsColumns(columns: EssentialsColumns) {
+        preferencesRepository.setEssentialsColumns(columns)
+        _preferences.value = _preferences.value.copy(essentialsColumns = columns)
     }
 
     fun setSaveKind(kind: SaveKind) {

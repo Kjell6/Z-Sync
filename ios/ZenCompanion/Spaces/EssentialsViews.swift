@@ -1,22 +1,26 @@
 import SwiftUI
 
-// MARK: - Essentials grid (icon tiles adaptive columns: 1–4: single row, 5–6: 3 cols, 7+: 4 cols)
+// MARK: - Essentials grid (icon tiles; rows fill the full width, last row included)
 
 struct EssentialsGrid: View {
     let tabs: [ZenTab]
     let scheme: ColorScheme
+    /// How many tiles share a row. The adaptive default is 1–4 in one row,
+    /// 5–6 in three columns, 7+ in four. Rows are built manually instead of
+    /// with `LazyVGrid` so a short final row stretches its tiles to fill the
+    /// width rather than leaving a gap on the right.
+    var columns: EssentialsColumns = .automatic
     var onOpen: (ZenTab) -> Void = { _ in }
     var onRenameTab: (String, String) async -> Void = { _, _ in }
 
     private var columnCount: Int {
-        switch tabs.count {
-        case 1: return 1
-        case 2: return 2
-        case 3: return 3
-        case 4: return 4
-        case 5, 6: return 3
-        case 7, 8: return 4
-        default: return 4
+        columns.columnCount(forItemCount: tabs.count)
+    }
+
+    private var rows: [[ZenTab]] {
+        let size = max(1, columnCount)
+        return stride(from: 0, to: tabs.count, by: size).map { start in
+            Array(tabs[start..<min(start + size, tabs.count)])
         }
     }
 
@@ -24,20 +28,20 @@ struct EssentialsGrid: View {
         54
     }
 
-    private var columns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: 10), count: columnCount)
-    }
-
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 10) {
-            ForEach(tabs) { tab in
-                EssentialTile(
-                    tab: tab,
-                    height: tileHeight,
-                    scheme: scheme,
-                    onOpen: { onOpen(tab) },
-                    onRename: { label in await onRenameTab(tab.id, label) }
-                )
+        VStack(spacing: 10) {
+            ForEach(rows, id: \.first?.id) { row in
+                HStack(spacing: 10) {
+                    ForEach(row) { tab in
+                        EssentialTile(
+                            tab: tab,
+                            height: tileHeight,
+                            scheme: scheme,
+                            onOpen: { onOpen(tab) },
+                            onRename: { label in await onRenameTab(tab.id, label) }
+                        )
+                    }
+                }
             }
         }
         .padding(.horizontal, 20)

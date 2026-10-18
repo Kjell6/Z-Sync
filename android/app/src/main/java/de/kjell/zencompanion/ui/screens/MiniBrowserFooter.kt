@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.SaveKind
 import de.kjell.zencompanion.ui.components.openURLExternally
+import de.kjell.zencompanion.ui.theme.Coral
+import de.kjell.zencompanion.ui.theme.CoralDark
 
 @Composable
 internal fun MiniBrowserFooter(
@@ -122,7 +124,7 @@ internal fun MiniBrowserFooter(
                                     R.string.browser_pin_to_space
                                 },
                             ),
-                            tint = if (canPin && effectiveUrl.isNotEmpty()) MaterialTheme.colorScheme.primary else onVariantBgColor.copy(alpha = 0.38f),
+                            tint = if (canPin && effectiveUrl.isNotEmpty()) if (isDark) CoralDark else Coral else onVariantBgColor.copy(alpha = 0.38f),
                         )
                     }
 

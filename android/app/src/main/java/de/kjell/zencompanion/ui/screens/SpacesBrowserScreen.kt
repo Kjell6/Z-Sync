@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
+import de.kjell.zencompanion.data.EssentialsColumns
 import de.kjell.zencompanion.data.ToolbarPlacement
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.BrowserState
@@ -52,6 +53,7 @@ fun SpacesBrowserScreen(
     isDemo: Boolean,
     state: BrowserState,
     essentialsGrouping: ZenSpaces.EssentialsGrouping,
+    essentialsColumns: EssentialsColumns,
     toolbarPlacement: ToolbarPlacement,
     onSelectSpace: (Int) -> Unit,
     onRefresh: () -> Unit,
@@ -160,6 +162,7 @@ fun SpacesBrowserScreen(
                         SpacesPager(
                             spaces = spaces,
                             essentialsBySpace = essentialsBySpace,
+                            essentialsColumns = essentialsColumns,
                             selectedIndex = state.selectedIndex,
                             onSelect = onSelectSpace,
                             onDeleteTab = onDeleteTab,

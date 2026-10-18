@@ -751,6 +751,26 @@
         }
       }
     },
+    "settings.essentials_columns" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Essentials per row"
+          }
+        }
+      }
+    },
+    "settings.essentials_columns.automatic" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatic"
+          }
+        }
+      }
+    },
     "settings.essentials_grouping" : {
       "localizations" : {
         "en" : {

@@ -187,6 +187,7 @@ struct SpacesBrowserView: View {
                                             nextSharesEssentials: nextSharesEssentials,
                                             scheme: spaceScheme,
                                             containerWidth: width,
+                                            essentialsColumns: model.essentialsColumns,
                                             onRefresh: {
                                                 await model.manualRefresh()
                                             },
@@ -268,9 +269,15 @@ struct SpacesBrowserView: View {
                     loadError: model.loadError,
                     scheme: scheme,
                     normalTabsCapability: model.snapshot.normalTabsCapability,
-                    onToolbarPlacementChange: { model.setToolbarPlacement($0) }
+                    onToolbarPlacementChange: { model.setToolbarPlacement($0) },
+                    onEssentialsColumnsChange: { model.setEssentialsColumns($0) }
                 )
-                .presentationDetents([.fraction(0.85), .large])
+                // Single detent on purpose: with `[.fraction(0.85), .large]`
+                // the sheet dropped back to the small detent when a page with
+                // little content (Advanced, Search engine) was pushed, so that
+                // screen no longer filled the height. `.large` keeps every
+                // page full height, like the app's other sheets.
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             case .browser(let session):
                 miniBrowser(session, spaces: model.snapshot.spaces)

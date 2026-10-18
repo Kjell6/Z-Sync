@@ -3,6 +3,7 @@ package de.kjell.zencompanion.ui.screens
 import android.net.Uri
 import de.kjell.zencompanion.ui.components.openURLExternally
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.webkit.WebView
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
@@ -52,9 +53,11 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.SaveKind
@@ -62,6 +65,7 @@ import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.BrowserRepository
 import de.kjell.zencompanion.ui.browser.MiniBrowserViewModel
 import de.kjell.zencompanion.ui.components.PinDestinationPicker
+import de.kjell.zencompanion.ui.theme.InkLight
 import de.kjell.zencompanion.util.Haptics
 import de.kjell.zencompanion.util.PageTitle
 import kotlin.coroutines.resume
@@ -178,9 +182,29 @@ fun MiniBrowserScreen(
         animationSpec = tween(300),
         label = "browserThemeColor",
     )
+    // The bars follow their own background, the page's color, not the app
+    // theme: a white page in dark mode still needs dark text and icons.
     val isDark = animatedBgColor.luminance() < 0.5f
-    val onBgColor = if (isDark) Color(0xFFF2F2F5) else MaterialTheme.colorScheme.onSurface
-    val onVariantBgColor = if (isDark) Color(0xFFB8B8C2) else MaterialTheme.colorScheme.onSurfaceVariant
+    val onBgColor = if (isDark) Color(0xFFF2F2F5) else InkLight
+    val onVariantBgColor = if (isDark) Color(0xFFB8B8C2) else InkLight.copy(alpha = 0.7f)
+
+    // The status and navigation bars sit on the same color. Restored on
+    // close, so the spaces screen keeps its own.
+    val view = LocalView.current
+    DisposableEffect(view, isDark) {
+        val window = (view.context as? Activity)?.window
+        val bars = window?.let { WindowCompat.getInsetsController(it, view) }
+        val lightStatusBars = bars?.isAppearanceLightStatusBars
+        val lightNavigationBars = bars?.isAppearanceLightNavigationBars
+        bars?.isAppearanceLightStatusBars = !isDark
+        bars?.isAppearanceLightNavigationBars = !isDark
+        onDispose {
+            if (bars != null && lightStatusBars != null && lightNavigationBars != null) {
+                bars.isAppearanceLightStatusBars = lightStatusBars
+                bars.isAppearanceLightNavigationBars = lightNavigationBars
+            }
+        }
+    }
 
     Surface(
         modifier = modifier.fillMaxSize(),

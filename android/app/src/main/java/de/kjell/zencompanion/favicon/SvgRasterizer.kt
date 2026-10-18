@@ -2,7 +2,6 @@ package de.kjell.zencompanion.favicon
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.RectF
 import com.caverock.androidsvg.SVG
 
 /**
@@ -17,9 +16,20 @@ internal object SvgRasterizer {
     /** Rasterize [svg] into a [size]×[size] bitmap. Null on parse/failure. */
     fun rasterize(svg: String, size: Int, cacheKey: String): Bitmap? = runCatching {
         val parsed = SVG.getFromString(svg)
+        // AndroidSVG 1.4 lets a document's own width/height override the rect
+        // passed to renderToCanvas(): an icon that declares width="180" is drawn
+        // 1:1 instead of being scaled into the target, so it comes out ~40% too
+        // large and clipped at the right and bottom edge (~15% of the icon cut
+        // off, which is how chatgpt.com's 180px mark showed up). The converse
+        // breaks too: a 32x32 octicon shrinks into the top-left corner. Pinning
+        // the document size to the target makes AndroidSVG fit the viewBox into
+        // it. iOS gets this for free: its WebView renderer is handed an explicit
+        // width/height on the <svg> element before drawing.
+        parsed.setDocumentWidth(size.toFloat())
+        parsed.setDocumentHeight(size.toFloat())
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        parsed.renderToCanvas(canvas, RectF(0f, 0f, size.toFloat(), size.toFloat()))
+        parsed.renderToCanvas(canvas)
         if (bitmap.isBlank()) {
             bitmap.recycle()
             null

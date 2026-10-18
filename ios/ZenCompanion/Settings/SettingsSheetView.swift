@@ -10,6 +10,8 @@ struct SettingsSheet: View {
     /// Called right after the user picks a toolbar placement, so the screen
     /// behind the sheet re-renders immediately instead of on dismissal.
     var onToolbarPlacementChange: (ToolbarPlacement) -> Void = { _ in }
+    /// Same for the essentials-per-row choice, which the start-page grid reads.
+    var onEssentialsColumnsChange: (EssentialsColumns) -> Void = { _ in }
 
     @Environment(\.dismiss) private var dismiss
     @State private var model = SettingsModel()
@@ -282,7 +284,11 @@ struct SettingsSheet: View {
 
                         VStack(spacing: 0) {
                             NavigationLink {
-                                AdvancedSettingsView(model: model, scheme: scheme)
+                                AdvancedSettingsView(
+                                    model: model,
+                                    scheme: scheme,
+                                    onEssentialsColumnsChange: onEssentialsColumnsChange
+                                )
                             } label: {
                                 HStack {
                                     Label {
@@ -744,10 +750,14 @@ private struct AddSearchEngineView: View {
 
 /// Rarely touched settings live here instead of the main page. Currently the
 /// essentials grouping override (SPEC §7.4): most users never need it because
-/// `.automatic` resolves the effective grouping on its own.
+/// `.automatic` resolves the effective grouping on its own. The
+/// essentials-per-row choice sits next to it.
 private struct AdvancedSettingsView: View {
     @Bindable var model: SettingsModel
     let scheme: ColorScheme
+    /// Mirrors the row choice into `BrowserModel` so the grid behind the sheet
+    /// updates immediately.
+    var onEssentialsColumnsChange: (EssentialsColumns) -> Void = { _ in }
 
     var body: some View {
         ScrollView {
@@ -784,6 +794,48 @@ private struct AdvancedSettingsView: View {
                     .font(.system(size: 12, design: .rounded))
                     .foregroundStyle(Palette.ink(scheme).opacity(0.45))
                     .padding(.horizontal, 4)
+
+                VStack(spacing: 0) {
+                    HStack {
+                        Label {
+                            Text("settings.essentials_columns")
+                                .font(.system(size: 16, weight: .medium, design: .rounded))
+                        } icon: {
+                            Image(systemName: "rectangle.grid.3x2")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(Palette.ink(scheme).opacity(0.6))
+                        }
+                        .foregroundStyle(Palette.ink(scheme))
+
+                        Spacer()
+
+                        Menu {
+                            ForEach(EssentialsColumns.allCases) { columns in
+                                Button {
+                                    model.essentialsColumns = columns
+                                    onEssentialsColumnsChange(columns)
+                                } label: {
+                                    if model.essentialsColumns == columns {
+                                        Label(columns.title, systemImage: "checkmark")
+                                    } else {
+                                        Text(columns.title)
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(model.essentialsColumns.title)
+                                    .font(.system(size: 15.5, design: .rounded))
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .font(.system(size: 10, weight: .semibold))
+                            }
+                            .foregroundStyle(Palette.ink(scheme).opacity(0.65))
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 54)
+                }
+                .liftCard(scheme)
             }
             .padding(.horizontal, 20)
             .padding(.top, 16)

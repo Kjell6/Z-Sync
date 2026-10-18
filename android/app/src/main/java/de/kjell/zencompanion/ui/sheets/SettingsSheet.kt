@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
+import de.kjell.zencompanion.data.EssentialsColumns
 import de.kjell.zencompanion.data.SaveKind
 import de.kjell.zencompanion.data.SearchEngine
 import de.kjell.zencompanion.data.SearchEngineValidation
@@ -75,6 +76,7 @@ fun SettingsSheet(
     onDeleteSearchEngine: (String) -> Unit,
     onSetAlwaysOpenExternally: (Boolean) -> Unit,
     onSetEssentialsGrouping: (ZenSpaces.EssentialsGrouping) -> Unit,
+    onSetEssentialsColumns: (EssentialsColumns) -> Unit,
     onSetSaveKind: (SaveKind) -> Unit,
     onSetToolbarPlacement: (ToolbarPlacement) -> Unit,
     onSetOpenIntoSearch: (Boolean) -> Unit,
@@ -155,6 +157,7 @@ fun SettingsSheet(
             SettingsAdvancedScreen(
                 preferences = preferences,
                 onSetEssentialsGrouping = onSetEssentialsGrouping,
+                onSetEssentialsColumns = onSetEssentialsColumns,
                 onBack = { showAdvanced = false },
                 onDone = onDone,
             )
@@ -172,7 +175,7 @@ fun SettingsSheet(
 
         Column(
             Modifier
-                .fillMaxWidth()
+                .settingsSheetPage()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
                 .padding(top = 28.dp, bottom = 28.dp),

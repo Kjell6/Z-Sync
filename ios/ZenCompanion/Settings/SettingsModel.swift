@@ -57,6 +57,16 @@ final class SettingsModel {
         didSet { preferences.setBool(openIntoSearch, PreferenceKeys.openIntoSearch, scope: .standard) }
     }
 
+    /// How many essentials sit on one grid row: adaptive (default) or a fixed
+    /// 1–5. Read by `BrowserModel` for the start-page grid.
+    var essentialsColumns: EssentialsColumns {
+        didSet {
+            guard essentialsColumns != oldValue else { return }
+            preferences.setString(essentialsColumns.rawValue, PreferenceKeys.essentialsColumns, scope: .appGroup)
+            preferences.setString(essentialsColumns.rawValue, PreferenceKeys.essentialsColumns, scope: .standard)
+        }
+    }
+
     private let searchEngine: SearchEngineProviding
     private let preferences: PreferencesStoring
     private let signerOut: SessionSigningOut
@@ -79,6 +89,19 @@ final class SettingsModel {
         self.saveKind = Self.loadSaveKind(preferences)
         self.toolbarPlacement = Self.loadToolbarPlacement(preferences)
         self.openIntoSearch = preferences.bool(PreferenceKeys.openIntoSearch, scope: .standard)
+        self.essentialsColumns = Self.loadEssentialsColumns(preferences)
+    }
+
+    /// AppGroup first, standard defaults fallback, `.automatic` default.
+    private static func loadEssentialsColumns(_ preferences: PreferencesStoring) -> EssentialsColumns {
+        let key = PreferenceKeys.essentialsColumns
+        if let raw = preferences.string(key, scope: .appGroup), let value = EssentialsColumns(rawValue: raw) {
+            return value
+        }
+        if let raw = preferences.string(key, scope: .standard), let value = EssentialsColumns(rawValue: raw) {
+            return value
+        }
+        return .automatic
     }
 
     private static func loadEssentialsGrouping(_ preferences: PreferencesStoring) -> EssentialsGrouping {

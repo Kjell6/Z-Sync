@@ -138,6 +138,8 @@
     <string name="settings_essentials_grouping_container_specific">Container-specific</string>
     <string name="settings_essentials_grouping_shared">All spaces</string>
     <string name="settings_essentials_grouping_caption">Automatic follows your desktop browser\'s \"Enable container-specific essentials\". All spaces shows every essential on every space.</string>
+    <string name="settings_essentials_columns">Essentials per row</string>
+    <string name="settings_essentials_columns_automatic">Automatic</string>
     <string name="settings_save_kind">Save shared tabs as</string>
     <string name="settings_save_kind_pinned">Pinned tab</string>
     <string name="settings_save_kind_normal">Normal tab</string>

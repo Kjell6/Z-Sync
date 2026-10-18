@@ -38,33 +38,27 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
+import de.kjell.zencompanion.data.EssentialsColumns
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.theme.liftBorder
 import de.kjell.zencompanion.ui.theme.pressFeedback
 
-/** Adaptive columns: 1-4 single row, 5-6 -> 3 cols, 7+ -> 4 cols. */
-internal fun columnCountFor(count: Int): Int = when (count) {
-    1 -> 1
-    2 -> 2
-    3 -> 3
-    4 -> 4
-    5, 6 -> 3
-    else -> 4
-}
-
 /**
  * Native Material 3 Essentials Grid.
  * Displays pinned essential tabs in a responsive grid of Material 3 cards with native ripples.
+ * Rows are built manually so a short final row stretches its tiles to fill
+ * the width instead of leaving a gap on the right.
  */
 @Composable
 fun EssentialsGrid(
     tabs: List<ZenSpaces.ZenTab>,
+    columns: EssentialsColumns = EssentialsColumns.AUTOMATIC,
     modifier: Modifier = Modifier,
     onOpenUrl: ((String, String?) -> Unit)? = null,
     onRenameTab: (String, String) -> Unit = { _, _ -> },
 ) {
-    val columns = columnCountFor(tabs.size)
-    val rows = tabs.chunked(columns)
+    val columnCount = columns.columnCountFor(tabs.size)
+    val rows = tabs.chunked(columnCount)
 
     Column(
         modifier = modifier.padding(horizontal = 20.dp),
@@ -80,10 +74,6 @@ fun EssentialsGrid(
                             onRename = { label -> onRenameTab(tab.id, label) },
                         )
                     }
-                }
-                // Pad the final row so tiles maintain width
-                repeat(columns - row.size) {
-                    Box(Modifier.weight(1f))
                 }
             }
         }

@@ -25,6 +25,8 @@ val PaperLight = Color(0xFFF3ECE6)
 val PaperDark = Color(0xFF1F1F1F)
 val InkLight = Color(0xFF2E2E2E)
 val InkDark = Color(0xFFF3ECE6)
+val ErrorLight = Color(0xFFBA1A1A)
+val ErrorDark = Color(0xFFFFB4AB)
 
 /** Placeholder gray for missing favicons (iOS `systemGray5`). */
 val FaviconPlaceholder = Color(0xFFE4E4E9)
@@ -103,7 +105,7 @@ fun ZenTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable ()
             onSurfaceVariant = InkDark.copy(alpha = 0.7f),
             surfaceContainer = Color(0xFF282828),
             surfaceContainerHigh = Color(0xFF323232),
-            error = Color(0xFFFFB4AB),
+            error = ErrorDark,
             onError = Color(0xFF690005),
         )
     } else {
@@ -118,7 +120,7 @@ fun ZenTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable ()
             onSurfaceVariant = InkLight.copy(alpha = 0.7f),
             surfaceContainer = Color(0xFFECE5DF),
             surfaceContainerHigh = Color(0xFFDDD7D1),
-            error = Color(0xFFBA1A1A),
+            error = ErrorLight,
             onError = Color.White,
         )
     }

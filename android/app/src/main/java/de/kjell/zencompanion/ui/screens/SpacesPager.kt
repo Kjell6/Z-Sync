@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import de.kjell.zencompanion.data.EssentialsColumns
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.components.EssentialsGrid
 import de.kjell.zencompanion.ui.motion.DampingSwitchSelect
@@ -35,6 +36,7 @@ import kotlin.math.abs
 internal fun SpacesPager(
     spaces: List<ZenSpaces.ZenSpace>,
     essentialsBySpace: Map<String, List<ZenSpaces.ZenTab>>,
+    essentialsColumns: EssentialsColumns,
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
     onDeleteTab: (String) -> Unit,
@@ -106,6 +108,7 @@ internal fun SpacesPager(
             space = spaces[index],
             index = index,
             essentials = spaceEssentials,
+            essentialsColumns = essentialsColumns,
             prevSharesEssentials = prevSharesEssentials,
             nextSharesEssentials = nextSharesEssentials,
             pagerState = pagerState,
@@ -171,6 +174,7 @@ internal fun SpacePageContainer(
     space: ZenSpaces.ZenSpace,
     index: Int,
     essentials: List<ZenSpaces.ZenTab>,
+    essentialsColumns: EssentialsColumns,
     prevSharesEssentials: Boolean,
     nextSharesEssentials: Boolean,
     pagerState: PagerState,
@@ -206,6 +210,7 @@ internal fun SpacePageContainer(
             ) {
                 EssentialsGrid(
                     tabs = essentials,
+                    columns = essentialsColumns,
                     modifier = Modifier.fillMaxWidth(),
                     onOpenUrl = onOpenUrl,
                     onRenameTab = onRenameTab,

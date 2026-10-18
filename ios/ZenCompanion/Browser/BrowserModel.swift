@@ -71,6 +71,22 @@ final class BrowserModel {
             scope: .standard
         )
         self.toolbarPlacement = Self.loadToolbarPlacement(preferences)
+        self.essentialsColumns = Self.loadEssentialsColumns(preferences)
+    }
+
+    /// AppGroup first, standard defaults fallback, `.automatic` default.
+    private static func loadEssentialsColumns(_ preferences: PreferencesStoring) -> EssentialsColumns {
+        let key = PreferenceKeys.essentialsColumns
+        if preferences.hasObject(key, scope: .appGroup),
+           let raw = preferences.string(key, scope: .appGroup),
+           let value = EssentialsColumns(rawValue: raw) {
+            return value
+        }
+        if let raw = preferences.string(key, scope: .standard),
+           let value = EssentialsColumns(rawValue: raw) {
+            return value
+        }
+        return .automatic
     }
 
     /// AppGroup first, standard defaults fallback, `.bottom` default.
@@ -146,6 +162,17 @@ final class BrowserModel {
     func setToolbarPlacement(_ placement: ToolbarPlacement) {
         guard placement != toolbarPlacement else { return }
         toolbarPlacement = placement
+    }
+
+    /// How many essentials sit on one grid row. Stored for the same reason as
+    /// `toolbarPlacement`: the grid re-renders live while the sheet is open.
+    var essentialsColumns: EssentialsColumns
+
+    /// Mirrors a column choice made in the settings sheet. Persisting stays
+    /// with `SettingsModel`.
+    func setEssentialsColumns(_ columns: EssentialsColumns) {
+        guard columns != essentialsColumns else { return }
+        essentialsColumns = columns
     }
 
     /// Essentials to show above `space` under the current grouping.

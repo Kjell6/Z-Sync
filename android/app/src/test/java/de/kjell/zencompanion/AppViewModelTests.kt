@@ -4,6 +4,7 @@ import android.content.ContextWrapper
 import android.content.SharedPreferences
 import de.kjell.zencompanion.data.AccountStore
 import de.kjell.zencompanion.data.DemoCatalog
+import de.kjell.zencompanion.data.EssentialsColumns
 import de.kjell.zencompanion.data.SaveKind
 import de.kjell.zencompanion.data.SearchEngine
 import de.kjell.zencompanion.data.SnapshotCache
@@ -680,6 +681,10 @@ private class FakePreferencesRepository : PreferencesRepository {
 
     override fun setEssentialsGrouping(grouping: ZenSpaces.EssentialsGrouping) {
         state = state.copy(essentialsGrouping = grouping)
+    }
+
+    override fun setEssentialsColumns(columns: EssentialsColumns) {
+        state = state.copy(essentialsColumns = columns)
     }
 
     override fun setSaveKind(kind: SaveKind) {

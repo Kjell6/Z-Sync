@@ -22,6 +22,7 @@ import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
@@ -45,6 +46,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
+import de.kjell.zencompanion.data.EssentialsColumns
 import de.kjell.zencompanion.data.SaveKind
 import de.kjell.zencompanion.data.SearchEngine
 import de.kjell.zencompanion.data.SearchEngines
@@ -432,15 +434,18 @@ internal fun SettingsPreferencesSection(
 internal fun SettingsAdvancedScreen(
     preferences: PreferencesState,
     onSetEssentialsGrouping: (ZenSpaces.EssentialsGrouping) -> Unit,
+    onSetEssentialsColumns: (EssentialsColumns) -> Unit,
     onBack: () -> Unit,
     onDone: () -> Unit,
 ) {
     var groupingMenuExpanded by remember { mutableStateOf(false) }
+    var columnsMenuExpanded by remember { mutableStateOf(false) }
     val essentialsGrouping = preferences.essentialsGrouping
+    val essentialsColumns = preferences.essentialsColumns
 
     Column(
         Modifier
-            .fillMaxWidth()
+            .settingsSheetPage()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp)
             .padding(top = 28.dp, bottom = 28.dp),
@@ -552,6 +557,75 @@ internal fun SettingsAdvancedScreen(
                 modifier = Modifier.padding(start = 4.dp),
             )
         }
+
+        LiftCard(modifier = Modifier.fillMaxWidth()) {
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { columnsMenuExpanded = true }
+                        .padding(horizontal = 16.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.GridView,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(22.dp),
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = stringResource(R.string.settings_essentials_columns),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = essentialsColumns.label(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Outlined.ArrowDropDown,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = columnsMenuExpanded,
+                    onDismissRequest = { columnsMenuExpanded = false },
+                ) {
+                    EssentialsColumns.entries.forEach { columns ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = columns.label(),
+                                    fontWeight = if (columns == essentialsColumns) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = if (columns == essentialsColumns) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                )
+                            },
+                            trailingIcon = if (columns == essentialsColumns) {
+                                {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                            } else null,
+                            onClick = {
+                                onSetEssentialsColumns(columns)
+                                columnsMenuExpanded = false
+                            },
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -592,6 +666,13 @@ private fun ZenSpaces.EssentialsGrouping.labelRes(): Int = when (this) {
     ZenSpaces.EssentialsGrouping.AUTOMATIC -> R.string.settings_essentials_grouping_automatic
     ZenSpaces.EssentialsGrouping.CONTAINER_SPECIFIC -> R.string.settings_essentials_grouping_container_specific
     ZenSpaces.EssentialsGrouping.SHARED -> R.string.settings_essentials_grouping_shared
+}
+
+/** "Automatic", or the bare number of essentials per row. */
+@Composable
+private fun EssentialsColumns.label(): String = when (this) {
+    EssentialsColumns.AUTOMATIC -> stringResource(R.string.settings_essentials_columns_automatic)
+    else -> storageValue
 }
 
 private fun ToolbarPlacement.labelRes(): Int = when (this) {

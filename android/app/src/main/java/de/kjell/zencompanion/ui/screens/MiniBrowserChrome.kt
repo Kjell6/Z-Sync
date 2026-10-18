@@ -48,6 +48,10 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
+import de.kjell.zencompanion.ui.theme.Coral
+import de.kjell.zencompanion.ui.theme.CoralDark
+import de.kjell.zencompanion.ui.theme.ErrorDark
+import de.kjell.zencompanion.ui.theme.ErrorLight
 
 @Composable
 internal fun MiniBrowserChrome(
@@ -86,9 +90,10 @@ internal fun MiniBrowserChrome(
 
     // Tint against the sampled page/chrome background, not the app paper theme
     // (`surfaceContainerHigh` is beige and clashes on a white Wikipedia header).
+    val accentColor = if (isDark) CoralDark else Coral
     val pillBgColor = if (isDark) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.06f)
     val pillBorderColor = if (isAddressFocused) {
-        MaterialTheme.colorScheme.primary
+        accentColor
     } else if (isDark) {
         Color.White.copy(alpha = 0.22f)
     } else {
@@ -111,7 +116,7 @@ internal fun MiniBrowserChrome(
             shape = RoundedCornerShape(24.dp),
             color = pillBgColor,
             border = if (isAddressFocused) {
-                androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+                androidx.compose.foundation.BorderStroke(1.5.dp, accentColor)
             } else {
                 androidx.compose.foundation.BorderStroke(1.dp, pillBorderColor)
             },
@@ -131,9 +136,9 @@ internal fun MiniBrowserChrome(
                     else -> Icons.Outlined.Search
                 }
                 val leadingTint = when {
-                    isAddressFocused -> MaterialTheme.colorScheme.primary
+                    isAddressFocused -> accentColor
                     effectiveUrl.startsWith("https://", ignoreCase = true) -> onVariantBgColor
-                    effectiveUrl.startsWith("http://", ignoreCase = true) -> MaterialTheme.colorScheme.error
+                    effectiveUrl.startsWith("http://", ignoreCase = true) -> if (isDark) ErrorDark else ErrorLight
                     else -> onVariantBgColor
                 }
                 Icon(
@@ -185,7 +190,7 @@ internal fun MiniBrowserChrome(
                         textAlign = if (isAddressFocused) TextAlign.Start else TextAlign.Center,
                         fontWeight = if (isAddressFocused) FontWeight.Normal else FontWeight.Medium,
                     ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    cursorBrush = SolidColor(accentColor),
                     keyboardOptions = KeyboardOptions(
                         imeAction = ImeAction.Go,
                         keyboardType = KeyboardType.Uri,
@@ -260,7 +265,7 @@ internal fun MiniBrowserChrome(
                 Icon(
                     imageVector = Icons.Outlined.Close,
                     contentDescription = stringResource(R.string.common_cancel),
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = accentColor,
                 )
             }
         }
@@ -273,7 +278,7 @@ internal fun MiniBrowserChrome(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(2.5.dp),
-            color = MaterialTheme.colorScheme.primary,
+            color = accentColor,
             trackColor = Color.Transparent,
         )
     } else {

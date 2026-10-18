@@ -50,7 +50,7 @@ internal fun SettingsAddSearchEngineScreen(
 
     Column(
         Modifier
-            .fillMaxWidth()
+            .settingsSheetPage()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp)
             .padding(top = 28.dp, bottom = 28.dp),

@@ -13,6 +13,8 @@ struct SpacePageContainer: View {
     let nextSharesEssentials: Bool
     let scheme: ColorScheme
     let containerWidth: CGFloat
+    /// How many essentials share a grid row (Advanced setting).
+    var essentialsColumns: EssentialsColumns = .automatic
     var onRefresh: () async -> Void = {}
     var onOpenTab: (ZenTab, ZenSpace) -> Void = { _, _ in }
     var onDeleteTab: (String) async -> Void = { _ in }
@@ -43,6 +45,7 @@ struct SpacePageContainer: View {
                     EssentialsGrid(
                         tabs: essentials,
                         scheme: scheme,
+                        columns: essentialsColumns,
                         onOpen: { tab in onOpenTab(tab, space) },
                         onRenameTab: onRenameTab
                     )

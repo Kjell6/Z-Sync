@@ -17,6 +17,7 @@ enum PreferenceKeys {
     static let saveKind = "save_kind"
     static let toolbarPlacement = "toolbar_placement"
     static let openIntoSearch = "open_into_search"
+    static let essentialsColumns = "essentials_columns"
 }
 
 enum PreferenceScope {

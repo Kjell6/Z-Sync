@@ -59,7 +59,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
             }
             // Pulls the outer buttons inwards. The navigation bar above keeps
             // its full width.
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 7)
         }
         .animation(motion, value: model.menuExpanded)
     }

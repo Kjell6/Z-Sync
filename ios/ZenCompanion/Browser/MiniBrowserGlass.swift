@@ -90,25 +90,39 @@ extension View {
 /// instead of being cut off by them.
 struct PageBottomFade: View {
     /// Height of the ramp. The fade starts this far above the physical bottom.
-    var height: CGFloat = 82
+    var height: CGFloat = 92
+
+    /// Each layer blurs what the layer below already blurred, so stacking them
+    /// deepens the blur. A single material stays too weak at this size.
+    private let layers = 3
 
     var body: some View {
+        ZStack(alignment: .bottom) {
+            ForEach(0..<layers, id: \.self) { _ in
+                layer
+            }
+        }
+        .frame(height: height)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private var layer: some View {
         Rectangle()
-            .fill(.ultraThinMaterial)
+            .fill(.thinMaterial)
             .mask(
                 LinearGradient(
                     stops: [
                         .init(color: .clear, location: 0),
-                        .init(color: .white.opacity(0.08), location: 0.28),
-                        .init(color: .white.opacity(0.24), location: 0.58),
-                        .init(color: .white.opacity(0.5), location: 1)
+                        .init(color: .white.opacity(0.4), location: 0.12),
+                        .init(color: .white.opacity(0.8), location: 0.34),
+                        .init(color: .white.opacity(0.97), location: 0.6),
+                        .init(color: .white, location: 1)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
                 )
             )
             .frame(height: height)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
     }
 }

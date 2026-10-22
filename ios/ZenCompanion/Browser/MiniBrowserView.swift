@@ -49,11 +49,10 @@ struct MiniBrowserView: View {
     /// Keyboard focus, the tap that opens the composer, or the search-open first paint.
     private var addressEditing: Bool { editingAddress || isAddressFocused || startsInSearch }
 
-    /// Space inside the plate, below the controls. The address composer
-    /// includes the keyboard height, so the same plate continues behind the
-    /// keys. A page field does not: the bar stays on the screen bottom.
-    private var chromeContentBottomInset: CGFloat {
-        if addressEditing, keyboardOverlap > 1 { return keyboardOverlap + 16 }
+    /// The bar rides above the keyboard while the address is edited, so the
+    /// text being typed stays visible. Otherwise it sits on the screen bottom.
+    private var chromeBottomInset: CGFloat {
+        if addressEditing, keyboardOverlap > 1 { return keyboardOverlap + 10 }
         return chromeBottomPadding
     }
 
@@ -158,6 +157,7 @@ struct MiniBrowserView: View {
                     space: space,
                     allSpaces: allSpaces,
                     onToggleMenu: { model.toggleMenu() },
+                    addressEditing: addressEditing,
                     navBar: {
                         MiniBrowserTopBar(
                             model: model,
@@ -170,7 +170,7 @@ struct MiniBrowserView: View {
                     }
                 )
                 .padding(.horizontal, 16)
-                .padding(.bottom, chromeBottomPadding)
+                .padding(.bottom, chromeBottomInset)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 .offset(y: barCollapsed ? 220 : 0)
                 .opacity(barCollapsed ? 0 : 1)

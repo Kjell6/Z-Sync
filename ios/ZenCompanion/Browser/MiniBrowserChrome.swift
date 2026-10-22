@@ -13,6 +13,9 @@ struct MiniBrowserChrome<NavBar: View>: View {
     let space: ZenSpace
     let allSpaces: [ZenSpace]
     var onToggleMenu: () -> Void
+    /// While the address is being typed the bar rides on the keyboard, and the
+    /// dock would only sit under the keys: it is dropped then.
+    var addressEditing = false
     /// The navigation bar. It stays in place while the menu grows above it.
     @ViewBuilder var navBar: () -> NavBar
 
@@ -26,7 +29,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
     private let tileRadius: CGFloat = Palette.liftCornerRadius
 
     private var motion: Animation {
-        reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.38, dampingFraction: 0.86)
+        reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.24, dampingFraction: 0.82)
     }
 
     private var menuOpen: Bool { model.menuExpanded }
@@ -38,11 +41,21 @@ struct MiniBrowserChrome<NavBar: View>: View {
                     .frame(maxWidth: .infinity)
                     .fixedSize(horizontal: false, vertical: true)
                     .floatingGlassPanel(cornerRadius: 26)
-                    .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .bottom)))
+                    // Grows out of the bar it sits on: quick, and with enough
+                    // travel to read as a card unfolding rather than a fade.
+                    .transition(
+                        .asymmetric(
+                            insertion: .scale(scale: 0.88, anchor: .bottom)
+                                .combined(with: .opacity),
+                            removal: .opacity
+                                .combined(with: .scale(scale: 0.95, anchor: .bottom))
+                        )
+                    )
             }
 
             navBar()
 
+            if !addressEditing {
             HStack(spacing: 10) {
                 // Placeholder: the page stack arrives with real tabs.
                 dockButton(systemName: "square.on.square") {}
@@ -60,6 +73,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
             // Pulls the outer buttons inwards. The navigation bar above keeps
             // its full width.
             .padding(.horizontal, 7)
+            }
         }
         .glassGroup()
         .animation(motion, value: model.menuExpanded)

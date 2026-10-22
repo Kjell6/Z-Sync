@@ -46,8 +46,10 @@ struct MiniBrowserChrome<NavBar: View>: View {
             HStack(spacing: 10) {
                 // Placeholder: the page stack arrives with real tabs.
                 dockButton(systemName: "square.on.square") {}
+                Spacer(minLength: 0)
                 // Placeholder: a new tab / fresh search arrives later.
-                dockButton(systemName: "plus", wide: true) {}
+                plusButton
+                Spacer(minLength: 0)
                 dockButton(
                     systemName: "ellipsis",
                     label: menuOpen ? "browser.close_menu" : "browser.more"
@@ -57,6 +59,20 @@ struct MiniBrowserChrome<NavBar: View>: View {
             }
         }
         .animation(motion, value: model.menuExpanded)
+    }
+
+    /// Smaller than the side buttons, as the middle control of the row.
+    private var plusButton: some View {
+        Button(action: {}) {
+            Image(systemName: "plus")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Palette.ink(scheme))
+                .frame(width: 56, height: 34)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(SquircleButtonStyle())
+        .floatingGlassCapsule()
+        .accessibilityLabel(Text("browser.new_tab"))
     }
 
     private func dockButton(

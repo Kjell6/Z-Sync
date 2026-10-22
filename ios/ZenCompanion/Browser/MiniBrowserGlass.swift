@@ -94,11 +94,15 @@ struct PageBottomFade: View {
 
     /// Each layer blurs what the one below already blurred. The ramp stays
     /// linear because every layer is kept weak instead of saturating early.
-    private let layers = 3
+    ///
+    /// Few, weak layers on purpose: a material cannot blur without also laying
+    /// a little of its own tone over the page. Every extra layer adds that tone
+    /// faster than it adds blur, which is what turned the fade grey.
+    private let layers = 2
 
-    /// Strength of a single layer at the very bottom. Three layers end up at
-    /// roughly 0.83 combined.
-    private let strength = 0.45
+    /// Strength of a single layer at the very bottom. Two layers end up at
+    /// roughly 0.64 combined.
+    private let strength = 0.4
 
     var body: some View {
         ZStack(alignment: .bottom) {

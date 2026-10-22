@@ -61,6 +61,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
             // its full width.
             .padding(.horizontal, 7)
         }
+        .glassGroup()
         .animation(motion, value: model.menuExpanded)
     }
 

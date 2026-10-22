@@ -415,7 +415,7 @@ struct MiniBrowserTopBar: View {
 
     @Environment(\.colorScheme) private var scheme
 
-    private let barHeight: CGFloat = 42
+    private let barHeight: CGFloat = 46
 
     var body: some View {
         HStack(spacing: 6) {

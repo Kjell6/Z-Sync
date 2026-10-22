@@ -92,13 +92,13 @@ struct PageBottomFade: View {
     /// Height of the ramp. The fade starts this far above the physical bottom.
     var height: CGFloat = 92
 
-    /// Two layers: the upper blurs, the lower blurs the blurred result. More
-    /// layers stack up so fast that the ramp is spent in the first few points.
-    private let layers = 2
+    /// Each layer blurs what the one below already blurred. The ramp stays
+    /// linear because every layer is kept weak instead of saturating early.
+    private let layers = 3
 
-    /// Strength of a single layer at the very bottom. Two layers end up at
-    /// roughly 0.84 combined.
-    private let strength = 0.6
+    /// Strength of a single layer at the very bottom. Three layers end up at
+    /// roughly 0.83 combined.
+    private let strength = 0.45
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -113,7 +113,9 @@ struct PageBottomFade: View {
 
     private var layer: some View {
         Rectangle()
-            .fill(.thinMaterial)
+            // Ultra-thin keeps the veil near invisible: thicker materials read
+            // as a grey (over dark pages: brownish) panel rather than a blur.
+            .fill(.ultraThinMaterial)
             .mask(
                 LinearGradient(
                     colors: [.clear, .white.opacity(strength)],

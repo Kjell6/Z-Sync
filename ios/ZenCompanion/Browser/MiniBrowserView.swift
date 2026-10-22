@@ -142,6 +142,8 @@ struct MiniBrowserView: View {
                 // stopping against the controls.
                 PageBottomFade()
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .opacity(barCollapsed ? 0 : 1)
+                    .animation(barMotion, value: barCollapsed)
 
                 if let notice = model.pinNotice {
                     pinNoticeToast(notice)

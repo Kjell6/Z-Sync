@@ -60,7 +60,7 @@ struct MiniBrowserView: View {
     /// Air between the controls and the physical bottom. The home indicator
     /// occupies the bottom of the safe area; the controls sit just above it.
     private var chromeBottomPadding: CGFloat {
-        max(12, safeBottom)
+        max(10, safeBottom - 6)
     }
 
     /// Webpage or find field, not the address composer.
@@ -70,10 +70,6 @@ struct MiniBrowserView: View {
             addressEditing: addressEditing
         )
     }
-
-    /// Height of the collapsed bar. The page always reserves exactly this, so
-    /// opening the menu or the keyboard does not push the page up.
-    private var collapsedBarHeight: CGFloat { 8 + 44 + chromeBottomPadding }
 
     /// The bar tucks away while the page scrolls down and returns on the way
     /// up. Editing the address, an open menu and a live toast keep it in place.
@@ -115,64 +111,62 @@ struct MiniBrowserView: View {
         @Bindable var model = model
 
         NavigationStack {
-            ZStack(alignment: .bottom) {
-                VStack(spacing: 0) {
-                    ZStack {
-                        webPane
+            ZStack {
+                ZStack {
+                    webPane
 
-                        if let article = model.readerArticle {
-                            ReaderView(article: article, scheme: scheme) {
-                                model.closeReader()
-                            }
-                            .transition(.opacity)
+                    if let article = model.readerArticle {
+                        ReaderView(article: article, scheme: scheme) {
+                            model.closeReader()
                         }
-
-                        if model.menuExpanded {
-                            // UIKit scrim, not a SwiftUI tap gesture. A SwiftUI
-                            // gesture left on top of the web view kept eating
-                            // touches after the menu closed.
-                            PageDismissScrim {
-                                withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
-                                    model.collapseMenu()
-                                }
-                            }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .accessibilityLabel(Text("browser.close_menu"))
-                            .accessibilityAddTraits(.isButton)
-                        }
+                        .transition(.opacity)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                    Color.clear
-                        .frame(height: barCollapsed ? 0 : collapsedBarHeight)
-                        .accessibilityHidden(true)
-                        .allowsHitTesting(false)
+                    if model.menuExpanded {
+                        // UIKit scrim, not a SwiftUI tap gesture. A SwiftUI
+                        // gesture left on top of the web view kept eating
+                        // touches after the menu closed.
+                        PageDismissScrim {
+                            withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+                                model.collapseMenu()
+                            }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .accessibilityLabel(Text("browser.close_menu"))
+                        .accessibilityAddTraits(.isButton)
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 if let notice = model.pinNotice {
                     pinNoticeToast(notice)
                         .padding(.horizontal, 20)
-                        .padding(.bottom, collapsedBarHeight + 8)
-                        .frame(maxWidth: .infinity)
+                        .padding(.bottom, 132)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                         .environment(\.colorScheme, barScheme)
                 }
 
                 MiniBrowserChrome(
                     model: model,
-                    addressEditing: addressEditing,
-                    animateChrome: animateAddressChrome,
-                    isAddressFocused: $isAddressFocused,
                     space: space,
                     allSpaces: allSpaces,
-                    bottomInset: chromeContentBottomInset,
-                    barBackground: barBackground,
-                    onBeginAddressEdit: beginAddressEditing,
-                    onCancel: cancelAddressEditing,
-                    onSubmit: submitAddress
+                    onToggleMenu: { model.toggleMenu() },
+                    navBar: {
+                        MiniBrowserTopBar(
+                            model: model,
+                            addressEditing: addressEditing,
+                            isAddressFocused: $isAddressFocused,
+                            onBeginAddressEdit: beginAddressEditing,
+                            onCancel: cancelAddressEditing,
+                            onSubmit: submitAddress
+                        )
+                    }
                 )
-                .fixedSize(horizontal: false, vertical: true)
-                .offset(y: barCollapsed ? collapsedBarHeight : 0)
-                .environment(\.colorScheme, barScheme)
+                .padding(.horizontal, 16)
+                .padding(.bottom, chromeBottomPadding)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .offset(y: barCollapsed ? 220 : 0)
+                .opacity(barCollapsed ? 0 : 1)
                 .accessibilityHidden(pageKeyboard || barCollapsed)
 
                 if pageKeyboard {

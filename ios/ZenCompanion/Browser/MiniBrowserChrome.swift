@@ -1,342 +1,81 @@
 import SwiftUI
 
-/// Bottom browser chrome. The page ends where this bar begins.
+/// Bottom browser chrome: two rows of floating Liquid Glass, bottom to top.
 ///
-/// Android port (`MiniBrowserChrome` / `MiniBrowserFooter`): one bottom strip.
-/// Collapsed, the page ends where the strip begins. Expanded, and while the
-/// address field is editing, the strip draws over the page and keeps the
-/// screen bottom, so the page does not move. The address composer runs behind
-/// the keyboard. A page field does not lift this strip.
+///   [tab] [＋] [⋯]   three separate glass buttons (tab and plus are placeholders)
+///   [navigation bar] the full-width address bar, handed in as `navBar`
+///   [menu panel]     only while the page menu is open: it grows above the bar
 ///
-/// One opaque plate of the page color behind everything (`browserBar`), so the
-/// bar and the open menu are the same surface. Controls use the app's tile
-/// language: `Palette.lift`, the address field as a pill, the side controls as
-/// circles.
-struct MiniBrowserChrome: View {
+/// Nothing spans the screen edge to edge and nothing has a hard edge: the page
+/// stays visible behind the glass.
+struct MiniBrowserChrome<NavBar: View>: View {
     var model: MiniBrowserModel
-    var addressEditing: Bool
-    var animateChrome: Bool
-    @FocusState.Binding var isAddressFocused: Bool
     let space: ZenSpace
     let allSpaces: [ZenSpace]
-    /// Space under the controls. Includes the home indicator while the keyboard
-    /// is hidden, so the plate runs to the physical bottom and the buttons sit
-    /// above the indicator.
-    var bottomInset: CGFloat
-    /// Opaque page color of the plate. Same in both states, so the open menu
-    /// keeps the bar's surface instead of turning glassy over the page.
-    var barBackground: Color
-    /// Collapsed URL label was tapped. The field does not exist yet.
-    var onBeginAddressEdit: () -> Void
-    var onCancel: () -> Void
-    var onSubmit: () -> Void
+    var onToggleMenu: () -> Void
+    /// The navigation bar. It stays in place while the menu grows above it.
+    @ViewBuilder var navBar: () -> NavBar
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var copied = false
     @State private var copyGeneration = 0
 
-    /// Same tile as the home action bar.
-    private let tileRadius: CGFloat = Palette.liftCornerRadius
     private let controlSide: CGFloat = 44
-
-    /// Side control corner: noticeably rounder than the app's 16pt tiles, but
-    /// still square enough to leave a flat edge (not a circle).
-    private var controlCornerRadius: CGFloat { controlSide * 0.45 }
+    /// Menu tiles keep the app's own tile corner.
+    private let tileRadius: CGFloat = Palette.liftCornerRadius
 
     private var motion: Animation {
         reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.38, dampingFraction: 0.86)
     }
 
-    private var chromeAnimation: Animation? {
-        animateChrome ? motion : nil
-    }
-
-    private var menuOpen: Bool { model.menuExpanded && !addressEditing }
-
-    /// Expanded menu and the typing composer round the top. Collapsed stays cut.
-    private var roundsSheetTop: Bool { menuOpen || addressEditing }
-
-    /// The open menu keeps a tighter corner than the sheet around it; the
-    /// taller keyboard composer can afford a rounder one.
-    private var sheetTopRadius: CGFloat { addressEditing ? 40 : 32 }
+    private var menuOpen: Bool { model.menuExpanded }
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 8) {
             if menuOpen {
-                // No ScrollView and no opacity transition. Both left a gesture
-                // in the hierarchy, so after closing nothing on the page received taps.
                 expandedContent
+                    .frame(maxWidth: .infinity)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .floatingGlassPanel(cornerRadius: 26)
+                    .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .bottom)))
             }
-            if addressEditing {
-                inputComposer
-                    .transition(.identity)
-            } else {
-                controlRow
-                    .padding(.horizontal, 20)
-                    // Option rows are 48pt with the label centered, so the air
-                    // between two labels is about 24pt. 8pt read as too tight.
-                    .padding(.top, menuOpen ? 24 : 8)
-                    .padding(.bottom, bottomInset)
-                    .transition(.identity)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        // Hug the controls. A flexible height here becomes a full-screen hit
-        // target once the menu has opened, and taps stop reaching the page.
-        .fixedSize(horizontal: false, vertical: true)
-        .browserBar(
-            topRadius: roundsSheetTop ? sheetTopRadius : 0,
-            backdrop: barBackground
-        )
-        .animation(chromeAnimation, value: model.canGoForward)
-        .animation(chromeAnimation, value: addressEditing)
-        .animation(chromeAnimation, value: model.addressText.isEmpty)
-    }
 
-    // MARK: - Compact row
+            navBar()
 
-    /// Keyboard composer. One field and cancel, with even air above the keys.
-    /// Not the navigation row with a sheet radius pasted on.
-    private var inputComposer: some View {
-        HStack(spacing: 12) {
-            addressCard
-            homeTile(
-                systemName: "xmark",
-                label: "common.cancel",
-                enabled: true,
-                tint: Palette.coral(scheme)
-            ) {
-                onCancel()
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 18)
-        .padding(.bottom, bottomInset)
-    }
-
-    /// Same rhythm as the home action bar: side tiles, field, side tile.
-    /// The trailing tile opens the menu. It points up while closed.
-    private var controlRow: some View {
-        HStack(spacing: 12) {
-            homeTile(
-                systemName: "chevron.backward",
-                label: "browser.back",
-                enabled: model.canGoBack
-            ) {
-                model.goBack()
-            }
-            if MiniBrowserTools.showsForwardButton(
-                canGoForward: model.canGoForward,
-                addressEditing: false
-            ) {
-                homeTile(
-                    systemName: "chevron.forward",
-                    label: "browser.forward",
-                    enabled: true
+            HStack(spacing: 10) {
+                // Placeholder: the page stack arrives with real tabs.
+                dockButton(systemName: "square.on.square") {}
+                // Placeholder: a new tab / fresh search arrives later.
+                dockButton(systemName: "plus", wide: true) {}
+                dockButton(
+                    systemName: "ellipsis",
+                    label: menuOpen ? "browser.close_menu" : "browser.more"
                 ) {
-                    model.goForward()
-                }
-                .transition(.opacity)
-            }
-
-            addressCard
-
-            homeTile(
-                systemName: menuOpen ? "chevron.down" : "chevron.up",
-                label: menuOpen ? "browser.close_menu" : "browser.more",
-                enabled: menuOpen || model.effectiveURL != nil
-            ) {
-                withAnimation(motion) {
-                    model.toggleMenu()
+                    withAnimation(motion) { onToggleMenu() }
                 }
             }
         }
+        .animation(motion, value: model.menuExpanded)
     }
 
-    /// Pill field shared by the navigation row and the keyboard composer.
-    /// Collapsed, the whole pill is the button, so press-down scales the
-    /// shape the same way as the side controls. The editor is not that button.
-    @ViewBuilder
-    private var addressCard: some View {
-        if addressEditing {
-            addressSurface {
-                HStack(spacing: 8) {
-                    leadingIcon
-                    addressEditor
-                    trailingIcon
-                }
-            }
-        } else {
-            Button(action: onBeginAddressEdit) {
-                addressSurface {
-                    HStack(spacing: 8) {
-                        leadingIcon
-                        addressLabel
-                        trailingIcon
-                    }
-                }
-                .overlay(alignment: .bottom) {
-                    if model.isLoading {
-                        progressBar
-                            .padding(.horizontal, 18)
-                            .padding(.bottom, 1)
-                    }
-                }
-            }
-            .buttonStyle(SquircleButtonStyle())
-            .accessibilityLabel(collapsedAddressLabel)
-        }
-    }
-
-    private var collapsedAddressLabel: Text {
-        model.addressText.isEmpty
-            ? Text("browser.search_placeholder")
-            : Text(model.addressText)
-    }
-
-    private func addressSurface<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        content()
-            .padding(.leading, 18)
-            .padding(.trailing, 4)
-            .frame(height: controlSide)
-            .frame(maxWidth: .infinity)
-            .background(Palette.lift(scheme), in: Capsule())
-            .glassRimCapsule()
-            .contentShape(Capsule())
-    }
-
-    /// Side control: a squircle that stays rounder than the app's tiles, so the
-    /// row and the address pill read as one family.
-    private func homeTile(
+    private func dockButton(
         systemName: String,
-        label: LocalizedStringKey,
-        enabled: Bool,
-        tint: Color? = nil,
+        label: LocalizedStringKey? = nil,
+        wide: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(tint ?? Palette.ink(scheme).opacity(enabled ? 0.75 : 0.35))
-                .frame(width: controlSide, height: controlSide)
-                .background(
-                    Palette.lift(scheme),
-                    in: RoundedRectangle(cornerRadius: controlCornerRadius, style: .continuous)
-                )
-                .glassRim(cornerRadius: controlCornerRadius)
-                .contentShape(RoundedRectangle(cornerRadius: controlCornerRadius, style: .continuous))
-                .contentTransition(.symbolEffect(.replace))
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Palette.ink(scheme))
+                .frame(maxWidth: wide ? .infinity : nil)
+                .frame(width: wide ? nil : controlSide, height: controlSide)
+                .contentShape(Capsule())
         }
         .buttonStyle(SquircleButtonStyle())
-        .disabled(!enabled)
-        .accessibilityLabel(Text(label))
-    }
-
-    private var addressEditor: some View {
-        TextField(
-            "",
-            text: Bindable(model).addressText,
-            prompt: Text("browser.search_placeholder")
-                .foregroundStyle(Palette.ink(scheme).opacity(0.55))
-        )
-        .font(.system(size: 16, weight: .medium, design: .rounded))
-        .foregroundStyle(Palette.ink(scheme))
-        .textInputAutocapitalization(.never)
-        .autocorrectionDisabled()
-        .keyboardType(.webSearch)
-        .submitLabel(.go)
-        .multilineTextAlignment(.leading)
-        .focused($isAddressFocused)
-        .onSubmit(onSubmit)
-        .onAppear {
-            DispatchQueue.main.async {
-                guard addressEditing else { return }
-                isAddressFocused = true
-            }
-        }
-    }
-
-    private var addressLabel: some View {
-        Group {
-            if model.addressText.isEmpty {
-                Text("browser.search_placeholder")
-                    .foregroundStyle(Palette.ink(scheme).opacity(0.55))
-            } else {
-                Text(model.addressText)
-                    .foregroundStyle(Palette.ink(scheme))
-            }
-        }
-        .font(.system(size: 16, weight: .medium, design: .rounded))
-        .lineLimit(1)
-        .frame(maxWidth: .infinity, alignment: .center)
-    }
-
-    @ViewBuilder
-    private var leadingIcon: some View {
-        if addressEditing || model.effectiveURL == nil {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(addressEditing ? Palette.coral(scheme) : Palette.ink(scheme).opacity(0.55))
-                .frame(width: 22, height: 22)
-        } else if model.effectiveURL?.scheme == "http" {
-            Image(systemName: "lock.slash.fill")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.orange)
-                .frame(width: 22, height: 22)
-                .accessibilityHidden(true)
-        } else if let url = model.effectiveURL {
-            Favicon(urlString: url.absoluteString, size: 18)
-                .frame(width: 22, height: 22)
-        }
-    }
-
-    @ViewBuilder
-    private var trailingIcon: some View {
-        if addressEditing && !model.addressText.isEmpty {
-            Button {
-                model.clearAddressText()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 16))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 36, height: controlSide)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text("browser.clear"))
-        } else if !addressEditing && model.effectiveURL != nil {
-            Button {
-                if model.isLoading {
-                    model.stopLoading()
-                } else {
-                    model.reload()
-                }
-            } label: {
-                Image(systemName: model.isLoading ? "xmark" : "arrow.clockwise")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 36, height: controlSide)
-                    .contentShape(Rectangle())
-                    .contentTransition(.symbolEffect(.replace))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text(model.isLoading ? "browser.stop" : "browser.reload"))
-        }
-    }
-
-    private var progressBar: some View {
-        GeometryReader { geo in
-            Capsule()
-                .fill(Palette.coral(scheme))
-                .frame(
-                    width: geo.size.width * CGFloat(max(model.estimatedProgress, 0.05)),
-                    height: 2.5
-                )
-                .animation(.linear(duration: 0.2), value: model.estimatedProgress)
-        }
-        .frame(height: 2.5)
-        .accessibilityHidden(true)
+        .floatingGlassCapsule()
+        .accessibilityLabel(Text(label ?? LocalizedStringKey(systemName)))
     }
 
     // MARK: - Expanded menu
@@ -354,18 +93,17 @@ struct MiniBrowserChrome: View {
                 rowDivider
                 zoomRow
             }
-            .padding(.horizontal, 8)
-            .padding(.top, 18)
+            .padding(.horizontal, 14)
+            .padding(.top, 14)
+            .padding(.bottom, 14)
 
             actionRow
-                .padding(.horizontal, 20)
-                .padding(.top, 10)
+                .padding(.top, 8)
 
             if model.showPinBanner {
                 // No opacity transition. The sheet just grows by this row.
                 pinSavedSection
-                    .padding(.horizontal, 8)
-                    .padding(.top, 16)
+                    .padding(.top, 12)
                     .transition(.identity)
             }
         }
@@ -438,8 +176,7 @@ struct MiniBrowserChrome: View {
                     }
                 )
             }
-            .padding(.horizontal, 10)
-            .frame(minHeight: 48)
+            .frame(minHeight: 44)
         }
     }
 
@@ -483,7 +220,7 @@ struct MiniBrowserChrome: View {
         }
         .foregroundStyle(Palette.ink(scheme).opacity(0.85))
         .frame(maxWidth: .infinity)
-        .frame(height: 68)
+        .frame(height: 60)
         .background(
             Palette.lift(scheme),
             in: RoundedRectangle(cornerRadius: tileRadius, style: .continuous)
@@ -513,8 +250,7 @@ struct MiniBrowserChrome: View {
                     .foregroundStyle(copied ? Palette.coral(scheme) : Color.primary)
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 10)
-            .frame(minHeight: 48)
+            .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(CardPressStyle())
@@ -547,8 +283,7 @@ struct MiniBrowserChrome: View {
                         .foregroundStyle(Palette.coral(scheme))
                 }
             }
-            .padding(.horizontal, 10)
-            .frame(minHeight: 48)
+            .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(CardPressStyle())
@@ -574,8 +309,8 @@ struct MiniBrowserChrome: View {
             .labelsHidden()
             .tint(Palette.coral(scheme))
         }
-        .padding(.horizontal, 10)
-        .frame(minHeight: 48)
+        .padding(.horizontal, 0)
+        .frame(minHeight: 44)
         .accessibilityElement(children: .combine)
     }
 
@@ -606,8 +341,8 @@ struct MiniBrowserChrome: View {
                 in: Capsule()
             )
         }
-        .padding(.horizontal, 10)
-        .frame(minHeight: 48)
+        .padding(.horizontal, 0)
+        .frame(minHeight: 44)
     }
 
     private func zoomStepButton(
@@ -646,5 +381,158 @@ private struct CardPressStyle: ButtonStyle {
             .scaleEffect(!reduceMotion && configuration.isPressed ? 0.97 : 1)
             .opacity(configuration.isPressed ? 0.72 : 1)
             .animation(reduceMotion ? nil : .spring(response: 0.22, dampingFraction: 0.75), value: configuration.isPressed)
+    }
+}
+
+
+
+// MARK: - Top bar
+
+/// Full-width navigation bar over the page: back, forward, the address and the
+/// reload. Same glass as the dock below.
+struct MiniBrowserTopBar: View {
+    var model: MiniBrowserModel
+    var addressEditing: Bool
+    @FocusState.Binding var isAddressFocused: Bool
+    var onBeginAddressEdit: () -> Void
+    var onCancel: () -> Void
+    var onSubmit: () -> Void
+
+    @Environment(\.colorScheme) private var scheme
+
+    private let barHeight: CGFloat = 42
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if addressEditing {
+                editor
+            } else {
+                iconButton(systemName: "chevron.backward", label: "browser.back", enabled: model.canGoBack) {
+                    model.goBack()
+                }
+                iconButton(systemName: "chevron.forward", label: "browser.forward", enabled: model.canGoForward) {
+                    model.goForward()
+                }
+
+                Button(action: onBeginAddressEdit) {
+                    HStack(spacing: 8) {
+                        siteIcon
+                        Text(displayTitle)
+                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .foregroundStyle(Palette.ink(scheme))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        Spacer(minLength: 0)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("browser.search_placeholder"))
+
+                iconButton(
+                    systemName: model.isLoading ? "xmark" : "arrow.clockwise",
+                    label: model.isLoading ? "browser.stop" : "browser.reload",
+                    enabled: true
+                ) {
+                    if model.isLoading { model.stopLoading() } else { model.reload() }
+                }
+            }
+        }
+        .padding(.horizontal, 8)
+        .frame(height: barHeight)
+        .floatingGlassCapsule()
+    }
+
+    private var displayTitle: String {
+        let title = model.pageTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !title.isEmpty { return title }
+        let host = model.pageHost
+        return host.isEmpty ? String(localized: "browser.search_placeholder") : host
+    }
+
+    private var siteIcon: some View {
+        Group {
+            if let url = model.effectiveURL, url.scheme == "http" || url.scheme == "https" {
+                Favicon(urlString: url.absoluteString, size: 16)
+            } else {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.55))
+            }
+        }
+        .frame(width: 22, height: 22)
+    }
+
+    private func iconButton(
+        systemName: String,
+        label: LocalizedStringKey,
+        enabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Palette.ink(scheme).opacity(enabled ? 0.85 : 0.3))
+                .frame(width: 32, height: barHeight - 8)
+                .contentShape(Rectangle())
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(SquircleButtonStyle())
+        .disabled(!enabled)
+        .accessibilityLabel(Text(label))
+    }
+
+    private var editor: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Palette.coral(scheme))
+
+            TextField(
+                "",
+                text: Bindable(model).addressText,
+                prompt: Text("browser.search_placeholder")
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.45))
+            )
+            .font(.system(size: 16, weight: .medium, design: .rounded))
+            .foregroundStyle(Palette.ink(scheme))
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .keyboardType(.webSearch)
+            .submitLabel(.go)
+            .multilineTextAlignment(.leading)
+            .focused($isAddressFocused)
+            .onSubmit(onSubmit)
+            .onAppear {
+                DispatchQueue.main.async {
+                    guard addressEditing else { return }
+                    isAddressFocused = true
+                }
+            }
+
+            if !model.addressText.isEmpty {
+                Button {
+                    model.clearAddressText()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Palette.ink(scheme).opacity(0.45))
+                        .frame(width: 28, height: barHeight - 8)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(SquircleButtonStyle())
+                .accessibilityLabel(Text("browser.clear"))
+            }
+
+            Button(action: onCancel) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.75))
+                    .frame(width: 32, height: barHeight - 8)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(SquircleButtonStyle())
+            .accessibilityLabel(Text("common.cancel"))
+        }
     }
 }

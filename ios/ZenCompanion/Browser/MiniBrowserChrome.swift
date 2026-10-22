@@ -67,7 +67,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
             Image(systemName: "plus")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Palette.ink(scheme))
-                .frame(width: 56, height: 34)
+                .frame(width: 92, height: 34)
                 .contentShape(Capsule())
         }
         .buttonStyle(SquircleButtonStyle())

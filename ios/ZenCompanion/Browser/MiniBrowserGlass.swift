@@ -84,3 +84,31 @@ extension View {
         }
     }
 }
+
+/// Soft bottom fade over the page. A live blur that ramps in towards the screen
+/// bottom and stops at half strength, so the page dissolves into the controls
+/// instead of being cut off by them.
+struct PageBottomFade: View {
+    /// Height of the ramp. The fade starts this far above the physical bottom.
+    var height: CGFloat = 82
+
+    var body: some View {
+        Rectangle()
+            .fill(.ultraThinMaterial)
+            .mask(
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: .white.opacity(0.08), location: 0.28),
+                        .init(color: .white.opacity(0.24), location: 0.58),
+                        .init(color: .white.opacity(0.5), location: 1)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .frame(height: height)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}

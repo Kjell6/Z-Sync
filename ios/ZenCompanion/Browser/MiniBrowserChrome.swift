@@ -57,6 +57,9 @@ struct MiniBrowserChrome<NavBar: View>: View {
                     withAnimation(motion) { onToggleMenu() }
                 }
             }
+            // Pulls the outer buttons inwards. The navigation bar above keeps
+            // its full width.
+            .padding(.horizontal, 14)
         }
         .animation(motion, value: model.menuExpanded)
     }
@@ -67,7 +70,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
             Image(systemName: "plus")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Palette.ink(scheme))
-                .frame(width: 92, height: 34)
+                .frame(width: 92, height: 42)
                 .contentShape(Capsule())
         }
         .buttonStyle(SquircleButtonStyle())

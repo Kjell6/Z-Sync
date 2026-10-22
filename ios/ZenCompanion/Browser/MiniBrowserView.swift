@@ -60,7 +60,7 @@ struct MiniBrowserView: View {
     /// Air between the controls and the physical bottom. The home indicator
     /// occupies the bottom of the safe area; the controls sit just above it.
     private var chromeBottomPadding: CGFloat {
-        max(10, safeBottom - 6)
+        max(8, safeBottom - 14)
     }
 
     /// Webpage or find field, not the address composer.
@@ -137,6 +137,11 @@ struct MiniBrowserView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                // The page runs out into a soft blur at the bottom instead of
+                // stopping against the controls.
+                PageBottomFade()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
 
                 if let notice = model.pinNotice {
                     pinNoticeToast(notice)

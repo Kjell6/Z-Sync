@@ -96,8 +96,8 @@ struct MiniBrowserChrome<NavBar: View>: View {
 
     // MARK: - Expanded menu
 
-    /// Grows inside the same full-width plate. The bar's top corners, not this
-    /// content, carry the reduced sheet radius.
+    /// Grows above the navigation bar. Everything inside shares one outer inset,
+    /// so rows, tiles and the pin row start on the same edge on every side.
     private var expandedContent: some View {
         VStack(spacing: 0) {
             VStack(spacing: 0) {
@@ -109,9 +109,6 @@ struct MiniBrowserChrome<NavBar: View>: View {
                 rowDivider
                 zoomRow
             }
-            .padding(.horizontal, 14)
-            .padding(.top, 14)
-            .padding(.bottom, 14)
 
             actionRow
                 .padding(.top, 8)
@@ -123,6 +120,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
                     .transition(.identity)
             }
         }
+        .padding(14)
     }
 
     /// Bottom row, trailing edge first for the thumb: Pin sits on the right.
@@ -325,7 +323,6 @@ struct MiniBrowserChrome<NavBar: View>: View {
             .labelsHidden()
             .tint(Palette.coral(scheme))
         }
-        .padding(.horizontal, 0)
         .frame(minHeight: 44)
         .accessibilityElement(children: .combine)
     }
@@ -357,7 +354,6 @@ struct MiniBrowserChrome<NavBar: View>: View {
                 in: Capsule()
             )
         }
-        .padding(.horizontal, 0)
         .frame(minHeight: 44)
     }
 

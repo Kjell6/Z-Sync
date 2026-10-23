@@ -39,6 +39,8 @@ struct MiniBrowserChrome<NavBar: View>: View {
     /// While the address is being typed the bar rides on the keyboard, and the
     /// dock would only sit under the keys: it is dropped then.
     var addressEditing = false
+    /// A tapped suggestion goes through the same submit path as typed text.
+    var onPickSuggestion: (String) -> Void
     /// The navigation bar. It stays in place while the menu grows above it.
     @ViewBuilder var navBar: () -> NavBar
 
@@ -76,6 +78,23 @@ struct MiniBrowserChrome<NavBar: View>: View {
                     )
             }
 
+            // Only while the address field is open. The list grows out of the
+            // bar the same way the page menu does, and shares its glass.
+            if addressEditing, !model.suggestions.isEmpty {
+                suggestionList
+                    .frame(maxWidth: .infinity)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .floatingGlassPanel(cornerRadius: 26)
+                    .transition(
+                        .asymmetric(
+                            insertion: .scale(scale: 0.88, anchor: .bottom)
+                                .combined(with: .opacity),
+                            removal: .opacity
+                                .combined(with: .scale(scale: 0.95, anchor: .bottom))
+                        )
+                    )
+            }
+
             navBar()
 
             if !addressEditing {
@@ -99,7 +118,55 @@ struct MiniBrowserChrome<NavBar: View>: View {
             }
         }
         .glassGroup()
+        .onChange(of: model.addressText) { _, _ in
+            model.refreshSuggestions(isEditing: addressEditing)
+        }
+        .onChange(of: addressEditing) { _, editing in
+            model.refreshSuggestions(isEditing: editing)
+        }
         .animation(motion, value: model.menuExpanded)
+        .animation(motion, value: model.suggestions)
+    }
+
+    // MARK: - Suggestions
+
+    /// Part of the address editing state, not a new layer: the rows use the
+    /// same ink and row height as the menu, and the panel sits in the space
+    /// above the bar that only exists while typing.
+    private var suggestionList: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(model.suggestions.enumerated()), id: \.offset) { index, suggestion in
+                Button {
+                    onPickSuggestion(suggestion)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Palette.ink(scheme).opacity(0.45))
+                            .frame(width: 22, height: 22)
+                        Text(suggestion)
+                            .font(.system(size: 16, weight: .medium, design: .rounded))
+                            .foregroundStyle(Palette.ink(scheme))
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.horizontal, 20)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                    .overlay(alignment: .bottom) {
+                        if index < model.suggestions.count - 1 {
+                            Rectangle()
+                                .fill(Color.primary.opacity(0.08))
+                                .frame(height: 0.5)
+                                .padding(.leading, 52)
+                        }
+                    }
+                }
+                .buttonStyle(SuggestionPressStyle())
+            }
+        }
+        .padding(.vertical, 6)
+        .accessibilityElement(children: .contain)
     }
 
     /// Smaller than the side buttons, as the middle control of the row.
@@ -434,6 +501,17 @@ private struct CardPressStyle: ButtonStyle {
             .scaleEffect(!reduceMotion && configuration.isPressed ? 0.97 : 1)
             .opacity(configuration.isPressed ? 0.72 : 1)
             .animation(reduceMotion ? nil : .spring(response: 0.22, dampingFraction: 0.75), value: configuration.isPressed)
+    }
+}
+
+/// Highlight on touch-down. The row stays full width, so it does not scale.
+private struct SuggestionPressStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(configuration.isPressed ? Color.primary.opacity(0.08) : Color.clear)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.08), value: configuration.isPressed)
     }
 }
 

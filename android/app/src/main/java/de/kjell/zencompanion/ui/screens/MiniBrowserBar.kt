@@ -130,7 +130,7 @@ private val PanelInset = 14.dp
 private val RowGap = 8.dp
 /** How far the dock drops into the gesture area: the safe area is not touched,
  * only the slack above it is used up. */
-private val BottomLift = 20.dp
+private val BottomLift = 15.dp
 /** Pulls the outer dock buttons inwards, like the iOS chrome. */
 private val DockInset = 7.dp
 
@@ -175,6 +175,10 @@ internal fun MiniBrowserBar(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            // The bar area has its own background already (the page ends above
+            // it). Painting it here keeps the translucent tiles compositing
+            // against that background instead of the page.
+            .background(barColor)
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(RowGap),
     ) {

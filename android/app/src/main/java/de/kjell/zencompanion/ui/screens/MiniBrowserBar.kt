@@ -131,6 +131,8 @@ private val RowGap = 8.dp
 /** How far the dock drops into the gesture area: the safe area is not touched,
  * only the slack above it is used up. */
 private val BottomLift = 15.dp
+/** Air above the first row, so the bar background does not end flush with it. */
+private val TopGap = 12.dp
 /** Pulls the outer dock buttons inwards, like the iOS chrome. */
 private val DockInset = 7.dp
 
@@ -179,7 +181,9 @@ internal fun MiniBrowserBar(
             // it). Painting it here keeps the translucent tiles compositing
             // against that background instead of the page.
             .background(barColor)
-            .padding(horizontal = 16.dp),
+            // The background starts above the address row: it should not end
+            // hard against it.
+            .padding(start = 16.dp, end = 16.dp, top = TopGap),
         verticalArrangement = Arrangement.spacedBy(RowGap),
     ) {
         if (state.menuExpanded) {
@@ -297,7 +301,7 @@ internal fun MiniBrowserTopBar(barColor: Color, onClose: () -> Unit) {
 
 /** Height of the chrome at rest, so the page can reserve exactly that much. */
 internal val CollapsedBarHeightBase: androidx.compose.ui.unit.Dp =
-    BarHeight + RowGap + DockSide - BottomLift
+    TopGap + BarHeight + RowGap + DockSide - BottomLift
 
 // MARK: - Navigation bar
 

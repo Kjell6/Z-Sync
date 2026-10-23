@@ -117,7 +117,11 @@ struct MiniBrowserChrome<NavBar: View>: View {
             .padding(.horizontal, 7)
             }
         }
-        .glassGroup()
+        // No `GlassEffectContainer` around the chrome on purpose. A container
+        // merges neighbouring glass into one effect, so as soon as the menu or
+        // the suggestion list grows in, the bar and dock that were already on
+        // screen change their look. Each control keeps its own `.glassEffect`
+        // so the chrome looks the same whatever is open.
         .onChange(of: model.addressText) { _, _ in
             model.refreshSuggestions(isEditing: addressEditing)
         }

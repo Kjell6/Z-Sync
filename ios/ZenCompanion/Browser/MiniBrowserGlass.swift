@@ -130,17 +130,3 @@ struct PageBottomFade: View {
             .frame(height: height)
     }
 }
-
-extension View {
-    /// Keeps neighbouring glass elements in one glass context, as Liquid Glass
-    /// expects them to be: they then share light, shadowing and rendering cost
-    /// instead of each starting its own backdrop pass.
-    @ViewBuilder
-    func glassGroup(spacing: CGFloat = 8) -> some View {
-        if #available(iOS 26.0, *) {
-            GlassEffectContainer(spacing: spacing) { self }
-        } else {
-            self
-        }
-    }
-}

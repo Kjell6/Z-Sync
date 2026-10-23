@@ -28,7 +28,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
-import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
@@ -152,6 +151,7 @@ private val DockInset = 7.dp
 internal fun MiniBrowserBar(
     state: MiniBrowserViewModel.State,
     viewModel: MiniBrowserViewModel,
+    onClose: () -> Unit,
     effectiveUrl: String,
     addressText: TextFieldValue,
     onAddressTextChange: (TextFieldValue) -> Unit,
@@ -236,6 +236,7 @@ internal fun MiniBrowserBar(
             Dock(
                 menuOpen = state.menuExpanded,
                 ink = zen.ink,
+                onClose = onClose,
                 onToggleMenu = {
                     if (state.menuExpanded) viewModel.collapseMenu() else viewModel.toggleMenu()
                 },
@@ -258,46 +259,6 @@ private fun Modifier.pane(shape: Shape, color: Color): Modifier = this
     .clip(shape)
     .background(color)
     .border(liftBorder(), shape)
-
-/**
- * Slim strip above the page: the app's chrome color plus the one explicit way
- * out of the mini-browser (Android has no swipe-to-dismiss sheet).
- */
-@Composable
-internal fun MiniBrowserTopBar(barColor: Color, onClose: () -> Unit) {
-    val zen = LocalZenColors.current
-    Column(Modifier.fillMaxWidth().background(barColor)) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Spacer(Modifier.weight(1f))
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .background(zen.lift, DockShape)
-                    .border(liftBorder(), DockShape)
-                    .barClickable(onClick = onClose),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Close,
-                    contentDescription = stringResource(R.string.browser_close),
-                    tint = zen.ink.copy(alpha = 0.75f),
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-        }
-        Spacer(
-            Modifier
-                .fillMaxWidth()
-                .height(0.5.dp)
-                .background(zen.ink.copy(alpha = 0.10f)),
-        )
-    }
-}
 
 /** Height of the chrome at rest, so the page can reserve exactly that much. */
 internal val CollapsedBarHeightBase: androidx.compose.ui.unit.Dp =
@@ -410,7 +371,12 @@ private fun NavGlyph(
 // MARK: - Dock
 
 @Composable
-private fun Dock(menuOpen: Boolean, ink: Color, onToggleMenu: () -> Unit) {
+private fun Dock(
+    menuOpen: Boolean,
+    ink: Color,
+    onClose: () -> Unit,
+    onToggleMenu: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -426,14 +392,15 @@ private fun Dock(menuOpen: Boolean, ink: Color, onToggleMenu: () -> Unit) {
 
         Spacer(Modifier.weight(1f))
 
-        // Placeholder: a new tab / fresh search arrives later.
+        // The only way out of the mini-browser.
         DockButton(
-            icon = Icons.Outlined.Add,
-            description = stringResource(R.string.browser_new_tab),
+            icon = Icons.Outlined.Close,
+            description = stringResource(R.string.browser_close),
             tint = ink,
             width = PlusWidth,
             height = PlusHeight,
-        ) {}
+            onClick = onClose,
+        )
 
         Spacer(Modifier.weight(1f))
 

@@ -101,6 +101,17 @@
         }
       }
     },
+    "browser.close": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        }
+      }
+    },
     "browser.close_menu": {
       "localizations": {
         "en": {

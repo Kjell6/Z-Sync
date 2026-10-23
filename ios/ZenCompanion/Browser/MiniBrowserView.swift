@@ -163,6 +163,10 @@ struct MiniBrowserView: View {
                     space: space,
                     allSpaces: allSpaces,
                     onToggleMenu: { model.toggleMenu() },
+                    onClose: {
+                        model.commitPendingPinSave()
+                        onDismiss()
+                    },
                     addressEditing: addressEditing,
                     navBar: {
                         MiniBrowserTopBar(

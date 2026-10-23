@@ -312,15 +312,6 @@ fun MiniBrowserScreen(
                 .imePadding(),
         ) {
             Column(Modifier.fillMaxSize()) {
-                ZenTheme(darkTheme = barIsDark) {
-                    MiniBrowserTopBar(
-                        barColor = barColor,
-                        onClose = {
-                            viewModel.commitPendingPinSave()
-                            onDismiss()
-                        },
-                    )
-                }
             // Page pane: the page ends where the collapsed bar begins. The open
             // menu draws over the page instead of pushing it up.
             Box(
@@ -420,6 +411,10 @@ fun MiniBrowserScreen(
                     MiniBrowserBar(
                         state = state,
                         viewModel = viewModel,
+                        onClose = {
+                            viewModel.commitPendingPinSave()
+                            onDismiss()
+                        },
                         effectiveUrl = effectiveUrl,
                         addressText = state.addressText,
                         onAddressTextChange = viewModel::onAddressTextChange,

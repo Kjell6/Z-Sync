@@ -23,14 +23,12 @@ struct SpacesBrowserView: View {
 
     private enum ActiveSheet: Identifiable, Equatable {
         case account
-        case browser(BrowserTabSession)
         case activity
         case syncSetup
 
         var id: String {
             switch self {
             case .account: return "account"
-            case .browser(let session): return session.id.uuidString
             case .activity: return "activity"
             case .syncSetup: return "syncSetup"
             }
@@ -42,6 +40,9 @@ struct SpacesBrowserView: View {
     }
 
     @State private var activeSheet: ActiveSheet?
+    /// The mini-browser is a page, not a sheet: nothing to swipe away, so the
+    /// dock's close control is the only way out.
+    @State private var browserTab: BrowserTabSession?
     /// A pin inside the mini-browser (or a delete from it) fired while a sheet
     /// was up; refresh once the last sheet is gone.
     @State private var pendingStaleReload = false
@@ -232,21 +233,6 @@ struct SpacesBrowserView: View {
                 )
                 .presentationDetents([.fraction(0.85), .large])
                 .presentationDragIndicator(.visible)
-            case .browser(let session):
-                MiniBrowserView(
-                    initialURL: session.url,
-                    initialTitle: session.initialTitle,
-                    space: session.space,
-                    allSpaces: model.snapshot.spaces,
-                    onDismiss: { activeSheet = nil }
-                )
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                // The sheet's own corner radius is larger than the display's,
-                // so a sliver of the app behind shows along the bottom corners
-                // where the bar should meet the screen edge. Keep the sheet
-                // radius below the display radius so the bar fills the corner.
-                .presentationCornerRadius(24)
             case .activity:
                 SyncedActivitySheet(
                     allSpaces: model.snapshot.spaces,
@@ -256,7 +242,7 @@ struct SpacesBrowserView: View {
                             ExternalBrowser.open(url)
                         } else {
                             // Swap to the mini-browser without dismissing this sheet first.
-                            activeSheet = .browser(BrowserTabSession(
+                            presentBrowser(BrowserTabSession(
                                 url: url,
                                 initialTitle: nil,
                                 space: space
@@ -274,9 +260,25 @@ struct SpacesBrowserView: View {
                 .presentationDragIndicator(.visible)
             }
         }
+        .fullScreenCover(item: $browserTab) { session in
+            MiniBrowserView(
+                initialURL: session.url,
+                initialTitle: session.initialTitle,
+                space: session.space,
+                allSpaces: model.snapshot.spaces,
+                onDismiss: { browserTab = nil }
+            )
+            .onDisappear {
+                // A pin inside the mini-browser fired while it was up.
+                if pendingStaleReload {
+                    pendingStaleReload = false
+                    Task { await model.reload() }
+                }
+            }
+        }
         .task { await model.initialLoad() }
         .onReceive(NotificationCenter.default.publisher(for: .zenCompanionSnapshotStale)) { _ in
-            guard activeSheet == nil else {
+            guard activeSheet == nil, browserTab == nil else {
                 pendingStaleReload = true
                 return
             }
@@ -285,7 +287,7 @@ struct SpacesBrowserView: View {
         .onChange(of: activeSheet) { _, sheet in
             // A pin inside the mini-browser (or a delete from it) fired while
             // a sheet was up; refresh once the last sheet is gone.
-            if sheet == nil, pendingStaleReload {
+            if sheet == nil, browserTab == nil, pendingStaleReload {
                 pendingStaleReload = false
                 Task { await model.reload() }
             }
@@ -386,13 +388,29 @@ struct SpacesBrowserView: View {
         .accessibilityLabel(Text("browser.web_placeholder"))
     }
 
+    /// Opens the mini-browser as a page. A sheet that is already up has to go
+    /// first: SwiftUI will not present a full-screen cover over one, and
+    /// swapping the sheet's own case is what made the browser a sheet.
+    private func presentBrowser(_ session: BrowserTabSession) {
+        guard activeSheet != nil else {
+            browserTab = session
+            return
+        }
+        activeSheet = nil
+        Task { @MainActor in
+            // Sheet dismissal has to start before the cover can take over.
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            browserTab = session
+        }
+    }
+
     private func openTab(_ tab: ZenTab, in space: ZenSpace) {
         guard let url = URL(string: tab.url) else { return }
         if model.alwaysOpenExternally {
             ExternalBrowser.open(url)
             return
         }
-        activeSheet = .browser(BrowserTabSession(
+        presentBrowser(BrowserTabSession(
             url: url,
             initialTitle: tab.displayTitle,
             space: space
@@ -400,11 +418,7 @@ struct SpacesBrowserView: View {
     }
 
     private func openNewTab(in space: ZenSpace) {
-        activeSheet = .browser(BrowserTabSession(
-            url: nil,
-            initialTitle: nil,
-            space: space
-        ))
+        presentBrowser(BrowserTabSession(url: nil, initialTitle: nil, space: space))
     }
 
     // MARK: States (shown until the first successful sync)

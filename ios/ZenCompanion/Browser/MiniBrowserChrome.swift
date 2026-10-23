@@ -33,6 +33,9 @@ struct MiniBrowserChrome<NavBar: View>: View {
     let space: ZenSpace
     let allSpaces: [ZenSpace]
     var onToggleMenu: () -> Void
+    /// Closes the mini-browser. The dock's middle control used to be a
+    /// placeholder; it is the way out now that there is no sheet to swipe down.
+    var onClose: () -> Void
     /// While the address is being typed the bar rides on the keyboard, and the
     /// dock would only sit under the keys: it is dropped then.
     var addressEditing = false
@@ -80,8 +83,8 @@ struct MiniBrowserChrome<NavBar: View>: View {
                 // Placeholder: the page stack arrives with real tabs.
                 dockButton(systemName: "square.on.square") {}
                 Spacer(minLength: 0)
-                // Placeholder: a new tab / fresh search arrives later.
-                plusButton
+                // Closes the mini-browser.
+                closeButton
                 Spacer(minLength: 0)
                 dockButton(
                     systemName: "ellipsis",
@@ -100,9 +103,9 @@ struct MiniBrowserChrome<NavBar: View>: View {
     }
 
     /// Smaller than the side buttons, as the middle control of the row.
-    private var plusButton: some View {
-        Button(action: {}) {
-            Image(systemName: "plus")
+    private var closeButton: some View {
+        Button(action: onClose) {
+            Image(systemName: "xmark")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Palette.ink(scheme))
                 .frame(width: 92, height: 42)
@@ -110,7 +113,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
         }
         .buttonStyle(SquircleButtonStyle())
         .floatingGlassCapsule()
-        .accessibilityLabel(Text("browser.new_tab"))
+        .accessibilityLabel(Text("browser.close"))
     }
 
     private func dockButton(

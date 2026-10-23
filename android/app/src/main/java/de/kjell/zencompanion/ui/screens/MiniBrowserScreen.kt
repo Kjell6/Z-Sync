@@ -58,6 +58,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -274,6 +275,10 @@ fun MiniBrowserScreen(
     val collapsedBarHeight = CollapsedBarHeightBase + navigationBarInset
     val reservedBottom by animateDpAsState(
         targetValue = if (barVisible) collapsedBarHeight else 0.dp,
+        // When the bar tucks away the page must take the space in one step.
+        // Animating it made the web view grow in slices, with a band of empty
+        // bar background left over below it the whole time.
+        animationSpec = if (barVisible) tween(durationMillis = 180) else snap(),
         label = "barReserve",
     )
 

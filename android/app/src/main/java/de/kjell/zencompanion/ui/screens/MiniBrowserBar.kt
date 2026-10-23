@@ -127,12 +127,10 @@ private val PlusHeight = 42.dp
 private val RowHeight = 44.dp
 private val TileHeight = 60.dp
 private val PanelInset = 14.dp
-/** Inset of the rows inside the bottom plate. */
-private val PlateInset = 6.dp
 private val RowGap = 8.dp
 /** How far the dock drops into the gesture area: the safe area is not touched,
  * only the slack above it is used up. */
-private val BottomLift = 15.dp
+private val BottomLift = 20.dp
 /** Pulls the outer dock buttons inwards, like the iOS chrome. */
 private val DockInset = 7.dp
 
@@ -199,49 +197,41 @@ internal fun MiniBrowserBar(
             }
         }
 
-        // One plate behind both rows: the address line and the three buttons
-        // sit on the same surface, so nothing floats on its own.
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .pane(DockShape, barColor)
-                .padding(PlateInset),
-            verticalArrangement = Arrangement.spacedBy(RowGap),
-        ) {
-            if (state.isAddressFocused) {
-                // The bar rides on the keyboard while typing; the dock would
-                // only sit under the keys.
-                ComposerRow(
-                    addressText = addressText,
-                    onAddressTextChange = onAddressTextChange,
-                    focusRequester = focusRequester,
-                    onAddressFocusedChange = onAddressFocusedChange,
-                    onSubmitAddress = onSubmitAddress,
-                    onCancel = onCancelAddressEdit,
-                )
-            } else {
-                NavRow(
-                    canGoBack = state.canGoBack,
-                    canGoForward = state.canGoForward,
-                    effectiveUrl = effectiveUrl,
-                    title = state.currentTitle,
-                    isLoading = state.isLoading,
-                    progress = state.progress,
-                    onBack = onBack,
-                    onForward = onForward,
-                    onReload = onReload,
-                    onStop = onStop,
-                    onBeginAddressEdit = onBeginAddressEdit,
-                )
+        if (state.isAddressFocused) {
+            // The bar rides on the keyboard while typing; the dock would only
+            // sit under the keys.
+            ComposerBar(
+                addressText = addressText,
+                onAddressTextChange = onAddressTextChange,
+                focusRequester = focusRequester,
+                onAddressFocusedChange = onAddressFocusedChange,
+                onSubmitAddress = onSubmitAddress,
+                onCancel = onCancelAddressEdit,
+                barColor = barColor,
+            )
+        } else {
+            NavBar(
+                canGoBack = state.canGoBack,
+                canGoForward = state.canGoForward,
+                effectiveUrl = effectiveUrl,
+                title = state.currentTitle,
+                isLoading = state.isLoading,
+                progress = state.progress,
+                onBack = onBack,
+                onForward = onForward,
+                onReload = onReload,
+                onStop = onStop,
+                onBeginAddressEdit = onBeginAddressEdit,
+                barColor = barColor,
+            )
 
-                Dock(
-                    menuOpen = state.menuExpanded,
-                    ink = zen.ink,
-                    onToggleMenu = {
-                        if (state.menuExpanded) viewModel.collapseMenu() else viewModel.toggleMenu()
-                    },
-                )
-            }
+            Dock(
+                menuOpen = state.menuExpanded,
+                ink = zen.ink,
+                onToggleMenu = {
+                    if (state.menuExpanded) viewModel.collapseMenu() else viewModel.toggleMenu()
+                },
+            )
         }
 
         val navigationInset = WindowInsets.navigationBars
@@ -303,12 +293,12 @@ internal fun MiniBrowserTopBar(barColor: Color, onClose: () -> Unit) {
 
 /** Height of the chrome at rest, so the page can reserve exactly that much. */
 internal val CollapsedBarHeightBase: androidx.compose.ui.unit.Dp =
-    PlateInset * 2 + BarHeight + RowGap + DockSide - BottomLift
+    BarHeight + RowGap + DockSide - BottomLift
 
 // MARK: - Navigation bar
 
 @Composable
-private fun NavRow(
+private fun NavBar(
     canGoBack: Boolean,
     canGoForward: Boolean,
     effectiveUrl: String,
@@ -320,9 +310,10 @@ private fun NavRow(
     onReload: () -> Unit,
     onStop: () -> Unit,
     onBeginAddressEdit: () -> Unit,
+    barColor: Color,
 ) {
     val zen = LocalZenColors.current
-    Box(modifier = Modifier.fillMaxWidth()) {
+    Box(modifier = Modifier.fillMaxWidth().pane(DockShape, zen.lift)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -478,18 +469,20 @@ private fun DockButton(
 // MARK: - Composer
 
 @Composable
-private fun ComposerRow(
+private fun ComposerBar(
     addressText: TextFieldValue,
     onAddressTextChange: (TextFieldValue) -> Unit,
     focusRequester: FocusRequester,
     onAddressFocusedChange: (Boolean) -> Unit,
     onSubmitAddress: (String) -> Unit,
     onCancel: () -> Unit,
+    barColor: Color,
 ) {
     val zen = LocalZenColors.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .pane(DockShape, zen.lift)
             .padding(horizontal = 6.dp)
             .height(BarHeight),
         verticalAlignment = Alignment.CenterVertically,

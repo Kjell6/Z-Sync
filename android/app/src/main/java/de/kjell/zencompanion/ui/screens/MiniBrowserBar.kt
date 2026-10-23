@@ -160,6 +160,7 @@ internal fun MiniBrowserBar(
     onBeginAddressEdit: () -> Unit,
     onCancelAddressEdit: () -> Unit,
     onSubmitAddress: (String) -> Unit,
+    onPickSuggestion: (String) -> Unit,
     onBack: () -> Unit,
     onForward: () -> Unit,
     onReload: () -> Unit,
@@ -206,6 +207,14 @@ internal fun MiniBrowserBar(
         }
 
         if (state.isAddressFocused) {
+            // Part of the address editing state: the list sits in the space
+            // above the composer, on the same plate, and goes away with it.
+            if (state.suggestions.isNotEmpty()) {
+                SuggestionPanel(
+                    suggestions = state.suggestions,
+                    onSelect = onPickSuggestion,
+                )
+            }
             // The bar rides on the keyboard while typing; the dock would only
             // sit under the keys.
             ComposerBar(
@@ -438,6 +447,55 @@ private fun DockButton(
             tint = tint.copy(alpha = 0.8f),
             modifier = Modifier.size(20.dp),
         )
+    }
+}
+
+// MARK: - Suggestions
+
+/**
+ * Same rows as the iOS list, on the hard surface this chrome uses. The panel
+ * grows above the composer row, so the list reads as part of typing an
+ * address rather than as a layer over the page.
+ */
+@Composable
+private fun SuggestionPanel(
+    suggestions: List<String>,
+    onSelect: (String) -> Unit,
+) {
+    val zen = LocalZenColors.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .pane(DockShape, zen.lift),
+    ) {
+        suggestions.forEachIndexed { index, suggestion ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(RowHeight)
+                    .barClickable { onSelect(suggestion) }
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Search,
+                    contentDescription = null,
+                    // Same quiet ink as the composer's glyph.
+                    tint = zen.ink.copy(alpha = 0.45f),
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = suggestion,
+                    style = ZenType.rounded(16, FontWeight.Medium),
+                    color = zen.ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            if (index < suggestions.lastIndex) RowDivider()
+        }
     }
 }
 

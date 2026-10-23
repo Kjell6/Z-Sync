@@ -301,6 +301,24 @@ fun MiniBrowserScreen(
         label = "barReserve",
     )
 
+    /** One path for typed text and a tapped suggestion. */
+    fun openAddressTarget(target: String) {
+        if (target.isEmpty()) return
+        if (loadsInWebView(target)) {
+            webView?.loadUrl(target)
+        } else if (!openURLExternally(context, Uri.parse(target))) {
+            // An address that names another app's scheme never reaches the
+            // WebView.
+            viewModel.onLinkUnavailable()
+        }
+    }
+
+    fun finishAddressEdit() {
+        focusManager.clearFocus()
+        keyboardController?.hide()
+        viewModel.endAddressEdit()
+    }
+
     Surface(
         modifier = modifier.fillMaxSize(),
         color = barColor,
@@ -427,19 +445,12 @@ fun MiniBrowserScreen(
                             keyboardController?.hide()
                         },
                         onSubmitAddress = { input ->
-                            val target = viewModel.submitAddress(input)
-                            if (target.isNotEmpty()) {
-                                if (loadsInWebView(target)) {
-                                    webView?.loadUrl(target)
-                                } else if (!openURLExternally(context, Uri.parse(target))) {
-                                    // Typed text that names another app's scheme
-                                    // never reaches the WebView.
-                                    viewModel.onLinkUnavailable()
-                                }
-                            }
-                            focusManager.clearFocus()
-                            keyboardController?.hide()
-                            viewModel.endAddressEdit()
+                            openAddressTarget(viewModel.submitAddress(input))
+                            finishAddressEdit()
+                        },
+                        onPickSuggestion = { suggestion ->
+                            openAddressTarget(viewModel.selectSuggestion(suggestion))
+                            finishAddressEdit()
                         },
                         onBack = { webView?.goBack() },
                         onForward = { webView?.goForward() },

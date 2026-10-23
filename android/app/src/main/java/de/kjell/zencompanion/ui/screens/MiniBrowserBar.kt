@@ -1,6 +1,5 @@
 package de.kjell.zencompanion.ui.screens
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,10 +7,10 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -27,22 +26,25 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.FilterNone
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Laptop
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -55,6 +57,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -108,24 +111,37 @@ internal fun Modifier.barClickable(enabled: Boolean = true, onClick: () -> Unit)
         )
 }
 
-/** Side controls: rounder than the app's tiles, still square with a flat edge. */
-private val ControlShape = RoundedCornerShape(20.dp)
+// MARK: - Metrics
 
-/** Menu tiles keep the app's own tile corner, like the home action bar. */
+/** A solid surface, not glass: the platform has no Liquid Glass, so the bar is
+ * a hard pane that sits on the page. */
+private val BarShape = RoundedCornerShape(22.dp)
+private val PanelShape = RoundedCornerShape(20.dp)
+private val DockShape = RoundedCornerShape(20.dp)
 private val TileShape = RoundedCornerShape(16.dp)
-private val ControlSide = 44.dp
-private val RowHeight = 48.dp
-private val TileHeight = 68.dp
+
+private val BarHeight = 44.dp
+private val DockSide = 44.dp
+private val PlusWidth = 92.dp
+private val PlusHeight = 42.dp
+private val RowHeight = 44.dp
+private val TileHeight = 60.dp
+private val PanelInset = 14.dp
+private val RowGap = 8.dp
+/** Pulls the outer dock buttons inwards, like the iOS chrome. */
+private val DockInset = 7.dp
 
 /**
- * Bottom browser bar: one plate holding the controls, the open page menu and
- * the address composer (port of iOS `MiniBrowserChrome`).
+ * Bottom browser chrome (port of iOS `MiniBrowserChrome`), bottom to top:
  *
- * Collapsed it shows back, forward (when available), the address pill and the
- * menu control. The menu grows inside the same plate, so the bar and the menu
- * are one surface. The plate takes the page's own background color; the bar is
- * wrapped in `ZenTheme(darkTheme = isDark)` by the screen, so every color here
- * follows the plate rather than the system theme.
+ *   [tab] [＋] [⋯]    three separate buttons; tab and plus are placeholders
+ *   [navigation bar]  back, forward, favicon, title, reload
+ *   [menu panel]      only while the menu is open: it grows above the bar
+ *
+ * Unlike iOS the surfaces are solid: no backdrop to blur at the page's edge
+ * would read as glass anyway. The bar is wrapped in `ZenTheme(darkTheme =
+ * isDark)` by the screen, so every color here follows the page rather than the
+ * system theme.
  */
 @Composable
 internal fun MiniBrowserBar(
@@ -151,53 +167,51 @@ internal fun MiniBrowserBar(
     barColor: Color,
     modifier: Modifier = Modifier,
 ) {
-    val menuOpen = state.menuExpanded
-    val plateShape = RoundedCornerShape(topStart = if (menuOpen) 28.dp else 0.dp, topEnd = if (menuOpen) 28.dp else 0.dp)
+    val zen = LocalZenColors.current
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            // The page's own color, nudged by the caller so the plate stays
-            // visible against it; the lift shadow does the rest.
-            .shadow(8.dp, plateShape, clip = false)
-            .clip(plateShape)
-            .background(barColor),
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(RowGap),
     ) {
-        // Top edge, so the plate reads as chrome even on a same-colored page.
-        Spacer(
-            Modifier
-                .fillMaxWidth()
-                .height(0.5.dp)
-                .background(LocalZenColors.current.ink.copy(alpha = 0.10f)),
-        )
-        if (menuOpen) {
-            ExpandedMenu(
-                state = state,
-                viewModel = viewModel,
-                onCopyLink = onCopyLink,
-                onFind = onFind,
-                onShare = onShare,
-                onOpenExternal = onOpenExternal,
-                onPin = onPin,
-            )
+        if (state.menuExpanded) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .solidSurface(PanelShape, barColor)
+                    .padding(PanelInset),
+            ) {
+                ExpandedMenu(
+                    state = state,
+                    viewModel = viewModel,
+                    onCopyLink = onCopyLink,
+                    onFind = onFind,
+                    onShare = onShare,
+                    onOpenExternal = onOpenExternal,
+                    onPin = onPin,
+                )
+            }
         }
 
         if (state.isAddressFocused) {
-            ComposerRow(
+            // The bar rides on the keyboard while typing; the dock would only
+            // sit under the keys.
+            ComposerBar(
                 addressText = addressText,
                 onAddressTextChange = onAddressTextChange,
                 focusRequester = focusRequester,
                 onAddressFocusedChange = onAddressFocusedChange,
                 onSubmitAddress = onSubmitAddress,
                 onCancel = onCancelAddressEdit,
+                barColor = barColor,
             )
         } else {
-            ControlRow(
+            NavBar(
                 canGoBack = state.canGoBack,
                 canGoForward = state.canGoForward,
                 effectiveUrl = effectiveUrl,
-                addressText = addressText,
-                menuOpen = menuOpen,
+                title = state.currentTitle,
                 isLoading = state.isLoading,
                 progress = state.progress,
                 onBack = onBack,
@@ -205,15 +219,30 @@ internal fun MiniBrowserBar(
                 onReload = onReload,
                 onStop = onStop,
                 onBeginAddressEdit = onBeginAddressEdit,
+                barColor = barColor,
+            )
+
+            Dock(
+                menuOpen = state.menuExpanded,
+                ink = zen.ink,
                 onToggleMenu = {
-                    if (menuOpen) viewModel.collapseMenu() else viewModel.toggleMenu()
+                    if (state.menuExpanded) viewModel.collapseMenu() else viewModel.toggleMenu()
                 },
             )
         }
 
+        Spacer(Modifier.height(RowGap))
         Spacer(Modifier.navigationBarsPadding())
     }
 }
+
+/** Solid pane with the app's hairline, in place of the iOS glass. */
+@Composable
+private fun Modifier.solidSurface(shape: Shape, color: Color): Modifier = this
+    .shadow(6.dp, shape, clip = false)
+    .clip(shape)
+    .background(color)
+    .border(liftBorder(), shape)
 
 /**
  * Slim strip above the page: the app's chrome color plus the one explicit way
@@ -233,8 +262,8 @@ internal fun MiniBrowserTopBar(barColor: Color, onClose: () -> Unit) {
             Box(
                 modifier = Modifier
                     .size(36.dp)
-                    .background(zen.lift, ControlShape)
-                    .border(liftBorder(), ControlShape)
+                    .background(zen.lift, DockShape)
+                    .border(liftBorder(), DockShape)
                     .barClickable(onClick = onClose),
                 contentAlignment = Alignment.Center,
             ) {
@@ -255,18 +284,17 @@ internal fun MiniBrowserTopBar(barColor: Color, onClose: () -> Unit) {
     }
 }
 
-/** Height of the collapsed bar, so the page can reserve exactly that much. */
-internal val CollapsedBarHeightBase: androidx.compose.ui.unit.Dp = 8.dp + ControlSide + 10.dp
+/** Height of the chrome at rest, so the page can reserve exactly that much. */
+internal val CollapsedBarHeightBase: androidx.compose.ui.unit.Dp = BarHeight + RowGap + DockSide + RowGap
 
-// MARK: - Collapsed row
+// MARK: - Navigation bar
 
 @Composable
-private fun ControlRow(
+private fun NavBar(
     canGoBack: Boolean,
     canGoForward: Boolean,
     effectiveUrl: String,
-    addressText: TextFieldValue,
-    menuOpen: Boolean,
+    title: String,
     isLoading: Boolean,
     progress: Float,
     onBack: () -> Unit,
@@ -274,55 +302,74 @@ private fun ControlRow(
     onReload: () -> Unit,
     onStop: () -> Unit,
     onBeginAddressEdit: () -> Unit,
-    onToggleMenu: () -> Unit,
+    barColor: Color,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .padding(top = if (menuOpen) 16.dp else 8.dp, bottom = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        ControlButton(
-            icon = Icons.AutoMirrored.Outlined.ArrowBack,
-            description = stringResource(R.string.browser_back),
-            enabled = canGoBack,
-            onClick = onBack,
-        )
-
-        if (canGoForward) {
-            ControlButton(
+    val zen = LocalZenColors.current
+    Box(modifier = Modifier.fillMaxWidth().solidSurface(BarShape, barColor)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 6.dp)
+                .height(BarHeight),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            NavGlyph(
+                icon = Icons.AutoMirrored.Outlined.ArrowBack,
+                description = stringResource(R.string.browser_back),
+                enabled = canGoBack,
+                onClick = onBack,
+            )
+            NavGlyph(
                 icon = Icons.AutoMirrored.Outlined.ArrowForward,
                 description = stringResource(R.string.browser_forward),
-                enabled = true,
+                enabled = canGoForward,
                 onClick = onForward,
+            )
+
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(BarHeight - 12.dp)
+                    .barClickable(onClick = onBeginAddressEdit)
+                    .padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SiteIcon(effectiveUrl = effectiveUrl)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = title.ifBlank { stringResource(R.string.browser_search_placeholder) },
+                    style = ZenType.rounded(16, FontWeight.SemiBold),
+                    color = zen.ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            NavGlyph(
+                icon = if (isLoading) Icons.Outlined.Close else Icons.Outlined.Refresh,
+                description = stringResource(
+                    if (isLoading) R.string.browser_stop else R.string.browser_reload,
+                ),
+                enabled = true,
+                onClick = if (isLoading) onStop else onReload,
             )
         }
 
-        AddressPill(
-            effectiveUrl = effectiveUrl,
-            addressText = addressText,
-            isLoading = isLoading,
-            progress = progress,
-            modifier = Modifier.weight(1f),
-            onTap = onBeginAddressEdit,
-            onReload = onReload,
-            onStop = onStop,
-        )
-
-        ControlButton(
-            icon = if (menuOpen) Icons.Outlined.KeyboardArrowDown else Icons.Outlined.KeyboardArrowUp,
-            description = stringResource(if (menuOpen) R.string.browser_close_menu else R.string.browser_more),
-            enabled = true,
-            onClick = onToggleMenu,
-        )
+        if (isLoading && progress < 1f) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth(progress.coerceAtLeast(0.05f))
+                    .height(2.dp)
+                    .background(zen.coral),
+            )
+        }
     }
 }
 
-/** Side control: lift fill, squircle, icon only. */
+/** Icon-only glyph for the navigation bar: no chrome of its own. */
 @Composable
-private fun ControlButton(
+private fun NavGlyph(
     icon: ImageVector,
     description: String,
     enabled: Boolean,
@@ -331,183 +378,156 @@ private fun ControlButton(
     val zen = LocalZenColors.current
     Box(
         modifier = Modifier
-            .size(ControlSide)
-            .background(zen.lift, ControlShape)
-            .border(liftBorder(), ControlShape)
+            .size(width = 34.dp, height = BarHeight - 12.dp)
             .barClickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = description,
-            tint = zen.ink.copy(alpha = if (enabled) 0.75f else 0.35f),
+            tint = zen.ink.copy(alpha = if (enabled) 0.8f else 0.3f),
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
+// MARK: - Dock
+
+@Composable
+private fun Dock(menuOpen: Boolean, ink: Color, onToggleMenu: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = DockInset),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // Placeholder: the page stack arrives with real tabs.
+        DockButton(
+            icon = Icons.Outlined.FilterNone,
+            description = stringResource(R.string.browser_tabs),
+            tint = ink,
+        ) {}
+
+        Spacer(Modifier.weight(1f))
+
+        // Placeholder: a new tab / fresh search arrives later.
+        DockButton(
+            icon = Icons.Outlined.Add,
+            description = stringResource(R.string.browser_new_tab),
+            tint = ink,
+            width = PlusWidth,
+            height = PlusHeight,
+        ) {}
+
+        Spacer(Modifier.weight(1f))
+
+        DockButton(
+            icon = Icons.Outlined.MoreHoriz,
+            description = stringResource(if (menuOpen) R.string.browser_close_menu else R.string.browser_more),
+            tint = ink,
+            onClick = onToggleMenu,
+        )
+    }
+}
+
+@Composable
+private fun DockButton(
+    icon: ImageVector,
+    description: String,
+    tint: Color,
+    width: androidx.compose.ui.unit.Dp = DockSide,
+    height: androidx.compose.ui.unit.Dp = DockSide,
+    onClick: () -> Unit,
+) {
+    val zen = LocalZenColors.current
+    Box(
+        modifier = Modifier
+            .width(width)
+            .height(height)
+            .background(zen.lift, DockShape)
+            .border(liftBorder(), DockShape)
+            .barClickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            tint = tint.copy(alpha = 0.8f),
             modifier = Modifier.size(20.dp),
         )
     }
 }
 
-/** Address field: a pill, the one solid control in the row. */
-@Composable
-private fun AddressPill(
-    effectiveUrl: String,
-    addressText: TextFieldValue,
-    isLoading: Boolean,
-    progress: Float,
-    modifier: Modifier = Modifier,
-    onTap: () -> Unit,
-    onReload: () -> Unit,
-    onStop: () -> Unit,
-) {
-    val zen = LocalZenColors.current
-    Box(
-        modifier = modifier
-            .height(ControlSide)
-            .background(zen.lift, CircleShape)
-            .border(liftBorder(), CircleShape)
-            .barClickable(onClick = onTap),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(start = 16.dp, end = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SiteIcon(effectiveUrl = effectiveUrl)
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = addressText.text.ifEmpty { stringResource(R.string.browser_search_placeholder) },
-                style = ZenType.rounded(16, FontWeight.Medium),
-                color = if (addressText.text.isEmpty()) zen.ink.copy(alpha = 0.55f) else zen.ink,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.weight(1f),
-            )
-            if (effectiveUrl.isNotEmpty()) {
-                Icon(
-                    imageVector = if (isLoading) Icons.Outlined.Close else Icons.Outlined.Refresh,
-                    contentDescription = stringResource(
-                        if (isLoading) R.string.browser_stop else R.string.browser_reload,
-                    ),
-                    tint = zen.ink.copy(alpha = 0.55f),
-                    modifier = Modifier
-                        .size(36.dp)
-                        .barClickable(onClick = if (isLoading) onStop else onReload)
-                        .padding(8.dp),
-                )
-            }
-        }
-
-        if (isLoading && progress < 1f) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = 18.dp, vertical = 1.dp)
-                    .fillMaxWidth(progress.coerceAtLeast(0.05f))
-                    .height(2.dp)
-                    .background(zen.coral, CircleShape),
-            )
-        }
-    }
-}
-
-@Composable
-private fun SiteIcon(effectiveUrl: String) {
-    val zen = LocalZenColors.current
-    val icon = when {
-        effectiveUrl.isEmpty() -> Icons.Outlined.Search
-        effectiveUrl.startsWith("http://") -> Icons.Outlined.Lock
-        effectiveUrl.startsWith("https://") -> Icons.Outlined.Lock
-        else -> Icons.Outlined.Language
-    }
-    Icon(
-        imageVector = icon,
-        contentDescription = null,
-        tint = if (effectiveUrl.startsWith("http://")) zen.coral else zen.ink.copy(alpha = 0.7f),
-        modifier = Modifier.size(18.dp),
-    )
-}
-
 // MARK: - Composer
 
 @Composable
-private fun ComposerRow(
+private fun ComposerBar(
     addressText: TextFieldValue,
     onAddressTextChange: (TextFieldValue) -> Unit,
     focusRequester: FocusRequester,
     onAddressFocusedChange: (Boolean) -> Unit,
     onSubmitAddress: (String) -> Unit,
     onCancel: () -> Unit,
+    barColor: Color,
 ) {
     val zen = LocalZenColors.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .padding(top = 16.dp, bottom = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .solidSurface(BarShape, barColor)
+            .padding(horizontal = 6.dp)
+            .height(BarHeight),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
+        Icon(
+            imageVector = Icons.Outlined.Search,
+            contentDescription = null,
+            // Same ink as the other glyphs: the brand color reads as a state.
+            tint = zen.ink.copy(alpha = 0.8f),
+            modifier = Modifier.padding(horizontal = 8.dp).size(17.dp),
+        )
+        BasicTextField(
+            value = addressText,
+            onValueChange = onAddressTextChange,
+            singleLine = true,
+            textStyle = ZenType.rounded(16, FontWeight.Medium).copy(color = zen.ink),
+            cursorBrush = SolidColor(zen.coral),
+            keyboardOptions = KeyboardOptions(
+                imeAction = ImeAction.Go,
+                keyboardType = KeyboardType.Uri,
+                autoCorrectEnabled = false,
+            ),
+            keyboardActions = KeyboardActions(onGo = { onSubmitAddress(addressText.text) }),
             modifier = Modifier
                 .weight(1f)
-                .height(ControlSide)
-                .background(zen.lift, CircleShape)
-                .border(liftBorder(), CircleShape)
-                .padding(start = 16.dp, end = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Search,
-                contentDescription = null,
-                tint = zen.coral,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-            BasicTextField(
-                value = addressText,
-                onValueChange = onAddressTextChange,
-                singleLine = true,
-                textStyle = ZenType.rounded(16, FontWeight.Medium).copy(color = zen.ink),
-                cursorBrush = SolidColor(zen.coral),
-                keyboardOptions = KeyboardOptions(
-                    imeAction = ImeAction.Go,
-                    keyboardType = KeyboardType.Uri,
-                    autoCorrectEnabled = false,
-                ),
-                keyboardActions = KeyboardActions(onGo = { onSubmitAddress(addressText.text) }),
-                modifier = Modifier
-                    .weight(1f)
-                    .focusRequester(focusRequester)
-                    .onFocusChanged { onAddressFocusedChange(it.isFocused) },
-                decorationBox = { innerTextField ->
-                    Box(contentAlignment = Alignment.CenterStart) {
-                        if (addressText.text.isEmpty()) {
-                            Text(
-                                text = stringResource(R.string.browser_search_placeholder),
-                                style = ZenType.rounded(16, FontWeight.Medium),
-                                color = zen.ink.copy(alpha = 0.55f),
-                                maxLines = 1,
-                            )
-                        }
-                        innerTextField()
+                .focusRequester(focusRequester)
+                .onFocusChanged { onAddressFocusedChange(it.isFocused) },
+            decorationBox = { innerTextField ->
+                Box(contentAlignment = Alignment.CenterStart) {
+                    if (addressText.text.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.browser_search_placeholder),
+                            style = ZenType.rounded(16, FontWeight.Medium),
+                            color = zen.ink.copy(alpha = 0.5f),
+                            maxLines = 1,
+                        )
                     }
-                },
+                    innerTextField()
+                }
+            },
+        )
+        if (addressText.text.isNotEmpty()) {
+            Icon(
+                imageVector = Icons.Outlined.Cancel,
+                contentDescription = stringResource(R.string.browser_clear_search),
+                tint = zen.ink.copy(alpha = 0.55f),
+                modifier = Modifier
+                    .size(32.dp)
+                    .barClickable { onAddressTextChange(TextFieldValue("", selection = TextRange.Zero)) }
+                    .padding(8.dp),
             )
-            if (addressText.text.isNotEmpty()) {
-                Icon(
-                    imageVector = Icons.Outlined.Close,
-                    contentDescription = stringResource(R.string.browser_clear_search),
-                    tint = zen.ink.copy(alpha = 0.6f),
-                    modifier = Modifier
-                        .size(36.dp)
-                        .barClickable { onAddressTextChange(TextFieldValue("", selection = TextRange.Zero)) }
-                        .padding(9.dp),
-                )
-            }
         }
-
-        ControlButton(
+        NavGlyph(
             icon = Icons.Outlined.Close,
             description = stringResource(R.string.common_cancel),
             enabled = true,
@@ -516,7 +536,7 @@ private fun ComposerRow(
     }
 }
 
-// MARK: - Expanded menu
+// MARK: - Menu
 
 @Composable
 private fun ExpandedMenu(
@@ -529,7 +549,7 @@ private fun ExpandedMenu(
     onPin: () -> Unit,
 ) {
     val zen = LocalZenColors.current
-    Column(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 10.dp)) {
+    Column(Modifier.fillMaxWidth()) {
         MenuRow(
             icon = Icons.Outlined.ContentCopy,
             title = stringResource(if (state.copyConfirmed) R.string.browser_copied else R.string.browser_copy_link),
@@ -611,7 +631,7 @@ private fun ExpandedMenu(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 10.dp),
+                .padding(top = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             MenuTile(
@@ -647,7 +667,6 @@ private fun ExpandedMenu(
                 onClick = onPin,
             )
         }
-
     }
 }
 
@@ -663,7 +682,6 @@ private fun MenuRow(
         modifier = Modifier
             .fillMaxWidth()
             .barClickable(onClick = onClick)
-            .padding(horizontal = 18.dp)
             .height(RowHeight),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -693,7 +711,7 @@ private fun RowDivider() {
     Spacer(
         Modifier
             .fillMaxWidth()
-            .padding(start = 52.dp)
+            .padding(start = 34.dp)
             .height(0.5.dp)
             .background(zen.ink.copy(alpha = 0.08f)),
     )
@@ -756,4 +774,21 @@ private fun RowScope.MenuTile(
             overflow = TextOverflow.Ellipsis,
         )
     }
+}
+
+@Composable
+private fun SiteIcon(effectiveUrl: String) {
+    val zen = LocalZenColors.current
+    val icon = when {
+        effectiveUrl.isEmpty() -> Icons.Outlined.Search
+        effectiveUrl.startsWith("http://") -> Icons.Outlined.Lock
+        effectiveUrl.startsWith("https://") -> Icons.Outlined.Lock
+        else -> Icons.Outlined.Language
+    }
+    Icon(
+        imageVector = icon,
+        contentDescription = null,
+        tint = if (effectiveUrl.startsWith("http://")) zen.coral else zen.ink.copy(alpha = 0.7f),
+        modifier = Modifier.size(18.dp),
+    )
 }

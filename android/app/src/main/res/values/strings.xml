@@ -159,6 +159,8 @@
     <string name="browser_clear_search">Clear search</string>
     <string name="browser_more">More</string>
     <string name="browser_close_menu">Close menu</string>
+    <string name="browser_tabs">Tabs</string>
+    <string name="browser_new_tab">New tab</string>
     <string name="browser_copy_link">Copy Link</string>
     <string name="browser_copied">Copied</string>
     <string name="browser_reader">Reader</string>

@@ -516,7 +516,9 @@ struct MiniBrowserTopBar: View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Palette.coral(scheme))
+                // Same ink as the other glyphs - the brand color reads as a
+                // button state here, not as part of the field.
+                .foregroundStyle(Palette.ink(scheme).opacity(0.85))
 
             TextField(
                 "",

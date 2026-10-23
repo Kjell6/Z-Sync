@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -52,7 +54,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -115,7 +116,6 @@ internal fun Modifier.barClickable(enabled: Boolean = true, onClick: () -> Unit)
 
 /** A solid surface, not glass: the platform has no Liquid Glass, so the bar is
  * a hard pane that sits on the page. */
-private val BarShape = RoundedCornerShape(22.dp)
 private val PanelShape = RoundedCornerShape(20.dp)
 private val DockShape = RoundedCornerShape(20.dp)
 private val TileShape = RoundedCornerShape(16.dp)
@@ -128,6 +128,9 @@ private val RowHeight = 44.dp
 private val TileHeight = 60.dp
 private val PanelInset = 14.dp
 private val RowGap = 8.dp
+/** How far the dock drops into the gesture area: the safe area is not touched,
+ * only the slack above it is used up. */
+private val BottomLift = 20.dp
 /** Pulls the outer dock buttons inwards, like the iOS chrome. */
 private val DockInset = 7.dp
 
@@ -179,7 +182,7 @@ internal fun MiniBrowserBar(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .solidSurface(PanelShape, barColor)
+                    .pane(PanelShape, barColor)
                     .padding(PanelInset),
             ) {
                 ExpandedMenu(
@@ -231,15 +234,19 @@ internal fun MiniBrowserBar(
             )
         }
 
-        Spacer(Modifier.height(RowGap))
-        Spacer(Modifier.navigationBarsPadding())
+        val navigationInset = WindowInsets.navigationBars
+            .asPaddingValues()
+            .calculateBottomPadding()
+        Spacer(Modifier.height((navigationInset - BottomLift).coerceAtLeast(4.dp)))
     }
 }
 
-/** Solid pane with the app's hairline, in place of the iOS glass. */
+/**
+ * A pane, not a floating sheet: same fill and hairline as the dock buttons, no
+ * shadow. Nothing in this chrome hovers over the page.
+ */
 @Composable
-private fun Modifier.solidSurface(shape: Shape, color: Color): Modifier = this
-    .shadow(6.dp, shape, clip = false)
+private fun Modifier.pane(shape: Shape, color: Color): Modifier = this
     .clip(shape)
     .background(color)
     .border(liftBorder(), shape)
@@ -285,7 +292,8 @@ internal fun MiniBrowserTopBar(barColor: Color, onClose: () -> Unit) {
 }
 
 /** Height of the chrome at rest, so the page can reserve exactly that much. */
-internal val CollapsedBarHeightBase: androidx.compose.ui.unit.Dp = BarHeight + RowGap + DockSide + RowGap
+internal val CollapsedBarHeightBase: androidx.compose.ui.unit.Dp =
+    BarHeight + RowGap + DockSide - BottomLift
 
 // MARK: - Navigation bar
 
@@ -305,7 +313,7 @@ private fun NavBar(
     barColor: Color,
 ) {
     val zen = LocalZenColors.current
-    Box(modifier = Modifier.fillMaxWidth().solidSurface(BarShape, barColor)) {
+    Box(modifier = Modifier.fillMaxWidth().pane(DockShape, zen.lift)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -474,7 +482,7 @@ private fun ComposerBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .solidSurface(BarShape, barColor)
+            .pane(DockShape, zen.lift)
             .padding(horizontal = 6.dp)
             .height(BarHeight),
         verticalAlignment = Alignment.CenterVertically,

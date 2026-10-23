@@ -3,6 +3,10 @@ import WebKit
 
 struct MiniBrowserRepresentable: UIViewRepresentable {
     var model: MiniBrowserModel
+    /// Height of the floating chrome over the bottom of the page. The page's
+    /// layout viewport is pushed up by this much, so its bottom-most content
+    /// and fixed banners stay clear of the glass. Zero while the bar is away.
+    var bottomClearance: CGFloat = 0
 
     func makeCoordinator() -> Coordinator {
         Coordinator(model: model)
@@ -21,14 +25,16 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
         webView.backgroundColor = .clear
         webView.scrollView.backgroundColor = .clear
 
-        // The page fills the web view exactly: no auto-insets, no scroll-view
-        // content inset, no indicator inset.
+        // No auto-insets and no scroll-view content inset: the page fills the
+        // web view exactly, and the chrome is reserved through
+        // `obscuredContentInsets` instead (see MiniBrowserWebView).
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.contentInset = .zero
         webView.scrollView.automaticallyAdjustsScrollIndicatorInsets = false
         webView.scrollView.scrollIndicatorInsets = .zero
 
         context.coordinator.setupObservers(for: webView)
+        context.coordinator.applyBottomClearance(bottomClearance, to: webView)
         model.webView = webView
         model.applyWebpagePreferences()
         return webView
@@ -39,6 +45,7 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
         if !webView.isUserInteractionEnabled {
             webView.isUserInteractionEnabled = true
         }
+        context.coordinator.applyBottomClearance(bottomClearance, to: webView)
         model.applyWebpagePreferences()
     }
 
@@ -52,6 +59,8 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
         private var forwardObservation: NSKeyValueObservation?
         private var themeColorObservation: NSKeyValueObservation?
         private var scrollObservation: NSKeyValueObservation?
+        /// For re-basing the scroll origin after the chrome's clearance moves.
+        private weak var webView: WKWebView?
         /// Last vertical offset, to read the scroll direction.
         private var lastScrollY: CGFloat = 0
         /// Downward travel since the last direction change. Hides the bar only
@@ -64,11 +73,27 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
 
         func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
             // One web view. A new window with a real http(s) address replaces this page.
-            if navigationAction.targetFrame == nil,
-               BrowserNavigationPolicy.sameTabURL(navigationAction.request.url) != nil {
-                webView.load(navigationAction.request)
+            if navigationAction.targetFrame == nil, let url = navigationAction.request.url {
+                if let sameTab = BrowserNavigationPolicy.sameTabURL(url) {
+                    webView.load(URLRequest(url: sameTab))
+                } else if !BrowserNavigationPolicy.loadsInWebView(url) {
+                    // A popup aimed at an app: hand it over instead of dropping it.
+                    handOff(url)
+                }
             }
             return nil
+        }
+
+        /// Offers a link to the app that owns its scheme. When nothing takes it
+        /// the page stays where it is and the toast says why - silently doing
+        /// nothing reads like a broken browser.
+        private func handOff(_ url: URL) {
+            ExternalBrowser.open(url) { [weak self] opened in
+                guard !opened else { return }
+                DispatchQueue.main.async {
+                    self?.model.showNotice(String(localized: "browser.link_unavailable"))
+                }
+            }
         }
 
         func webView(
@@ -82,11 +107,18 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
                 decisionHandler(.allow, preferences)
                 return
             }
-            ExternalBrowser.open(url)
+            handOff(url)
             decisionHandler(.cancel, preferences)
         }
 
         func setupObservers(for webView: WKWebView) {
+            self.webView = webView
+            if let miniWebView = webView as? MiniBrowserWebView {
+                miniWebView.clearanceDidSettle = { [weak self] in
+                    self?.rebaseScrollOrigin()
+                }
+            }
+
             progressObservation = webView.observe(\.estimatedProgress, options: [.new]) { [weak self] wv, _ in
                 DispatchQueue.main.async {
                     self?.model.estimatedProgress = wv.estimatedProgress
@@ -135,7 +167,10 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
 
             // KVO, not `scrollView.delegate`: WebKit owns that delegate and
             // replacing it breaks its own scrolling.
-            scrollObservation = webView.scrollView.observe(\.contentOffset, options: [.new]) { [weak self] scrollView, _ in
+            scrollObservation = webView.scrollView.observe(\.contentOffset, options: [.new]) { [weak self, weak webView] scrollView, _ in
+                // Reserving or releasing the chrome's space moves the offset
+                // without a finger. Those moves must not drive the bar.
+                guard (webView as? MiniBrowserWebView)?.scrollClearanceIsChanging != true else { return }
                 let y = scrollView.contentOffset.y
                 let viewport = scrollView.bounds.height
                 let content = scrollView.contentSize.height
@@ -143,6 +178,20 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
                     self?.updateBarVisibility(scrollY: y, viewport: viewport, contentHeight: content)
                 }
             }
+        }
+
+        /// Pushes the chrome's height into the page's layout viewport.
+        func applyBottomClearance(_ clearance: CGFloat, to webView: WKWebView) {
+            (webView as? MiniBrowserWebView)?.setBottomClearance(clearance)
+        }
+
+        /// The clearance change may have clamped the offset. Take whatever the
+        /// page sits at now as the baseline, so the clamp is not read as the
+        /// user scrolling up (which would bring the bar straight back).
+        private func rebaseScrollOrigin() {
+            guard let scrollView = webView?.scrollView else { return }
+            lastScrollY = scrollView.contentOffset.y
+            scrollDownRun = 0
         }
 
         /// Tucks the bottom bar away once the page has scrolled down and
@@ -178,6 +227,11 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
             // scroll history so the bar's first decision is not carried over.
             lastScrollY = 0
             scrollDownRun = 0
+            // A page that cannot scroll - an error page, a dead link - must not
+            // leave the chrome tucked away with no way to bring it back.
+            DispatchQueue.main.async {
+                self.model.setScrollHidesBar(false)
+            }
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -216,12 +270,15 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
             DispatchQueue.main.async {
                 self.model.isLoading = false
+                // The page may now be an error page that cannot scroll.
+                self.model.setScrollHidesBar(false)
             }
         }
 
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
             DispatchQueue.main.async {
                 self.model.isLoading = false
+                self.model.setScrollHidesBar(false)
             }
         }
     }

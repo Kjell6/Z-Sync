@@ -609,6 +609,11 @@ final class MiniBrowserModel {
         showPinNotice(String(localized: "browser.pin_no_space"))
     }
 
+    /// Bottom toast for the browser itself, same language as the pin notice.
+    func showNotice(_ text: String, symbol: String = "exclamationmark.circle") {
+        showPinNotice(text, symbol: symbol)
+    }
+
     private func showPinNotice(_ text: String, symbol: String = "pin.slash.fill", duration: TimeInterval = 4.0) {
         pinNotice = text
         pinNoticeSymbol = symbol

@@ -3,16 +3,62 @@ import UIKit
 
 /// WKWebView for the mini-browser: the web content, nothing else.
 ///
-/// The page stops where the bar begins (the bar is an opaque plate, so there is
-/// nothing to paint under it). The layout viewport therefore ends at the web
-/// view's own frame, and no `obscuredContentInsets` bookkeeping is needed.
+/// The web view stays full-bleed: the glass bar floats over it and media keeps
+/// running underneath. What must not run underneath is page *layout* — cookie
+/// banners, sticky CTAs, consent bars with "Allow all" pinned to the bottom.
+/// `obscuredContentInsets` (iOS 26) shrinks the layout viewport from the
+/// bottom, so fixed and sticky page elements lay out above the bar while the
+/// page's background still paints behind it. That is the same mechanism Safari
+/// uses for its floating toolbar; plain `contentInset` would only add scroll
+/// range and leave fixed banners under the glass.
 ///
 /// What is left is WebKit's own chrome: the bottom scroll-edge pocket on
 /// iOS 26, and the iPhone Prev/Next/Done accessory bar that can otherwise stack
 /// under our toolbar.
 @MainActor
 final class MiniBrowserWebView: WKWebView {
+    /// How far the page's layout viewport is pushed up from the bottom. Zero
+    /// while the bar is tucked away, so the page uses the full height again.
+    private(set) var bottomClearance: CGFloat = 0
+
+    /// True while a clearance change is settling. WebKit may clamp the scroll
+    /// offset as part of it; the scroll observer must not read that as a scroll.
+    private(set) var scrollClearanceIsChanging = false
+
+    /// Runs after a clearance change has been applied and WebKit has had its
+    /// say about the scroll offset. A smaller inset raises the maximum offset,
+    /// a larger one can clamp the page; both move `contentOffset` without a
+    /// finger, so the scroll observer has to re-base on it.
+    var clearanceDidSettle: (() -> Void)?
+
     override var inputAccessoryView: UIView? { nil }
+
+    /// The page's own bottom edge stays clear of the chrome. Values are
+    /// clamped and de-duplicated so a re-layout of the view does not make
+    /// WebKit reflow the page for nothing.
+    func setBottomClearance(_ clearance: CGFloat) {
+        let target = max(0, clearance.rounded())
+        guard abs(target - bottomClearance) > 0.5 else { return }
+        bottomClearance = target
+
+        guard #available(iOS 26.0, *) else { return }
+        scrollClearanceIsChanging = true
+        var insets = obscuredContentInsets
+        insets.bottom = target
+        obscuredContentInsets = insets
+
+        // The offset WebKit settles on is not known synchronously: it may
+        // clamp during the next layout pass instead.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.clearanceDidSettle?()
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.clearanceDidSettle?()
+                self.scrollClearanceIsChanging = false
+            }
+        }
+    }
 
     override func didMoveToWindow() {
         super.didMoveToWindow()

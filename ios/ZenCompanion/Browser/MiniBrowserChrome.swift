@@ -1,5 +1,25 @@
 import SwiftUI
 
+/// How tall the floating chrome is. One source of truth: the rows draw with
+/// these values and the page keeps exactly this much clear at the bottom
+/// (`MiniBrowserWebView.obscuredContentInsets`), so the two cannot drift.
+enum MiniBrowserChromeMetrics {
+    /// The navigation bar row (back, address, reload).
+    static let navBarHeight: CGFloat = 44
+    /// Air between the navigation bar and the dock.
+    static let rowSpacing: CGFloat = 8
+    /// The dock row. The side buttons are square at this size.
+    static let dockHeight: CGFloat = 44
+
+    /// Dock bottom to navigation bar top.
+    static var height: CGFloat { navBarHeight + rowSpacing + dockHeight }
+
+    /// Screen bottom to navigation bar top, given the bar's bottom padding.
+    static func height(above bottomPadding: CGFloat) -> CGFloat {
+        bottomPadding + height
+    }
+}
+
 /// Bottom browser chrome: two rows of floating Liquid Glass, bottom to top.
 ///
 ///   [tab] [＋] [⋯]   three separate glass buttons (tab and plus are placeholders)
@@ -24,7 +44,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
     @State private var copied = false
     @State private var copyGeneration = 0
 
-    private let controlSide: CGFloat = 44
+    private let controlSide: CGFloat = MiniBrowserChromeMetrics.dockHeight
     /// Menu tiles keep the app's own tile corner.
     private let tileRadius: CGFloat = Palette.liftCornerRadius
 
@@ -35,7 +55,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
     private var menuOpen: Bool { model.menuExpanded }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MiniBrowserChromeMetrics.rowSpacing) {
             if menuOpen {
                 expandedContent
                     .frame(maxWidth: .infinity)
@@ -430,7 +450,7 @@ struct MiniBrowserTopBar: View {
 
     @Environment(\.colorScheme) private var scheme
 
-    private let barHeight: CGFloat = 44
+    private let barHeight: CGFloat = MiniBrowserChromeMetrics.navBarHeight
 
     var body: some View {
         HStack(spacing: 6) {

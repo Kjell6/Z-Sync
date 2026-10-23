@@ -1,7 +1,9 @@
 import SwiftUI
 import WebKit
 
-/// In-app mini-browser. Collapsed, the page ends where the bottom bar begins.
+/// In-app mini-browser. The page stays full-bleed behind the floating glass
+/// bar, but its layout viewport ends above the bar while the bar is up, so
+/// page content is never trapped under the glass.
 /// The open menu and the address composer draw over the page, so the page
 /// itself does not move. The address composer keeps running down to the
 /// screen bottom, behind the keys (`MiniBrowserChrome`). A field on the page
@@ -115,7 +117,11 @@ struct MiniBrowserView: View {
                     webPane
 
                     if let article = model.readerArticle {
-                        ReaderView(article: article, scheme: scheme) {
+                        ReaderView(
+                            article: article,
+                            scheme: scheme,
+                            bottomClearance: pageBottomClearance
+                        ) {
                             model.closeReader()
                         }
                         .transition(.opacity)
@@ -268,8 +274,18 @@ struct MiniBrowserView: View {
     /// The page stops at the bar: the plate is opaque, so there is nothing to
     /// paint under it and no viewport inset to reserve.
     private var webPane: some View {
-        MiniBrowserRepresentable(model: model)
+        MiniBrowserRepresentable(model: model, bottomClearance: pageBottomClearance)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Height the page has to keep clear at the bottom. Exactly the floating
+    /// chrome while it is up, zero once it tucks away, computed from the same
+    /// metrics the chrome draws with. The page stays full-bleed behind the
+    /// glass; only its layout viewport ends above the bar, so cookie banners
+    /// and sticky CTAs lay out in the visible strip instead of under it.
+    private var pageBottomClearance: CGFloat {
+        guard !barCollapsed else { return 0 }
+        return MiniBrowserChromeMetrics.height(above: chromeBottomInset)
     }
 
     private static func windowSafeBottom() -> CGFloat {
@@ -401,11 +417,13 @@ private extension MiniBrowserView {
 
 // MARK: - Reading view
 
-/// The page as plain text. Covers the web pane and stops at the bar, so the
-/// browser controls stay where they are while reading.
+/// The page as plain text. Covers the web pane and stops clear of the bar, so
+/// the browser controls stay where they are while reading.
 private struct ReaderView: View {
     let article: ReaderArticle
     let scheme: ColorScheme
+    /// Height of the floating chrome the text must stay above.
+    var bottomClearance: CGFloat = 0
     var onClose: () -> Void
 
     var body: some View {
@@ -432,7 +450,7 @@ private struct ReaderView: View {
             }
             .padding(.horizontal, 22)
             .padding(.top, 14)
-            .padding(.bottom, 36)
+            .padding(.bottom, 36 + bottomClearance)
             .frame(maxWidth: 680, alignment: .leading)
             .frame(maxWidth: .infinity)
         }

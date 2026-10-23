@@ -173,12 +173,50 @@ class MiniBrowserViewModel(
         }
     }
 
+    /**
+     * Opens the address composer. The field itself is only composed while this
+     * is on, so the screen focuses it afterwards; asking for focus here, before
+     * the field exists, is an unattached `FocusRequester` and does nothing.
+     */
+    fun beginAddressEdit() {
+        collapseMenu()
+        onAddressFocusChange(true)
+    }
+
+    /** Closes the composer through the state, not only through the keyboard. */
+    fun endAddressEdit() {
+        onAddressFocusChange(false)
+    }
+
     fun onLoadingChange(loading: Boolean) {
         _state.update { it.copy(isLoading = loading) }
     }
 
     fun onProgressChange(progress: Float) {
         _state.update { it.copy(progress = progress) }
+    }
+
+    /**
+     * A link the WebView must not load and nobody else can take. The page stays
+     * as it is: the WebView's own error page would leave nothing to go back to.
+     */
+    fun onLinkUnavailable() {
+        clearLoading()
+        showNotice(R.string.browser_scheme_unavailable)
+    }
+
+    /** A page that failed to load still leaves the chrome alive and reloadable. */
+    fun onPageLoadFailed() {
+        clearLoading()
+        showNotice(R.string.browser_load_failed)
+    }
+
+    /**
+     * A load that never finishes must not leave the bar in its "stop" state:
+     * a failed navigation gets no `onPageFinished` on some WebView versions.
+     */
+    private fun clearLoading() {
+        _state.update { it.copy(isLoading = false, progress = 0f) }
     }
 
     fun onCanGoBackChange(canGoBack: Boolean) {

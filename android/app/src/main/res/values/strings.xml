@@ -165,6 +165,8 @@
     <string name="browser_copied">Copied</string>
     <string name="browser_reader">Reader</string>
     <string name="browser_reader_unavailable">No article found on this page.</string>
+    <string name="browser_scheme_unavailable">No app on this device can open that link.</string>
+    <string name="browser_load_failed">This page couldn\'t be loaded.</string>
     <string name="browser_desktop_site">Request Desktop Site</string>
     <string name="browser_page_zoom">Page Zoom</string>
     <string name="browser_zoom_in">Zoom in</string>

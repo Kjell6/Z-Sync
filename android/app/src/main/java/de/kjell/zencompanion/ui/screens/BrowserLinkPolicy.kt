@@ -7,7 +7,21 @@ internal enum class BrowserLinkAction {
     OPEN_EXTERNALLY,
 }
 
+/**
+ * Schemes the WebView renders itself: http(s) plus the page-internal ones.
+ * Every other scheme belongs to another app, and letting the WebView try it
+ * ends on its own `net::ERR_UNKNOWN_URL_SCHEME` page, which leaves the
+ * browser stranded on a dead document.
+ */
 private val WEB_SCHEMES = setOf("http", "https", "about", "data", "blob", "file", "javascript")
+
+/** True when the WebView may load this scheme at all. */
+internal fun schemeLoadsInWebView(scheme: String?): Boolean =
+    scheme?.lowercase() in WEB_SCHEMES
+
+/** Same question for a whole URL, as typed into the bar or sent by a page. */
+internal fun loadsInWebView(url: String): Boolean =
+    schemeLoadsInWebView(url.trim().substringBefore(':', missingDelimiterValue = ""))
 
 internal fun browserLinkAction(
     scheme: String?,
@@ -18,7 +32,7 @@ internal fun browserLinkAction(
     ownPackage: String,
 ): BrowserLinkAction {
     val normalizedScheme = scheme?.lowercase()
-    if (normalizedScheme == null || normalizedScheme !in WEB_SCHEMES) {
+    if (!schemeLoadsInWebView(normalizedScheme)) {
         return BrowserLinkAction.OPEN_EXTERNALLY
     }
     if (normalizedScheme != "http" && normalizedScheme != "https") {

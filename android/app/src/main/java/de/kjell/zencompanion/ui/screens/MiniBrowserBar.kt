@@ -517,7 +517,11 @@ private fun ComposerBar(
             modifier = Modifier
                 .weight(1f)
                 .focusRequester(focusRequester)
-                .onFocusChanged { onAddressFocusedChange(it.isFocused) },
+                // Only a focus *gain* is reported: the composer is composed by
+                // the address state, so its first attach reports `false` and
+                // would close the field again on the same frame. Closing is
+                // explicit (Cancel, submit, back).
+                .onFocusChanged { if (it.isFocused) onAddressFocusedChange(true) },
             decorationBox = { innerTextField ->
                 Box(contentAlignment = Alignment.CenterStart) {
                     if (addressText.text.isEmpty()) {

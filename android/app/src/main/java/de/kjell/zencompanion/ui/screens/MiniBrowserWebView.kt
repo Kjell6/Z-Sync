@@ -9,6 +9,7 @@ import android.net.Uri
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -43,6 +44,12 @@ internal fun MiniBrowserWebView(
     onTextInputChange: (TextFieldValue) -> Unit,
     onTitleChange: (String) -> Unit,
     onProgressChange: (Float) -> Unit,
+    /** A fresh document started: the chrome comes back, whatever the scroll did before. */
+    onDocumentStart: () -> Unit,
+    /** A link nobody can take: no app handles it, or the page never loaded. */
+    onLinkUnavailable: () -> Unit,
+    /** The page itself failed (network, server, certificate). */
+    onPageLoadFailed: () -> Unit,
     onScrollChange: (scrollY: Int) -> Unit,
     onFindResult: (active: Int, total: Int) -> Unit,
 ) {
@@ -74,8 +81,15 @@ internal fun MiniBrowserWebView(
                 // The stock user agent, restored when desktop mode is turned off.
                 tag = settings.userAgentString
                 webViewClient = object : WebViewClient() {
+                    /** Last document that really committed, so a bad hop can be undone. */
+                    private var lastGoodUrl: String? = null
+
+                    /** Targets already put right once; a redirect loop must not spin. */
+                    private val restoredTargets = mutableSetOf<String>()
+
                     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                         super.onPageStarted(view, url, favicon)
+                        onDocumentStart()
                         onLoadingChange(true)
                         onSiteThemeColorChange(null)
                         url?.let { onCurrentUrlChange(it) }
@@ -85,6 +99,7 @@ internal fun MiniBrowserWebView(
 
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
+                        if (url != null && loadsInWebView(url)) lastGoodUrl = url
                         onLoadingChange(false)
                         url?.let {
                             onCurrentUrlChange(it)
@@ -122,18 +137,52 @@ internal fun MiniBrowserWebView(
                     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                         if (view == null || request == null) return false
                         val context = view.context
+                        val url = request.url
+
+                        // A scheme the WebView cannot render is never handed to it:
+                        // that is exactly the dead-end "net::ERR_UNKNOWN_URL_SCHEME"
+                        // page. Claim the navigation and ask the system instead; if
+                        // nobody takes it, the page stays put and the screen says so.
+                        if (!schemeLoadsInWebView(url.scheme)) {
+                            if (!openURLExternally(context, url)) onLinkUnavailable()
+                            return true
+                        }
+
                         val action = browserLinkAction(
-                            scheme = request.url.scheme,
+                            scheme = url.scheme,
                             isRedirect = request.isRedirect,
                             hasGesture = request.hasGesture(),
-                            resolvedPackage = resolveHandlerPackage(context, request.url),
+                            resolvedPackage = resolveHandlerPackage(context, url),
                             browserPackages = browserPackages(context),
                             ownPackage = context.packageName,
                         )
                         if (action == BrowserLinkAction.OPEN_EXTERNALLY) {
-                            return openURLExternally(context, request.url)
+                            // The hand-off failed: keep the web link in the page.
+                            return openURLExternally(context, url)
                         }
                         return false
+                    }
+
+                    override fun onReceivedError(
+                        view: WebView?,
+                        request: WebResourceRequest?,
+                        error: WebResourceError?,
+                    ) {
+                        super.onReceivedError(view, request, error)
+                        if (request?.isForMainFrame != true) return
+                        if (error?.errorCode == WebViewClient.ERROR_UNSUPPORTED_SCHEME) {
+                            // The interception above catches these; if one slips
+                            // through anyway, undo the hop rather than leave the
+                            // WebView's error page as the only thing on screen.
+                            val target = request.url?.toString().orEmpty()
+                            val previous = lastGoodUrl?.takeIf {
+                                it != target && restoredTargets.add(target)
+                            }
+                            if (previous != null) view?.loadUrl(previous) else view?.stopLoading()
+                            onLinkUnavailable()
+                        } else {
+                            onPageLoadFailed()
+                        }
                     }
                 }
                 webChromeClient = object : WebChromeClient() {
@@ -143,6 +192,36 @@ internal fun MiniBrowserWebView(
 
                     override fun onReceivedTitle(view: WebView?, title: String?) {
                         title?.let { onTitleChange(it) }
+                    }
+
+                    override fun onCreateWindow(
+                        view: WebView?,
+                        isDialog: Boolean,
+                        isUserGesture: Boolean,
+                        resultMsg: android.os.Message?,
+                    ): Boolean {
+                        val parent = view ?: return false
+                        val hit = parent.hitTestResult ?: return false
+                        val target = hit.extra?.trim().orEmpty()
+                        if (target.isEmpty()) return false
+
+                        // One web view: a new window with a real http(s) address
+                        // replaces this page. An image link reports the image, not
+                        // where it points, so that popup is left alone.
+                        val sameTab = tappedLinkUrl(hit.type, target)
+                        if (sameTab != null) {
+                            parent.loadUrl(sameTab)
+                            return true
+                        }
+                        // A popup that points at another app's scheme goes to that
+                        // app, never into a window we cannot render.
+                        if (hit.type == WebView.HitTestResult.SRC_ANCHOR_TYPE &&
+                            !loadsInWebView(target)
+                        ) {
+                            if (!openURLExternally(parent.context, Uri.parse(target))) onLinkUnavailable()
+                            return true
+                        }
+                        return false
                     }
                 }
 
@@ -156,8 +235,14 @@ internal fun MiniBrowserWebView(
                 )
 
                 val loadTarget = formatBrowserInput(initialUrl ?: "")
-                if (loadTarget.isNotEmpty()) {
-                    loadUrl(loadTarget)
+                when {
+                    loadTarget.isEmpty() -> Unit
+                    loadsInWebView(loadTarget) -> loadUrl(loadTarget)
+                    // A saved or shared address that names another app's scheme.
+                    else -> {
+                        val uri = Uri.parse(loadTarget)
+                        post { if (!openURLExternally(ctx, uri)) onLinkUnavailable() }
+                    }
                 }
                 onWebViewCreated(this)
             }

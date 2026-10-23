@@ -5,6 +5,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.webkit.WebView
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -175,6 +176,15 @@ fun MiniBrowserScreen(
     var webView by remember { mutableStateOf<WebView?>(null) }
     val focusRequester = remember { FocusRequester() }
 
+    // A new document, a failed load or a notice all mean the chrome must come
+    // back: the scroll-driven hide only ever belongs to a page that scrolls.
+    LaunchedEffect(state.noticeRes) {
+        if (state.noticeRes != null) {
+            barHidden = false
+            scrollDownRun = 0
+        }
+    }
+
     SideEffect {
         viewModel.documentTitle = documentTitle@{
             val view = webView ?: return@documentTitle null
@@ -215,6 +225,15 @@ fun MiniBrowserScreen(
     LaunchedEffect(initialUrl) {
         if (initialUrl.isNullOrEmpty()) {
             delay(200)
+            viewModel.beginAddressEdit()
+        }
+    }
+
+    // The composer is only composed while the address is being edited, so the
+    // focus request has to wait for it: a request made before the field exists
+    // is an unattached FocusRequester and leaves the bar dead under the finger.
+    LaunchedEffect(state.isAddressFocused) {
+        if (state.isAddressFocused) {
             focusRequester.requestFocus()
         }
     }
@@ -323,6 +342,13 @@ fun MiniBrowserScreen(
                     onTextInputChange = viewModel::onAddressTextChange,
                     onTitleChange = viewModel::onCurrentTitleChange,
                     onProgressChange = viewModel::onProgressChange,
+                    onDocumentStart = {
+                        barHidden = false
+                        scrollDownRun = 0
+                        lastScrollY = 0
+                    },
+                    onLinkUnavailable = viewModel::onLinkUnavailable,
+                    onPageLoadFailed = viewModel::onPageLoadFailed,
                     onScrollChange = onPageScroll,
                     onFindResult = { active, total ->
                         viewModel.setFindProgress(if (total > 0) "$active/$total" else null)
@@ -399,21 +425,26 @@ fun MiniBrowserScreen(
                         onAddressTextChange = viewModel::onAddressTextChange,
                         focusRequester = focusRequester,
                         onAddressFocusedChange = viewModel::onAddressFocusChange,
-                        onBeginAddressEdit = {
-                            viewModel.collapseMenu()
-                            focusRequester.requestFocus()
-                        },
+                        onBeginAddressEdit = viewModel::beginAddressEdit,
                         onCancelAddressEdit = {
+                            viewModel.endAddressEdit()
                             focusManager.clearFocus()
                             keyboardController?.hide()
                         },
                         onSubmitAddress = { input ->
                             val target = viewModel.submitAddress(input)
                             if (target.isNotEmpty()) {
-                                webView?.loadUrl(target)
+                                if (loadsInWebView(target)) {
+                                    webView?.loadUrl(target)
+                                } else if (!openURLExternally(context, Uri.parse(target))) {
+                                    // Typed text that names another app's scheme
+                                    // never reaches the WebView.
+                                    viewModel.onLinkUnavailable()
+                                }
                             }
                             focusManager.clearFocus()
                             keyboardController?.hide()
+                            viewModel.endAddressEdit()
                         },
                         onBack = { webView?.goBack() },
                         onForward = { webView?.goForward() },

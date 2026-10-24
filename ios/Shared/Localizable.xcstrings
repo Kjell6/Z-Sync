@@ -77,6 +77,166 @@
         }
       }
     },
+    "blocking.ads": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Block ads"
+          }
+        }
+      }
+    },
+    "blocking.card.block_again": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to block ads and trackers again"
+          }
+        }
+      }
+    },
+    "blocking.card.blocked.one": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Z-Sync blocked %d ad or tracker"
+          }
+        }
+      }
+    },
+    "blocking.card.blocked.other": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Z-Sync blocked %d ads and trackers"
+          }
+        }
+      }
+    },
+    "blocking.card.off_for_site": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blocking is off for %@"
+          }
+        }
+      }
+    },
+    "blocking.card.open_site_settings": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to open Site Settings"
+          }
+        }
+      }
+    },
+    "blocking.card.original": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Showing the original page"
+          }
+        }
+      }
+    },
+    "blocking.card.restore": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Problems? Tap to restore the original page"
+          }
+        }
+      }
+    },
+    "blocking.cookie_banners": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Block cookie banners"
+          }
+        }
+      }
+    },
+    "blocking.cookie_banners_detail": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Answers “Reject all” for you"
+          }
+        }
+      }
+    },
+    "blocking.off_in_settings": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off in Settings"
+          }
+        }
+      }
+    },
+    "blocking.setup.body": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pages you open in Z-Sync load without ads and trackers, and cookie banners are refused for you."
+          }
+        }
+      }
+    },
+    "blocking.setup.continue": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue"
+          }
+        }
+      }
+    },
+    "blocking.setup.note": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can change this in Settings, or for a single site from the browser menu."
+          }
+        }
+      }
+    },
+    "blocking.setup.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Block ads and trackers?"
+          }
+        }
+      }
+    },
+    "blocking.trackers": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Block trackers"
+          }
+        }
+      }
+    },
     "browser.back": {
       "localizations": {
         "en": {
@@ -337,6 +497,16 @@
         }
       }
     },
+    "browser.site_settings": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Site Settings"
+          }
+        }
+      }
+    },
     "browser.web_placeholder": {
       "localizations": {
         "en": {
@@ -388,6 +558,7 @@
         }
       }
     },
+    "CONTENT BLOCKING": {},
     "Delete": {},
     "demo.account_caption": {
       "localizations": {
@@ -756,6 +927,26 @@
     },
     "PREFERENCES": {},
     "Settings": {},
+    "settings.content_blocking.caption %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ad and tracker lists by EasyList, updated weekly. Last update: %@. Cookie banners are handled by DuckDuckGo’s autoconsent."
+          }
+        }
+      }
+    },
+    "settings.content_blocking.caption_undated": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ad and tracker lists by EasyList, updated weekly. Cookie banners are handled by DuckDuckGo’s autoconsent."
+          }
+        }
+      }
+    },
     "settings.whats_new": {
       "localizations": {
         "en": {
@@ -1299,6 +1490,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Check your email to confirm your Mozilla account. This window continues automatically once confirmed."
+          }
+        }
+      }
+    },
+    "site_settings.footer %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only for %@. To change blocking everywhere, open Settings."
           }
         }
       }

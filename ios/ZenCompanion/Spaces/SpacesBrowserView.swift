@@ -277,6 +277,13 @@ struct SpacesBrowserView: View {
                     .presentationDragIndicator(.visible)
             }
         }
+        // Asked once, right after sign-in or on the first launch that has it.
+        .fullScreenCover(isPresented: Binding(
+            get: { !ContentBlocker.shared.asked },
+            set: { _ in }
+        )) {
+            ContentBlockingSetupView(scheme: effectiveScheme)
+        }
         .fullScreenCover(item: $browserSession) { session in
             miniBrowser(session, spaces: model.snapshot.spaces)
                 .onDisappear {
@@ -288,12 +295,14 @@ struct SpacesBrowserView: View {
                 }
         }
         .task { await model.initialLoad() }
-        .task {
+        .task(id: ContentBlocker.shared.asked) {
             // Show release notes once per app version, after the first frame
             // has had a moment to settle. Demo mode skips it like the other
             // onboarding prompts. Only the main spaces screen reaches this
             // task: the Share Extension has its own view controller, so
-            // sharing a link never triggers the sheet.
+            // sharing a link never triggers the sheet. The content blocking
+            // question comes first; the notes wait for its answer.
+            guard ContentBlocker.shared.asked else { return }
             try? await Task.sleep(for: .milliseconds(450))
             guard !account.isDemo, activeSheet == nil, whatsNew.shouldPresent else { return }
             whatsNew.markPresented()

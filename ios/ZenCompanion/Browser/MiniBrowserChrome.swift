@@ -218,6 +218,12 @@ struct MiniBrowserChrome<NavBar: View>: View {
     /// so rows, tiles and the pin row start on the same edge on every side.
     private var expandedContent: some View {
         VStack(spacing: 0) {
+            // At the top: the menu grows up from the bar, so this is the far
+            // end, where Arc keeps the same card at the bottom of its sheet.
+            if model.blockingCard != .hidden {
+                blockingCard
+                    .padding(.bottom, 8)
+            }
             VStack(spacing: 0) {
                 copyRow
                 rowDivider
@@ -226,6 +232,8 @@ struct MiniBrowserChrome<NavBar: View>: View {
                 desktopRow
                 rowDivider
                 zoomRow
+                rowDivider
+                siteSettingsRow
             }
 
             actionRow
@@ -514,6 +522,63 @@ struct MiniBrowserChrome<NavBar: View>: View {
         .accessibilityLabel(Text(label))
     }
 
+    /// The blocked count, or what blocking does on this page, with what a tap does.
+    @ViewBuilder
+    private var blockingCard: some View {
+        let card = model.blockingCard
+        Button {
+            withAnimation(motion) { model.tapBlockingCard() }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: card.symbol)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Palette.coral(scheme))
+                    .frame(width: 32, height: 32)
+                    .background(Palette.coral(scheme).opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                VStack(alignment: .leading, spacing: 1) {
+                    card.title
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color.primary)
+                    Text(card.detail)
+                        .font(.system(size: 13, design: .rounded))
+                        .foregroundStyle(Color.primary.opacity(0.6))
+                }
+                .multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(Palette.lift(scheme), in: RoundedRectangle(cornerRadius: tileRadius, style: .continuous))
+            .glassRim(cornerRadius: tileRadius)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(CardPressStyle())
+    }
+
+    private var siteSettingsRow: some View {
+        Button {
+            withAnimation(motion) { model.openSiteSettings() }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: 24)
+                    .foregroundStyle(Color.primary)
+                Text("browser.site_settings")
+                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                    .foregroundStyle(Color.primary)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.primary.opacity(0.35))
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(CardPressStyle())
+        .disabled(model.blockingHost == nil)
+    }
+
     private var rowDivider: some View {
         Rectangle()
             .fill(Color.primary.opacity(0.08))
@@ -753,5 +818,40 @@ struct MiniBrowserTopBar: View {
         }
         .buttonStyle(GlassPressStyle())
         .accessibilityLabel(Text("common.cancel"))
+    }
+}
+
+private extension BlockingCard {
+    var symbol: String {
+        switch self {
+        case .blocked, .hidden: return "checkmark.shield"
+        case .showingOriginal: return "arrow.counterclockwise"
+        case .offForSite: return "slider.horizontal.3"
+        }
+    }
+
+    /// The count in bold, the rest of the sentence regular.
+    var title: Text {
+        switch self {
+        case .blocked(let count):
+            let format = String(localized: count == 1 ? "blocking.card.blocked.one" : "blocking.card.blocked.other")
+            let parts = format.components(separatedBy: "%d")
+            guard parts.count == 2 else { return Text(String(format: format, count)) }
+            return Text(parts[0]) + Text("\(count)").bold() + Text(parts[1])
+        case .showingOriginal:
+            return Text("blocking.card.original")
+        case .offForSite(let site):
+            return Text(String(format: String(localized: "blocking.card.off_for_site"), site))
+        case .hidden:
+            return Text(verbatim: "")
+        }
+    }
+
+    var detail: LocalizedStringKey {
+        switch self {
+        case .blocked, .hidden: return "blocking.card.restore"
+        case .showingOriginal: return "blocking.card.block_again"
+        case .offForSite: return "blocking.card.open_site_settings"
+        }
     }
 }

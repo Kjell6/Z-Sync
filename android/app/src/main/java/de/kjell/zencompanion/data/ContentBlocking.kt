@@ -166,7 +166,9 @@ object ContentBlocking {
         _asked.value = store.asked
         scope.launch {
             loadLists(app)
-            if (FilterListUpdates.isDue(store.listsUpdatedAt, System.currentTimeMillis())) {
+            // Nothing to keep current while both list switches are off.
+            val listsInUse = _settings.value.ads || _settings.value.trackers
+            if (listsInUse && FilterListUpdates.isDue(store.listsUpdatedAt, System.currentTimeMillis())) {
                 if (downloadLists(app)) {
                     store.listsUpdatedAt = System.currentTimeMillis()
                     loadLists(app)

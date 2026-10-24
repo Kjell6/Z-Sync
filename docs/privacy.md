@@ -42,6 +42,7 @@ While you use the app, the following information is kept **only on your device**
 - **Cached preview data** (space names, icons, themes; pinned-tab titles, URLs and icons) — local app storage (`spaces-cache.json`) — instant display while fresh data loads
 - **Cached website icons** (the image and the address it was loaded from) — the app's local cache — showing a synced tab again without downloading its page
 - **Preferences** (last selected space, cache timestamp) — local preferences — convenience
+- **Content blocking settings and lists** (the three blocking switches, the sites where you turned one off, and the downloaded ad and tracker lists) — local preferences and app storage — blocking in the mini-browser
 
 Notes:
 
@@ -109,6 +110,20 @@ The mini-browser address field shows suggestions while you type, for a built-in 
 
 **Legal basis:** performance of the feature you are using — Art. 6(1)(b) GDPR. Pick a custom search engine, or do not type a query, if you do not want these lookups. Removing the app stops them.
 
+### 5.4 Ad and tracker lists (content blocking)
+
+The mini-browser can block ads, trackers and cookie banners. The ad and tracker lists ship with the app, and once a week the app downloads fresh copies from the EasyList project:
+
+- `https://easylist.to/easylist/easylist.txt`
+- `https://easylist.to/easylist/easyprivacy.txt`
+
+- **Transmitted:** a plain request for the two list files, and your IP address as part of the HTTPS request.
+- **Not transmitted:** the pages you visit, your Mozilla account, sync data, or anything to the developer. Which requests get blocked is decided on your device.
+- Cookie banners are answered on your device by DuckDuckGo's open-source autoconsent rules, which ship with the app. Nothing is sent to DuckDuckGo for this.
+- The download is skipped while both ad and tracker blocking are off in Settings. Removing the app stops it.
+
+**Legal basis:** legitimate interest — Art. 6(1)(f) GDPR. The interest is a mini-browser that keeps its blocking lists current without anyone tracking which pages you open.
+
 ---
 
 ## 6. International data transfers
@@ -126,6 +141,8 @@ Search suggestions go to whichever built-in engine you selected. DuckDuckGo is b
 - [Ecosia Privacy Policy](https://www.ecosia.org/privacy)
 
 Please refer to those policies for how they handle a suggestion query.
+
+The weekly list download goes to `easylist.to`, run by the EasyList project, which receives only the request for the list files and your IP address.
 
 ---
 

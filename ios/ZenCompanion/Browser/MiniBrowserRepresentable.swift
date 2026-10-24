@@ -15,6 +15,12 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
+        // The blocked count's reports. The lists and scripts themselves go on
+        // per page, in `decidePolicyFor`.
+        config.userContentController.add(
+            BlockedResourceReport.Handler(model: model),
+            name: BlockedResourceReport.handlerName
+        )
 
         let webView = MiniBrowserWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
@@ -103,6 +109,13 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
             decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void
         ) {
             preferences.preferredContentMode = model.requestsDesktopSite ? .desktop : .mobile
+            if navigationAction.targetFrame?.isMainFrame ?? true,
+               let url = navigationAction.request.url,
+               BrowserNavigationPolicy.loadsInWebView(url) {
+                // Before the page starts loading, so its first requests already
+                // see the site's lists and the cookie banner script.
+                MainActor.assumeIsolated { model.prepareBlocking(for: url) }
+            }
             guard let url = navigationAction.request.url, !BrowserNavigationPolicy.loadsInWebView(url) else {
                 decisionHandler(.allow, preferences)
                 return

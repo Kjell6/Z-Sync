@@ -264,6 +264,15 @@ struct MiniBrowserView: View {
             .onDisappear {
                 model.commitPendingPinSave()
             }
+            .sheet(isPresented: $model.siteSettingsPresented) {
+                if let host = model.blockingHost {
+                    SiteSettingsSheet(host: host, scheme: scheme) {
+                        model.blockingSettingsDidChange()
+                    }
+                    .presentationDetents([.medium])
+                    .presentationDragIndicator(.visible)
+                }
+            }
         }
     }
 

@@ -189,12 +189,14 @@ fun MiniBrowserScreen(
     val blockingSettings by ContentBlocking.settings.collectAsState()
     val blocker = remember {
         val main = android.os.Handler(android.os.Looper.getMainLooper())
-        PageBlocker { count -> main.post { viewModel.onBlockedCountChange(count) } }
+        lateinit var created: PageBlocker
+        created = PageBlocker { generation, count ->
+            main.post { if (generation == created.generation) viewModel.onBlockedCountChange(count) }
+        }
+        created
     }
     var blockingReload by remember { mutableIntStateOf(0) }
-    val consentScript = remember(blockingSettings, state.showingOriginal) {
-        blocker.consentScript(ContentBlocking.consentScript(context), blockingSettings)
-    }
+    val consentBundle = remember { ContentBlocking.consentScript(context) }
     /// Scroll offset to put back after a reload finishes.
     var reloadScroll by remember { mutableStateOf<Int?>(null) }
     // A crashed renderer takes its WebView with it; a new key builds a fresh one.
@@ -440,7 +442,7 @@ fun MiniBrowserScreen(
                             viewModel.setFindProgress(if (total > 0) "$active/$total" else null)
                         },
                         blocker = blocker,
-                        consentScript = consentScript,
+                        consentBundle = consentBundle,
                         blockingSettings = blockingSettings,
                         blockingReload = blockingReload,
                     )

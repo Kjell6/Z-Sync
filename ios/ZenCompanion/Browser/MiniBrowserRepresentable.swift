@@ -19,6 +19,7 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
         // per page, in `decidePolicyFor`.
         config.userContentController.add(
             BlockedResourceReport.Handler(model: model),
+            contentWorld: BlockedResourceReport.world,
             name: BlockedResourceReport.handlerName
         )
 

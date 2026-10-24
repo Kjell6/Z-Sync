@@ -156,10 +156,11 @@ func consentScriptSource(bundle: String, skip: Set<String>) -> String {
     """
 }
 
-/// What one web view should have: which rule lists, and which sites the
-/// cookie banner script skips (nil: no script at all).
+/// What one web view should have: which compiled rule lists (by identifier,
+/// so a weekly refresh counts as a change), and which sites the cookie banner
+/// script skips (nil: no script at all).
 struct BlockingConfiguration: Equatable {
-    var ruleLists: [BlockCategory]
+    var ruleLists: [String]
     var consentSkip: Set<String>?
 }
 
@@ -231,7 +232,9 @@ final class ContentBlocker {
     /// What a web view needs for a page on `host`; `original` turns blocking off.
     func configuration(host: String?, original: Bool) -> BlockingConfiguration {
         if original { return BlockingConfiguration(ruleLists: [], consentSkip: nil) }
-        let wanted = [BlockCategory.ads, .trackers].filter { ruleLists[$0] != nil && settings.isOn($0, host: host) }
+        let wanted = [BlockCategory.ads, .trackers]
+            .filter { settings.isOn($0, host: host) }
+            .compactMap { ruleLists[$0]?.identifier }
         let skip = settings.isOn(.cookieBanners) && consentBundle != nil ? settings.cookieBannerSitesOff : nil
         return BlockingConfiguration(ruleLists: wanted, consentSkip: skip)
     }
@@ -240,8 +243,8 @@ final class ContentBlocker {
     /// adds its own scripts afterwards, because this clears them.
     func apply(_ configuration: BlockingConfiguration, to controller: WKUserContentController) {
         controller.removeAllContentRuleLists()
-        for category in configuration.ruleLists {
-            if let list = ruleLists[category] { controller.add(list) }
+        for list in ruleLists.values where configuration.ruleLists.contains(list.identifier) {
+            controller.add(list)
         }
         controller.removeAllUserScripts()
         if let skip = configuration.consentSkip, let consentBundle {
@@ -304,13 +307,7 @@ final class ContentBlocker {
     private nonisolated static func downloadLists() async -> Bool {
         var fetched: [FilterList: String] = [:]
         for list in FilterList.allCases {
-            var request = URLRequest(url: list.url, timeoutInterval: 30)
-            request.cachePolicy = .reloadIgnoringLocalCacheData
-            guard let (data, response) = try? await URLSession.shared.data(for: request),
-                  (response as? HTTPURLResponse)?.statusCode == 200,
-                  data.count <= FilterListUpdates.maxBytes,
-                  let text = String(data: data, encoding: .utf8),
-                  FilterListUpdates.accept(text) != nil else { return false }
+            guard let text = await fetch(list.url), FilterListUpdates.accept(text) != nil else { return false }
             fetched[list] = text
         }
         let folder = downloadedFile(.easylist).deletingLastPathComponent()
@@ -319,6 +316,30 @@ final class ContentBlocker {
             try? text.write(to: downloadedFile(list), atomically: true, encoding: .utf8)
         }
         return true
+    }
+
+    /// The body as text, or nil on any failure. Reading stops at the size
+    /// limit, so a broken server can't fill memory.
+    private nonisolated static func fetch(_ url: URL) async -> String? {
+        var request = URLRequest(url: url, timeoutInterval: 30)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        guard let (bytes, response) = try? await URLSession.shared.bytes(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              response.expectedContentLength <= Int64(FilterListUpdates.maxBytes) else { return nil }
+        var data = Data()
+        data.reserveCapacity(max(0, Int(response.expectedContentLength)))
+        do {
+            for try await byte in bytes {
+                data.append(byte)
+                if data.count > FilterListUpdates.maxBytes {
+                    bytes.task.cancel()
+                    return nil
+                }
+            }
+        } catch {
+            return nil
+        }
+        return String(data: data, encoding: .utf8)
     }
 
     private nonisolated static func downloadedFile(_ list: FilterList) -> URL {

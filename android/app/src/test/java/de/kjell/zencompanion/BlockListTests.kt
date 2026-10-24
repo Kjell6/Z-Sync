@@ -28,6 +28,9 @@ class BlockListTests {
         @@||safe.example^${'$'}document
         ||widget.example^
         @@||jetzt.de^${'$'}generichide
+        ||cdn2.example^
+        @@||cdn2.example^${'$'}script
+        @@||ads.example^${'$'}domain=bad"site.example|shop2.example
     """.trimIndent()
 
     private val list = BlockList.parse(sample)
@@ -40,7 +43,8 @@ class BlockListTests {
 
     @Test
     fun keepsOnlyDomainRulesItCanApply() {
-        assertEquals(setOf("ads.example", "pixel.example", "own.tracker.example", "widget.example"), list.anywhere)
+        // `pixel.example` is limited to some request types, so it is skipped.
+        assertEquals(setOf("ads.example", "own.tracker.example", "widget.example", "cdn2.example"), list.anywhere)
         assertEquals(setOf("tracker.example"), list.thirdParty)
         assertEquals(5, list.ruleCount)
     }
@@ -69,6 +73,13 @@ class BlockListTests {
         assertFalse("first party allowed", list.blocks("own.tracker.example", "app.tracker.example"))
         assertTrue("third party still blocked", list.blocks("own.tracker.example", "news.example"))
         assertFalse("page exception", list.blocks("widget.example", "safe.example"))
+        assertFalse("an exception for some types allows all", list.blocks("cdn2.example", "news.example"))
+    }
+
+    @Test
+    fun exceptionSitesMustBePlainNames() {
+        assertFalse(list.blocks("ads.example", "shop2.example"))
+        assertTrue(list.blocks("ads.example", "bad\"site.example"))
     }
 
     @Test

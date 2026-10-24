@@ -5,8 +5,11 @@ import WebKit
 /// page reports the addresses of the resources it adds (scripts, images,
 /// frames, styles, media) and the model counts the ones a list matches. It
 /// misses resources that never appear in the page, so the count is close, not
-/// exact. Only addresses cross the bridge, and only from the main frame.
+/// exact. Only addresses cross the bridge, and only from the main frame. The
+/// script and its handler live in the app's own content world, so the page's
+/// scripts can see neither of them.
 enum BlockedResourceReport {
+    @MainActor static var world: WKContentWorld { .defaultClient }
     static let handlerName = "zsyncResources"
 
     static let script = """
@@ -30,7 +33,7 @@ enum BlockedResourceReport {
       }
       function flush() {
         timer = null;
-        if (queue.length) handler.postMessage({ page: location.href, urls: queue.splice(0, queue.length) });
+        if (queue.length) handler.postMessage({ urls: queue.splice(0, queue.length) });
       }
       function scan(node) {
         if (node.matches && node.matches(selector)) add(node.getAttribute('src') || node.getAttribute('href'));
@@ -57,12 +60,13 @@ enum BlockedResourceReport {
         }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-            guard message.frameInfo.isMainFrame,
-                  let body = message.body as? [String: Any],
-                  let urls = body["urls"] as? [String] else { return }
-            let page = (body["page"] as? String).flatMap(URL.init(string:))
             MainActor.assumeIsolated {
-                model?.resourcesLoaded(Array(urls.prefix(2_000)), page: page)
+                guard message.frameInfo.isMainFrame,
+                      message.world == BlockedResourceReport.world,
+                      let body = message.body as? [String: Any],
+                      let urls = body["urls"] as? [String] else { return }
+                // The page's address from WebKit, not from the message.
+                model?.resourcesLoaded(Array(urls.prefix(2_000)), page: message.frameInfo.request.url)
             }
         }
     }

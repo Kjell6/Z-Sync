@@ -6,6 +6,7 @@ import de.kjell.zencompanion.data.ContentBlocking
 import de.kjell.zencompanion.data.ContentBlockingSettings
 import de.kjell.zencompanion.data.blockingSiteKey
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 /** What the card at the top of the browser menu says. */
 sealed interface BlockingCard {
@@ -41,7 +42,10 @@ sealed interface BlockingCard {
  * request on a background thread, so the page it is on and the switches are
  * kept in volatile fields rather than read from Compose state.
  */
-class PageBlocker(private val onBlockedCountChange: (Int) -> Unit) {
+class PageBlocker(
+    /** The count for one document; `generation` tells a late update apart. */
+    private val onBlockedCountChange: (generation: Int, count: Int) -> Unit,
+) {
     @Volatile
     var settings: ContentBlockingSettings = ContentBlockingSettings()
 
@@ -56,8 +60,15 @@ class PageBlocker(private val onBlockedCountChange: (Int) -> Unit) {
     private var originalPage: String? = null
 
     private val blocked = ConcurrentHashMap.newKeySet<String>()
+    private val documents = AtomicInteger(0)
+
+    /** Changes with every document, so a count from the previous one can be dropped. */
+    val generation: Int get() = documents.get()
 
     val showingOriginal: Boolean get() = originalPage != null
+
+    /** The host shown as the original page, or null. */
+    val originalHost: String? get() = originalPage?.let { runCatching { Uri.parse(it).host }.getOrNull() }
 
     /** A main-frame load started. Counting starts over for the new document. */
     fun pageStarted(url: String, isReload: Boolean = true) {
@@ -66,8 +77,9 @@ class PageBlocker(private val onBlockedCountChange: (Int) -> Unit) {
         if (originalPage != null && originalPage != withoutFragment) originalPage = null
         pageUrl = withoutFragment
         pageHost = runCatching { Uri.parse(url).host }.getOrNull()
+        val current = documents.incrementAndGet()
         blocked.clear()
-        onBlockedCountChange(0)
+        onBlockedCountChange(current, 0)
     }
 
     /** True when the request should get an empty response instead. */
@@ -80,8 +92,10 @@ class PageBlocker(private val onBlockedCountChange: (Int) -> Unit) {
         val scheme = url.scheme?.lowercase()
         if (scheme != "http" && scheme != "https") return false
         val host = url.host ?: return false
+        val document = documents.get()
         ContentBlocking.blockedCategory(host, pageHost, settings) ?: return false
-        if (blocked.add(url.toString())) onBlockedCountChange(blocked.size)
+        // A request from the previous document is still blocked, not counted.
+        if (document == documents.get() && blocked.add(url.toString())) onBlockedCountChange(document, blocked.size)
         return true
     }
 
@@ -101,8 +115,7 @@ class PageBlocker(private val onBlockedCountChange: (Int) -> Unit) {
      */
     fun consentScript(bundle: String?, settings: ContentBlockingSettings): String? {
         if (bundle == null || !settings.isOn(BlockCategory.COOKIE_BANNERS)) return null
-        val skip = settings.cookieBannerSitesOff() +
-            listOfNotNull(originalPage?.let { runCatching { Uri.parse(it).host }.getOrNull() }?.let(::blockingSiteKey))
+        val skip = settings.cookieBannerSitesOff() + listOfNotNull(originalHost?.let(::blockingSiteKey))
         return consentScriptSource(bundle, skip)
     }
 }

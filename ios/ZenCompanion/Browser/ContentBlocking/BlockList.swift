@@ -48,10 +48,13 @@ struct BlockList: Sendable {
 
     // MARK: - Parsing
 
-    /// Request types a domain rule may be limited to. They are all blocked alike.
+    /// Request types a rule may be limited to. Both apps block a domain for
+    /// every type, so a block rule limited to some types is skipped, and an
+    /// exception limited to some types counts for all of them: either way the
+    /// app blocks less than the list, never more.
     private static let requestTypes: Set<Substring> = [
         "script", "image", "stylesheet", "xmlhttprequest", "subdocument", "ping",
-        "media", "font", "object", "other", "websocket", "all", "important",
+        "media", "font", "object", "other", "websocket",
     ]
 
     static func parse(_ text: String) -> BlockList {
@@ -78,8 +81,9 @@ struct BlockList: Sendable {
                 for option in rule.options {
                     if option == "third-party" || option == "3p" {
                         onlyThirdParty = true
-                    } else if !requestTypes.contains(option) {
-                        // Popups, page blocks, one-site rules, redirects: not ours.
+                    } else if option != "all" && option != "important" {
+                        // Some request types only, popups, page blocks,
+                        // one-site rules, redirects: not ours.
                         return
                     }
                 }
@@ -94,13 +98,16 @@ struct BlockList: Sendable {
             if let domains = rule.options.first(where: { $0.hasPrefix("domain=") }) {
                 let sites = domains.dropFirst("domain=".count)
                     .split(separator: "|")
-                    .filter { !$0.isEmpty && !$0.hasPrefix("~") }
+                    // Only plain names: they go into the WebKit rule list as text.
+                    .filter { !$0.isEmpty && $0.allSatisfy(DomainRule.isDomainCharacter) }
                     .map(String.init)
                 if !sites.isEmpty { allowedOn[rule.domain, default: []].formUnion(sites) }
             } else if rule.options.contains("document") {
                 allowedPages.insert(rule.domain)
             } else if rule.options.contains("~third-party") || rule.options.contains("1p") {
                 allowedFirstParty.insert(rule.domain)
+            } else if rule.options.contains(where: { requestTypes.contains($0) || $0 == "third-party" || $0 == "3p" }) {
+                allowedEverywhere.insert(rule.domain)
             }
             // Element hiding and the like: nothing to undo here.
         }
@@ -147,7 +154,7 @@ struct BlockList: Sendable {
             }
         }
 
-        private static func isDomainCharacter(_ character: Character) -> Bool {
+        static func isDomainCharacter(_ character: Character) -> Bool {
             character.isASCII && (character.isLetter || character.isNumber || character == "." || character == "-" || character == "_")
         }
     }

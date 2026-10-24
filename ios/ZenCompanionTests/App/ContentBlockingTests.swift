@@ -24,6 +24,9 @@ final class BlockListTests: XCTestCase {
     @@||safe.example^$document
     ||widget.example^
     @@||jetzt.de^$generichide
+    ||cdn2.example^
+    @@||cdn2.example^$script
+    @@||ads.example^$domain=bad"site.example|shop2.example
     """
 
     private lazy var list = BlockList.parse(sample)
@@ -34,7 +37,8 @@ final class BlockListTests: XCTestCase {
     }
 
     func testKeepsOnlyDomainRulesItCanApply() {
-        XCTAssertEqual(list.anywhere, ["ads.example", "pixel.example", "own.tracker.example", "widget.example"])
+        // `pixel.example` is limited to some request types, so it is skipped.
+        XCTAssertEqual(list.anywhere, ["ads.example", "own.tracker.example", "widget.example", "cdn2.example"])
         XCTAssertEqual(list.thirdParty, ["tracker.example"])
         XCTAssertEqual(list.ruleCount, 5)
     }
@@ -60,6 +64,14 @@ final class BlockListTests: XCTestCase {
         XCTAssertFalse(list.blocks(requestHost: "own.tracker.example", pageHost: "app.tracker.example"))
         XCTAssertTrue(list.blocks(requestHost: "own.tracker.example", pageHost: "news.example"))
         XCTAssertFalse(list.blocks(requestHost: "widget.example", pageHost: "safe.example"))
+        // An exception for some request types allows all of them.
+        XCTAssertFalse(list.blocks(requestHost: "cdn2.example", pageHost: "news.example"))
+    }
+
+    func testExceptionSitesMustBePlainNames() throws {
+        XCTAssertFalse(list.blocks(requestHost: "ads.example", pageHost: "shop2.example"))
+        XCTAssertFalse(list.contentRuleListJSON().contains("bad"))
+        XCTAssertNoThrow(try JSONSerialization.jsonObject(with: Data(list.contentRuleListJSON().utf8)))
     }
 
     func testHostsAreCaseAndDotInsensitive() {

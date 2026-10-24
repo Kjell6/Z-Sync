@@ -291,6 +291,8 @@ final class MiniBrowserModel {
     var siteSettingsPresented = false
     @ObservationIgnored private var originalPage: URL?
     @ObservationIgnored private var countedResources = Set<String>()
+    /// Reported addresses looked at for this document, counted or not.
+    @ObservationIgnored private var checkedResources = 0
     @ObservationIgnored private var appliedBlocking: BlockingConfiguration?
     @ObservationIgnored let blocker: ContentBlocker
 
@@ -719,6 +721,7 @@ final class MiniBrowserModel {
         pageError = nil
         failedURL = nil
         countedResources.removeAll()
+        checkedResources = 0
         blockedCount = 0
     }
 
@@ -750,7 +753,8 @@ final class MiniBrowserModel {
     /// count is the reported resources an active list matches.
     func resourcesLoaded(_ urls: [String], page: URL?) {
         guard originalPage == nil, let host = currentURL?.host, page?.host == host else { return }
-        for raw in urls where countedResources.count < Self.maxCountedResources {
+        for raw in urls where checkedResources < Self.maxCheckedResources {
+            checkedResources += 1
             guard !countedResources.contains(raw), let url = URL(string: raw), blocker.blocks(url, pageHost: host) else { continue }
             countedResources.insert(raw)
         }
@@ -800,11 +804,14 @@ final class MiniBrowserModel {
         controller.addUserScript(WKUserScript(
             source: BlockedResourceReport.script,
             injectionTime: .atDocumentStart,
-            forMainFrameOnly: true
+            forMainFrameOnly: true,
+            in: BlockedResourceReport.world
         ))
     }
 
-    private static let maxCountedResources = 2_000
+    /// Per document. A page reports at most 2,000 addresses; this also bounds
+    /// the work if something reports more.
+    private static let maxCheckedResources = 5_000
 
     private static func withoutFragment(_ url: URL) -> URL {
         guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }

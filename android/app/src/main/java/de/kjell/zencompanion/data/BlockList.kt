@@ -50,12 +50,18 @@ class BlockList(
     }
 
     companion object {
-        /** Request types a domain rule may be limited to. They are all blocked alike. */
+        /**
+         * Request types a rule may be limited to. Both apps block a domain for
+         * every type, so a block rule limited to some types is skipped, and an
+         * exception limited to some types counts for all of them: either way
+         * the app blocks less than the list, never more.
+         */
         private val requestTypes = setOf(
             "script", "image", "stylesheet", "xmlhttprequest", "subdocument", "ping",
-            "media", "font", "object", "other", "websocket", "all", "important",
+            "media", "font", "object", "other", "websocket",
         )
         private val domainRule = Regex("""^(@@)?\|\|([a-z0-9._-]+)\^(?:\$(.*))?$""")
+        private val siteName = Regex("""^[a-z0-9._-]+$""")
 
         fun parse(text: String): BlockList {
             val anywhere = HashSet<String>()
@@ -85,8 +91,9 @@ class BlockList(
                     for (option in options) {
                         when (option) {
                             "third-party", "3p" -> onlyThirdParty = true
-                            in requestTypes -> Unit
-                            // Popups, page blocks, one-site rules, redirects: not ours.
+                            "all", "important" -> Unit
+                            // Some request types only, popups, page blocks,
+                            // one-site rules, redirects: not ours.
                             else -> return@forEach
                         }
                     }
@@ -101,11 +108,13 @@ class BlockList(
                 val sites = options.firstOrNull { it.startsWith("domain=") }
                     ?.removePrefix("domain=")
                     ?.split('|')
-                    ?.filter { it.isNotEmpty() && !it.startsWith("~") }
+                    // Only plain names: iOS writes these into its rule list.
+                    ?.filter { siteName.matches(it) }
                 when {
                     sites != null -> if (sites.isNotEmpty()) allowedOn.getOrPut(domain) { HashSet() }.addAll(sites)
                     "document" in options -> allowedPages.add(domain)
                     "~third-party" in options || "1p" in options -> allowedFirstParty.add(domain)
+                    options.any { it in requestTypes || it == "third-party" || it == "3p" } -> allowedEverywhere.add(domain)
                     // Element hiding and the like: nothing to undo here.
                     else -> Unit
                 }

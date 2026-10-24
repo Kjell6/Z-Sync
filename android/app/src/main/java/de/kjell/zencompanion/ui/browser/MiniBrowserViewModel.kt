@@ -106,6 +106,12 @@ class MiniBrowserViewModel(
         val findProgress: String? = null,
         /** Suggestions for the text being typed. Empty hides the list. */
         val suggestions: List<String> = emptyList(),
+        /** Ads and trackers blocked on the current page. */
+        val blockedCount: Int = 0,
+        /** The page was reloaded once with nothing blocked. */
+        val showingOriginal: Boolean = false,
+        /** The site's own blocking switches, opened from the menu. */
+        val siteSettingsOpen: Boolean = false,
     ) {
         /** Normal saves always target the space root, so folder rows are hidden. */
         val hideFolders: Boolean get() = saveKind == SaveKind.NORMAL
@@ -591,6 +597,25 @@ class MiniBrowserViewModel(
 
     fun collapseMenu() {
         _state.update { it.copy(menuExpanded = false) }
+    }
+
+    // MARK: - Content blocking
+
+    fun onBlockedCountChange(count: Int) {
+        _state.update { it.copy(blockedCount = count) }
+    }
+
+    /** The screen reloads the page right after this; the card follows the page. */
+    fun onShowingOriginalChange(showing: Boolean) {
+        _state.update { it.copy(showingOriginal = showing, menuExpanded = if (showing) false else it.menuExpanded) }
+    }
+
+    fun openSiteSettings() {
+        _state.update { it.copy(siteSettingsOpen = true, menuExpanded = false) }
+    }
+
+    fun closeSiteSettings() {
+        _state.update { it.copy(siteSettingsOpen = false) }
     }
 
     // MARK: - Page tools

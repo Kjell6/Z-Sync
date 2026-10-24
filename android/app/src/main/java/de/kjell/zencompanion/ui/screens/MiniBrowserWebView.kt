@@ -16,17 +16,25 @@ import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.webkit.ScriptHandler
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
+import de.kjell.zencompanion.data.ContentBlockingSettings
+import de.kjell.zencompanion.ui.browser.PageBlocker
+import java.io.ByteArrayInputStream
 import de.kjell.zencompanion.ui.components.openURLExternally
 
 /** Chrome-like desktop user agent for the "Request Desktop Site" toggle. */
@@ -58,6 +66,16 @@ internal fun MiniBrowserWebView(
     onLinkUnavailable: () -> Unit,
     onScrollChange: (scrollY: Int) -> Unit,
     onFindResult: (active: Int, total: Int) -> Unit,
+    /** Decides which requests get an empty answer, and counts them. */
+    blocker: PageBlocker,
+    /** The cookie banner script for the current switches, or null for none. */
+    consentScript: String?,
+    blockingSettings: ContentBlockingSettings,
+    /**
+     * Bumped to reload after a blocking change. The reload waits until the
+     * new switches and script are in place, so it can't load with the old ones.
+     */
+    blockingReload: Int,
 ) {
     // The factory runs once; read the live callbacks instead of the first values.
     val addressFocused by rememberUpdatedState(isAddressFocused)
@@ -66,6 +84,10 @@ internal fun MiniBrowserWebView(
     val loadFailed by rememberUpdatedState(onLoadFailed)
     val rendererGone by rememberUpdatedState(onRendererGone)
     val linkUnavailable by rememberUpdatedState(onLinkUnavailable)
+    val currentConsentScript by rememberUpdatedState(consentScript)
+    val consent = remember { ConsentScriptSlot(handledReload = blockingReload) }
+    // Before the factory's first load, which happens ahead of `update`.
+    blocker.settings = blockingSettings
 
     // Native Android WebView
     AndroidView(
@@ -98,6 +120,8 @@ internal fun MiniBrowserWebView(
                 webViewClient = object : WebViewClient() {
                     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                         super.onPageStarted(view, url, favicon)
+                        // Back and forward can skip the main-frame request.
+                        url?.let { blocker.pageStarted(it, isReload = false) }
                         // A failed load reports its error after this, so the
                         // new page always starts without the old panel.
                         onPageStart()
@@ -138,6 +162,20 @@ internal fun MiniBrowserWebView(
                             }
                         }
                         view?.evaluateJavascript(SCROLL_BINDING_SCRIPT, null)
+                    }
+
+                    // Runs on a WebView thread for every request the page makes.
+                    override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                        request ?: return null
+                        if (!blocker.shouldBlock(request.url, request.isForMainFrame)) return null
+                        return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
+                    }
+
+                    // Older WebViews can't add a script at document start; the
+                    // cookie banner script then runs once the page is visible.
+                    override fun onPageCommitVisible(view: WebView?, url: String?) {
+                        super.onPageCommitVisible(view, url)
+                        if (!consent.atDocumentStart) currentConsentScript?.let { view?.evaluateJavascript(it, null) }
                     }
 
                     override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
@@ -267,6 +305,7 @@ internal fun MiniBrowserWebView(
                     SCROLL_BRIDGE_NAME,
                 )
 
+                consent.install(this, consentScript)
                 val loadTarget = formatBrowserInput(initialUrl ?: "")
                 if (loadTarget.isNotEmpty()) {
                     if (isWebScheme(Uri.parse(loadTarget).scheme)) {
@@ -281,6 +320,12 @@ internal fun MiniBrowserWebView(
         },
         update = { view ->
             view.settings.textZoom = textZoomPercent
+            blocker.settings = blockingSettings
+            consent.install(view, consentScript)
+            if (blockingReload != consent.handledReload) {
+                consent.handledReload = blockingReload
+                view.reload()
+            }
             val defaultUserAgent = view.tag as? String
             val desired = if (desktopSite) DesktopUserAgent else defaultUserAgent
             if (desired != null && view.settings.userAgentString != desired) {
@@ -360,3 +405,21 @@ private fun browserPackages(context: Context): Set<String> {
 }
 
 private const val BROWSER_PROBE_URL = "https://example.com"
+
+/**
+ * The cookie banner script added to every document the WebView loads. Swapped
+ * whenever the switches change, so a site turned off stops getting it.
+ */
+private class ConsentScriptSlot(var handledReload: Int) {
+    private var handler: ScriptHandler? = null
+    private var installed: String? = null
+
+    val atDocumentStart: Boolean = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
+
+    fun install(view: WebView, script: String?) {
+        if (!atDocumentStart || script == installed) return
+        handler?.remove()
+        handler = script?.let { WebViewCompat.addDocumentStartJavaScript(view, it, setOf("*")) }
+        installed = script
+    }
+}

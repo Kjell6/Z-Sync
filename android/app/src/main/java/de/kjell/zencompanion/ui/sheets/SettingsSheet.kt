@@ -306,6 +306,8 @@ fun SettingsSheet(
                 onOpenAdvanced = { showAdvanced = true },
             )
 
+            SettingsContentBlockingSection()
+
             // Feedback Section
             SettingsAboutSection(onOpenWhatsNew = onOpenWhatsNew)
         }

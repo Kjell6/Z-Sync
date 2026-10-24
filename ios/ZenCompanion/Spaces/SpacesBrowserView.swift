@@ -17,14 +17,12 @@ struct SpacesBrowserView: View {
     let account: AccountSnapshot
 
     @Environment(\.colorScheme) private var scheme
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.requestReview) private var requestReview
     @State private var model: BrowserModel
 
     private enum ActiveSheet: Identifiable, Equatable {
         case account
-        case browser(BrowserTabSession)
         case activity
         case syncSetup
         case whatsNew
@@ -32,7 +30,6 @@ struct SpacesBrowserView: View {
         var id: String {
             switch self {
             case .account: return "account"
-            case .browser(let session): return session.id.uuidString
             case .activity: return "activity"
             case .syncSetup: return "syncSetup"
             case .whatsNew: return "whatsNew"
@@ -45,49 +42,15 @@ struct SpacesBrowserView: View {
     }
 
     @State private var activeSheet: ActiveSheet?
+    /// The mini-browser is a page, not a sheet: it fills the screen on every
+    /// size class, and its own close control is the only way out.
+    @State private var browserSession: BrowserTabSession?
     /// Once-per-app-version release notes. Marked as presented as soon as the
     /// sheet opens, so a relaunch does not show it again.
     @State private var whatsNew: WhatsNewStore
-    /// Locked when the browser opens. A later size-class change must not swap
-    /// the sheet and the cover, or the page reloads.
-    @State private var browserFillsScreen = false
     /// A pin inside the mini-browser (or a delete from it) fired while a sheet
     /// was up; refresh once the last sheet is gone.
     @State private var pendingStaleReload = false
-
-    /// Compact browser and the other sheets. A regular-width browser is left
-    /// out, so the sheet writing nil as it dismisses cannot clear the cover.
-    private var compactSheet: Binding<ActiveSheet?> {
-        Binding(
-            get: {
-                if browserFillsScreen, case .browser = activeSheet { return nil }
-                return activeSheet
-            },
-            set: { newValue in
-                if browserFillsScreen, case .browser = activeSheet, newValue == nil {
-                    return
-                }
-                if newValue == nil, case .browser = activeSheet {
-                    browserFillsScreen = false
-                }
-                activeSheet = newValue
-            }
-        )
-    }
-
-    private var fullScreenBrowser: Binding<BrowserTabSession?> {
-        Binding(
-            get: {
-                guard browserFillsScreen, case .browser(let session) = activeSheet else { return nil }
-                return session
-            },
-            set: { newValue in
-                guard newValue == nil, case .browser = activeSheet else { return }
-                activeSheet = nil
-                browserFillsScreen = false
-            }
-        )
-    }
 
     init(account: AccountSnapshot) {
         self.account = account
@@ -267,7 +230,7 @@ struct SpacesBrowserView: View {
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .sheet(item: compactSheet) { sheet in
+        .sheet(item: $activeSheet) { sheet in
             switch sheet {
             case .account:
                 SettingsSheet(
@@ -285,11 +248,6 @@ struct SpacesBrowserView: View {
                 // page full height, like the app's other sheets.
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-            case .browser(let session):
-                miniBrowser(session, spaces: model.snapshot.spaces)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-                    .geometryGroup()
             case .activity:
                 SyncedActivitySheet(
                     allSpaces: model.snapshot.spaces,
@@ -319,9 +277,15 @@ struct SpacesBrowserView: View {
                     .presentationDragIndicator(.visible)
             }
         }
-        .fullScreenCover(item: fullScreenBrowser) { session in
+        .fullScreenCover(item: $browserSession) { session in
             miniBrowser(session, spaces: model.snapshot.spaces)
-                .geometryGroup()
+                .onDisappear {
+                    // A pin inside the mini-browser fired while it was up.
+                    if pendingStaleReload {
+                        pendingStaleReload = false
+                        Task { await model.reload() }
+                    }
+                }
         }
         .task { await model.initialLoad() }
         .task {
@@ -360,7 +324,7 @@ struct SpacesBrowserView: View {
         .onChange(of: model.searchOnOpenPending) { _, pending in
             guard pending else { return }
             // Leave an open browser or settings sheet where the user left it.
-            if activeSheet == nil { openNewTab(in: model.activeSpace) }
+            if activeSheet == nil, browserSession == nil { openNewTab(in: model.activeSpace) }
             model.consumeSearchOnOpen()
         }
         .onChange(of: model.reviewPromptPending) { _, pending in
@@ -466,12 +430,20 @@ struct SpacesBrowserView: View {
         presentBrowser(url: nil, title: nil, space: space)
     }
 
-    /// Decides the presentation once. `horizontalSizeClass` is read here, not
-    /// while the browser is already up.
+    /// Opens the browser as a page. A sheet that is already up has to go
+    /// first: SwiftUI will not present a full-screen cover over one.
     private func presentBrowser(url: URL?, title: String?, space: ZenSpace) {
-        let presentation = QuickBrowserPresentationPolicy.presentation(for: horizontalSizeClass)
-        browserFillsScreen = presentation == .fullScreen
-        activeSheet = .browser(BrowserTabSession(url: url, initialTitle: title, space: space))
+        let session = BrowserTabSession(url: url, initialTitle: title, space: space)
+        guard activeSheet != nil else {
+            browserSession = session
+            return
+        }
+        activeSheet = nil
+        Task { @MainActor in
+            // Sheet dismissal has to start before the cover can take over.
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            browserSession = session
+        }
     }
 
     private func miniBrowser(_ session: BrowserTabSession, spaces: [ZenSpace]) -> some View {
@@ -480,14 +452,8 @@ struct SpacesBrowserView: View {
             initialTitle: session.initialTitle,
             space: session.space,
             allSpaces: spaces,
-            showsToolbarClose: browserFillsScreen,
-            onDismiss: { dismissPresentedBrowser() }
+            onDismiss: { browserSession = nil }
         )
-    }
-
-    private func dismissPresentedBrowser() {
-        activeSheet = nil
-        browserFillsScreen = false
     }
 
     // MARK: States (shown until the first successful sync)

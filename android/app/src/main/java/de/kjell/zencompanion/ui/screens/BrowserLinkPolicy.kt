@@ -10,7 +10,21 @@ internal enum class BrowserLinkAction {
     BLOCK,
 }
 
+/**
+ * Schemes the WebView renders itself: http(s) plus the page-internal ones.
+ * Every other scheme belongs to another app, and letting the WebView try it
+ * ends on its own `net::ERR_UNKNOWN_URL_SCHEME` page, which leaves the
+ * browser stranded on a dead document.
+ */
 private val WEB_SCHEMES = setOf("http", "https", "about", "data", "blob", "file", "javascript")
+
+/** True when the WebView may load this scheme at all. */
+internal fun schemeLoadsInWebView(scheme: String?): Boolean =
+    scheme?.lowercase() in WEB_SCHEMES
+
+/** Same question for a whole URL, as typed into the bar or sent by a page. */
+internal fun loadsInWebView(url: String): Boolean =
+    schemeLoadsInWebView(url.trim().substringBefore(':', missingDelimiterValue = ""))
 
 /** True when a URL with [scheme] loads in the WebView instead of another app. */
 internal fun isWebScheme(scheme: String?): Boolean = scheme == null || scheme.lowercase() in WEB_SCHEMES

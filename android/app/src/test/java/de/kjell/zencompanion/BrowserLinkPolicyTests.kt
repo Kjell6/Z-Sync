@@ -4,6 +4,8 @@ import android.webkit.WebView
 import de.kjell.zencompanion.ui.screens.BrowserLinkAction
 import de.kjell.zencompanion.ui.screens.browserLinkAction
 import de.kjell.zencompanion.ui.screens.isWebScheme
+import de.kjell.zencompanion.ui.screens.loadsInWebView
+import de.kjell.zencompanion.ui.screens.schemeLoadsInWebView
 import de.kjell.zencompanion.ui.screens.sameTabUrl
 import de.kjell.zencompanion.ui.screens.tappedLinkUrl
 import org.junit.Assert.assertEquals
@@ -175,5 +177,33 @@ class BrowserLinkPolicyTests {
             BrowserLinkAction.LOAD_IN_WEBVIEW,
             action("javascript", hasGesture = false, resolvedPackage = null),
         )
+    }
+
+    @Test
+    fun onlyWebSchemesMayReachTheWebView() {
+        assertTrue(schemeLoadsInWebView("https"))
+        assertTrue(schemeLoadsInWebView("HTTPS"))
+        assertTrue(schemeLoadsInWebView("http"))
+        assertTrue(schemeLoadsInWebView("about"))
+        assertTrue(schemeLoadsInWebView("data"))
+        assertTrue(schemeLoadsInWebView("blob"))
+        assertTrue(schemeLoadsInWebView("file"))
+        assertTrue(schemeLoadsInWebView("javascript"))
+        assertFalse(schemeLoadsInWebView("snssdk1340"))
+        assertFalse(schemeLoadsInWebView("intent"))
+        assertFalse(schemeLoadsInWebView("market"))
+        assertFalse(schemeLoadsInWebView("tel"))
+        assertFalse(schemeLoadsInWebView(null))
+        assertFalse(loadsInWebView(""))
+    }
+
+    @Test
+    fun appSchemesAreRecognisedInAFullUrl() {
+        // TikTok's share links land here: the WebView must never try them.
+        assertFalse(loadsInWebView("snssdk1340://aweme/detail/7698629723966033184?refer=probe"))
+        assertFalse(loadsInWebView("mailto:nobody@example.com"))
+        assertFalse(loadsInWebView("intent://scan/#Intent;scheme=zxing;end"))
+        assertTrue(loadsInWebView("https://example.com/a"))
+        assertTrue(loadsInWebView("http://localhost:8765/redirect.html"))
     }
 }

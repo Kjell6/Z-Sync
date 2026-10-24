@@ -107,3 +107,43 @@ struct PressedButtonStyle: ButtonStyle {
         )
     }
 }
+
+
+extension Color {
+    /// Perceptual luminance test for colors that carry a real value: a page's
+    /// `theme-color`, a hex or CSS rgb string, a native UIColor. Non-RGB colors
+    /// (materials, dynamic system colors that cannot be resolved) report
+    /// `false`; the caller decides its own fallback for those.
+    var isDarkBackground: Bool {
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        guard UIColor(self).getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
+            return false
+        }
+        return 0.2126 * red + 0.7152 * green + 0.0722 * blue < 0.5
+    }
+
+    /// The same color, nudged away from the page so the bar reads as its own
+    /// surface: a touch darker on light colors, a touch lighter on dark ones.
+    /// Nil when the color cannot be resolved.
+    func nudgedForBar(by amount: CGFloat = 0.08) -> Color? {
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        guard UIColor(self).getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
+            return nil
+        }
+        let luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+        let target: CGFloat = luminance < 0.5 ? 1 : 0
+        return Color(
+            .sRGB,
+            red: Double(red + (target - red) * amount),
+            green: Double(green + (target - green) * amount),
+            blue: Double(blue + (target - blue) * amount),
+            opacity: Double(alpha)
+        )
+    }
+}

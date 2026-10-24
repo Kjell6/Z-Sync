@@ -188,6 +188,28 @@
     <string name="browser_stop">Stop</string>
     <string name="browser_clear_search">Clear search</string>
 
+    <string name="browser_more">More</string>
+    <string name="browser_close_menu">Close menu</string>
+    <string name="browser_tabs">Tabs</string>
+    <string name="browser_copy_link">Copy Link</string>
+    <string name="browser_copied">Copied</string>
+    <string name="browser_reader">Reader</string>
+    <string name="browser_reader_unavailable">No article found on this page.</string>
+    <string name="browser_scheme_unavailable">No app on this device can open that link.</string>
+    <string name="browser_load_failed">This page couldn\'t be loaded.</string>
+    <string name="browser_desktop_site">Request Desktop Site</string>
+    <string name="browser_page_zoom">Page Zoom</string>
+    <string name="browser_zoom_in">Zoom in</string>
+    <string name="browser_zoom_out">Zoom out</string>
+    <string name="browser_find_short">Find</string>
+    <string name="browser_find_on_page">Find on page</string>
+    <string name="browser_find_next">Next</string>
+    <string name="browser_find_previous">Previous</string>
+    <string name="browser_share">Share</string>
+    <string name="browser_open_short">Open</string>
+    <string name="browser_pin_short">Pin</string>
+    <string name="browser_save_short">Save</string>
+
     <string name="whats_new_title">What\'s New</string>
     <string name="whats_new_subtitle">Here\'s what changed in this update.</string>
     <string name="whats_new_done">Done</string>

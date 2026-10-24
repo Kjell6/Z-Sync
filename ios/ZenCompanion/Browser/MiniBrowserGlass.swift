@@ -3,35 +3,12 @@ import SwiftUI
 // MARK: - Liquid Glass View Modifier Helper
 
 extension View {
-    /// iOS 26 SDK leaves the bottom bar chrome-less on iOS 17/18 unless we
-    /// force a visible material. No-op on iOS 26 (glass is automatic).
+    /// Untinted capsule. `interactive` is the same touch flex native glass
+    /// buttons get.
     @ViewBuilder
-    func legacyBottomToolbarBackground(_ color: Color) -> some View {
+    func liquidGlassCapsule(interactive: Bool = false) -> some View {
         if #available(iOS 26.0, *) {
-            self
-        } else {
-            self
-                .toolbarBackground(.visible, for: .bottomBar)
-                .toolbarBackground(color, for: .bottomBar)
-        }
-    }
-
-    /// iOS 26: no scroll-edge pocket under the bottom toolbar (Apple's "None").
-    /// Styles are only `.automatic` / `.soft` / `.hard`; hiding the effect is
-    /// `scrollEdgeEffectHidden` — see https://developer.apple.com/documentation/swiftui/view/scrolledgeeffecthidden(_:for:)
-    @ViewBuilder
-    func hiddenBottomScrollEdgeEffect() -> some View {
-        if #available(iOS 26.0, *) {
-            self.scrollEdgeEffectHidden(true, for: .bottom)
-        } else {
-            self
-        }
-    }
-
-    @ViewBuilder
-    func liquidGlassCapsule() -> some View {
-        if #available(iOS 26.0, *) {
-            self.glassEffect(in: Capsule())
+            self.glassEffect(interactive ? .regular.interactive() : .regular, in: Capsule())
         } else {
             self
                 .background(.ultraThinMaterial, in: Capsule())
@@ -41,52 +18,115 @@ extension View {
         }
     }
 
+    /// Soft lift. No fill: the page stays what the glass samples.
+    func floatingGlassShadow(scheme: ColorScheme) -> some View {
+        shadow(
+            color: Color.black.opacity(scheme == .dark ? 0.35 : 0.16),
+            radius: 14,
+            x: 0,
+            y: 6
+        )
+    }
+
+    /// Floating glass capsule: a pill that hovers over the page.
     @ViewBuilder
-    func liquidGlassCircle() -> some View {
+    func floatingGlassCapsule() -> some View {
+        let shape = Capsule(style: .continuous)
         if #available(iOS 26.0, *) {
-            self.glassEffect(in: Circle())
+            self
+                .clipShape(shape)
+                .glassEffect(.regular, in: shape)
+                .shadow(color: .black.opacity(0.20), radius: 16, y: 6)
         } else {
             self
-                .background(.ultraThinMaterial, in: Circle())
-                .overlay(
-                    Circle().strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.6)
-                )
+                .background(.ultraThinMaterial, in: shape)
+                .clipShape(shape)
+                .overlay(shape.strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.6))
+                .shadow(color: .black.opacity(0.16), radius: 14, y: 5)
         }
     }
 
-    /// Brand-tinted Liquid Glass: keeps the glass material but grounds it on a
-    /// solid tint so the capsule color never depends on the website behind it
-    /// (which previously caused light-on-light, unreadable toasts).
-    ///
-    /// `glassVisible == false` drops the glass layer: while a native context
-    /// menu is presented iOS 26 renders `glassEffect` as an opaque white slab
-    /// (and it stays broken through the menu's closing animation), so the pin
-    /// banner disables it once its destination picker has been opened.
+    /// Floating glass panel, for the open menu.
     @ViewBuilder
-    func liquidGlassTintedCapsule(_ tint: Color, glassVisible: Bool = true) -> some View {
+    func floatingGlassPanel(cornerRadius: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         if #available(iOS 26.0, *) {
-            self.background {
-                ZStack {
-                    Capsule().fill(tint.opacity(0.88))
-                    Capsule()
-                        .fill(Color.clear)
-                        .glassEffect(.regular.tint(tint), in: Capsule())
-                        .opacity(glassVisible ? 1 : 0)
-                }
-            }
+            self
+                .clipShape(shape)
+                .glassEffect(.regular, in: shape)
+                .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
         } else {
             self
-                .background {
-                    ZStack {
-                        Capsule()
-                            .fill(.ultraThinMaterial)
-                            .opacity(glassVisible ? 1 : 0)
-                        Capsule().fill(tint.opacity(0.92))
-                    }
-                }
+                .background(.ultraThinMaterial, in: shape)
+                .clipShape(shape)
+                .overlay(shape.strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.6))
+                .shadow(color: .black.opacity(0.18), radius: 16, y: 6)
+        }
+    }
+
+
+
+    /// Untinted regular glass, for a floating card over the page.
+    @ViewBuilder
+    func liquidGlassCard(cornerRadius: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        if #available(iOS 26.0, *) {
+            self
+                .clipShape(shape)
+                .glassEffect(.regular, in: shape)
+        } else {
+            self
+                .background(.ultraThinMaterial, in: shape)
+                .clipShape(shape)
                 .overlay(
-                    Capsule().strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.6)
+                    shape.strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.6)
                 )
         }
+    }
+}
+
+/// Soft bottom fade over the page. A live blur that ramps in towards the screen
+/// bottom and stops at half strength, so the page dissolves into the controls
+/// instead of being cut off by them.
+struct PageBottomFade: View {
+    /// Height of the ramp. The fade starts this far above the physical bottom.
+    var height: CGFloat = 92
+
+    /// Each layer blurs what the one below already blurred. The ramp stays
+    /// linear because every layer is kept weak instead of saturating early.
+    ///
+    /// Few, weak layers on purpose: a material cannot blur without also laying
+    /// a little of its own tone over the page. Every extra layer adds that tone
+    /// faster than it adds blur, which is what turned the fade grey.
+    private let layers = 2
+
+    /// Strength of a single layer at the very bottom. Two layers end up at
+    /// roughly 0.64 combined.
+    private let strength = 0.4
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            ForEach(0..<layers, id: \.self) { _ in
+                layer
+            }
+        }
+        .frame(height: height)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private var layer: some View {
+        Rectangle()
+            // Ultra-thin keeps the veil near invisible: thicker materials read
+            // as a grey (over dark pages: brownish) panel rather than a blur.
+            .fill(.ultraThinMaterial)
+            .mask(
+                LinearGradient(
+                    colors: [.clear, .white.opacity(strength)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .frame(height: height)
     }
 }

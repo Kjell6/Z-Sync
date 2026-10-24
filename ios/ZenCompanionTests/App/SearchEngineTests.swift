@@ -185,4 +185,141 @@ final class SearchEngineTests: XCTestCase {
         XCTAssertTrue(SearchEngines.custom.isEmpty)
         XCTAssertEqual(SearchEngines.current, .duckDuckGo)
     }
+
+    // MARK: - Suggestions
+    //
+    // Bodies are the live answers from 2026-10-11, trimmed only by the parser's
+    // eight-row cap. Each engine returned `["query", ["…"]]`. Google adds more
+    // elements after the list.
+
+    func testURLInputDoesNotBuildASuggestRequest() {
+        let urls = [
+            "https://example.com/private",
+            "http://example.com/foo bar",
+            "example.com",
+            "192.168.0.1:8080",
+            "mailto:support@kjell.cc",
+            "   \n\t",
+            "",
+        ]
+        for engine in SearchEngines.builtIn {
+            for text in urls {
+                XCTAssertNil(
+                    SearchSuggestions.requestURL(for: text, engine: engine),
+                    "\(engine.id) must not be asked about \(text.debugDescription)"
+                )
+            }
+        }
+    }
+
+    func testSearchQueryBuildsTheCheckedEndpoint() {
+        func query(_ engine: SearchEngine, _ name: String) -> String? {
+            let url = SearchSuggestions.requestURL(for: "zen browser", engine: engine)
+            return URLComponents(url: url!, resolvingAgainstBaseURL: false)?
+                .queryItems?
+                .first { $0.name == name }?
+                .value
+        }
+
+        XCTAssertEqual(SearchSuggestions.requestURL(for: "zen browser", engine: .duckDuckGo)?.host, "duckduckgo.com")
+        XCTAssertEqual(query(.duckDuckGo, "q"), "zen browser")
+        XCTAssertEqual(query(.duckDuckGo, "type"), "list")
+
+        XCTAssertEqual(SearchSuggestions.requestURL(for: "zen browser", engine: .google)?.host, "suggestqueries.google.com")
+        XCTAssertEqual(query(.google, "q"), "zen browser")
+        XCTAssertEqual(query(.google, "client"), "firefox")
+
+        XCTAssertEqual(SearchSuggestions.requestURL(for: "zen browser", engine: .ecosia)?.host, "ac.ecosia.org")
+        XCTAssertEqual(query(.ecosia, "type"), "list")
+
+        XCTAssertEqual(SearchSuggestions.requestURL(for: "zen browser", engine: .brave)?.host, "search.brave.com")
+        XCTAssertEqual(query(.brave, "q"), "zen browser")
+
+        XCTAssertEqual(SearchSuggestions.requestURL(for: "zen browser", engine: .bing)?.host, "www.bing.com")
+        XCTAssertEqual(query(.bing, "query"), "zen browser")
+        XCTAssertNil(query(.bing, "q"))
+    }
+
+    func testTappedSuggestionSearchesUnlessItIsAnHTTPAddress() {
+        XCTAssertEqual(
+            SearchSuggestions.target(of: "node.js", engine: .duckDuckGo),
+            SearchEngine.duckDuckGo.searchURL(for: "node.js")
+        )
+        XCTAssertEqual(
+            SearchSuggestions.target(of: "https://zen-browser.app", engine: .duckDuckGo)?.absoluteString,
+            "https://zen-browser.app"
+        )
+    }
+
+    func testPlusInQueryIsEncoded() {
+        let url = SearchSuggestions.requestURL(for: "c++", engine: .google)
+        XCTAssertTrue(url?.absoluteString.contains("q=c%2B%2B") == true, url?.absoluteString ?? "nil")
+    }
+
+    func testDotWithSpaceStillSuggests() {
+        XCTAssertNotNil(SearchSuggestions.requestURL(for: "hello.world foo", engine: .google))
+    }
+
+    func testCustomEngineHasNoSuggestRequest() {
+        let custom = SearchEngine(
+            id: "kagi",
+            displayName: "Kagi",
+            template: "https://kagi.com/search?q={query}",
+            isBuiltIn: false
+        )
+        XCTAssertNil(custom.suggestEndpoint)
+        XCTAssertNil(SearchSuggestions.requestURL(for: "kagi", engine: custom))
+    }
+
+    func testParseLiveSuggestBodies() {
+        let duckDuckGo = Data(
+            #"["zen browser",["zen browser","zen browser download","zen browser windows","zen browser reddit","zen browser portable","zen browser review","zen browser twilight","zen browser github"]]"#.utf8
+        )
+        XCTAssertEqual(
+            SearchSuggestions.parse(duckDuckGo),
+            [
+                "zen browser", "zen browser download", "zen browser windows", "zen browser reddit",
+                "zen browser portable", "zen browser review", "zen browser twilight", "zen browser github",
+            ]
+        )
+
+        let ecosia = Data(
+            #"["zen browser",["zen browser","zen browser download","zen browser windows","zen browser reddit","zen browser portable","zen browser github","zen browser twilight","zen browser vs firefox"]]"#.utf8
+        )
+        XCTAssertEqual(SearchSuggestions.parse(ecosia).count, 8)
+        XCTAssertEqual(SearchSuggestions.parse(ecosia).last, "zen browser vs firefox")
+
+        let brave = Data(
+            #"["zen browser",["zen browser","zen browser android","zen browser download","zen browser windows","zen browser arch","zen browser ios","zen browser apk","zen browser mobile"]]"#.utf8
+        )
+        XCTAssertEqual(SearchSuggestions.parse(brave)[1], "zen browser android")
+
+        // Google's live body has an empty third element and a subtype object.
+        let google = Data(
+            #"["zen browser",["zen browser","zen browser download","zen browser android","zen browser linux","zen browser ios","zen browser windows","zen browser arch","zen browser reddit","zen browser adblocker","zen browser github"],[],{"google:suggestsubtypes":[[512,433],[512]]}]"#.utf8
+        )
+        let googleSuggestions = SearchSuggestions.parse(google)
+        XCTAssertEqual(googleSuggestions.count, 8)
+        XCTAssertEqual(googleSuggestions.first, "zen browser")
+        XCTAssertFalse(googleSuggestions.contains("zen browser adblocker"))
+
+        let bing = Data(
+            #"["zen browser",["zen browser","zen browser download","zen browser windows","zen browser reddit","zen browser portable","zen browser github","zen browser twilight","zen browser vs firefox","zen browser vs brave","zen browser available in windows","zen browser winget","zen browser android"]]"#.utf8
+        )
+        XCTAssertEqual(SearchSuggestions.parse(bing).count, 8)
+        XCTAssertFalse(SearchSuggestions.parse(bing).contains("zen browser android"))
+    }
+
+    func testParseDropsBlankDuplicatesAndNonStrings() {
+        let body = Data(#"["q",["ok","  ","ok",1,null," second "]]"#.utf8)
+        XCTAssertEqual(SearchSuggestions.parse(body), ["ok", "second"])
+    }
+
+    func testParseRejectsAnythingElse() {
+        XCTAssertTrue(SearchSuggestions.parse(Data("[]".utf8)).isEmpty)
+        XCTAssertTrue(SearchSuggestions.parse(Data(#"["only"]"#.utf8)).isEmpty)
+        XCTAssertTrue(SearchSuggestions.parse(Data(#"{"suggestions":["a"]}"#.utf8)).isEmpty)
+        XCTAssertTrue(SearchSuggestions.parse(Data("not json".utf8)).isEmpty)
+        XCTAssertTrue(SearchSuggestions.parse(Data()).isEmpty)
+    }
 }

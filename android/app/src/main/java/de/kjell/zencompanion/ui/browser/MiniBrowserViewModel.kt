@@ -9,9 +9,10 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.SaveKind
+import de.kjell.zencompanion.data.SearchEngines
+import de.kjell.zencompanion.data.SearchSuggestions
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.BrowserRepository
-import de.kjell.zencompanion.data.SearchEngines
 import de.kjell.zencompanion.ui.components.PinDestination
 import de.kjell.zencompanion.ui.screens.BrowserPageError
 import de.kjell.zencompanion.ui.screens.formatBrowserInput
@@ -25,6 +26,26 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.net.URI
+import kotlin.math.roundToInt
+
+/// Page zoom steps for the mini browser, mirrored from `MiniBrowserTools` on
+/// iOS: a fraction of 1.0, clamped to 0.5...2.0 in steps of 0.1.
+object MiniBrowserZoom {
+    const val min = 0.5f
+    const val max = 2.0f
+    const val step = 0.1f
+    const val default = 1.0f
+
+    fun clamped(value: Float): Float {
+        val stepped = (value / step).roundToInt() * step
+        return (min.coerceAtLeast(max.coerceAtMost(stepped)) * 100f).roundToInt() / 100f
+    }
+
+    fun percentLabel(value: Float): String = "${(clamped(value) * 100).roundToInt()}%"
+
+    fun canZoomIn(value: Float): Boolean = clamped(value) < max - 0.001f
+    fun canZoomOut(value: Float): Boolean = clamped(value) > min + 0.001f
+}
 
 /**
  * Chrome and deferred-pin state for the mini browser (port of the state
@@ -36,6 +57,8 @@ class MiniBrowserViewModel(
     initialTitle: String?,
     spaces: List<ZenSpaces.ZenSpace>,
     currentSpaceId: String,
+    private val suggestionClient: SearchSuggestionClient = LiveSearchSuggestionClient(),
+    private val suggestionDebounceMs: Long = SearchSuggestions.DEBOUNCE_MS,
 ) : ViewModel() {
 
     private var initialUrl: String? = initialUrl
@@ -65,6 +88,23 @@ class MiniBrowserViewModel(
         val pageError: BrowserPageError? = null,
         /** The address that failed; the address bar and the panel act on it. */
         val failedUrl: String = "",
+        /** Expanded page menu on the bottom bar. */
+        val menuExpanded: Boolean = false,
+        /** Reading view of the current page, or null for the page itself. */
+        val readerArticle: ReaderArticle? = null,
+        val readerLoading: Boolean = false,
+        /** Session-only desktop request; applied to the WebView. */
+        val requestsDesktopSite: Boolean = false,
+        /** 1.0 = 100%. Always inside [MiniBrowserZoom] limits. */
+        val pageZoom: Float = MiniBrowserZoom.default,
+        /** Transient "Copied" confirmation on the copy row. */
+        val copyConfirmed: Boolean = false,
+        /** In-page find bar. */
+        val findVisible: Boolean = false,
+        val findQuery: String = "",
+        val findProgress: String? = null,
+        /** Suggestions for the text being typed. Empty hides the list. */
+        val suggestions: List<String> = emptyList(),
     ) {
         /** Normal saves always target the space root, so folder rows are hidden. */
         val hideFolders: Boolean get() = saveKind == SaveKind.NORMAL
@@ -89,13 +129,20 @@ class MiniBrowserViewModel(
 
     private var pinBannerJob: Job? = null
     private var noticeJob: Job? = null
+    private var copyJob: Job? = null
+    private var suggestionJob: Job? = null
     private var hasPendingPinSave = false
+    /** Set after a pick or submit so the following text write does not suggest. */
+    private var suggestionsSuspended = false
 
     /**
      * Live `document.title` from the WebView. The screen installs this.
      * WebView's own title callback is often the URL.
      */
     var documentTitle: suspend () -> String? = { null }
+
+    /** Reader extraction payload from the page. Installed by the screen. */
+    var readerPayload: suspend () -> String? = { null }
 
     /**
      * The page the user pinned (url to title), captured when the banner
@@ -123,6 +170,8 @@ class MiniBrowserViewModel(
         this.currentSpaceId = currentSpaceId
         pinBannerJob?.cancel()
         noticeJob?.cancel()
+        suggestionJob?.cancel()
+        suggestionsSuspended = false
         hasPendingPinSave = false
         pendingPin = null
         _state.value = State(
@@ -146,18 +195,37 @@ class MiniBrowserViewModel(
 
     fun onAddressTextChange(value: TextFieldValue) {
         _state.update { it.copy(addressText = value) }
+        refreshSuggestions()
     }
 
     fun onAddressFocusChange(focused: Boolean) {
         if (focused == _state.value.isAddressFocused) return
+        if (!focused) suggestionsSuspended = false
         _state.update {
             it.copy(
                 isAddressFocused = focused,
+                suggestions = if (focused) it.suggestions else emptyList(),
                 addressText = TextFieldValue(
                     text = if (focused) effectiveUrl() else displayHost(effectiveUrl()),
                 ),
             )
         }
+        if (focused) refreshSuggestions() else suggestionJob?.cancel()
+    }
+
+    /**
+     * Opens the address composer. The field itself is only composed while this
+     * is on, so the screen focuses it afterwards; asking for focus here, before
+     * the field exists, is an unattached `FocusRequester` and does nothing.
+     */
+    fun beginAddressEdit() {
+        collapseMenu()
+        onAddressFocusChange(true)
+    }
+
+    /** Closes the composer through the state, not only through the keyboard. */
+    fun endAddressEdit() {
+        onAddressFocusChange(false)
     }
 
     fun onLoadingChange(loading: Boolean) {
@@ -166,6 +234,23 @@ class MiniBrowserViewModel(
 
     fun onProgressChange(progress: Float) {
         _state.update { it.copy(progress = progress) }
+    }
+
+    /**
+     * A link the WebView must not load and nobody else can take. The page stays
+     * as it is: the WebView's own error page would leave nothing to go back to.
+     */
+    fun onLinkUnavailable() {
+        clearLoading()
+        showNotice(Notice(R.string.browser_scheme_unavailable))
+    }
+
+    /**
+     * A load that never finishes must not leave the bar in its "stop" state:
+     * a failed navigation gets no `onPageFinished` on some WebView versions.
+     */
+    private fun clearLoading() {
+        _state.update { it.copy(isLoading = false, progress = 0f) }
     }
 
     fun onCanGoBackChange(canGoBack: Boolean) {
@@ -178,8 +263,20 @@ class MiniBrowserViewModel(
 
     fun onCurrentUrlChange(url: String) {
         _state.update { state ->
-            if (PageTitle.sameDocument(state.currentUrl, url)) state.copy(currentUrl = url)
-            else state.copy(currentUrl = url, currentTitle = "")
+            if (PageTitle.sameDocument(state.currentUrl, url)) {
+                state.copy(currentUrl = url)
+            } else {
+                // A fresh document ends the reading view and the find session.
+                state.copy(
+                    currentUrl = url,
+                    currentTitle = "",
+                    readerArticle = null,
+                    readerLoading = false,
+                    findVisible = false,
+                    findQuery = "",
+                    findProgress = null,
+                )
+            }
         }
         // Leaving the pinned page saves it now instead of letting the banner
         // timer save whatever page is showing later.
@@ -245,7 +342,63 @@ class MiniBrowserViewModel(
      * Resolves raw address input to a fully-qualified URL (or search URL).
      * The caller loads the returned value; empty means nothing to load.
      */
-    fun submitAddress(input: String): String = formatBrowserInput(input)
+    fun submitAddress(input: String): String {
+        suggestionsSuspended = true
+        suggestionJob?.cancel()
+        _state.update { it.copy(suggestions = emptyList()) }
+        return formatBrowserInput(input)
+    }
+
+    /**
+     * A tapped suggestion searches; only an explicit http(s) address loads
+     * directly (see [SearchSuggestions.target]).
+     */
+    fun selectSuggestion(suggestion: String): String {
+        suggestionsSuspended = true
+        suggestionJob?.cancel()
+        _state.update {
+            it.copy(
+                suggestions = emptyList(),
+                addressText = TextFieldValue(suggestion),
+            )
+        }
+        return SearchSuggestions.target(suggestion, SearchEngines.current)
+    }
+
+    /**
+     * Asks for suggestions while the field is focused and the text is a search
+     * query. A URL, blank text, a custom engine, or a closed field sends nothing.
+     * Errors and empty answers clear the list.
+     */
+    private fun refreshSuggestions() {
+        suggestionJob?.cancel()
+        if (suggestionsSuspended || !_state.value.isAddressFocused) {
+            _state.update { it.copy(suggestions = emptyList()) }
+            return
+        }
+        val raw = _state.value.addressText.text
+        val url = SearchSuggestions.requestUrl(raw, SearchEngines.current)
+        if (url == null) {
+            _state.update { it.copy(suggestions = emptyList()) }
+            return
+        }
+        suggestionJob = viewModelScope.launch {
+            if (suggestionDebounceMs > 0) delay(suggestionDebounceMs)
+            val body = try {
+                suggestionClient.fetch(url)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
+            if (body == null) {
+                _state.update { it.copy(suggestions = emptyList()) }
+                return@launch
+            }
+            if (_state.value.addressText.text != raw || !_state.value.isAddressFocused) return@launch
+            _state.update { it.copy(suggestions = SearchSuggestions.parse(body)) }
+        }
+    }
 
     /** Back precedence: menus → address focus → web history → dismiss. */
     fun onBackPressed(webViewCanGoBack: Boolean): BackAction = when {
@@ -260,9 +413,12 @@ class MiniBrowserViewModel(
             BackAction.Handled
         }
         _state.value.isAddressFocused -> {
+            suggestionJob?.cancel()
+            suggestionsSuspended = false
             _state.update {
                 it.copy(
                     isAddressFocused = false,
+                    suggestions = emptyList(),
                     addressText = TextFieldValue(displayHost(effectiveUrl())),
                 )
             }
@@ -280,8 +436,8 @@ class MiniBrowserViewModel(
     fun triggerPinBanner() {
         val urlToPin = effectiveUrl()
         // No spaces to attach the pin to: never open a banner that would save
-        // an unattached record.
-        if (urlToPin.isEmpty() || spaces.isEmpty()) return
+        // an unattached record. A failed page is not worth pinning either.
+        if (urlToPin.isEmpty() || spaces.isEmpty() || _state.value.pageError != null) return
 
         if (_state.value.pinnedDestination.spaceId.isEmpty() ||
             spaces.none { it.id == _state.value.pinnedDestination.spaceId }
@@ -388,6 +544,93 @@ class MiniBrowserViewModel(
         noticeJob = viewModelScope.launch {
             delay(6_000L)
             _state.update { it.copy(notice = null) }
+        }
+    }
+
+    // MARK: - Page menu
+
+    fun toggleMenu() {
+        _state.update { it.copy(menuExpanded = !it.menuExpanded) }
+    }
+
+    fun collapseMenu() {
+        _state.update { it.copy(menuExpanded = false) }
+    }
+
+    // MARK: - Page tools
+
+    fun toggleDesktopSite() {
+        val next = !_state.value.requestsDesktopSite
+        _state.update { it.copy(requestsDesktopSite = next, menuExpanded = false) }
+    }
+
+    fun zoomIn() {
+        val next = MiniBrowserZoom.clamped(_state.value.pageZoom + MiniBrowserZoom.step)
+        _state.update { it.copy(pageZoom = next) }
+    }
+
+    fun zoomOut() {
+        val next = MiniBrowserZoom.clamped(_state.value.pageZoom - MiniBrowserZoom.step)
+        _state.update { it.copy(pageZoom = next) }
+    }
+
+    /** Transient confirmation on the copy row; the screen does the clipboard. */
+    fun confirmCopied() {
+        copyJob?.cancel()
+        _state.update { it.copy(copyConfirmed = true) }
+        copyJob = viewModelScope.launch {
+            delay(1_600L)
+            _state.update { it.copy(copyConfirmed = false) }
+        }
+    }
+
+    // MARK: - Find on page
+
+    fun openFind() {
+        _state.update { it.copy(findVisible = true, menuExpanded = false) }
+    }
+
+    fun closeFind() {
+        _state.update { it.copy(findVisible = false, findQuery = "", findProgress = null) }
+    }
+
+    fun setFindQuery(query: String) {
+        _state.update { it.copy(findQuery = query) }
+    }
+
+    fun setFindProgress(progress: String?) {
+        _state.update { it.copy(findProgress = progress) }
+    }
+
+    // MARK: - Reader
+
+    /** Lifts the article out of the page, or drops back to the page. */
+    fun toggleReader() {
+        if (_state.value.readerArticle != null) {
+            closeReader()
+            return
+        }
+        loadReader()
+    }
+
+    fun closeReader() {
+        _state.update { it.copy(readerArticle = null, readerLoading = false) }
+    }
+
+    private fun loadReader() {
+        if (_state.value.readerLoading) return
+        _state.update { it.copy(readerLoading = true, menuExpanded = false) }
+        viewModelScope.launch {
+            val payload = try {
+                readerPayload()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
+            val article = ReaderExtractor.parse(payload)
+            _state.update { it.copy(readerLoading = false, readerArticle = article) }
+            if (article == null) showNotice(Notice(R.string.browser_reader_unavailable))
         }
     }
 

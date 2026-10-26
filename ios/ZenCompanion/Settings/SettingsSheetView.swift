@@ -318,6 +318,9 @@ struct SettingsSheet: View {
                         .padding(.top, 8)
                     }
 
+                    // MARK: - Content blocking
+                    ContentBlockingSettingsSection(scheme: scheme)
+
                     // MARK: - 3. Feedback
                     VStack(alignment: .leading, spacing: 8) {
                         Text("FEEDBACK")

@@ -2,6 +2,7 @@ package de.kjell.zencompanion
 
 import android.app.Application
 import de.kjell.zencompanion.data.AppContextHolder
+import de.kjell.zencompanion.data.ContentBlocking
 import de.kjell.zencompanion.favicon.FaviconLoader
 
 class ZenCompanionApp : Application() {
@@ -9,5 +10,6 @@ class ZenCompanionApp : Application() {
         super.onCreate()
         AppContextHolder.initialize(this)
         FaviconLoader.initialize(this)
+        ContentBlocking.start(this)
     }
 }

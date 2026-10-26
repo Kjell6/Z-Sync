@@ -16,17 +16,26 @@ import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.webkit.ScriptHandler
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
+import de.kjell.zencompanion.data.ContentBlocking
+import de.kjell.zencompanion.data.ContentBlockingSettings
+import de.kjell.zencompanion.ui.browser.PageBlocker
+import java.io.ByteArrayInputStream
 import de.kjell.zencompanion.ui.components.openURLExternally
 
 /** Chrome-like desktop user agent for the "Request Desktop Site" toggle. */
@@ -58,6 +67,17 @@ internal fun MiniBrowserWebView(
     onLinkUnavailable: () -> Unit,
     onScrollChange: (scrollY: Int) -> Unit,
     onFindResult: (active: Int, total: Int) -> Unit,
+    /** Decides which requests get an empty answer, and counts them. */
+    blocker: PageBlocker,
+    /** The autoconsent bundle; the script around it follows the switches. */
+    consentBundle: String?,
+    /** Passed so a change recomposes; the current value is read from [ContentBlocking]. */
+    blockingSettings: ContentBlockingSettings,
+    /**
+     * Bumped to reload after a blocking change. The reload waits until the
+     * new switches and script are in place, so it can't load with the old ones.
+     */
+    blockingReload: Int,
 ) {
     // The factory runs once; read the live callbacks instead of the first values.
     val addressFocused by rememberUpdatedState(isAddressFocused)
@@ -66,6 +86,7 @@ internal fun MiniBrowserWebView(
     val loadFailed by rememberUpdatedState(onLoadFailed)
     val rendererGone by rememberUpdatedState(onRendererGone)
     val linkUnavailable by rememberUpdatedState(onLinkUnavailable)
+    val consent = remember { ConsentScriptSlot(handledReload = blockingReload) }
 
     // Native Android WebView
     AndroidView(
@@ -98,6 +119,12 @@ internal fun MiniBrowserWebView(
                 webViewClient = object : WebViewClient() {
                     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                         super.onPageStarted(view, url, favicon)
+                        // Back and forward can skip the main-frame request.
+                        url?.let { blocker.pageStarted(it, isReload = false) }
+                        // Leaving the page shown as the original: this document
+                        // started with the script that skipped it, so run the
+                        // current one now as well.
+                        view?.let { consent.sync(it, blocker, consentBundle, runNow = true) }
                         // A failed load reports its error after this, so the
                         // new page always starts without the old panel.
                         onPageStart()
@@ -138,6 +165,20 @@ internal fun MiniBrowserWebView(
                             }
                         }
                         view?.evaluateJavascript(SCROLL_BINDING_SCRIPT, null)
+                    }
+
+                    // Runs on a WebView thread for every request the page makes.
+                    override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                        request ?: return null
+                        if (!blocker.shouldBlock(request.url, request.isForMainFrame)) return null
+                        return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
+                    }
+
+                    // Older WebViews can't add a script at document start; the
+                    // cookie banner script then runs once the page is visible.
+                    override fun onPageCommitVisible(view: WebView?, url: String?) {
+                        super.onPageCommitVisible(view, url)
+                        if (!consent.atDocumentStart) consent.current?.let { view?.evaluateJavascript(it, null) }
                     }
 
                     override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
@@ -267,6 +308,8 @@ internal fun MiniBrowserWebView(
                     SCROLL_BRIDGE_NAME,
                 )
 
+                // Before the first load, which happens ahead of `update`.
+                consent.sync(this, blocker, consentBundle, runNow = false)
                 val loadTarget = formatBrowserInput(initialUrl ?: "")
                 if (loadTarget.isNotEmpty()) {
                     if (isWebScheme(Uri.parse(loadTarget).scheme)) {
@@ -281,6 +324,11 @@ internal fun MiniBrowserWebView(
         },
         update = { view ->
             view.settings.textZoom = textZoomPercent
+            consent.sync(view, blocker, consentBundle, runNow = false)
+            if (blockingReload != consent.handledReload) {
+                consent.handledReload = blockingReload
+                view.reload()
+            }
             val defaultUserAgent = view.tag as? String
             val desired = if (desktopSite) DesktopUserAgent else defaultUserAgent
             if (desired != null && view.settings.userAgentString != desired) {
@@ -360,3 +408,38 @@ private fun browserPackages(context: Context): Set<String> {
 }
 
 private const val BROWSER_PROBE_URL = "https://example.com"
+
+/**
+ * The cookie banner script added to every document the WebView loads. Swapped
+ * whenever the switches change, so a site turned off stops getting it.
+ */
+private class ConsentScriptSlot(var handledReload: Int) {
+    private var handler: ScriptHandler? = null
+    private var key: Pair<ContentBlockingSettings, String?>? = null
+
+    /** The script for the switches last synced, or null for none. */
+    var current: String? = null
+        private set
+
+    val atDocumentStart: Boolean = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
+
+    /**
+     * Hands the current switches to [blocker] and swaps the script when they
+     * changed. Read from [ContentBlocking] rather than Compose state, which can
+     * lag a frame behind a switch the user just changed. [runNow] also runs a
+     * changed script in the document that has already started.
+     */
+    fun sync(view: WebView, blocker: PageBlocker, bundle: String?, runNow: Boolean) {
+        val settings = ContentBlocking.settings.value
+        blocker.settings = settings
+        val wanted = settings to blocker.originalHost
+        if (wanted == key) return
+        key = wanted
+        current = blocker.consentScript(bundle, settings)
+        if (atDocumentStart) {
+            handler?.remove()
+            handler = current?.let { WebViewCompat.addDocumentStartJavaScript(view, it, setOf("*")) }
+        }
+        if (runNow) current?.let { view.evaluateJavascript(it, null) }
+    }
+}

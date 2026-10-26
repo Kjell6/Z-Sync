@@ -282,6 +282,20 @@ final class MiniBrowserModel {
     /// SF Symbol shown with `pinNotice`.
     private(set) var pinNoticeSymbol = "pin.slash.fill"
 
+    // MARK: Content blocking
+    /// Ads and trackers blocked on the current page (close, not exact, on iOS).
+    private(set) var blockedCount = 0
+    /// The page was reloaded once with nothing blocked.
+    private(set) var showingOriginal = false
+    /// The site's own blocking switches, opened from the menu.
+    var siteSettingsPresented = false
+    @ObservationIgnored private var originalPage: URL?
+    @ObservationIgnored private var countedResources = Set<String>()
+    /// Reported addresses looked at for this document, counted or not.
+    @ObservationIgnored private var checkedResources = 0
+    @ObservationIgnored private var appliedBlocking: BlockingConfiguration?
+    @ObservationIgnored let blocker: ContentBlocker
+
     /// Scroll offset captured when the reader asked for a reload.
     @ObservationIgnored private var reloadScrollY: CGFloat?
     @ObservationIgnored private var pinBannerDismissTask: Task<Void, Never>?
@@ -309,9 +323,11 @@ final class MiniBrowserModel {
         preferences: PreferencesStoring = AppServices.preferences,
         allowsNormalTabs: Bool = false,
         suggestionClient: SearchSuggestionFetching = LiveSearchSuggestionClient(),
-        suggestionDebounce: Duration = SearchSuggestions.debounce
+        suggestionDebounce: Duration = SearchSuggestions.debounce,
+        blocker: ContentBlocker = .shared
     ) {
         self.initialURL = initialURL
+        self.blocker = blocker
         self.pinWriter = pinWriter
         self.urlOpener = urlOpener
         self.searchEngine = searchEngine
@@ -704,6 +720,103 @@ final class MiniBrowserModel {
     func pageDidCommit() {
         pageError = nil
         failedURL = nil
+        countedResources.removeAll()
+        checkedResources = 0
+        blockedCount = 0
+    }
+
+    // MARK: - Content blocking
+
+    /// The page's host for blocking, or nil for a blank or non-web page.
+    var blockingHost: String? {
+        guard let url = effectiveURL, ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return nil }
+        return url.host
+    }
+
+    var blockingCard: BlockingCard {
+        BlockingCard.of(settings: blocker.settings, host: blockingHost, blockedCount: blockedCount, showingOriginal: showingOriginal)
+    }
+
+    /// A main-frame load is about to start: the lists and scripts for its site
+    /// go on the web view first. Leaving the page shown as the original turns
+    /// blocking back on.
+    func prepareBlocking(for url: URL) {
+        let page = Self.withoutFragment(url)
+        if originalPage != nil, originalPage != page {
+            originalPage = nil
+            showingOriginal = false
+        }
+        applyBlocking(host: url.host)
+    }
+
+    /// Resources the page reported. WebKit doesn't say what it blocked, so the
+    /// count is the reported resources an active list matches.
+    func resourcesLoaded(_ urls: [String], page: URL?) {
+        guard originalPage == nil, let host = currentURL?.host, page?.host == host else { return }
+        for raw in urls where checkedResources < Self.maxCheckedResources {
+            checkedResources += 1
+            guard !countedResources.contains(raw), let url = URL(string: raw), blocker.blocks(url, pageHost: host) else { continue }
+            countedResources.insert(raw)
+        }
+        if blockedCount != countedResources.count { blockedCount = countedResources.count }
+    }
+
+    func tapBlockingCard() {
+        switch blockingCard {
+        case .blocked:
+            originalPage = currentURL.map(Self.withoutFragment)
+            showingOriginal = true
+            menuExpanded = false
+            reloadForBlocking()
+        case .showingOriginal:
+            originalPage = nil
+            showingOriginal = false
+            menuExpanded = false
+            reloadForBlocking()
+        case .offForSite:
+            openSiteSettings()
+        case .hidden:
+            break
+        }
+    }
+
+    func openSiteSettings() {
+        menuExpanded = false
+        siteSettingsPresented = true
+    }
+
+    /// A switch changed in Site Settings: the page reloads with it.
+    func blockingSettingsDidChange() {
+        reloadForBlocking()
+    }
+
+    private func reloadForBlocking() {
+        applyBlocking(host: currentURL?.host)
+        webView?.reload()
+    }
+
+    private func applyBlocking(host: String?) {
+        guard let controller = webView?.configuration.userContentController else { return }
+        let configuration = blocker.configuration(host: host, original: originalPage != nil)
+        guard configuration != appliedBlocking else { return }
+        appliedBlocking = configuration
+        blocker.apply(configuration, to: controller)
+        controller.addUserScript(WKUserScript(
+            source: BlockedResourceReport.script,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true,
+            in: BlockedResourceReport.world
+        ))
+    }
+
+    /// Per document. A page reports at most 2,000 addresses; this also bounds
+    /// the work if something reports more.
+    private static let maxCheckedResources = 5_000
+
+    private static func withoutFragment(_ url: URL) -> URL {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+        components.fragment = nil
+        return components.url ?? url
     }
 
     /// Keeps the address bar on the failed address while the panel shows,

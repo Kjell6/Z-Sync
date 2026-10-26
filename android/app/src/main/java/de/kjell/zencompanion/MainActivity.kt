@@ -37,6 +37,10 @@ import de.kjell.zencompanion.ui.sheets.SettingsSheet
 import de.kjell.zencompanion.ui.sheets.SignInHelpSheet
 import de.kjell.zencompanion.ui.sheets.SyncedActivitySheet
 import de.kjell.zencompanion.ui.sheets.WhatsNewSheet
+import de.kjell.zencompanion.ui.sheets.ContentBlockingSetupScreen
+import de.kjell.zencompanion.data.ContentBlocking
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import de.kjell.zencompanion.ui.sheets.ZenSheet
 import de.kjell.zencompanion.ui.theme.ZenTheme
 import kotlinx.coroutines.delay
@@ -130,6 +134,7 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
     val preferences by viewModel.preferences.collectAsState()
     val activityState by viewModel.activity.collectAsState()
     val whatsNewVisible by viewModel.whatsNewVisible.collectAsState()
+    val blockingAsked by ContentBlocking.asked.collectAsState()
     val account = session ?: return
 
     var showSettings by rememberSaveable { mutableStateOf(false) }
@@ -148,7 +153,9 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
     // Only the main activity reaches this: sharing from another app opens
     // ShareActivity, which never builds AppViewModel, so a share cannot
     // trigger the sheet.
-    LaunchedEffect(Unit) {
+    // The content blocking question comes first; the notes wait for its answer.
+    LaunchedEffect(blockingAsked) {
+        if (!blockingAsked) return@LaunchedEffect
         delay(450)
         viewModel.presentWhatsNewIfNeeded()
     }
@@ -280,5 +287,21 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
 
     if (whatsNewVisible) {
         WhatsNewSheet(onDismiss = { viewModel.dismissWhatsNew() })
+    }
+
+    // Asked once, right after sign-in or on the first launch that has it.
+    // Back does nothing: Continue is the answer.
+    if (!blockingAsked) {
+        Dialog(
+            onDismissRequest = {},
+            properties = DialogProperties(
+                dismissOnBackPress = false,
+                dismissOnClickOutside = false,
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false,
+            ),
+        ) {
+            ContentBlockingSetupScreen()
+        }
     }
 }

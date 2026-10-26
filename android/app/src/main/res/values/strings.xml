@@ -223,4 +223,29 @@
     <string name="whats_new_item_tab_controls_detail">Move pinned tabs into folders or pin normal tabs from their context menu.</string>
     <string name="whats_new_item_more_title">Plus a few more things</string>
     <string name="whats_new_item_more_detail">Folder icons, essentials per row, and many smaller fixes.</string>
+
+    <!-- Content blocking -->
+    <plurals name="blocking_card_blocked">
+        <item quantity="one">Z-Sync blocked %d ad or tracker</item>
+        <item quantity="other">Z-Sync blocked %d ads and trackers</item>
+    </plurals>
+    <string name="blocking_card_restore">Problems? Tap to restore the original page</string>
+    <string name="blocking_card_original">Showing the original page</string>
+    <string name="blocking_card_block_again">Tap to block ads and trackers again</string>
+    <string name="blocking_card_off_for_site">Blocking is off for %s</string>
+    <string name="blocking_card_open_site_settings">Tap to open Site Settings</string>
+    <string name="browser_site_settings">Site Settings</string>
+    <string name="blocking_ads">Block ads</string>
+    <string name="blocking_trackers">Block trackers</string>
+    <string name="blocking_cookie_banners">Block cookie banners</string>
+    <string name="blocking_cookie_banners_detail">Answers \"Reject all\" for you</string>
+    <string name="blocking_off_in_settings">Off in Settings</string>
+    <string name="site_settings_footer">Only for %s. To change blocking everywhere, open Settings.</string>
+    <string name="settings_content_blocking">Content blocking</string>
+    <string name="settings_content_blocking_caption">Ad and tracker lists by EasyList, updated weekly. Last update: %s. Cookie banners are handled by DuckDuckGo\'s autoconsent.</string>
+    <string name="settings_content_blocking_caption_undated">Ad and tracker lists by EasyList, updated weekly. Cookie banners are handled by DuckDuckGo\'s autoconsent.</string>
+    <string name="blocking_setup_title">Block ads and trackers?</string>
+    <string name="blocking_setup_body">Pages you open in Z-Sync load without ads and trackers, and cookie banners are refused for you.</string>
+    <string name="blocking_setup_continue">Continue</string>
+    <string name="blocking_setup_note">You can change this in Settings, or for a single site from the browser menu.</string>
 </resources>

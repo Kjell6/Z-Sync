@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -28,6 +29,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.Check
@@ -43,6 +45,9 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Restore
+import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.CircularProgressIndicator
@@ -62,7 +67,11 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -74,6 +83,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.SaveKind
+import de.kjell.zencompanion.ui.browser.BlockingCard
 import de.kjell.zencompanion.ui.browser.MiniBrowserViewModel
 import de.kjell.zencompanion.ui.browser.MiniBrowserZoom
 import de.kjell.zencompanion.ui.theme.LocalZenColors
@@ -183,6 +193,10 @@ internal fun MiniBrowserBar(
     onShare: () -> Unit,
     onOpenExternal: () -> Unit,
     onPin: () -> Unit,
+    /** What the card at the top of the menu says. */
+    blockingCard: BlockingCard,
+    onBlockingCard: () -> Unit,
+    onSiteSettings: () -> Unit,
     barColor: Color,
     modifier: Modifier = Modifier,
 ) {
@@ -219,6 +233,9 @@ internal fun MiniBrowserBar(
                     onShare = onShare,
                     onOpenExternal = onOpenExternal,
                     onPin = onPin,
+                    blockingCard = blockingCard,
+                    onBlockingCard = onBlockingCard,
+                    onSiteSettings = onSiteSettings,
                 )
             }
         }
@@ -619,9 +636,20 @@ private fun ExpandedMenu(
     onShare: () -> Unit,
     onOpenExternal: () -> Unit,
     onPin: () -> Unit,
+    blockingCard: BlockingCard,
+    onBlockingCard: () -> Unit,
+    onSiteSettings: () -> Unit,
 ) {
     val zen = LocalZenColors.current
     Column(Modifier.fillMaxWidth()) {
+        // At the top: the menu grows up from the bar, so this is the far end,
+        // where Arc keeps the same status at the bottom of its sheet. A plain
+        // row, like the ones below it: a lift card inside the glass panel reads
+        // as a grey patch with a rim.
+        if (blockingCard != BlockingCard.Hidden) {
+            BlockingCardRow(card = blockingCard, onClick = onBlockingCard)
+            RowDivider()
+        }
         MenuRow(
             icon = Icons.Outlined.ContentCopy,
             title = stringResource(if (state.copyConfirmed) R.string.browser_copied else R.string.browser_copy_link),
@@ -698,6 +726,21 @@ private fun ExpandedMenu(
                 }
             },
         )
+        RowDivider()
+        MenuRow(
+            icon = Icons.Outlined.Tune,
+            title = stringResource(R.string.browser_site_settings),
+            tint = zen.ink,
+            trailing = {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = zen.ink.copy(alpha = 0.5f),
+                    modifier = Modifier.size(20.dp),
+                )
+            },
+            onClick = onSiteSettings,
+        )
 
         Row(
             modifier = Modifier
@@ -744,6 +787,74 @@ private fun ExpandedMenu(
                 background = barColor,
                 onClick = onPin,
                 enabled = canPin,
+            )
+        }
+    }
+}
+
+/** The blocked count, or what blocking does on this page, with what a tap does. */
+@Composable
+private fun BlockingCardRow(card: BlockingCard, onClick: () -> Unit) {
+    val zen = LocalZenColors.current
+    val (icon, title, detail) = when (card) {
+        is BlockingCard.Blocked -> {
+            val text = pluralStringResource(R.plurals.blocking_card_blocked, card.count, card.count)
+            val number = card.count.toString()
+            val start = text.indexOf(number)
+            Triple(
+                Icons.Outlined.Shield,
+                buildAnnotatedString {
+                    if (start < 0) {
+                        append(text)
+                    } else {
+                        append(text.substring(0, start))
+                        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(number) }
+                        append(text.substring(start + number.length))
+                    }
+                },
+                stringResource(R.string.blocking_card_restore),
+            )
+        }
+        BlockingCard.ShowingOriginal -> Triple(
+            Icons.Outlined.Restore,
+            buildAnnotatedString { append(stringResource(R.string.blocking_card_original)) },
+            stringResource(R.string.blocking_card_block_again),
+        )
+        is BlockingCard.OffForSite -> Triple(
+            Icons.Outlined.Tune,
+            buildAnnotatedString { append(stringResource(R.string.blocking_card_off_for_site, card.site)) },
+            stringResource(R.string.blocking_card_open_site_settings),
+        )
+        BlockingCard.Hidden -> return
+    }
+    // True white or black rather than the cream ink: this row sits on the
+    // page's own colour through the glass, where cream loses contrast.
+    val strong = if (zen.isDark) Color.White else Color.Black
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .barClickable(onClick = onClick)
+            .heightIn(min = RowHeight)
+            .padding(vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = strong,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = ZenType.rounded(16, FontWeight.Medium),
+                color = strong,
+            )
+            Text(
+                text = detail,
+                style = ZenType.rounded(13, FontWeight.Normal),
+                color = strong.copy(alpha = 0.72f),
             )
         }
     }

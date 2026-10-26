@@ -134,6 +134,8 @@ dependencies {
     implementation("androidx.security:security-crypto:1.1.0")
     implementation("com.google.android.play:review-ktx:2.0.2")
     implementation("com.caverock:androidsvg-aar:1.4")
+    // Adds the cookie banner script before a page's own scripts run.
+    implementation("androidx.webkit:webkit:1.18.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20260814")

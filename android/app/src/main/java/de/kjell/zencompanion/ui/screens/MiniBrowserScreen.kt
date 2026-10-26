@@ -91,6 +91,10 @@ import de.kjell.zencompanion.R
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.BrowserRepository
 import de.kjell.zencompanion.ui.browser.MiniBrowserViewModel
+import de.kjell.zencompanion.ui.browser.BlockingCard
+import de.kjell.zencompanion.ui.browser.PageBlocker
+import de.kjell.zencompanion.data.ContentBlocking
+import de.kjell.zencompanion.ui.sheets.SiteSettingsSheet
 import de.kjell.zencompanion.ui.browser.ReaderExtractor
 import de.kjell.zencompanion.ui.components.PinDestinationPicker
 import de.kjell.zencompanion.ui.components.SaveKindMenuButton
@@ -182,6 +186,17 @@ fun MiniBrowserScreen(
     }
 
     var webView by remember { mutableStateOf<WebView?>(null) }
+    val blockingSettings by ContentBlocking.settings.collectAsState()
+    val blocker = remember {
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        lateinit var created: PageBlocker
+        created = PageBlocker { generation, count ->
+            main.post { if (generation == created.generation) viewModel.onBlockedCountChange(count) }
+        }
+        created
+    }
+    var blockingReload by remember { mutableIntStateOf(0) }
+    val consentBundle = remember { ContentBlocking.consentScript(context) }
     /// Scroll offset to put back after a reload finishes.
     var reloadScroll by remember { mutableStateOf<Int?>(null) }
     // A crashed renderer takes its WebView with it; a new key builds a fresh one.
@@ -408,6 +423,7 @@ fun MiniBrowserScreen(
                         onTitleChange = viewModel::onCurrentTitleChange,
                         onProgressChange = viewModel::onProgressChange,
                         onPageStarted = {
+                            viewModel.onShowingOriginalChange(blocker.showingOriginal)
                             viewModel.clearPageError()
                             barHidden = false
                             scroll.downRun = 0
@@ -425,6 +441,10 @@ fun MiniBrowserScreen(
                         onFindResult = { active, total ->
                             viewModel.setFindProgress(if (total > 0) "$active/$total" else null)
                         },
+                        blocker = blocker,
+                        consentBundle = consentBundle,
+                        blockingSettings = blockingSettings,
+                        blockingReload = blockingReload,
                     )
                 }
 
@@ -583,6 +603,32 @@ fun MiniBrowserScreen(
                             Haptics.perform(context, Haptics.Kind.CONFIRM)
                             viewModel.triggerPinBanner()
                         },
+                        blockingCard = BlockingCard.of(
+                            settings = blockingSettings,
+                            host = pageHost(effectiveUrl),
+                            blockedCount = state.blockedCount,
+                            showingOriginal = state.showingOriginal,
+                        ),
+                        onBlockingCard = {
+                            when (
+                                BlockingCard.of(blockingSettings, pageHost(effectiveUrl), state.blockedCount, state.showingOriginal)
+                            ) {
+                                is BlockingCard.Blocked -> {
+                                    blocker.restoreOriginal(effectiveUrl)
+                                    viewModel.onShowingOriginalChange(true)
+                                    blockingReload++
+                                }
+                                BlockingCard.ShowingOriginal -> {
+                                    blocker.blockAgain()
+                                    viewModel.onShowingOriginalChange(false)
+                                    viewModel.collapseMenu()
+                                    blockingReload++
+                                }
+                                is BlockingCard.OffForSite -> viewModel.openSiteSettings()
+                                BlockingCard.Hidden -> Unit
+                            }
+                        },
+                        onSiteSettings = viewModel::openSiteSettings,
                         barColor = barColor,
                     )
                 }
@@ -602,6 +648,17 @@ fun MiniBrowserScreen(
                 )
             }
         }
+    }
+
+    if (state.siteSettingsOpen) {
+        pageHost(effectiveUrl)?.let { host ->
+            SiteSettingsSheet(
+                host = host,
+                onDismiss = viewModel::closeSiteSettings,
+                // The page reloads so the new switches apply to it.
+                onChanged = { blockingReload++ },
+            )
+        } ?: viewModel.closeSiteSettings()
     }
 
     // Keep the find bar's matches in sync with the query.
@@ -859,4 +916,12 @@ private fun shareUrl(context: Context, url: String, title: String) {
         if (title.isNotEmpty()) putExtra(Intent.EXTRA_SUBJECT, title)
     }
     runCatching { context.startActivity(Intent.createChooser(intent, null)) }
+}
+
+/** The page's host for blocking, or null for a blank or non-web page. */
+private fun pageHost(url: String): String? {
+    val uri = runCatching { android.net.Uri.parse(url) }.getOrNull() ?: return null
+    val scheme = uri.scheme?.lowercase()
+    if (scheme != "http" && scheme != "https") return null
+    return uri.host?.takeIf { it.isNotEmpty() }
 }

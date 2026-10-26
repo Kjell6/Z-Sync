@@ -3,7 +3,6 @@ package de.kjell.zencompanion.ui.sheets
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,7 +20,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Cookie
 import androidx.compose.material.icons.outlined.PanTool
-import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
@@ -234,16 +232,9 @@ internal fun ContentBlockingSetupScreen() {
                 .weight(1f)
                 .verticalScroll(rememberScrollState()),
         ) {
-            Spacer(Modifier.height(40.dp))
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .background(zen.lift, RoundedCornerShape(20.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Outlined.Shield, contentDescription = null, tint = zen.coral, modifier = Modifier.size(32.dp))
-            }
-            Spacer(Modifier.height(22.dp))
+            Spacer(Modifier.height(28.dp))
+            // No badge at the top: the title carries the screen, the same way
+            // the What's New sheet opens on its title.
             Text(
                 text = stringResource(R.string.blocking_setup_title),
                 style = MaterialTheme.typography.headlineMedium,

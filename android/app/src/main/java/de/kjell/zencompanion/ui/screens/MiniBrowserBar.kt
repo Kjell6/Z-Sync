@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -642,10 +643,12 @@ private fun ExpandedMenu(
     val zen = LocalZenColors.current
     Column(Modifier.fillMaxWidth()) {
         // At the top: the menu grows up from the bar, so this is the far end,
-        // where Arc keeps the same card at the bottom of its sheet.
+        // where Arc keeps the same status at the bottom of its sheet. A plain
+        // row, like the ones below it: a lift card inside the glass panel reads
+        // as a grey patch with a rim.
         if (blockingCard != BlockingCard.Hidden) {
-            BlockingCardRow(card = blockingCard, background = barColor, onClick = onBlockingCard)
-            Spacer(Modifier.height(6.dp))
+            BlockingCardRow(card = blockingCard, onClick = onBlockingCard)
+            RowDivider()
         }
         MenuRow(
             icon = Icons.Outlined.ContentCopy,
@@ -791,7 +794,7 @@ private fun ExpandedMenu(
 
 /** The blocked count, or what blocking does on this page, with what a tap does. */
 @Composable
-private fun BlockingCardRow(card: BlockingCard, background: Color, onClick: () -> Unit) {
+private fun BlockingCardRow(card: BlockingCard, onClick: () -> Unit) {
     val zen = LocalZenColors.current
     val (icon, title, detail) = when (card) {
         is BlockingCard.Blocked -> {
@@ -824,35 +827,34 @@ private fun BlockingCardRow(card: BlockingCard, background: Color, onClick: () -
         )
         BlockingCard.Hidden -> return
     }
+    // True white or black rather than the cream ink: this row sits on the
+    // page's own colour through the glass, where cream loses contrast.
+    val strong = if (zen.isDark) Color.White else Color.Black
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(TileShape)
-            .background(background)
-            .border(liftBorder(), TileShape)
             .barClickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .heightIn(min = RowHeight)
+            .padding(vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .background(zen.coral.copy(alpha = 0.16f), CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(imageVector = icon, contentDescription = null, tint = zen.coral, modifier = Modifier.size(18.dp))
-        }
-        Spacer(Modifier.width(12.dp))
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = strong,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = ZenType.rounded(15, FontWeight.SemiBold),
-                color = zen.ink,
+                style = ZenType.rounded(16, FontWeight.Medium),
+                color = strong,
             )
             Text(
                 text = detail,
                 style = ZenType.rounded(13, FontWeight.Normal),
-                color = zen.ink.copy(alpha = 0.62f),
+                color = strong.copy(alpha = 0.72f),
             )
         }
     }

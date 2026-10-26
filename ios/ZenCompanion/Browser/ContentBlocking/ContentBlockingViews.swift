@@ -169,13 +169,8 @@ struct ContentBlockingSetupView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    Image(systemName: "checkmark.shield")
-                        .font(.system(size: 30, weight: .semibold))
-                        .foregroundStyle(Palette.coral(scheme))
-                        .frame(width: 64, height: 64)
-                        .background(Palette.lift(scheme), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                        .padding(.top, 40)
-                        .padding(.bottom, 22)
+                    // No badge at the top: the title carries the screen, the
+                    // same way the What's New sheet opens on its title.
                     Text("blocking.setup.title")
                         .font(.system(size: 30, weight: .bold, design: .rounded))
                         .foregroundStyle(Palette.ink(scheme))
@@ -191,6 +186,7 @@ struct ContentBlockingSetupView: View {
                     )
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 28)
             }
             .scrollBounceBehavior(.basedOnSize)
 

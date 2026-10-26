@@ -66,7 +66,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
     var body: some View {
         VStack(spacing: MiniBrowserChromeMetrics.rowSpacing) {
             if menuOpen {
-                expandedContent
+                menuPanel
                     .frame(maxWidth: .infinity)
                     .fixedSize(horizontal: false, vertical: true)
                     .floatingGlassPanel(cornerRadius: 26)
@@ -133,6 +133,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
             model.refreshSuggestions(isEditing: editing)
         }
         .animation(motion, value: model.menuExpanded)
+        .animation(motion, value: model.menuSiteSettings)
         .animation(motion, value: model.suggestions)
     }
 
@@ -214,8 +215,75 @@ struct MiniBrowserChrome<NavBar: View>: View {
 
     // MARK: - Expanded menu
 
-    /// Grows above the navigation bar. Everything inside shares one outer inset,
-    /// so rows, tiles and the pin row start on the same edge on every side.
+    /// The open menu: one glass panel with two pages. Site Settings is the
+    /// second one, so opening the site's switches never stacks a sheet on top
+    /// of the menu; only the panel's content and height change.
+    private var menuPanel: some View {
+        VStack(spacing: 0) {
+            if model.menuSiteSettings, let host = model.blockingHost {
+                siteSettingsPage(host: host)
+            } else {
+                expandedContent
+            }
+        }
+        .padding(14)
+    }
+
+    /// The menu's second page. Its header is a quiet inline nav bar: the
+    /// chevron at the leading edge, title and site centred, both a touch
+    /// smaller so the row still belongs to the panel. The switches keep the
+    /// card they have in Settings.
+    private func siteSettingsPage(host: String) -> some View {
+        VStack(spacing: 8) {
+            siteSettingsHeader(host: host)
+            SiteSettingsControls(host: host, scheme: scheme) {
+                model.blockingSettingsDidChange()
+            }
+        }
+    }
+
+    private func siteSettingsHeader(host: String) -> some View {
+        ZStack {
+            VStack(spacing: 0) {
+                Text("browser.site_settings")
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Color.primary)
+                Text(blockingSiteKey(host))
+                    .font(.system(size: 12, design: .rounded))
+                    .foregroundStyle(Color.primary.opacity(0.55))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            // Clear of the chevron on both sides, so a long site name shrinks
+            // in the middle instead of running under the button.
+            .padding(.horizontal, 52)
+            .frame(maxWidth: .infinity)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+
+            HStack(spacing: 0) {
+                Button {
+                    withAnimation(motion) { model.closeSiteSettings() }
+                } label: {
+                    Image(systemName: "chevron.backward")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.primary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(GlyphPressStyle())
+                .accessibilityLabel(Text("browser.back"))
+
+                Spacer(minLength: 0)
+            }
+        }
+        .frame(height: 44)
+    }
+
+    /// The menu's first page: the blocking status, the page tools, the quick
+    /// actions and the save row. Everything inside shares the panel's single
+    /// outer inset, so rows, tiles and the pin row start on the same edge on
+    /// every side.
     private var expandedContent: some View {
         VStack(spacing: 8) {
             // At the top: the menu grows up from the bar, so this is the far
@@ -251,7 +319,6 @@ struct MiniBrowserChrome<NavBar: View>: View {
                     .transition(.identity)
             }
         }
-        .padding(14)
     }
 
     /// Bottom row, trailing edge first for the thumb: Pin sits on the right.

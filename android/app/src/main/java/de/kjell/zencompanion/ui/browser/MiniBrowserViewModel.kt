@@ -110,8 +110,8 @@ class MiniBrowserViewModel(
         val blockedCount: Int = 0,
         /** The page was reloaded once with nothing blocked. */
         val showingOriginal: Boolean = false,
-        /** The site's own blocking switches, opened from the menu. */
-        val siteSettingsOpen: Boolean = false,
+        /** The site's own blocking switches, as a page inside the open menu. */
+        val menuSiteSettings: Boolean = false,
     ) {
         /** Normal saves always target the space root, so folder rows are hidden. */
         val hideFolders: Boolean get() = saveKind == SaveKind.NORMAL
@@ -592,11 +592,15 @@ class MiniBrowserViewModel(
     // MARK: - Page menu
 
     fun toggleMenu() {
-        _state.update { it.copy(menuExpanded = !it.menuExpanded) }
+        if (_state.value.menuExpanded) {
+            collapseMenu()
+        } else {
+            _state.update { it.copy(menuExpanded = true) }
+        }
     }
 
     fun collapseMenu() {
-        _state.update { it.copy(menuExpanded = false) }
+        _state.update { it.copy(menuExpanded = false, menuSiteSettings = false) }
     }
 
     // MARK: - Content blocking
@@ -607,15 +611,26 @@ class MiniBrowserViewModel(
 
     /** The screen reloads the page right after this; the card follows the page. */
     fun onShowingOriginalChange(showing: Boolean) {
-        _state.update { it.copy(showingOriginal = showing, menuExpanded = if (showing) false else it.menuExpanded) }
+        _state.update {
+            it.copy(
+                showingOriginal = showing,
+                menuExpanded = if (showing) false else it.menuExpanded,
+                menuSiteSettings = if (showing) false else it.menuSiteSettings,
+            )
+        }
     }
 
+    /**
+     * Opens the site's switches as a page inside the menu. The panel stays one
+     * surface instead of stacking a sheet on top of it.
+     */
     fun openSiteSettings() {
-        _state.update { it.copy(siteSettingsOpen = true, menuExpanded = false) }
+        _state.update { it.copy(menuExpanded = true, menuSiteSettings = true) }
     }
 
+    /** Back to the menu's own page. The menu stays open. */
     fun closeSiteSettings() {
-        _state.update { it.copy(siteSettingsOpen = false) }
+        _state.update { it.copy(menuSiteSettings = false) }
     }
 
     // MARK: - Page tools

@@ -25,13 +25,19 @@ private struct BlockingSwitches: View {
     let onChange: (BlockCategory, Bool) -> Void
     var isEnabled: (BlockCategory) -> Bool = { _ in true }
     var showsDetail = true
+    /// Row ink. Inside the browser menu the rows sit on the panel's glass and
+    /// follow the menu's own `Color.primary`; every other surface uses the
+    /// app's cream ink.
+    var ink: Color? = nil
+
+    private var rowInk: Color { ink ?? Palette.ink(scheme) }
 
     var body: some View {
         VStack(spacing: 0) {
             ForEach(Array(BlockCategory.allCases.enumerated()), id: \.element) { index, category in
                 if index > 0 {
                     Rectangle()
-                        .fill(Palette.ink(scheme).opacity(0.15))
+                        .fill(rowInk.opacity(0.15))
                         .frame(height: 0.5)
                         .padding(.leading, 44)
                 }
@@ -51,19 +57,19 @@ private struct BlockingSwitches: View {
                     if !enabled {
                         Text("blocking.off_in_settings")
                             .font(.system(size: 13, design: .rounded))
-                            .foregroundStyle(Palette.ink(scheme).opacity(0.6))
+                            .foregroundStyle(rowInk.opacity(0.6))
                     } else if showsDetail, category == .cookieBanners {
                         Text("blocking.cookie_banners_detail")
                             .font(.system(size: 13, design: .rounded))
-                            .foregroundStyle(Palette.ink(scheme).opacity(0.6))
+                            .foregroundStyle(rowInk.opacity(0.6))
                     }
                 }
             } icon: {
                 Image(systemName: category.symbol)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Palette.ink(scheme).opacity(0.6))
+                    .foregroundStyle(rowInk.opacity(0.6))
             }
-            .foregroundStyle(Palette.ink(scheme))
+            .foregroundStyle(rowInk)
         }
         .tint(Palette.coral(scheme))
         .disabled(!enabled)
@@ -106,55 +112,36 @@ struct ContentBlockingSettingsSection: View {
     }
 }
 
-/// "Site Settings" from the browser menu: the switches for one site. A switch
+/// "Site Settings" inside the browser menu: the switches for one site. A switch
 /// that is off in Settings stays off here, with a note saying so.
-struct SiteSettingsSheet: View {
+struct SiteSettingsControls: View {
     let host: String
     let scheme: ColorScheme
     /// The page reloads so the new switches apply to it.
     var onChange: () -> Void
 
-    @Environment(\.dismiss) private var dismiss
     private var blocker: ContentBlocker { .shared }
 
     var body: some View {
         let site = blockingSiteKey(host)
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(site.uppercased())
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .tracking(0.8)
-                    .foregroundStyle(Palette.ink(scheme).opacity(0.4))
-                    .padding(.horizontal, 4)
+        VStack(alignment: .leading, spacing: 8) {
+            BlockingSwitches(
+                scheme: scheme,
+                isOn: { blocker.settings.isOn($0, host: host) },
+                onChange: { category, on in
+                    blocker.update(blocker.settings.withSite(category, host: host, on: on))
+                    onChange()
+                },
+                isEnabled: { blocker.settings.isOn($0) },
+                showsDetail: false,
+                // The menu's own ink: these rows sit on its glass panel.
+                ink: .primary
+            )
 
-                BlockingSwitches(
-                    scheme: scheme,
-                    isOn: { blocker.settings.isOn($0, host: host) },
-                    onChange: { category, on in
-                        blocker.update(blocker.settings.withSite(category, host: host, on: on))
-                        onChange()
-                    },
-                    isEnabled: { blocker.settings.isOn($0) },
-                    showsDetail: false
-                )
-
-                Text("site_settings.footer \(site)")
-                    .font(.system(size: 13, design: .rounded))
-                    .foregroundStyle(Palette.ink(scheme).opacity(0.6))
-                    .padding(.horizontal, 4)
-
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .background(Palette.paper(scheme))
-            .navigationTitle(Text("browser.site_settings"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("common.done") { dismiss() }
-                }
-            }
+            Text("site_settings.footer \(site)")
+                .font(.system(size: 13, design: .rounded))
+                .foregroundStyle(Color.primary.opacity(0.6))
+                .padding(.horizontal, 4)
         }
     }
 }

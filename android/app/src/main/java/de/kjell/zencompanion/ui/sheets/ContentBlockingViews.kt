@@ -21,9 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Cookie
 import androidx.compose.material.icons.outlined.PanTool
 import androidx.compose.material.icons.outlined.VisibilityOff
-import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -45,18 +43,17 @@ import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.BlockCategory
 import de.kjell.zencompanion.data.ContentBlocking
 import de.kjell.zencompanion.data.ContentBlockingSettings
-import de.kjell.zencompanion.data.blockingSiteKey
 import de.kjell.zencompanion.ui.theme.LiftCard
 import de.kjell.zencompanion.ui.theme.LocalZenColors
 
-private val BlockCategory.icon: ImageVector
+internal val BlockCategory.icon: ImageVector
     get() = when (this) {
         BlockCategory.ADS -> Icons.Outlined.PanTool
         BlockCategory.TRACKERS -> Icons.Outlined.VisibilityOff
         BlockCategory.COOKIE_BANNERS -> Icons.Outlined.Cookie
     }
 
-private val BlockCategory.title: Int
+internal val BlockCategory.title: Int
     get() = when (this) {
         BlockCategory.ADS -> R.string.blocking_ads
         BlockCategory.TRACKERS -> R.string.blocking_trackers
@@ -157,59 +154,6 @@ internal fun SettingsContentBlockingSection() {
 /** `24 Oct 2026 21:50 UTC` from the list header becomes `24 Oct 2026`. */
 internal fun listDate(lastModified: String): String? =
     lastModified.split(' ').filter { it.isNotEmpty() }.take(3).takeIf { it.size == 3 }?.joinToString(" ")
-
-/**
- * "Site Settings" from the browser menu: the switches for one site. A switch
- * that is off in Settings stays off here, with a note saying so.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-internal fun SiteSettingsSheet(host: String, onDismiss: () -> Unit, onChanged: () -> Unit) {
-    val settings by ContentBlocking.settings.collectAsState()
-    val site = blockingSiteKey(host)
-    ZenSheet(
-        onDismiss = onDismiss,
-        skipPartiallyExpanded = true,
-        dragHandle = { BottomSheetDefaults.DragHandle() },
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = LocalZenColors.current.paper,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 24.dp)
-                .navigationBarsPadding(),
-        ) {
-            Text(
-                text = stringResource(R.string.browser_site_settings),
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = site,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 2.dp, bottom = 16.dp),
-            )
-            BlockingSwitches(
-                isOn = { settings.isOn(it, host) },
-                onChange = { category, on ->
-                    ContentBlocking.update(settings.withSite(category, host, on))
-                    onChanged()
-                },
-                isEnabled = settings::isOn,
-                showDetail = false,
-            )
-            Text(
-                text = stringResource(R.string.site_settings_footer, site),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 10.dp),
-            )
-        }
-    }
-}
 
 /**
  * The setup question: asked once, after sign-in or on the first launch with

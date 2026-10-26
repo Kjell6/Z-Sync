@@ -36,6 +36,46 @@ enum MiniBrowserTools {
 
 }
 
+/// Page zoom inside a loaded document.
+///
+/// A browser's page zoom reflows the page: the layout viewport narrows, text
+/// wraps earlier, and images scale with it, so nothing runs off the screen.
+/// Setting CSS `zoom` on the root element does exactly that in both web views.
+/// `WKWebView.pageZoom` looks like the native answer but does not: WebKit
+/// scales the rendered page and leaves the layout width alone, so a zoomed-in
+/// page just runs off the right edge. Android's `WebSettings.textZoom` is no
+/// better - it grows fonts only and leaves images and spacing at their size.
+///
+/// Android port: `PageZoomScript.source` in
+/// `ui/screens/MiniBrowserWebView.kt` builds the same function.
+enum PageZoomScript {
+    /// Applies [zoom] (1.0 = 100%) to the document that is already loaded.
+    /// Idempotent, so it is safe to run again after every navigation.
+    static func source(for zoom: Double) -> String {
+        let body = abs(zoom - MiniBrowserTools.defaultZoom) <= 0.001
+            ? "root.style.removeProperty('zoom');"
+            : "root.style.zoom = '\(String(format: "%.2f", zoom))';"
+        return """
+        (function () {
+          // Only the top document: an embedded frame is already scaled with
+          // its parent's layout, and zooming it again would double the size.
+          try {
+            if (window.self !== window.top) return;
+          } catch (e) {
+            return;
+          }
+          function apply() {
+            var root = document.documentElement;
+            if (!root) return;
+            \(body)
+          }
+          if (document.documentElement) apply();
+          else document.addEventListener('DOMContentLoaded', apply, false);
+        })()
+        """
+    }
+}
+
 /// One block of extracted article text, in document order.
 struct ReaderBlock: Equatable, Identifiable {
     let id: Int
@@ -59,7 +99,9 @@ enum ReaderExtractor {
     static let script = #"""
     (function () {
       var BLOCK_SELECTOR = 'h1,h2,h3,h4,h5,h6,p,li,blockquote,pre';
-      var NOISE = { NAV: 1, ASIDE: 1, FOOTER: 1, HEADER: 1, FORM: 1, BUTTON: 1 };
+      var NOISE = { NAV: 1, ASIDE: 1, FOOTER: 1, HEADER: 1, FORM: 1, BUTTON: 1, DIALOG: 1 };
+      // ARIA landmarks that are chrome around an article, not the article.
+      var NOISE_ROLES = { banner: 1, complementary: 1, navigation: 1, contentinfo: 1, search: 1, menu: 1, menubar: 1, dialog: 1, alertdialog: 1 };
       // Chrome headings that survive the noise filter but say nothing in a reader.
       var JUNK_HEADINGS = { contents: 1, 'table of contents': 1, 'inhaltsverzeichnis': 1, inhalt: 1, menu: 1, navigation: 1 };
 
@@ -80,6 +122,41 @@ enum ReaderExtractor {
         return true;
       }
 
+      function role(el) {
+        var explicit = el.getAttribute && el.getAttribute('role');
+        return explicit ? String(explicit).toLowerCase() : '';
+      }
+
+      // Cookie walls, donation banners and newsletter pop-ups paint over the
+      // article, and their text often outscores the real one. Everything
+      // pinned to the viewport is chrome, never the story. Memoised per run:
+      // thousands of candidates share the same ancestors, and
+      // getComputedStyle is the expensive part of this pass.
+      var overlayMemo = new Map();
+      function isOverlay(el) {
+        if (overlayMemo.has(el)) return overlayMemo.get(el);
+        var pinned = false;
+        try {
+          var s = window.getComputedStyle(el);
+          if (s && (s.position === 'fixed' || s.position === 'sticky')) pinned = true;
+        } catch (e) {}
+        if (!pinned && el !== document.body && el.parentElement) pinned = isOverlay(el.parentElement);
+        overlayMemo.set(el, pinned);
+        return pinned;
+      }
+
+      // Landmarks and overlays that are not the article: walking up from a
+      // block (or a candidate container) tells us whether it belongs to one.
+      function inNoiseChrome(el, stopAt) {
+        var node = el;
+        while (node && node !== stopAt) {
+          if (NOISE_ROLES[role(node)]) return true;
+          if (node.getAttribute && node.getAttribute('aria-hidden') === 'true') return true;
+          node = node.parentElement;
+        }
+        return false;
+      }
+
       function linkShare(el) {
         var total = textOf(el).length;
         if (total === 0) return 1;
@@ -97,19 +174,32 @@ enum ReaderExtractor {
       }
 
       var candidates = document.querySelectorAll('article, main, [role="main"], section, div, td');
-      var scored = [];
-      var longest = 0;
-      for (var i = 0; i < candidates.length; i++) {
-        var el = candidates[i];
-        if (!isVisible(el)) continue;
-        var length = textOf(el).length;
-        if (length < 300) continue;
-        var share = linkShare(el);
-        if (share > 0.6 && length < 2000) continue;
-        if (length > longest) longest = length;
-        scored.push({ el: el, length: length, score: length - 1.2 * length * share + 30 * el.querySelectorAll('p').length });
+      function collect(skipChrome) {
+        var scored = [];
+        for (var i = 0; i < candidates.length; i++) {
+          var el = candidates[i];
+          if (!isVisible(el)) continue;
+          if (skipChrome && (isOverlay(el) || inNoiseChrome(el, document.body))) continue;
+          var length = textOf(el).length;
+          if (length < 300) continue;
+          var share = linkShare(el);
+          if (share > 0.6 && length < 2000) continue;
+          scored.push({ el: el, length: length, score: length - 1.2 * length * share + 30 * el.querySelectorAll('p').length });
+        }
+        return scored;
       }
+
+      // Overlay filtering is the usual answer, but a site that pins its whole
+      // layout (an app shell) would then have no candidates at all: fall back
+      // to the unfiltered scan rather than declaring the page unreadable.
+      var scored = collect(true);
+      if (scored.length === 0) scored = collect(false);
       if (scored.length === 0) return null;
+
+      var longest = 0;
+      for (var l = 0; l < scored.length; l++) {
+        if (scored[l].length > longest) longest = scored[l].length;
+      }
 
       var winner = scored[0];
       for (var s = 1; s < scored.length; s++) {
@@ -133,6 +223,8 @@ enum ReaderExtractor {
         var p = el.parentElement;
         while (p && p !== chosen) {
           if (NOISE[(p.tagName || '').toUpperCase()]) return true;
+          if (NOISE_ROLES[role(p)]) return true;
+          if (p.getAttribute && p.getAttribute('aria-hidden') === 'true') return true;
           p = p.parentElement;
         }
         return false;
@@ -246,6 +338,11 @@ final class MiniBrowserModel {
     var requestsDesktopSite = false
     /// 1.0 is 100%. Always inside `MiniBrowserTools` limits.
     private(set) var pageZoom: Double = MiniBrowserTools.defaultZoom
+
+    /// The web view and zoom last written into a document, so repeated view
+    /// updates do not re-run the zoom script.
+    @ObservationIgnored private weak var zoomedWebView: WKWebView?
+    @ObservationIgnored private var appliedPageZoom: Double?
 
     @ObservationIgnored weak var webView: WKWebView?
 
@@ -383,6 +480,8 @@ final class MiniBrowserModel {
 
     var canZoomIn: Bool { MiniBrowserTools.canZoomIn(pageZoom) }
     var canZoomOut: Bool { MiniBrowserTools.canZoomOut(pageZoom) }
+    /// The percent readout doubles as "back to 100%" once the page is zoomed.
+    var canResetZoom: Bool { abs(pageZoom - MiniBrowserTools.defaultZoom) > 0.001 }
 
     // MARK: - Loading
 
@@ -518,7 +617,13 @@ final class MiniBrowserModel {
         let next = MiniBrowserTools.clampedZoom(value)
         guard abs(next - pageZoom) > 0.001 else { return }
         pageZoom = next
-        applyWebpagePreferences()
+        applyPageZoom()
+    }
+
+    /// Back to 100%, the way a browser resets its zoom.
+    func resetPageZoom() {
+        guard abs(pageZoom - MiniBrowserTools.defaultZoom) > 0.001 else { return }
+        setPageZoom(MiniBrowserTools.defaultZoom)
     }
 
     func zoomIn() {
@@ -559,16 +664,24 @@ final class MiniBrowserModel {
         return true
     }
 
-    /// Keeps WebKit's desktop mode and page zoom aligned with the model.
-    /// Called again when the web view is (re)attached.
+    /// Keeps WebKit's desktop mode aligned with the model. Called again when
+    /// the web view is (re)attached.
     func applyWebpagePreferences() {
         guard let webView else { return }
         webView.configuration.defaultWebpagePreferences.preferredContentMode =
             requestsDesktopSite ? .desktop : .mobile
-        let zoom = CGFloat(pageZoom)
-        if abs(webView.pageZoom - zoom) > 0.001 {
-            webView.pageZoom = zoom
-        }
+    }
+
+    /// Puts the current zoom into the loaded document. A new document starts
+    /// at 100%, so this runs again after every navigation (see
+    /// `MiniBrowserRepresentable`). Skipped when the same web view already
+    /// shows this zoom, so repeated SwiftUI updates cost nothing.
+    func applyPageZoom(force: Bool = false) {
+        guard let webView else { return }
+        guard force || zoomedWebView !== webView || appliedPageZoom != pageZoom else { return }
+        zoomedWebView = webView
+        appliedPageZoom = pageZoom
+        webView.evaluateJavaScript(PageZoomScript.source(for: pageZoom))
     }
 
     // MARK: - Address field intents

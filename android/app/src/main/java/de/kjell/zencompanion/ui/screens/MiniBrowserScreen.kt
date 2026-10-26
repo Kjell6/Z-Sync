@@ -402,7 +402,7 @@ fun MiniBrowserScreen(
                         },
                         isAddressFocused = state.isAddressFocused,
                         desktopSite = state.requestsDesktopSite,
-                        textZoomPercent = (state.pageZoom * 100f).toInt(),
+                        pageZoom = state.pageZoom,
                         onWebViewCreated = { webView = it },
                         onLoadingChange = { loading ->
                             viewModel.onLoadingChange(loading)

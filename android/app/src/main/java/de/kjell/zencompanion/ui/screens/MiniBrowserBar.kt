@@ -42,6 +42,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.FilterNone
+import androidx.compose.material.icons.outlined.FormatSize
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Language
@@ -72,6 +73,8 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
@@ -732,10 +735,12 @@ private fun ExpandedMenu(
             )
             RowDivider()
             MenuRow(
-                icon = Icons.Outlined.Search,
+                icon = Icons.Outlined.FormatSize,
                 title = stringResource(R.string.browser_page_zoom),
                 tint = zen.ink,
                 trailing = {
+                    val resetLabel = stringResource(R.string.browser_zoom_reset)
+                    val canReset = MiniBrowserZoom.canReset(state.pageZoom)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
@@ -748,13 +753,29 @@ private fun ExpandedMenu(
                             enabled = MiniBrowserZoom.canZoomOut(state.pageZoom),
                             onClick = viewModel::zoomOut,
                         )
-                        Text(
-                            text = MiniBrowserZoom.percentLabel(state.pageZoom),
-                            style = ZenType.rounded(15, FontWeight.SemiBold),
-                            color = zen.ink,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.width(54.dp),
-                        )
+                        // The readout is the reset: same gesture as a browser's
+                        // zoom percentage, and it keeps the row to one control.
+                        Box(
+                            modifier = Modifier
+                                .size(width = 54.dp, height = 32.dp)
+                                .barClickable(
+                                    enabled = canReset,
+                                    onClick = viewModel::resetPageZoom,
+                                )
+                                // At 100% the readout is plain text and announces
+                                // itself; zoomed, it is the reset button.
+                                .semantics {
+                                    if (canReset) contentDescription = resetLabel
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = MiniBrowserZoom.percentLabel(state.pageZoom),
+                                style = ZenType.rounded(15, FontWeight.SemiBold),
+                                color = zen.ink,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
                         ZoomStep(
                             icon = Icons.Outlined.KeyboardArrowUp,
                             description = stringResource(R.string.browser_zoom_in),

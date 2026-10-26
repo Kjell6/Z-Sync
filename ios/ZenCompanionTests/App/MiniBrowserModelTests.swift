@@ -136,6 +136,36 @@ final class MiniBrowserModelTests: XCTestCase {
         XCTAssertEqual(MiniBrowserTools.zoomPercentLabel(model.pageZoom), "50%")
     }
 
+    func testZoomReadoutResetsToOneHundredPercent() {
+        let (model, _) = makeModel(initialURL: nil)
+        XCTAssertFalse(model.canResetZoom)
+
+        model.zoomIn()
+        model.zoomIn()
+        XCTAssertEqual(model.pageZoom, 1.2, accuracy: 0.001)
+        XCTAssertTrue(model.canResetZoom)
+
+        model.resetPageZoom()
+        XCTAssertEqual(model.pageZoom, MiniBrowserTools.defaultZoom, accuracy: 0.001)
+        XCTAssertFalse(model.canResetZoom)
+        // Nothing to reset: a second tap leaves the page alone.
+        model.resetPageZoom()
+        XCTAssertEqual(model.pageZoom, 1, accuracy: 0.001)
+    }
+
+    func testZoomScriptZoomsTheRootElement() {
+        let zoomed = PageZoomScript.source(for: 1.2)
+        XCTAssertTrue(zoomed.contains("root.style.zoom = '1.20'"))
+        XCTAssertTrue(zoomed.contains("document.documentElement"))
+        // Frames are already scaled with their parent's layout.
+        XCTAssertTrue(zoomed.contains("window.self !== window.top"))
+
+        // 100% takes the property off again instead of pinning it at 1.
+        let identity = PageZoomScript.source(for: 1)
+        XCTAssertTrue(identity.contains("root.style.removeProperty('zoom')"))
+        XCTAssertFalse(identity.contains("style.zoom ="))
+    }
+
     func testDesktopSiteTogglesWithoutAWebView() {
         let (model, _) = makeModel(initialURL: URL(string: "https://example.com"))
         XCTAssertFalse(model.requestsDesktopSite)

@@ -46,6 +46,7 @@ object MiniBrowserZoom {
 
     fun canZoomIn(value: Float): Boolean = clamped(value) < max - 0.001f
     fun canZoomOut(value: Float): Boolean = clamped(value) > min + 0.001f
+    fun canReset(value: Float): Boolean = kotlin.math.abs(clamped(value) - default) > 0.001f
 }
 
 /**
@@ -633,6 +634,11 @@ class MiniBrowserViewModel(
     fun zoomOut() {
         val next = MiniBrowserZoom.clamped(_state.value.pageZoom - MiniBrowserZoom.step)
         _state.update { it.copy(pageZoom = next) }
+    }
+
+    /** Back to 100%, the way a browser resets its zoom. */
+    fun resetPageZoom() {
+        _state.update { it.copy(pageZoom = MiniBrowserZoom.default) }
     }
 
     /** Transient confirmation on the copy row; the screen does the clipboard. */

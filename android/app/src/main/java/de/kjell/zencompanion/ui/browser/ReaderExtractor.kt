@@ -30,7 +30,9 @@ data class ReaderArticle(
 object ReaderExtractor {
     const val SCRIPT = """(function () {
   var BLOCK_SELECTOR = 'h1,h2,h3,h4,h5,h6,p,li,blockquote,pre';
-  var NOISE = { NAV: 1, ASIDE: 1, FOOTER: 1, HEADER: 1, FORM: 1, BUTTON: 1 };
+  var NOISE = { NAV: 1, ASIDE: 1, FOOTER: 1, HEADER: 1, FORM: 1, BUTTON: 1, DIALOG: 1 };
+  // ARIA landmarks that are chrome around an article, not the article.
+  var NOISE_ROLES = { banner: 1, complementary: 1, navigation: 1, contentinfo: 1, search: 1, menu: 1, menubar: 1, dialog: 1, alertdialog: 1 };
   // Chrome headings that survive the noise filter but say nothing in a reader.
   var JUNK_HEADINGS = { contents: 1, 'table of contents': 1, 'inhaltsverzeichnis': 1, inhalt: 1, menu: 1, navigation: 1 };
 
@@ -51,6 +53,41 @@ object ReaderExtractor {
     return true;
   }
 
+  function role(el) {
+    var explicit = el.getAttribute && el.getAttribute('role');
+    return explicit ? String(explicit).toLowerCase() : '';
+  }
+
+  // Cookie walls, donation banners and newsletter pop-ups paint over the
+  // article, and their text often outscores the real one. Everything
+  // pinned to the viewport is chrome, never the story. Memoised per run:
+  // thousands of candidates share the same ancestors, and
+  // getComputedStyle is the expensive part of this pass.
+  var overlayMemo = new Map();
+  function isOverlay(el) {
+    if (overlayMemo.has(el)) return overlayMemo.get(el);
+    var pinned = false;
+    try {
+      var s = window.getComputedStyle(el);
+      if (s && (s.position === 'fixed' || s.position === 'sticky')) pinned = true;
+    } catch (e) {}
+    if (!pinned && el !== document.body && el.parentElement) pinned = isOverlay(el.parentElement);
+    overlayMemo.set(el, pinned);
+    return pinned;
+  }
+
+  // Landmarks and overlays that are not the article: walking up from a
+  // block (or a candidate container) tells us whether it belongs to one.
+  function inNoiseChrome(el, stopAt) {
+    var node = el;
+    while (node && node !== stopAt) {
+      if (NOISE_ROLES[role(node)]) return true;
+      if (node.getAttribute && node.getAttribute('aria-hidden') === 'true') return true;
+      node = node.parentElement;
+    }
+    return false;
+  }
+
   function linkShare(el) {
     var total = textOf(el).length;
     if (total === 0) return 1;
@@ -68,19 +105,32 @@ object ReaderExtractor {
   }
 
   var candidates = document.querySelectorAll('article, main, [role="main"], section, div, td');
-  var scored = [];
-  var longest = 0;
-  for (var i = 0; i < candidates.length; i++) {
-    var el = candidates[i];
-    if (!isVisible(el)) continue;
-    var length = textOf(el).length;
-    if (length < 300) continue;
-    var share = linkShare(el);
-    if (share > 0.6 && length < 2000) continue;
-    if (length > longest) longest = length;
-    scored.push({ el: el, length: length, score: length - 1.2 * length * share + 30 * el.querySelectorAll('p').length });
+  function collect(skipChrome) {
+    var scored = [];
+    for (var i = 0; i < candidates.length; i++) {
+      var el = candidates[i];
+      if (!isVisible(el)) continue;
+      if (skipChrome && (isOverlay(el) || inNoiseChrome(el, document.body))) continue;
+      var length = textOf(el).length;
+      if (length < 300) continue;
+      var share = linkShare(el);
+      if (share > 0.6 && length < 2000) continue;
+      scored.push({ el: el, length: length, score: length - 1.2 * length * share + 30 * el.querySelectorAll('p').length });
+    }
+    return scored;
   }
+
+  // Overlay filtering is the usual answer, but a site that pins its whole
+  // layout (an app shell) would then have no candidates at all: fall back
+  // to the unfiltered scan rather than declaring the page unreadable.
+  var scored = collect(true);
+  if (scored.length === 0) scored = collect(false);
   if (scored.length === 0) return null;
+
+  var longest = 0;
+  for (var l = 0; l < scored.length; l++) {
+    if (scored[l].length > longest) longest = scored[l].length;
+  }
 
   var winner = scored[0];
   for (var s = 1; s < scored.length; s++) {
@@ -104,6 +154,8 @@ object ReaderExtractor {
     var p = el.parentElement;
     while (p && p !== chosen) {
       if (NOISE[(p.tagName || '').toUpperCase()]) return true;
+      if (NOISE_ROLES[role(p)]) return true;
+      if (p.getAttribute && p.getAttribute('aria-hidden') === 'true') return true;
       p = p.parentElement;
     }
     return false;

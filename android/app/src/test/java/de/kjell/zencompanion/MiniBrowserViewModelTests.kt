@@ -10,6 +10,7 @@ import de.kjell.zencompanion.sync.SyncError
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.BrowserRepository
 import de.kjell.zencompanion.ui.browser.MiniBrowserViewModel
+import de.kjell.zencompanion.ui.browser.MiniBrowserZoom
 import de.kjell.zencompanion.ui.browser.SearchSuggestionClient
 import de.kjell.zencompanion.ui.components.PinDestination
 import de.kjell.zencompanion.ui.screens.BrowserPageError
@@ -518,6 +519,19 @@ class MiniBrowserViewModelTests {
         assertTrue(vm.state.value.suggestions.isEmpty())
         // The text write that follows a pick must not start another lookup.
         assertEquals(1, client.requested.size)
+    }
+
+    @Test
+    fun theZoomReadoutResetsBackToOneHundredPercent() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = newViewModel()
+
+        vm.zoomIn()
+        vm.zoomIn()
+        assertEquals(1.2f, vm.state.value.pageZoom, 0.001f)
+
+        vm.resetPageZoom()
+        assertEquals(MiniBrowserZoom.default, vm.state.value.pageZoom, 0.001f)
+        assertFalse(MiniBrowserZoom.canReset(vm.state.value.pageZoom))
     }
 }
 

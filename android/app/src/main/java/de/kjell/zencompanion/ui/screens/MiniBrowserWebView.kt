@@ -34,9 +34,11 @@ import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import de.kjell.zencompanion.data.ContentBlocking
 import de.kjell.zencompanion.data.ContentBlockingSettings
+import de.kjell.zencompanion.ui.browser.MiniBrowserZoom
 import de.kjell.zencompanion.ui.browser.PageBlocker
-import java.io.ByteArrayInputStream
 import de.kjell.zencompanion.ui.components.openURLExternally
+import java.io.ByteArrayInputStream
+import java.util.Locale
 
 /** Chrome-like desktop user agent for the "Request Desktop Site" toggle. */
 private const val DesktopUserAgent =
@@ -49,7 +51,8 @@ internal fun MiniBrowserWebView(
     initialUrl: String?,
     isAddressFocused: Boolean,
     desktopSite: Boolean,
-    textZoomPercent: Int,
+    /** 1.0 = 100%. Page zoom for the page's document. */
+    pageZoom: Float,
     onWebViewCreated: (WebView) -> Unit,
     onLoadingChange: (Boolean) -> Unit,
     onSiteThemeColorChange: (Color?) -> Unit,
@@ -87,6 +90,7 @@ internal fun MiniBrowserWebView(
     val rendererGone by rememberUpdatedState(onRendererGone)
     val linkUnavailable by rememberUpdatedState(onLinkUnavailable)
     val consent = remember { ConsentScriptSlot(handledReload = blockingReload) }
+    val pageZoomSlot = remember { PageZoomSlot() }
 
     // Native Android WebView
     AndroidView(
@@ -137,6 +141,9 @@ internal fun MiniBrowserWebView(
 
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
+                        // Whatever the document-start script did, the finished
+                        // document gets the zoom the reader picked.
+                        view?.let(pageZoomSlot::applyNow)
                         onLoadingChange(false)
                         url?.let {
                             onCurrentUrlChange(it)
@@ -175,10 +182,11 @@ internal fun MiniBrowserWebView(
                     }
 
                     // Older WebViews can't add a script at document start; the
-                    // cookie banner script then runs once the page is visible.
+                    // cookie banner and page zoom then run once the page is visible.
                     override fun onPageCommitVisible(view: WebView?, url: String?) {
                         super.onPageCommitVisible(view, url)
                         if (!consent.atDocumentStart) consent.current?.let { view?.evaluateJavascript(it, null) }
+                        if (!pageZoomSlot.atDocumentStart) view?.let(pageZoomSlot::applyNow)
                     }
 
                     override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
@@ -323,7 +331,7 @@ internal fun MiniBrowserWebView(
             }
         },
         update = { view ->
-            view.settings.textZoom = textZoomPercent
+            pageZoomSlot.sync(view, pageZoom)
             consent.sync(view, blocker, consentBundle, runNow = false)
             if (blockingReload != consent.handledReload) {
                 consent.handledReload = blockingReload
@@ -441,5 +449,79 @@ private class ConsentScriptSlot(var handledReload: Int) {
             handler = current?.let { WebViewCompat.addDocumentStartJavaScript(view, it, setOf("*")) }
         }
         if (runNow) current?.let { view.evaluateJavascript(it, null) }
+    }
+}
+
+/**
+ * Page zoom for the mini browser. CSS `zoom` on the root element is the one
+ * thing that reflows the way a browser's page zoom does: the layout viewport
+ * narrows, text wraps earlier, images scale with it and nothing runs off the
+ * screen. `WebSettings.textZoom` is no substitute - it grows fonts only and
+ * leaves images and spacing at their size.
+ *
+ * iOS port: `PageZoomScript.source(for:)` in `Browser/MiniBrowserModel.swift`
+ * builds the same function.
+ */
+internal object PageZoomScript {
+    /** True when the zoom is 100%: the page keeps its own layout. */
+    fun isIdentity(zoom: Float): Boolean = kotlin.math.abs(zoom - MiniBrowserZoom.default) <= 0.001f
+
+    /** Applies [zoom] (1.0 = 100%) to the document that is already loaded. */
+    fun source(zoom: Float): String {
+        val body = if (isIdentity(zoom)) {
+            "root.style.removeProperty('zoom');"
+        } else {
+            "root.style.zoom = '${String.format(Locale.US, "%.2f", zoom)}';"
+        }
+        return """
+            (function () {
+              // Only the top document: an embedded frame is already scaled with
+              // its parent's layout, and zooming it again would double the size.
+              try {
+                if (window.self !== window.top) return;
+              } catch (e) {
+                return;
+              }
+              function apply() {
+                var root = document.documentElement;
+                if (!root) return;
+                $body
+              }
+              if (document.documentElement) apply();
+              else document.addEventListener('DOMContentLoaded', apply, false);
+            })()
+        """.trimIndent()
+    }
+}
+
+/**
+ * The page zoom script added to every document, swapped when the zoom changes
+ * so a page that loads while zoomed never paints at 100% first.
+ */
+private class PageZoomSlot {
+    private var handler: ScriptHandler? = null
+    private var applied: Float? = null
+
+    val atDocumentStart: Boolean = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
+
+    /** Follows the zoom the state asks for. Runs it on the page that is up. */
+    fun sync(view: WebView, zoom: Float) {
+        val previous = applied
+        if (previous != null && kotlin.math.abs(previous - zoom) <= 0.001f) return
+        applied = zoom
+        if (atDocumentStart) {
+            handler?.remove()
+            handler = if (PageZoomScript.isIdentity(zoom)) {
+                null
+            } else {
+                WebViewCompat.addDocumentStartJavaScript(view, PageZoomScript.source(zoom), setOf("*"))
+            }
+        }
+        applyNow(view)
+    }
+
+    fun applyNow(view: WebView) {
+        val zoom = applied ?: return
+        view.evaluateJavascript(PageZoomScript.source(zoom), null)
     }
 }

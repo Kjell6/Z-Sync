@@ -217,13 +217,16 @@ struct MiniBrowserChrome<NavBar: View>: View {
     /// Grows above the navigation bar. Everything inside shares one outer inset,
     /// so rows, tiles and the pin row start on the same edge on every side.
     private var expandedContent: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 8) {
             // At the top: the menu grows up from the bar, so this is the far
-            // end, where Arc keeps the same card at the bottom of its sheet.
+            // end, where Arc keeps the same status at the bottom of its sheet.
             if model.blockingCard != .hidden {
                 blockingCard
-                    .padding(.bottom, 8)
             }
+
+            // The page tools, grouped into one card. The rows keep their
+            // dividers inside it, so the card reads as a list rather than
+            // four chips.
             VStack(spacing: 0) {
                 copyRow
                 rowDivider
@@ -232,17 +235,19 @@ struct MiniBrowserChrome<NavBar: View>: View {
                 desktopRow
                 rowDivider
                 zoomRow
-                rowDivider
-                siteSettingsRow
             }
+            .padding(.horizontal, 14)
+            .liftCard(scheme)
+
+            // Its own card: one destination, not a group.
+            siteSettingsRow
+                .liftCard(scheme)
 
             actionRow
-                .padding(.top, 8)
 
             if model.showPinBanner {
-                // No opacity transition. The sheet just grows by this row.
+                // No opacity transition. The sheet just grows by this card.
                 pinSavedSection
-                    .padding(.top, 12)
                     .transition(.identity)
             }
         }
@@ -291,53 +296,49 @@ struct MiniBrowserChrome<NavBar: View>: View {
     /// Where the page was saved, and the control that changes that place.
     /// Sits under the quick actions so the open sheet grows upward.
     private var pinSavedSection: some View {
-        VStack(spacing: 0) {
-            rowDivider
-            HStack(spacing: 10) {
-                if model.allowsNormalTabs {
-                    // Same choice as the share sheet, in the row's own scale:
-                    // small enough to belong, raised enough to read as a button.
-                    SaveKindMenuButton(
-                        kind: model.pinSaveKind,
-                        scheme: scheme,
-                        style: .compact,
-                        onOpen: { model.pinMenuWillOpen() }
-                    ) { kind in
-                        model.selectPinSaveKind(kind)
-                    }
-                } else {
-                    Image(systemName: "pin.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .frame(width: 24)
-                        .foregroundStyle(Color.primary)
-                }
-                Text(model.pinSaveKind == .pinned ? "browser.pinned" : "browser.saved_as_normal")
-                    .font(.system(size: 16, weight: .medium, design: .rounded))
-                    .foregroundStyle(Color.primary)
-                    .lineLimit(1)
-                Spacer(minLength: 8)
-                PinDestinationMenuButton(
-                    destination: model.pinnedDestination,
-                    spaces: allSpaces,
+        HStack(spacing: 10) {
+            if model.allowsNormalTabs {
+                // Same choice as the share sheet, in the row's own scale:
+                // small enough to belong, raised enough to read as a button.
+                SaveKindMenuButton(
+                    kind: model.pinSaveKind,
                     scheme: scheme,
-                    titleSize: 15,
-                    allowsFolders: model.pinSaveKind == .pinned,
-                    onSelect: { chosen in
-                        model.selectPinDestination(chosen)
-                    },
-                    onMenuWillOpen: {
-                        model.pinMenuWillOpen()
-                    },
-                    onMenuDidDismiss: {
-                        model.pinMenuDidDismiss()
-                    }
-                )
+                    style: .compact,
+                    onOpen: { model.pinMenuWillOpen() }
+                ) { kind in
+                    model.selectPinSaveKind(kind)
+                }
+            } else {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: 24)
+                    .foregroundStyle(Color.primary)
             }
-            .frame(minHeight: 44)
-            // Narrower than the menu rows above it, so the save row reads as
-            // its own confirmation instead of another settings row.
-            .padding(.horizontal, 8)
+            Text(model.pinSaveKind == .pinned ? "browser.pinned" : "browser.saved_as_normal")
+                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .foregroundStyle(Color.primary)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            PinDestinationMenuButton(
+                destination: model.pinnedDestination,
+                spaces: allSpaces,
+                scheme: scheme,
+                titleSize: 15,
+                allowsFolders: model.pinSaveKind == .pinned,
+                onSelect: { chosen in
+                    model.selectPinDestination(chosen)
+                },
+                onMenuWillOpen: {
+                    model.pinMenuWillOpen()
+                },
+                onMenuDidDismiss: {
+                    model.pinMenuDidDismiss()
+                }
+            )
         }
+        .frame(minHeight: 44)
+        .padding(.horizontal, 14)
+        .liftCard(scheme)
     }
 
     @ViewBuilder
@@ -523,6 +524,8 @@ struct MiniBrowserChrome<NavBar: View>: View {
     }
 
     /// The blocked count, or what blocking does on this page, with what a tap does.
+    /// Its own card above the page tools, so the status reads as one of the
+    /// menu's surfaces and the icon lines up with the rows below it.
     @ViewBuilder
     private var blockingCard: some View {
         let card = model.blockingCard
@@ -531,28 +534,26 @@ struct MiniBrowserChrome<NavBar: View>: View {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: card.symbol)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Palette.coral(scheme))
-                    .frame(width: 32, height: 32)
-                    .background(Palette.coral(scheme).opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.primary)
+                    .frame(width: 24)
                 VStack(alignment: .leading, spacing: 1) {
                     card.title
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .font(.system(size: 16, weight: .medium, design: .rounded))
                         .foregroundStyle(Color.primary)
                     Text(card.detail)
                         .font(.system(size: 13, design: .rounded))
                         .foregroundStyle(Color.primary.opacity(0.6))
                 }
                 .multilineTextAlignment(.leading)
-                Spacer(minLength: 0)
+                Spacer(minLength: 8)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(Palette.lift(scheme), in: RoundedRectangle(cornerRadius: tileRadius, style: .continuous))
-            .glassRim(cornerRadius: tileRadius)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(CardPressStyle())
+        .liftCard(scheme)
     }
 
     private var siteSettingsRow: some View {
@@ -572,6 +573,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.primary.opacity(0.35))
             }
+            .padding(.horizontal, 14)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
@@ -583,7 +585,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
         Rectangle()
             .fill(Color.primary.opacity(0.08))
             .frame(height: 0.5)
-            .padding(.leading, 46)
+            .padding(.leading, 36)
     }
 }
 

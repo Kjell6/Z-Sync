@@ -488,10 +488,23 @@ struct MiniBrowserChrome<NavBar: View>: View {
                 zoomStepButton(systemName: "minus", label: "browser.zoom_out", enabled: model.canZoomOut) {
                     model.zoomOut()
                 }
-                Text(MiniBrowserTools.zoomPercentLabel(model.pageZoom))
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .frame(minWidth: 52)
+                Button {
+                    model.resetPageZoom()
+                } label: {
+                    Text(MiniBrowserTools.zoomPercentLabel(model.pageZoom))
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .frame(minWidth: 52)
+                        .frame(height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(CardPressStyle())
+                .disabled(!model.canResetZoom)
+                .accessibilityLabel(
+                    model.canResetZoom
+                        ? Text("browser.zoom_reset")
+                        : Text(verbatim: MiniBrowserTools.zoomPercentLabel(model.pageZoom))
+                )
                 zoomStepButton(systemName: "plus", label: "browser.zoom_in", enabled: model.canZoomIn) {
                     model.zoomIn()
                 }

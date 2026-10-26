@@ -54,6 +54,7 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
         }
         context.coordinator.applyBottomClearance(bottomClearance, to: webView)
         model.applyWebpagePreferences()
+        model.applyPageZoom()
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
@@ -258,6 +259,9 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
         func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
             DispatchQueue.main.async {
                 self.model.pageDidCommit()
+                // A new document starts at 100%: this lands before the page is
+                // painted, so the zoom never jumps in front of the reader.
+                self.model.applyPageZoom(force: true)
             }
         }
 
@@ -271,6 +275,9 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
                 self.model.isLoading = false
                 self.model.updateCurrentURL(webView.url)
                 self.model.adoptPageTitle(webView.title ?? "")
+                // A page whose own scripts rewrote the root style gets the
+                // zoom back once it has settled.
+                self.model.applyPageZoom(force: true)
                 if #available(iOS 15.0, *) {
                     if let native = webView.themeColor {
                         self.model.themeColor = Color(uiColor: native)

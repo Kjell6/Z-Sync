@@ -2073,6 +2073,16 @@
         }
       }
     },
+    "browser.zoom_reset": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset page zoom"
+          }
+        }
+      }
+    },
     "browser.zoom_out": {
       "localizations": {
         "en": {

@@ -217,7 +217,10 @@ struct MiniBrowserChrome<NavBar: View>: View {
     /// Grows above the navigation bar. Everything inside shares one outer inset,
     /// so rows, tiles and the pin row start on the same edge on every side.
     private var expandedContent: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 8) {
+            // The page tools, grouped into one card. The rows keep their
+            // dividers inside it, so the card reads as a list rather than
+            // four chips.
             VStack(spacing: 0) {
                 copyRow
                 rowDivider
@@ -227,14 +230,14 @@ struct MiniBrowserChrome<NavBar: View>: View {
                 rowDivider
                 zoomRow
             }
+            .padding(.horizontal, 14)
+            .liftCard(scheme)
 
             actionRow
-                .padding(.top, 8)
 
             if model.showPinBanner {
-                // No opacity transition. The sheet just grows by this row.
+                // No opacity transition. The sheet just grows by this card.
                 pinSavedSection
-                    .padding(.top, 12)
                     .transition(.identity)
             }
         }
@@ -283,53 +286,49 @@ struct MiniBrowserChrome<NavBar: View>: View {
     /// Where the page was saved, and the control that changes that place.
     /// Sits under the quick actions so the open sheet grows upward.
     private var pinSavedSection: some View {
-        VStack(spacing: 0) {
-            rowDivider
-            HStack(spacing: 10) {
-                if model.allowsNormalTabs {
-                    // Same choice as the share sheet, in the row's own scale:
-                    // small enough to belong, raised enough to read as a button.
-                    SaveKindMenuButton(
-                        kind: model.pinSaveKind,
-                        scheme: scheme,
-                        style: .compact,
-                        onOpen: { model.pinMenuWillOpen() }
-                    ) { kind in
-                        model.selectPinSaveKind(kind)
-                    }
-                } else {
-                    Image(systemName: "pin.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .frame(width: 24)
-                        .foregroundStyle(Color.primary)
-                }
-                Text(model.pinSaveKind == .pinned ? "browser.pinned" : "browser.saved_as_normal")
-                    .font(.system(size: 16, weight: .medium, design: .rounded))
-                    .foregroundStyle(Color.primary)
-                    .lineLimit(1)
-                Spacer(minLength: 8)
-                PinDestinationMenuButton(
-                    destination: model.pinnedDestination,
-                    spaces: allSpaces,
+        HStack(spacing: 10) {
+            if model.allowsNormalTabs {
+                // Same choice as the share sheet, in the row's own scale:
+                // small enough to belong, raised enough to read as a button.
+                SaveKindMenuButton(
+                    kind: model.pinSaveKind,
                     scheme: scheme,
-                    titleSize: 15,
-                    allowsFolders: model.pinSaveKind == .pinned,
-                    onSelect: { chosen in
-                        model.selectPinDestination(chosen)
-                    },
-                    onMenuWillOpen: {
-                        model.pinMenuWillOpen()
-                    },
-                    onMenuDidDismiss: {
-                        model.pinMenuDidDismiss()
-                    }
-                )
+                    style: .compact,
+                    onOpen: { model.pinMenuWillOpen() }
+                ) { kind in
+                    model.selectPinSaveKind(kind)
+                }
+            } else {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: 24)
+                    .foregroundStyle(Color.primary)
             }
-            .frame(minHeight: 44)
-            // Narrower than the menu rows above it, so the save row reads as
-            // its own confirmation instead of another settings row.
-            .padding(.horizontal, 8)
+            Text(model.pinSaveKind == .pinned ? "browser.pinned" : "browser.saved_as_normal")
+                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .foregroundStyle(Color.primary)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            PinDestinationMenuButton(
+                destination: model.pinnedDestination,
+                spaces: allSpaces,
+                scheme: scheme,
+                titleSize: 15,
+                allowsFolders: model.pinSaveKind == .pinned,
+                onSelect: { chosen in
+                    model.selectPinDestination(chosen)
+                },
+                onMenuWillOpen: {
+                    model.pinMenuWillOpen()
+                },
+                onMenuDidDismiss: {
+                    model.pinMenuDidDismiss()
+                }
+            )
         }
+        .frame(minHeight: 44)
+        .padding(.horizontal, 14)
+        .liftCard(scheme)
     }
 
     @ViewBuilder
@@ -518,7 +517,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
         Rectangle()
             .fill(Color.primary.opacity(0.08))
             .frame(height: 0.5)
-            .padding(.leading, 46)
+            .padding(.leading, 36)
     }
 }
 

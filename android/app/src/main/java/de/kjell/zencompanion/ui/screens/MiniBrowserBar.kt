@@ -1,5 +1,10 @@
 package de.kjell.zencompanion.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -85,10 +90,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
+import de.kjell.zencompanion.data.BlockCategory
+import de.kjell.zencompanion.data.ContentBlockingSettings
 import de.kjell.zencompanion.data.SaveKind
+import de.kjell.zencompanion.data.blockingSiteKey
 import de.kjell.zencompanion.ui.browser.BlockingCard
 import de.kjell.zencompanion.ui.browser.MiniBrowserViewModel
 import de.kjell.zencompanion.ui.browser.MiniBrowserZoom
+import de.kjell.zencompanion.ui.sheets.icon
+import de.kjell.zencompanion.ui.sheets.title
 import de.kjell.zencompanion.ui.theme.LocalZenColors
 import de.kjell.zencompanion.ui.theme.ZenType
 import de.kjell.zencompanion.ui.theme.liftBorder
@@ -199,7 +209,10 @@ internal fun MiniBrowserBar(
     /** What the card at the top of the menu says. */
     blockingCard: BlockingCard,
     onBlockingCard: () -> Unit,
-    onSiteSettings: () -> Unit,
+    /** The site's own switches, on the menu's second page. */
+    blockingSettings: ContentBlockingSettings,
+    blockingHost: String?,
+    onSiteBlockingChange: (BlockCategory, Boolean) -> Unit,
     barColor: Color,
     modifier: Modifier = Modifier,
 ) {
@@ -226,20 +239,39 @@ internal fun MiniBrowserBar(
                     .pane(PanelShape, zen.lift)
                     .padding(PanelInset),
             ) {
-                ExpandedMenu(
-                    state = state,
-                    viewModel = viewModel,
-                    canPin = canPin,
-                    barColor = barColor,
-                    onCopyLink = onCopyLink,
-                    onFind = onFind,
-                    onShare = onShare,
-                    onOpenExternal = onOpenExternal,
-                    onPin = onPin,
-                    blockingCard = blockingCard,
-                    onBlockingCard = onBlockingCard,
-                    onSiteSettings = onSiteSettings,
-                )
+                // One panel, two pages: the tools, and the site's own switches.
+                // The swap happens inside the same surface, so Site Settings
+                // never opens as a second sheet on top of the menu.
+                AnimatedContent(
+                    targetState = state.menuSiteSettings && blockingHost != null,
+                    transitionSpec = {
+                        fadeIn(tween(MenuPageFadeMs)) togetherWith fadeOut(tween(MenuPageFadeMs))
+                    },
+                    label = "menuPage",
+                ) { showSiteSettings ->
+                    if (showSiteSettings && blockingHost != null) {
+                        SiteSettingsMenuPage(
+                            host = blockingHost,
+                            settings = blockingSettings,
+                            onBack = viewModel::closeSiteSettings,
+                            onChange = onSiteBlockingChange,
+                        )
+                    } else {
+                        ExpandedMenu(
+                            state = state,
+                            viewModel = viewModel,
+                            canPin = canPin,
+                            barColor = barColor,
+                            onCopyLink = onCopyLink,
+                            onFind = onFind,
+                            onShare = onShare,
+                            onOpenExternal = onOpenExternal,
+                            onPin = onPin,
+                            blockingCard = blockingCard,
+                            onBlockingCard = onBlockingCard,
+                        )
+                    }
+                }
             }
         }
 
@@ -641,113 +673,121 @@ private fun ExpandedMenu(
     onPin: () -> Unit,
     blockingCard: BlockingCard,
     onBlockingCard: () -> Unit,
-    onSiteSettings: () -> Unit,
 ) {
     val zen = LocalZenColors.current
-    Column(Modifier.fillMaxWidth()) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(RowGap),
+    ) {
         // At the top: the menu grows up from the bar, so this is the far end,
-        // where Arc keeps the same status at the bottom of its sheet. A plain
-        // row, like the ones below it: a lift card inside the glass panel reads
-        // as a grey patch with a rim.
+        // where Arc keeps the same status at the bottom of its sheet.
         if (blockingCard != BlockingCard.Hidden) {
             BlockingCardRow(card = blockingCard, onClick = onBlockingCard)
-            RowDivider()
         }
-        MenuRow(
-            icon = Icons.Outlined.ContentCopy,
-            title = stringResource(if (state.copyConfirmed) R.string.browser_copied else R.string.browser_copy_link),
-            tint = if (state.copyConfirmed) zen.coral else zen.ink,
-            onClick = onCopyLink,
-        )
-        RowDivider()
-        MenuRow(
-            icon = Icons.Outlined.Description,
-            title = stringResource(R.string.browser_reader),
-            tint = zen.ink,
-            trailing = {
-                when {
-                    state.readerLoading -> CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = zen.coral,
-                    )
 
-                    state.readerArticle != null -> Icon(
-                        imageVector = Icons.Outlined.Check,
-                        contentDescription = null,
-                        tint = zen.coral,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-            },
-            onClick = viewModel::toggleReader,
-        )
-        RowDivider()
-        MenuRow(
-            icon = Icons.Outlined.Laptop,
-            title = stringResource(R.string.browser_desktop_site),
-            tint = zen.ink,
-            trailing = {
-                Switch(
-                    checked = state.requestsDesktopSite,
-                    onCheckedChange = { viewModel.toggleDesktopSite() },
-                )
-            },
-            onClick = viewModel::toggleDesktopSite,
-        )
-        RowDivider()
-        MenuRow(
-            icon = Icons.Outlined.FormatSize,
-            title = stringResource(R.string.browser_page_zoom),
-            tint = zen.ink,
-            trailing = {
-                val resetLabel = stringResource(R.string.browser_zoom_reset)
-                val canReset = MiniBrowserZoom.canReset(state.pageZoom)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .background(barColor, CircleShape)
-                        .padding(horizontal = 2.dp),
-                ) {
-                    ZoomStep(
-                        icon = Icons.Outlined.KeyboardArrowDown,
-                        description = stringResource(R.string.browser_zoom_out),
-                        enabled = MiniBrowserZoom.canZoomOut(state.pageZoom),
-                        onClick = viewModel::zoomOut,
-                    )
-                    // The readout is the reset: same gesture as a browser's
-                    // zoom percentage, and it keeps the row to one control.
-                    Box(
-                        modifier = Modifier
-                            .size(width = 54.dp, height = 32.dp)
-                            .barClickable(
-                                enabled = canReset,
-                                onClick = viewModel::resetPageZoom,
-                            )
-                            // At 100% the readout is plain text and announces
-                            // itself; zoomed, it is the reset button.
-                            .semantics {
-                                if (canReset) contentDescription = resetLabel
-                            },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = MiniBrowserZoom.percentLabel(state.pageZoom),
-                            style = ZenType.rounded(15, FontWeight.SemiBold),
-                            color = zen.ink,
-                            textAlign = TextAlign.Center,
+        // The page tools, one block, divided inside. On Android the rows stay
+        // straight on the panel: the dividers and the gap between the blocks
+        // do the grouping, no second card under them.
+        Column(Modifier.fillMaxWidth()) {
+            MenuRow(
+                icon = Icons.Outlined.ContentCopy,
+                title = stringResource(
+                    if (state.copyConfirmed) R.string.browser_copied else R.string.browser_copy_link,
+                ),
+                tint = if (state.copyConfirmed) zen.coral else zen.ink,
+                onClick = onCopyLink,
+            )
+            RowDivider()
+            MenuRow(
+                icon = Icons.Outlined.Description,
+                title = stringResource(R.string.browser_reader),
+                tint = zen.ink,
+                trailing = {
+                    when {
+                        state.readerLoading -> CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = zen.coral,
+                        )
+
+                        state.readerArticle != null -> Icon(
+                            imageVector = Icons.Outlined.Check,
+                            contentDescription = null,
+                            tint = zen.coral,
+                            modifier = Modifier.size(18.dp),
                         )
                     }
-                    ZoomStep(
-                        icon = Icons.Outlined.KeyboardArrowUp,
-                        description = stringResource(R.string.browser_zoom_in),
-                        enabled = MiniBrowserZoom.canZoomIn(state.pageZoom),
-                        onClick = viewModel::zoomIn,
+                },
+                onClick = viewModel::toggleReader,
+            )
+            RowDivider()
+            MenuRow(
+                icon = Icons.Outlined.Laptop,
+                title = stringResource(R.string.browser_desktop_site),
+                tint = zen.ink,
+                trailing = {
+                    Switch(
+                        checked = state.requestsDesktopSite,
+                        onCheckedChange = { viewModel.toggleDesktopSite() },
                     )
-                }
-            },
-        )
-        RowDivider()
+                },
+                onClick = viewModel::toggleDesktopSite,
+            )
+            RowDivider()
+            MenuRow(
+                icon = Icons.Outlined.FormatSize,
+                title = stringResource(R.string.browser_page_zoom),
+                tint = zen.ink,
+                trailing = {
+                    val resetLabel = stringResource(R.string.browser_zoom_reset)
+                    val canReset = MiniBrowserZoom.canReset(state.pageZoom)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .background(barColor, CircleShape)
+                            .padding(horizontal = 2.dp),
+                    ) {
+                        ZoomStep(
+                            icon = Icons.Outlined.KeyboardArrowDown,
+                            description = stringResource(R.string.browser_zoom_out),
+                            enabled = MiniBrowserZoom.canZoomOut(state.pageZoom),
+                            onClick = viewModel::zoomOut,
+                        )
+                        // The readout is the reset: same gesture as a browser's
+                        // zoom percentage, and it keeps the row to one control.
+                        Box(
+                            modifier = Modifier
+                                .size(width = 54.dp, height = 32.dp)
+                                .barClickable(
+                                    enabled = canReset,
+                                    onClick = viewModel::resetPageZoom,
+                                )
+                                // At 100% the readout is plain text and announces
+                                // itself; zoomed, it is the reset button.
+                                .semantics {
+                                    if (canReset) contentDescription = resetLabel
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = MiniBrowserZoom.percentLabel(state.pageZoom),
+                                style = ZenType.rounded(15, FontWeight.SemiBold),
+                                color = zen.ink,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                        ZoomStep(
+                            icon = Icons.Outlined.KeyboardArrowUp,
+                            description = stringResource(R.string.browser_zoom_in),
+                            enabled = MiniBrowserZoom.canZoomIn(state.pageZoom),
+                            onClick = viewModel::zoomIn,
+                        )
+                    }
+                },
+            )
+        }
+
+        // Its own block: one destination, not a group.
         MenuRow(
             icon = Icons.Outlined.Tune,
             title = stringResource(R.string.browser_site_settings),
@@ -760,13 +800,11 @@ private fun ExpandedMenu(
                     modifier = Modifier.size(20.dp),
                 )
             },
-            onClick = onSiteSettings,
+            onClick = viewModel::openSiteSettings,
         )
 
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 10.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             MenuTile(
@@ -810,6 +848,128 @@ private fun ExpandedMenu(
                 enabled = canPin,
             )
         }
+    }
+}
+
+/** How long the menu's two pages take to cross-fade. */
+private const val MenuPageFadeMs = 160
+
+/**
+ * The menu's second page: the site's own blocking switches, in the panel's row
+ * style. Its first row goes back, so the sub-page reads as one step inside the
+ * menu instead of a sheet on top of it. A switch that is off in Settings stays
+ * off here, with a note saying so.
+ */
+@Composable
+private fun SiteSettingsMenuPage(
+    host: String,
+    settings: ContentBlockingSettings,
+    onBack: () -> Unit,
+    onChange: (BlockCategory, Boolean) -> Unit,
+) {
+    val zen = LocalZenColors.current
+    val site = blockingSiteKey(host)
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(RowGap),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .barClickable(onClick = onBack)
+                .heightIn(min = RowHeight),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // The chevron sits in the space the menu rows use for their glyphs,
+            // so the title lines up with the rows on the other page.
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                contentDescription = stringResource(R.string.browser_back),
+                tint = zen.ink.copy(alpha = 0.75f),
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.browser_site_settings),
+                    style = ZenType.rounded(16, FontWeight.Medium),
+                    color = zen.ink,
+                )
+                Text(
+                    text = site,
+                    style = ZenType.rounded(13, FontWeight.Normal),
+                    color = zen.ink.copy(alpha = 0.6f),
+                )
+            }
+        }
+        // One block, divided inside, like the page tools on the menu's first
+        // page: no card under them, the gap separates the block from the header.
+        Column(Modifier.fillMaxWidth()) {
+            BlockCategory.entries.forEachIndexed { index, category ->
+                if (index > 0) RowDivider()
+                SiteBlockingRow(
+                    category = category,
+                    host = host,
+                    settings = settings,
+                    onChange = onChange,
+                )
+            }
+        }
+        Text(
+            text = stringResource(R.string.site_settings_footer, site),
+            style = ZenType.rounded(13, FontWeight.Normal),
+            color = zen.ink.copy(alpha = 0.6f),
+            modifier = Modifier.padding(start = 4.dp, end = 4.dp),
+        )
+    }
+}
+
+/** One site switch as a plain menu row: like the menu's tools, the rows sit
+ *  straight on the panel and the dividers do the grouping. */
+@Composable
+private fun SiteBlockingRow(
+    category: BlockCategory,
+    host: String,
+    settings: ContentBlockingSettings,
+    onChange: (BlockCategory, Boolean) -> Unit,
+) {
+    val zen = LocalZenColors.current
+    val enabled = settings.isOn(category)
+    val on = settings.isOn(category, host)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .barClickable(enabled = enabled) { onChange(category, !on) }
+            .heightIn(min = RowHeight)
+            .padding(vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = category.icon,
+            contentDescription = null,
+            tint = zen.ink.copy(alpha = 0.6f),
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = stringResource(category.title),
+                style = ZenType.rounded(16, FontWeight.Medium),
+                color = zen.ink,
+            )
+            if (!enabled) {
+                Text(
+                    text = stringResource(R.string.blocking_off_in_settings),
+                    style = ZenType.rounded(13, FontWeight.Normal),
+                    color = zen.ink.copy(alpha = 0.6f),
+                )
+            }
+        }
+        Switch(
+            checked = on,
+            onCheckedChange = { onChange(category, it) },
+            enabled = enabled,
+        )
     }
 }
 

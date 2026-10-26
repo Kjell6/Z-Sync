@@ -95,6 +95,27 @@ final class MiniBrowserModelTests: XCTestCase {
         XCTAssertFalse(model.menuExpanded)
     }
 
+    /// Site Settings is a page inside the menu, so opening it keeps the panel
+    /// up and only closing the menu leaves it.
+    func testSiteSettingsOpenInsideTheMenu() {
+        let (model, _) = makeModel(initialURL: URL(string: "https://example.com")!)
+        model.currentURL = URL(string: "https://example.com")
+        model.toggleMenu()
+
+        model.openSiteSettings()
+        XCTAssertTrue(model.menuExpanded)
+        XCTAssertTrue(model.menuSiteSettings)
+
+        model.closeSiteSettings()
+        XCTAssertTrue(model.menuExpanded)
+        XCTAssertFalse(model.menuSiteSettings)
+
+        model.openSiteSettings()
+        model.collapseMenu()
+        XCTAssertFalse(model.menuExpanded)
+        XCTAssertFalse(model.menuSiteSettings)
+    }
+
     func testZoomClampsToHalfAndDouble() {
         let (model, _) = makeModel(initialURL: nil)
         XCTAssertEqual(model.pageZoom, 1, accuracy: 0.001)

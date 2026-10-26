@@ -384,8 +384,8 @@ final class MiniBrowserModel {
     private(set) var blockedCount = 0
     /// The page was reloaded once with nothing blocked.
     private(set) var showingOriginal = false
-    /// The site's own blocking switches, opened from the menu.
-    var siteSettingsPresented = false
+    /// The site's own blocking switches, as a page inside the open menu.
+    var menuSiteSettings = false
     @ObservationIgnored private var originalPage: URL?
     @ObservationIgnored private var countedResources = Set<String>()
     /// Reported addresses looked at for this document, counted or not.
@@ -554,7 +554,7 @@ final class MiniBrowserModel {
     /// always allowed.
     func toggleMenu() {
         if menuExpanded {
-            menuExpanded = false
+            collapseMenu()
             return
         }
         guard effectiveURL != nil else { return }
@@ -564,6 +564,7 @@ final class MiniBrowserModel {
 
     func collapseMenu() {
         menuExpanded = false
+        menuSiteSettings = false
     }
 
     /// Scroll-driven bar visibility. No-op when the value is unchanged so a
@@ -648,7 +649,7 @@ final class MiniBrowserModel {
 
     /// System find bar. The page menu closes so the two bars do not stack.
     func presentFindOnPage() {
-        menuExpanded = false
+        collapseMenu()
         guard let webView else { return }
         webView.isFindInteractionEnabled = true
         webView.findInteraction?.presentFindNavigator(showingReplace: false)
@@ -879,12 +880,12 @@ final class MiniBrowserModel {
         case .blocked:
             originalPage = currentURL.map(Self.withoutFragment)
             showingOriginal = true
-            menuExpanded = false
+            collapseMenu()
             reloadForBlocking()
         case .showingOriginal:
             originalPage = nil
             showingOriginal = false
-            menuExpanded = false
+            collapseMenu()
             reloadForBlocking()
         case .offForSite:
             openSiteSettings()
@@ -893,9 +894,16 @@ final class MiniBrowserModel {
         }
     }
 
+    /// Opens the site's switches as a page inside the menu. The panel stays one
+    /// surface instead of stacking a second sheet on top of it.
     func openSiteSettings() {
-        menuExpanded = false
-        siteSettingsPresented = true
+        menuExpanded = true
+        menuSiteSettings = true
+    }
+
+    /// Back to the menu's own page. The menu stays open.
+    func closeSiteSettings() {
+        menuSiteSettings = false
     }
 
     /// A switch changed in Site Settings: the page reloads with it.

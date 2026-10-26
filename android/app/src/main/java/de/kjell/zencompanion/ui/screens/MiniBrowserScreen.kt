@@ -94,7 +94,6 @@ import de.kjell.zencompanion.ui.browser.MiniBrowserViewModel
 import de.kjell.zencompanion.ui.browser.BlockingCard
 import de.kjell.zencompanion.ui.browser.PageBlocker
 import de.kjell.zencompanion.data.ContentBlocking
-import de.kjell.zencompanion.ui.sheets.SiteSettingsSheet
 import de.kjell.zencompanion.ui.browser.ReaderExtractor
 import de.kjell.zencompanion.ui.components.PinDestinationPicker
 import de.kjell.zencompanion.ui.components.SaveKindMenuButton
@@ -278,6 +277,9 @@ fun MiniBrowserScreen(
         when {
             state.findVisible -> viewModel.closeFind()
             state.readerArticle != null -> viewModel.closeReader()
+            // The site's switches are a page inside the menu: back returns to
+            // the menu's own page, not out of the browser.
+            state.menuSiteSettings -> viewModel.closeSiteSettings()
             state.menuExpanded -> viewModel.collapseMenu()
             else -> when (viewModel.onBackPressed(webView?.canGoBack() == true)) {
                 MiniBrowserViewModel.BackAction.Handled -> Unit
@@ -628,7 +630,15 @@ fun MiniBrowserScreen(
                                 BlockingCard.Hidden -> Unit
                             }
                         },
-                        onSiteSettings = viewModel::openSiteSettings,
+                        blockingSettings = blockingSettings,
+                        blockingHost = pageHost(effectiveUrl),
+                        onSiteBlockingChange = { category, on ->
+                            pageHost(effectiveUrl)?.let { host ->
+                                ContentBlocking.update(blockingSettings.withSite(category, host, on))
+                                // The page reloads so the new switches apply.
+                                blockingReload++
+                            }
+                        },
                         barColor = barColor,
                     )
                 }
@@ -648,17 +658,6 @@ fun MiniBrowserScreen(
                 )
             }
         }
-    }
-
-    if (state.siteSettingsOpen) {
-        pageHost(effectiveUrl)?.let { host ->
-            SiteSettingsSheet(
-                host = host,
-                onDismiss = viewModel::closeSiteSettings,
-                // The page reloads so the new switches apply to it.
-                onChanged = { blockingReload++ },
-            )
-        } ?: viewModel.closeSiteSettings()
     }
 
     // Keep the find bar's matches in sync with the query.

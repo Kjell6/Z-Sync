@@ -429,8 +429,10 @@ preferences as `{"value": {…}}`:
 
 - `zen.spaces-sync.normal-tabs` (bool): the normal-tabs opt-in. When the record is
   absent or unreadable, callers default to `true`.
-- `zen.workspaces.separate-essentials` (bool, optional): Zen does not mark this pref
-  for sync today, so it is normally absent. See §7.4.
+- `zen.workspaces.separate-essentials` (bool, optional): Zen 1.23 and later register
+  this pref for sync. Firefox's prefs engine writes `null` for a pref the user never
+  changed, so the key is present with a `null` value until the default is touched.
+  See §7.4.
 
 Collection keys are read from `crypto/keys`.
 
@@ -588,13 +590,17 @@ same top-level `"contract": 1`, and use:
 The layout record always groups essentials by container bucket (§3.7), but Zen
 Desktop renders them container-specific or shared depending on the
 `zen.workspaces.separate-essentials` pref. Both platforms MUST resolve the same
-effective grouping:
+effective grouping automatically, with no user-facing override:
 
-1. An explicit user choice in the app wins.
-2. Otherwise `zen.workspaces.separate-essentials` from the `prefs` record wins when
-   present and parseable (§3.1 bool tolerance).
-3. Otherwise infer: container-specific iff at least one essential sits in a bucket
-   other than `default`.
+1. When the `prefs` record carries `zen.workspaces.separate-essentials`, that value
+   is decisive. Zen 1.23 and later register the pref for sync; Firefox's prefs
+   engine writes `null` for a pref the user never changed while keeping the key.
+   Zen's default is `true`, so a present key whose value is `null` or unparseable
+   means container-specific (§3.1 bool tolerance; fixture
+   `wire-prefs-separate-essentials`).
+2. Otherwise the browser does not sync the pref (Zen 1.22 and older, or an
+   unreadable `prefs` record): infer container-specific iff at least one essential
+   sits in a bucket other than `default`.
 
 Rendering follows desktop `_shouldShowTab`: a space with a container shows its
 bucket; a space without one shows the `default` bucket plus buckets no space uses
@@ -708,6 +714,13 @@ fixtures, but fixtures do not pin them and future work SHOULD remove them:
 
 ## 11. Changelog
 
+- **2026-10-27 — Essentials grouping resolves automatically.** Zen 1.23
+  registers `zen.workspaces.separate-essentials` for sync. §7.4 now resolves the
+  grouping from that pref alone — a present `null` value is the untouched default
+  `true` — and infers from the layout buckets only when the pref is absent. The
+  app-level override is gone. Added fixture `wire-prefs-separate-essentials`.
+  Contract-Version stays 1: no wire change, and the resolution only makes §7.4
+  precise.
 - **2026-10-09 — Write preconditions.** Added §7.5: a `meta/global` engine-version
   gate (fixture `wire-meta-global-write-gate`), complete planning reads, no
   synthesized parents, fail-closed removals on undecryptable records, preservation of

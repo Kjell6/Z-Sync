@@ -34,7 +34,6 @@ import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.EssentialsColumns
 import de.kjell.zencompanion.data.ToolbarPlacement
-import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.BrowserState
 import de.kjell.zencompanion.ui.components.ZenSpaceGradientBackground
 import de.kjell.zencompanion.ui.sheets.SyncSetupSheet
@@ -52,7 +51,6 @@ import de.kjell.zencompanion.ui.theme.ZenTheme
 fun SpacesBrowserScreen(
     isDemo: Boolean,
     state: BrowserState,
-    essentialsGrouping: ZenSpaces.EssentialsGrouping,
     essentialsColumns: EssentialsColumns,
     toolbarPlacement: ToolbarPlacement,
     onSelectSpace: (Int) -> Unit,
@@ -71,11 +69,11 @@ fun SpacesBrowserScreen(
     val currentTheme = spaces.getOrNull(state.selectedIndex)?.theme
     var showSyncSetup by remember { mutableStateOf(false) }
     val isDark = currentTheme?.isDarkTheme ?: isSystemInDarkTheme()
-    // Resolved once per snapshot/grouping so adjacent pages are compared by
-    // their effective essentials grid, not just by container guid.
-    val essentialsBySpace = remember(state.snapshot, essentialsGrouping) {
+    // Resolved once per snapshot so adjacent pages are compared by their
+    // effective essentials grid, not just by container guid.
+    val essentialsBySpace = remember(state.snapshot) {
         spaces.associate { space ->
-            space.id to state.snapshot.essentialsFor(space, essentialsGrouping)
+            space.id to state.snapshot.essentialsFor(space)
         }
     }
     // Single definition of the bar; the placement decides which edge renders it.

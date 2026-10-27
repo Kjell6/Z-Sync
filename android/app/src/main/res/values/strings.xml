@@ -141,11 +141,6 @@
     <string name="settings_search_engine_error_missing_placeholder">Add {query} where the search term should go.</string>
     <string name="settings_open_into_search">Open into search</string>
     <string name="settings_external_browser">Open tabs in default browser</string>
-    <string name="settings_essentials_grouping">Essentials</string>
-    <string name="settings_essentials_grouping_automatic">Automatic</string>
-    <string name="settings_essentials_grouping_container_specific">Container-specific</string>
-    <string name="settings_essentials_grouping_shared">All spaces</string>
-    <string name="settings_essentials_grouping_caption">Automatic follows your desktop browser\'s \"Enable container-specific essentials\". All spaces shows every essential on every space.</string>
     <string name="settings_essentials_columns">Essentials per row</string>
     <string name="settings_essentials_columns_automatic">Automatic</string>
     <string name="settings_save_kind">Save shared tabs as</string>

@@ -75,13 +75,12 @@ enum class EssentialsColumns(val storageValue: String) {
 
 /**
  * Whether tapping a tab opens the URL in the system default browser
- * instead of the in-app mini-browser, plus the essentials grouping override,
- * the essentials grid columns and the pinned/normal save kind.
+ * instead of the in-app mini-browser, plus the essentials grid columns and
+ * the pinned/normal save kind.
  */
 object BrowserSettings {
     const val PREFS_NAME = "zen_prefs"
     const val KEY_ALWAYS_OPEN_EXTERNALLY = "always_open_links_externally"
-    const val KEY_ESSENTIALS_GROUPING = "essentials_grouping"
     const val KEY_ESSENTIALS_COLUMNS = "essentials_columns"
     const val KEY_SAVE_KIND = "save_tab_kind"
     const val KEY_TOOLBAR_PLACEMENT = "toolbar_placement"
@@ -95,18 +94,6 @@ object BrowserSettings {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putBoolean(KEY_ALWAYS_OPEN_EXTERNALLY, enabled)
-            .apply()
-    }
-
-    /** Raw storage value; null when the user never chose a grouping. */
-    fun getEssentialsGrouping(context: Context): String? =
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getString(KEY_ESSENTIALS_GROUPING, null)
-
-    fun setEssentialsGrouping(context: Context, value: String) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putString(KEY_ESSENTIALS_GROUPING, value)
             .apply()
     }
 

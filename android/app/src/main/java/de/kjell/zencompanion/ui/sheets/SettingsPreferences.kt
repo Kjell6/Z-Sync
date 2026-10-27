@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ArrowDropDown
@@ -433,14 +432,11 @@ internal fun SettingsPreferencesSection(
 @Composable
 internal fun SettingsAdvancedScreen(
     preferences: PreferencesState,
-    onSetEssentialsGrouping: (ZenSpaces.EssentialsGrouping) -> Unit,
     onSetEssentialsColumns: (EssentialsColumns) -> Unit,
     onBack: () -> Unit,
     onDone: () -> Unit,
 ) {
-    var groupingMenuExpanded by remember { mutableStateOf(false) }
     var columnsMenuExpanded by remember { mutableStateOf(false) }
-    val essentialsGrouping = preferences.essentialsGrouping
     val essentialsColumns = preferences.essentialsColumns
 
     Column(
@@ -478,84 +474,6 @@ internal fun SettingsAdvancedScreen(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-        }
-
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            LiftCard(modifier = Modifier.fillMaxWidth()) {
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { groupingMenuExpanded = true }
-                            .padding(horizontal = 16.dp, vertical = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.List,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(22.dp),
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = stringResource(R.string.settings_essentials_grouping),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Text(
-                            text = stringResource(essentialsGrouping.labelRes()),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Icons.Outlined.ArrowDropDown,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-
-                    DropdownMenu(
-                        expanded = groupingMenuExpanded,
-                        onDismissRequest = { groupingMenuExpanded = false },
-                    ) {
-                        ZenSpaces.EssentialsGrouping.entries.forEach { grouping ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = stringResource(grouping.labelRes()),
-                                        fontWeight = if (grouping == essentialsGrouping) FontWeight.SemiBold else FontWeight.Normal,
-                                        color = if (grouping == essentialsGrouping) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                    )
-                                },
-                                trailingIcon = if (grouping == essentialsGrouping) {
-                                    {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Check,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(18.dp),
-                                        )
-                                    }
-                                } else null,
-                                onClick = {
-                                    onSetEssentialsGrouping(grouping)
-                                    groupingMenuExpanded = false
-                                },
-                            )
-                        }
-                    }
-                }
-            }
-
-            Text(
-                text = stringResource(R.string.settings_essentials_grouping_caption),
-                style = MaterialTheme.typography.labelSmall,
-                color = LocalZenColors.current.ink.copy(alpha = 0.45f),
-                modifier = Modifier.padding(start = 4.dp),
-            )
         }
 
         LiftCard(modifier = Modifier.fillMaxWidth()) {
@@ -660,12 +578,6 @@ private fun SaveKindOption(
             },
         )
     }
-}
-
-private fun ZenSpaces.EssentialsGrouping.labelRes(): Int = when (this) {
-    ZenSpaces.EssentialsGrouping.AUTOMATIC -> R.string.settings_essentials_grouping_automatic
-    ZenSpaces.EssentialsGrouping.CONTAINER_SPECIFIC -> R.string.settings_essentials_grouping_container_specific
-    ZenSpaces.EssentialsGrouping.SHARED -> R.string.settings_essentials_grouping_shared
 }
 
 /** "Automatic", or the bare number of essentials per row. */

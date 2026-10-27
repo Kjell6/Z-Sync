@@ -788,10 +788,9 @@ private struct AddSearchEngineView: View {
 
 // MARK: - Advanced
 
-/// Rarely touched settings live here instead of the main page. Currently the
-/// essentials grouping override (SPEC §7.4): most users never need it because
-/// `.automatic` resolves the effective grouping on its own. The
-/// essentials-per-row choice sits next to it.
+/// Rarely touched settings live here instead of the main page. The
+/// essentials-per-row choice sits here; the essentials grouping resolves
+/// automatically from the synced desktop pref (SPEC §7.4).
 private struct AdvancedSettingsView: View {
     @Bindable var model: SettingsModel
     let scheme: ColorScheme
@@ -802,39 +801,6 @@ private struct AdvancedSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                VStack(spacing: 0) {
-                    HStack {
-                        Label {
-                            Text("settings.essentials_grouping")
-                                .font(.system(size: 16, weight: .medium, design: .rounded))
-                        } icon: {
-                            Image(systemName: "square.grid.2x2")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(Palette.ink(scheme).opacity(0.6))
-                        }
-                        .foregroundStyle(Palette.ink(scheme))
-
-                        Spacer()
-
-                        Picker("settings.essentials_grouping", selection: $model.essentialsGrouping) {
-                            ForEach(EssentialsGrouping.allCases) { grouping in
-                                Text(grouping.titleKey).tag(grouping)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .tint(Palette.ink(scheme).opacity(0.65))
-                        .font(.system(size: 15.5, design: .rounded))
-                    }
-                    .padding(.horizontal, 16)
-                    .frame(minHeight: 54)
-                }
-                .liftCard(scheme)
-
-                Text("settings.essentials_grouping.caption")
-                    .font(.system(size: 12, design: .rounded))
-                    .foregroundStyle(Palette.ink(scheme).opacity(0.45))
-                    .padding(.horizontal, 4)
-
                 VStack(spacing: 0) {
                     HStack {
                         Label {
@@ -884,15 +850,5 @@ private struct AdvancedSettingsView: View {
         .background(Palette.paper(scheme).ignoresSafeArea())
         .navigationTitle(Text("settings.advanced"))
         .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-private extension EssentialsGrouping {
-    var titleKey: LocalizedStringKey {
-        switch self {
-        case .automatic: return "settings.essentials_grouping.automatic"
-        case .containerSpecific: return "settings.essentials_grouping.container_specific"
-        case .shared: return "settings.essentials_grouping.shared"
-        }
     }
 }

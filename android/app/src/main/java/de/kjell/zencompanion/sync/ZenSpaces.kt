@@ -393,9 +393,9 @@ object ZenSpaces {
         val essentials: Map<String, List<ZenTab>>,
         val fetchedAtMillis: Long,
         /**
-         * Synced `zen.workspaces.separate-essentials` value. Zen does not sync
-         * that pref today, so this is normally null and [AUTOMATIC] falls back
-         * to [inferContainerSpecific].
+         * Resolved `zen.workspaces.separate-essentials` value. Null means the
+         * browser does not sync the pref (Zen 1.22 and older), so grouping
+         * falls back to [inferContainerSpecific].
          */
         val separateEssentialsPref: Boolean? = null,
         /**
@@ -422,22 +422,17 @@ object ZenSpaces {
 
         // MARK: Essentials grouping
 
-        /** Essentials to show on [space] under [grouping]. */
-        fun essentialsFor(
-            space: ZenSpace,
-            grouping: EssentialsGrouping = EssentialsGrouping.AUTOMATIC,
-        ): List<ZenTab> =
-            if (isContainerSpecific(grouping)) containerSpecificEssentials(space) else sharedEssentials()
+        /** Essentials to show on [space] under the resolved desktop grouping. */
+        fun essentialsFor(space: ZenSpace): List<ZenTab> =
+            if (isContainerSpecific) containerSpecificEssentials(space) else sharedEssentials()
 
         /**
-         * Whether container grouping applies under [grouping]. AUTOMATIC uses
-         * the synced pref when present, otherwise infers from the buckets.
+         * Whether desktop renders essentials container-specific. The resolved
+         * synced pref is decisive; older Zen versions that do not sync it fall
+         * back to inference from the buckets.
          */
-        fun isContainerSpecific(grouping: EssentialsGrouping): Boolean = when (grouping) {
-            EssentialsGrouping.AUTOMATIC -> separateEssentialsPref ?: inferContainerSpecific(essentials)
-            EssentialsGrouping.CONTAINER_SPECIFIC -> true
-            EssentialsGrouping.SHARED -> false
-        }
+        val isContainerSpecific: Boolean
+            get() = separateEssentialsPref ?: inferContainerSpecific(essentials)
 
         /**
          * Container-specific lookup mirrors desktop `_shouldShowTab`: a space
@@ -494,30 +489,17 @@ object ZenSpaces {
             val empty = ZenSnapshot(emptyList(), emptyMap(), Long.MIN_VALUE)
 
             /**
-             * Separate essentials only when at least one lives in a real
+             * Legacy fallback for browsers that do not sync
+             * `zen.workspaces.separate-essentials` (Zen 1.22 and older):
+             * separate essentials only when at least one lives in a real
              * container bucket. All-default data (the common case when the
-             * pref is off) shows on every space.
+             * pref is off) shows on every space. The wire alone cannot fully
+             * distinguish the modes: shared mode can keep a container tab's
+             * containerGuid, and container-specific mode can have every
+             * essential in the default bucket.
              */
             fun inferContainerSpecific(buckets: Map<String, List<ZenTab>>): Boolean =
                 buckets.any { (key, tabs) -> key != "default" && tabs.isNotEmpty() }
-        }
-    }
-
-    /**
-     * How essentials map onto spaces. Zen Desktop's
-     * `zen.workspaces.separate-essentials` preference switches between
-     * container-specific and shared; [AUTOMATIC] follows the synced pref when
-     * Zen sends it and otherwise infers from the wire buckets.
-     */
-    enum class EssentialsGrouping(val storageValue: String) {
-        AUTOMATIC("automatic"),
-        CONTAINER_SPECIFIC("container-specific"),
-        SHARED("shared"),
-        ;
-
-        companion object {
-            fun fromStorage(value: String?): EssentialsGrouping =
-                entries.firstOrNull { it.storageValue == value } ?: AUTOMATIC
         }
     }
 

@@ -167,7 +167,6 @@ data class PreferencesState(
     /** User-defined engines shown after the built-ins in the picker. */
     val customSearchEngines: List<SearchEngine> = emptyList(),
     val alwaysOpenExternally: Boolean = false,
-    val essentialsGrouping: ZenSpaces.EssentialsGrouping = ZenSpaces.EssentialsGrouping.AUTOMATIC,
     /** How many essentials share one grid row: adaptive (default) or a fixed 1-5. */
     val essentialsColumns: EssentialsColumns = EssentialsColumns.AUTOMATIC,
     /** Pinned (default) or normal tab for tabs saved from share/mini browser. */
@@ -180,14 +179,13 @@ data class PreferencesState(
 
 /**
  * Preferences owner: search engine, external-browser toggle, essentials
- * grouping and the onboarding flags (sync-setup hint, share-extension tip).
+ * columns and the onboarding flags (sync-setup hint, share-extension tip).
  */
 interface PreferencesRepository {
     fun load(): PreferencesState
     fun setSearchEngine(engine: SearchEngine)
     fun setCustomSearchEngines(engines: List<SearchEngine>)
     fun setAlwaysOpenExternally(enabled: Boolean)
-    fun setEssentialsGrouping(grouping: ZenSpaces.EssentialsGrouping)
     fun setEssentialsColumns(columns: EssentialsColumns)
     fun setSaveKind(kind: SaveKind)
     fun setToolbarPlacement(placement: ToolbarPlacement)
@@ -207,9 +205,6 @@ internal class AndroidPreferencesRepository(private val context: Context) : Pref
         searchEngine = SearchEngines.resolve(context),
         customSearchEngines = SearchEngines.custom(context),
         alwaysOpenExternally = BrowserSettings.get(context),
-        essentialsGrouping = ZenSpaces.EssentialsGrouping.fromStorage(
-            BrowserSettings.getEssentialsGrouping(context),
-        ),
         essentialsColumns = BrowserSettings.getEssentialsColumns(context),
         saveKind = BrowserSettings.getSaveKind(context),
         toolbarPlacement = BrowserSettings.getToolbarPlacement(context),
@@ -222,9 +217,6 @@ internal class AndroidPreferencesRepository(private val context: Context) : Pref
         SearchEngines.setCustom(context, engines)
 
     override fun setAlwaysOpenExternally(enabled: Boolean) = BrowserSettings.set(context, enabled)
-
-    override fun setEssentialsGrouping(grouping: ZenSpaces.EssentialsGrouping) =
-        BrowserSettings.setEssentialsGrouping(context, grouping.storageValue)
 
     override fun setEssentialsColumns(columns: EssentialsColumns) =
         BrowserSettings.setEssentialsColumns(context, columns)
@@ -790,11 +782,6 @@ class AppViewModel(
     fun setAlwaysOpenExternally(enabled: Boolean) {
         preferencesRepository.setAlwaysOpenExternally(enabled)
         _preferences.value = _preferences.value.copy(alwaysOpenExternally = enabled)
-    }
-
-    fun setEssentialsGrouping(grouping: ZenSpaces.EssentialsGrouping) {
-        preferencesRepository.setEssentialsGrouping(grouping)
-        _preferences.value = _preferences.value.copy(essentialsGrouping = grouping)
     }
 
     fun setEssentialsColumns(columns: EssentialsColumns) {

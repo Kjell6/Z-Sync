@@ -763,10 +763,6 @@ private class FakePreferencesRepository : PreferencesRepository {
         state = state.copy(alwaysOpenExternally = enabled)
     }
 
-    override fun setEssentialsGrouping(grouping: ZenSpaces.EssentialsGrouping) {
-        state = state.copy(essentialsGrouping = grouping)
-    }
-
     override fun setEssentialsColumns(columns: EssentialsColumns) {
         state = state.copy(essentialsColumns = columns)
     }

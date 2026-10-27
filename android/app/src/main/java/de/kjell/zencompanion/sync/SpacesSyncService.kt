@@ -27,8 +27,8 @@ object SpacesSyncService {
     const val NORMAL_TABS_PREF_KEY = "zen.spaces-sync.normal-tabs"
 
     /**
-     * Desktop setting "Enable container-specific essentials". Not in Zen's
-     * synced-prefs list today, so callers must tolerate it being absent.
+     * Desktop setting "Enable container-specific essentials". Zen 1.23+
+     * registers it for sync; older versions leave it absent.
      */
     const val SEPARATE_ESSENTIALS_PREF_KEY = "zen.workspaces.separate-essentials"
 
@@ -175,8 +175,8 @@ object SpacesSyncService {
         /** "Include unpinned tabs" (`zen.spaces-sync.normal-tabs`), default true. */
         val normalTabs: Boolean = true,
         /**
-         * "Enable container-specific essentials" when Zen synced it; null when
-         * absent (Zen does not mark it for sync today).
+         * "Enable container-specific essentials". Null when the browser does
+         * not sync the pref (Zen 1.22 and older).
          */
         val separateEssentials: Boolean? = null,
         /**
@@ -212,9 +212,23 @@ object SpacesSyncService {
                 prefs = prefs.copy(normalTabsCapability = derived)
             }
             parsePrefBool(values.opt(NORMAL_TABS_PREF_KEY))?.let { prefs = prefs.copy(normalTabs = it) }
-            parsePrefBool(values.opt(SEPARATE_ESSENTIALS_PREF_KEY))?.let { prefs = prefs.copy(separateEssentials = it) }
+            separateEssentialsPref(values)?.let { prefs = prefs.copy(separateEssentials = it) }
         }
         return prefs
+    }
+
+    /**
+     * Resolves `zen.workspaces.separate-essentials` from one synced prefs value
+     * map (fixture `wire-prefs-separate-essentials`). Zen 1.23+ registers the
+     * pref for sync. Firefox's prefs engine writes `null` for a pref the user
+     * never changed, and Zen's default is `true` (container-specific), so a
+     * present key with a missing or unreadable value means container-specific.
+     * A missing key means the browser does not sync the pref at all; callers
+     * then infer from the layout buckets.
+     */
+    internal fun separateEssentialsPref(values: JSONObject?): Boolean? {
+        if (values == null || !values.has(SEPARATE_ESSENTIALS_PREF_KEY)) return null
+        return parsePrefBool(values.opt(SEPARATE_ESSENTIALS_PREF_KEY)) ?: true
     }
 
     /**

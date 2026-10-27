@@ -756,19 +756,6 @@ struct ZenSpace: Identifiable, Hashable, Codable {
     }
 }
 
-/// How essentials map onto spaces. Zen Desktop's
-/// `zen.workspaces.separate-essentials` preference switches between
-/// container-specific (a space shows only its container's bucket) and shared
-/// (every space shows all essentials). `.automatic` follows the synced pref
-/// when Zen sends it and otherwise infers from the wire buckets.
-enum EssentialsGrouping: String, CaseIterable, Identifiable, Codable {
-    case automatic
-    case containerSpecific = "container-specific"
-    case shared
-
-    var id: String { rawValue }
-}
-
 /// Whether the synced Zen browser can author `pinned: false` records
 /// (SPEC §7 "Normal-tabs capability (write gating)"). `enabled`/`disabled`
 /// require a readable `prefs` record carrying the key (desktop registers the
@@ -839,9 +826,9 @@ struct ZenSnapshot: Equatable, Codable {
     /// Essential tabs per container bucket, sidebar order from the layout
     /// record. A space without a container reads the "default" bucket.
     var essentials: [String: [ZenTab]]
-    /// Synced `zen.workspaces.separate-essentials` value. Zen does not sync
-    /// that pref today, so this is normally nil and `.automatic` falls back
-    /// to `inferContainerSpecific`.
+    /// Resolved `zen.workspaces.separate-essentials` value. `nil` means the
+    /// browser does not sync the pref (Zen 1.22 and older), so grouping falls
+    /// back to `inferContainerSpecific`. Zen 1.23+ always resolves to a bool.
     var separateEssentialsPref: Bool?
     /// Write-gating capability for `pinned: false` records (SPEC §7).
     /// Older caches decode as `.absent`.
@@ -894,28 +881,28 @@ struct ZenSnapshot: Equatable, Codable {
 
     // MARK: Essentials grouping
 
-    /// Essentials to show on `space` under `grouping`.
-    func essentials(for space: ZenSpace, grouping: EssentialsGrouping = .automatic) -> [ZenTab] {
-        if isContainerSpecific(grouping: grouping) {
+    /// Essentials to show on `space` under the resolved desktop grouping.
+    func essentials(for space: ZenSpace) -> [ZenTab] {
+        if isContainerSpecific {
             return containerSpecificEssentials(for: space)
         }
         return sharedEssentials()
     }
 
-    /// Whether container grouping applies under `grouping`. `.automatic` uses
-    /// the synced pref when present, otherwise infers from the buckets.
-    func isContainerSpecific(grouping: EssentialsGrouping) -> Bool {
-        switch grouping {
-        case .containerSpecific: return true
-        case .shared: return false
-        case .automatic:
-            return separateEssentialsPref ?? Self.inferContainerSpecific(essentials)
-        }
+    /// Whether desktop renders essentials container-specific. The resolved
+    /// synced pref is decisive; older Zen versions that do not sync it fall
+    /// back to inference from the buckets.
+    var isContainerSpecific: Bool {
+        separateEssentialsPref ?? Self.inferContainerSpecific(essentials)
     }
 
-    /// Separate essentials only when at least one lives in a real container
-    /// bucket. All-default data (the common case when the pref is off) shows
-    /// on every space.
+    /// Legacy fallback for browsers that do not sync
+    /// `zen.workspaces.separate-essentials` (Zen 1.22 and older): separate
+    /// essentials only when at least one lives in a real container bucket.
+    /// All-default data (the common case when the pref is off) shows on every
+    /// space. The wire alone cannot fully distinguish the modes: shared mode
+    /// can keep a container tab's `containerGuid`, and container-specific mode
+    /// can have every essential in the default bucket.
     static func inferContainerSpecific(_ buckets: [String: [ZenTab]]) -> Bool {
         buckets.contains { key, tabs in key != "default" && !tabs.isEmpty }
     }

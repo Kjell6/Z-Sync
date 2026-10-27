@@ -87,11 +87,10 @@ struct SettingsSheet: View {
 
     // MARK: Account
 
-    /// Email and the destructive action live in one card: signing out belongs
-    /// to the account, and it no longer needs a button of its own next to it.
+    /// Email on the left, the destructive action as a compact card beside it.
     private var accountCard: some View {
-        VStack(spacing: 0) {
-            VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
                 HStack(spacing: 12) {
                     Image(systemName: "person.crop.circle")
                         .font(.system(size: 16, weight: .semibold))
@@ -113,25 +112,26 @@ struct SettingsSheet: View {
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 16)
-                .frame(minHeight: 56)
-
-                SettingsHairline(scheme: scheme)
+                .frame(height: 54)
+                .liftCard(scheme)
 
                 Button(role: .destructive) {
                     isShowingSignOutConfirm = true
                 } label: {
-                    SettingsRow(
-                        title: LocalizedStringKey(account.isDemo ? "demo.exit" : "home.sign_out"),
-                        systemImage: "rectangle.portrait.and.arrow.right",
-                        scheme: scheme,
-                        color: .red
-                    ) {
-                        EmptyView()
-                    }
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                        .font(.system(size: 16.5, weight: .semibold))
+                        .foregroundStyle(Color.red)
+                        .offset(x: 2.5) // balances the asymmetric glyph
+                        .frame(width: 44, height: 54)
+                        .background(
+                            Color.red.opacity(scheme == .dark ? 0.15 : 0.08),
+                            in: RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous)
+                        )
+                        .glassRim(cornerRadius: Palette.liftCornerRadius)
                 }
                 .buttonStyle(PressedButtonStyle())
+                .accessibilityLabel(Text(account.isDemo ? "demo.exit" : "home.sign_out"))
             }
-            .liftCard(scheme)
 
             if let loadError {
                 HStack(alignment: .top, spacing: 8) {
@@ -151,7 +151,6 @@ struct SettingsSheet: View {
                     Color.orange.opacity(scheme == .dark ? 0.12 : 0.08),
                     in: RoundedRectangle(cornerRadius: 14, style: .continuous)
                 )
-                .padding(.top, 8)
             }
         }
     }
@@ -395,6 +394,14 @@ struct SettingsSheet: View {
                         SettingsExternalMark(scheme: scheme)
                     }
                 }
+
+                SettingsHairline(scheme: scheme)
+
+                SettingsRow(title: "app.name", systemImage: "info.circle", scheme: scheme) {
+                    Text(appVersionString)
+                        .font(.system(size: 14, design: .rounded))
+                        .foregroundStyle(Palette.ink(scheme).opacity(0.4))
+                }
             }
             .liftCard(scheme)
         }
@@ -402,15 +409,10 @@ struct SettingsSheet: View {
 
     // MARK: Footer
 
-    /// Version, disclaimer and the icon attribution. The disclaimer leads: it
-    /// is the legal notice, so it sits above the attribution and reads one
-    /// step larger.
+    /// Disclaimer and icon attribution. The disclaimer leads: it is the legal
+    /// notice, so it sits above the attribution and reads one step larger.
     private var footer: some View {
         VStack(spacing: 6) {
-            Text(appVersionString)
-                .font(.system(size: 12, design: .rounded))
-                .foregroundStyle(Palette.ink(scheme).opacity(0.4))
-
             Text("home.disclaimer")
                 .font(.system(size: 13, weight: .regular, design: .rounded))
                 .foregroundStyle(Palette.ink(scheme).opacity(0.4))

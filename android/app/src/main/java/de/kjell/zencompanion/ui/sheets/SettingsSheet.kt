@@ -26,6 +26,8 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -46,6 +48,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import de.kjell.zencompanion.ui.theme.liftBorder
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.EssentialsColumns
 import de.kjell.zencompanion.data.SaveKind
@@ -253,8 +256,7 @@ private fun SettingsSheetHeader(onDone: () -> Unit) {
 }
 
 /**
- * Email and the destructive action in one card: signing out belongs to the
- * account and no longer needs a button of its own beside the address.
+ * Email on the left, the destructive action as a compact card beside it.
  */
 @Composable
 private fun SettingsAccountCard(
@@ -262,12 +264,19 @@ private fun SettingsAccountCard(
     isDemo: Boolean,
     onSignOut: () -> Unit,
 ) {
-    LiftCard(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.fillMaxWidth()) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        LiftCard(
+            modifier = Modifier
+                .weight(1f)
+                .height(if (isDemo) 64.dp else 56.dp),
+        ) {
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
+                    .fillMaxSize()
                     .padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -302,32 +311,29 @@ private fun SettingsAccountCard(
                     }
                 }
             }
+        }
 
-            HorizontalDivider(
-                modifier = Modifier.padding(start = 16.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-            )
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onSignOut)
-                    .height(56.dp)
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
+        Card(
+            modifier = Modifier
+                .size(56.dp)
+                .clickable(onClick = onSignOut),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
+            ),
+            shape = RoundedCornerShape(16.dp),
+            border = liftBorder(),
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Outlined.ExitToApp,
-                    contentDescription = null,
+                    contentDescription = stringResource(
+                        if (isDemo) R.string.demo_exit else R.string.home_sign_out,
+                    ),
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(22.dp),
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = stringResource(if (isDemo) R.string.demo_exit else R.string.home_sign_out),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.weight(1f),
                 )
             }
         }

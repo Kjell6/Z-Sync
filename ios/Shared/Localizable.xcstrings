@@ -947,6 +947,16 @@
         }
       }
     },
+    "settings.content_blocking": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Content blocking"
+          }
+        }
+      }
+    },
     "settings.whats_new": {
       "localizations": {
         "en": {

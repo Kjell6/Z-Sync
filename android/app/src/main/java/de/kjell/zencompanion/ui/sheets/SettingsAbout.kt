@@ -119,15 +119,40 @@ internal fun SettingsAboutSection(onOpenWhatsNew: () -> Unit) {
                         }
                     },
                 )
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                )
+
+                // App Version
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_version),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = BuildConfig.VERSION_NAME,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
 }
 
 /**
- * Version, disclaimer and the icon attribution. The disclaimer leads: it is
- * the legal notice, so it sits above the attribution and reads one step
- * larger.
+ * Disclaimer and icon attribution. The disclaimer leads: it is the legal
+ * notice, so it sits above the attribution and reads one step larger.
  */
 @Composable
 internal fun SettingsFooter() {
@@ -138,12 +163,6 @@ internal fun SettingsFooter() {
             .fillMaxWidth()
             .padding(top = 4.dp),
     ) {
-        Text(
-            text = stringResource(R.string.settings_version) + " " + BuildConfig.VERSION_NAME,
-            style = MaterialTheme.typography.bodySmall,
-            color = LocalZenColors.current.ink.copy(alpha = 0.4f),
-            textAlign = TextAlign.Center,
-        )
         Text(
             text = stringResource(R.string.home_disclaimer),
             style = MaterialTheme.typography.bodyMedium,

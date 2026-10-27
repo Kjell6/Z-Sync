@@ -196,7 +196,7 @@ struct SettingsSheet: View {
     // MARK: Browsing
 
     private func browsingSection(model: SettingsModel) -> some View {
-        SettingsSection(title: "BROWSING", scheme: scheme) {
+        SettingsSection(title: "Browsing", scheme: scheme) {
             VStack(spacing: 0) {
                 engineRow(model: model)
 
@@ -303,7 +303,7 @@ struct SettingsSheet: View {
     // MARK: Layout
 
     private func layoutSection(model: SettingsModel) -> some View {
-        SettingsSection(title: "LAYOUT", scheme: scheme) {
+        SettingsSection(title: "Layout", scheme: scheme) {
             VStack(spacing: 0) {
                 SettingsRow(title: "settings.essentials_columns", systemImage: "rectangle.grid.3x2", scheme: scheme) {
                     Menu {
@@ -352,7 +352,7 @@ struct SettingsSheet: View {
     // MARK: Feedback
 
     private var feedbackSection: some View {
-        SettingsSection(title: "FEEDBACK", scheme: scheme) {
+        SettingsSection(title: "Feedback", scheme: scheme) {
             VStack(spacing: 0) {
                 Link(destination: Legal.feedbackURL) {
                     SettingsRow(title: "legal.feedback", systemImage: "bubble.left.and.text.bubble.right", scheme: scheme) {
@@ -376,7 +376,7 @@ struct SettingsSheet: View {
     // MARK: About
 
     private var aboutSection: some View {
-        SettingsSection(title: "ABOUT", scheme: scheme) {
+        SettingsSection(title: "About", scheme: scheme) {
             VStack(spacing: 0) {
                 Button {
                     isShowingWhatsNew = true
@@ -462,7 +462,7 @@ private struct SettingsSection<Content: View>: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .tracking(0.8)
+                .tracking(0.2)
                 .foregroundStyle(Palette.ink(scheme).opacity(0.4))
                 .padding(.horizontal, 4)
 

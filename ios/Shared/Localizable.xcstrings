@@ -1022,7 +1022,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Opens a search tab when you open the app"
+            "value": "Opens a search tab when the app starts"
           }
         }
       }

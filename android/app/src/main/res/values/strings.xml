@@ -140,7 +140,7 @@
     <string name="settings_search_engine_error_invalid_url">Enter a valid http:// or https:// URL.</string>
     <string name="settings_search_engine_error_missing_placeholder">Add {query} where the search term should go.</string>
     <string name="settings_open_into_search">Open into search</string>
-    <string name="settings_open_into_search_subtitle">Opens a search tab when you open the app</string>
+    <string name="settings_open_into_search_subtitle">Opens a search tab when the app starts</string>
     <string name="settings_external_browser">Open tabs in default browser</string>
     <string name="settings_essentials_columns">Essentials per row</string>
     <string name="settings_essentials_columns_automatic">Automatic</string>

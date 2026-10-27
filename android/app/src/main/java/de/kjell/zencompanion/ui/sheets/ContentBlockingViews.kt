@@ -123,16 +123,10 @@ private fun BlockingSwitches(
 
 /** "Content blocking" in Settings: the switches for every site. */
 @Composable
-internal fun SettingsContentBlockingSection() {
+internal fun SettingsContentBlockingBody() {
     val settings by ContentBlocking.settings.collectAsState()
     val lastModified by ContentBlocking.lastModified.collectAsState()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = stringResource(R.string.settings_content_blocking),
-            style = MaterialTheme.typography.labelLarge,
-            color = LocalZenColors.current.ink.copy(alpha = 0.4f),
-            modifier = Modifier.padding(start = 4.dp),
-        )
         BlockingSwitches(
             isOn = settings::isOn,
             onChange = { category, on -> ContentBlocking.update(settings.with(category, on)) },

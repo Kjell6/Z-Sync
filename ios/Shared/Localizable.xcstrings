@@ -1007,12 +1007,22 @@
         }
       }
     },
+    "settings.open_into_search.subtitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When the app opens"
+          }
+        }
+      }
+    },
     "settings.save_kind": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Save shared tabs as"
+            "value": "Save shared link as"
           }
         }
       }
@@ -1055,6 +1065,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Search Engine"
+          }
+        }
+      }
+    },
+    "settings.search_engine.add": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add custom search engine"
+          }
+        }
+      }
+    },
+    "settings.search_engine.custom_section": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Custom engines"
           }
         }
       }

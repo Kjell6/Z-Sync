@@ -15,15 +15,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ExitToApp
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.ArrowDropDown
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -50,19 +56,15 @@ import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.PreferencesState
 import de.kjell.zencompanion.ui.theme.LiftCard
 import de.kjell.zencompanion.ui.theme.LocalZenColors
-import de.kjell.zencompanion.ui.theme.liftBorder
-
-import androidx.compose.foundation.shape.RoundedCornerShape
 
 /**
  * Native Material 3 Settings Bottom Sheet.
  *
- * Features:
- * - Account section: Left card with user email & person icon (~56dp height),
- *   right compact square card button with destructive red sign-out icon (~56dp)
- *   that prompts for confirmation on click.
- * - About section: Material 3 card with rows for Privacy Policy and App Version.
- * - Footer: License attribution and subtle disclaimer caption.
+ * Rows are grouped (account, save kind, browsing, layout, feedback, about) and
+ * exactly one group leads to a sub-screen — the content blocking switches.
+ * Everything else changes in place, so the sheet stays one scroll.
+ *
+ * @param onDone dismisses the whole sheet.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,11 +86,11 @@ fun SettingsSheet(
     onDone: () -> Unit,
 ) {
     var showSignOutDialog by remember { mutableStateOf(false) }
-    var showAdvanced by remember { mutableStateOf(false) }
+    var showContentBlocking by remember { mutableStateOf(false) }
     var showAddEngine by remember { mutableStateOf(false) }
 
-    BackHandler(enabled = showAdvanced || showAddEngine) {
-        showAdvanced = false
+    BackHandler(enabled = showContentBlocking || showAddEngine) {
+        showContentBlocking = false
         showAddEngine = false
     }
 
@@ -153,11 +155,9 @@ fun SettingsSheet(
             )
         },
     ) {
-        if (showAdvanced) {
-            SettingsAdvancedScreen(
-                preferences = preferences,
-                onSetEssentialsColumns = onSetEssentialsColumns,
-                onBack = { showAdvanced = false },
+        if (showContentBlocking) {
+            SettingsContentBlockingScreen(
+                onBack = { showContentBlocking = false },
                 onDone = onDone,
             )
             return@ZenSheet
@@ -180,134 +180,317 @@ fun SettingsSheet(
                 .padding(top = 28.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            // Header
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 4.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_title),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f),
-                )
-                IconButton(onClick = onDone, modifier = Modifier.padding(end = 4.dp)) {
-                    Icon(
-                        imageVector = Icons.Outlined.Close,
-                        contentDescription = stringResource(R.string.common_done),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+            SettingsSheetHeader(onDone = onDone)
 
-            // Account Section
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = stringResource(R.string.settings_account_section),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = LocalZenColors.current.ink.copy(alpha = 0.4f),
-                    modifier = Modifier.padding(start = 4.dp),
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    // Left Card: Email + Person icon (~56dp height)
-                    LiftCard(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(if (isDemo) 64.dp else 56.dp),
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Person,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(22.dp),
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = if (isDemo) {
-                                        stringResource(R.string.demo_account_name)
-                                    } else {
-                                        email
-                                    },
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                if (isDemo) {
-                                    Text(
-                                        text = stringResource(R.string.demo_account_caption),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // Right Card: Square destructive sign-out button (~56dp height & width)
-                    Card(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .clickable { showSignOutDialog = true },
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                        border = liftBorder(),
-                    ) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Outlined.ExitToApp,
-                                contentDescription = stringResource(
-                                    if (isDemo) R.string.demo_exit else R.string.home_sign_out,
-                                ),
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(22.dp),
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Preferences Section
-            SettingsPreferencesSection(
-                preferences = preferences,
-                normalTabsCapability = normalTabsCapability,
-                onSetSearchEngine = onSetSearchEngine,
-                onOpenAddSearchEngine = { showAddEngine = true },
-                onDeleteSearchEngine = onDeleteSearchEngine,
-                onSetAlwaysOpenExternally = onSetAlwaysOpenExternally,
-                onSetSaveKind = onSetSaveKind,
-                onSetToolbarPlacement = onSetToolbarPlacement,
-                onSetOpenIntoSearch = onSetOpenIntoSearch,
-                onOpenAdvanced = { showAdvanced = true },
+            SettingsAccountCard(
+                email = email,
+                isDemo = isDemo,
+                onSignOut = { showSignOutDialog = true },
             )
 
-            SettingsContentBlockingSection()
+            if (normalTabsCapability != ZenSpaces.NormalTabsCapability.ABSENT) {
+                SettingsSaveKindCard(
+                    saveKind = preferences.saveKind,
+                    normalTabsCapability = normalTabsCapability,
+                    onSetSaveKind = onSetSaveKind,
+                )
+            }
 
-            // Feedback Section
+            SettingsBrowsingSection(
+                preferences = preferences,
+                onSetSearchEngine = onSetSearchEngine,
+                onOpenAddSearchEngine = { showAddEngine = true },
+                onSetOpenIntoSearch = onSetOpenIntoSearch,
+                onOpenContentBlocking = { showContentBlocking = true },
+                onSetAlwaysOpenExternally = onSetAlwaysOpenExternally,
+            )
+
+            if (preferences.customSearchEngines.isNotEmpty()) {
+                SettingsCustomEnginesCard(
+                    engines = preferences.customSearchEngines,
+                    onDeleteSearchEngine = onDeleteSearchEngine,
+                )
+            }
+
+            SettingsLayoutSection(
+                preferences = preferences,
+                onSetEssentialsColumns = onSetEssentialsColumns,
+                onSetToolbarPlacement = onSetToolbarPlacement,
+            )
+
+            SettingsFeedbackSection()
+
             SettingsAboutSection(onOpenWhatsNew = onOpenWhatsNew)
+
+            SettingsFooter()
         }
     }
+}
+
+@Composable
+private fun SettingsSheetHeader(onDone: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 4.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.settings_title),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(onClick = onDone, modifier = Modifier.padding(end = 4.dp)) {
+            Icon(
+                imageVector = Icons.Outlined.Close,
+                contentDescription = stringResource(R.string.common_done),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/**
+ * Email and the destructive action in one card: signing out belongs to the
+ * account and no longer needs a button of its own beside the address.
+ */
+@Composable
+private fun SettingsAccountCard(
+    email: String,
+    isDemo: Boolean,
+    onSignOut: () -> Unit,
+) {
+    LiftCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Person,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp),
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (isDemo) {
+                            stringResource(R.string.demo_account_name)
+                        } else {
+                            email
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (isDemo) {
+                        Text(
+                            text = stringResource(R.string.demo_account_caption),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(
+                modifier = Modifier.padding(start = 16.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onSignOut)
+                    .height(56.dp)
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.ExitToApp,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(22.dp),
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = stringResource(if (isDemo) R.string.demo_exit else R.string.home_sign_out),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Pinned or normal tabs for links shared into the app. Stands on its own above
+ * the groups: it is the only choice about what happens to a shared link.
+ */
+@Composable
+private fun SettingsSaveKindCard(
+    saveKind: SaveKind,
+    normalTabsCapability: ZenSpaces.NormalTabsCapability,
+    onSetSaveKind: (SaveKind) -> Unit,
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    val displayed = if (normalTabsCapability == ZenSpaces.NormalTabsCapability.ENABLED) {
+        saveKind
+    } else {
+        SaveKind.PINNED
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LiftCard(modifier = Modifier.fillMaxWidth()) {
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { menuExpanded = true }
+                        .height(56.dp)
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.PushPin,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(22.dp),
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = stringResource(R.string.settings_save_kind),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = stringResource(displayed.labelRes()),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Outlined.ArrowDropDown,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                ) {
+                    SaveKind.entries.forEach { kind ->
+                        val enabled = kind != SaveKind.NORMAL ||
+                            normalTabsCapability == ZenSpaces.NormalTabsCapability.ENABLED
+                        DropdownMenuItem(
+                            enabled = enabled,
+                            text = {
+                                Text(
+                                    text = stringResource(kind.labelRes()),
+                                    fontWeight = if (kind == displayed) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = if (kind == displayed) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    },
+                                )
+                            },
+                            trailingIcon = if (kind == displayed) {
+                                {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                            } else null,
+                            onClick = {
+                                onSetSaveKind(kind)
+                                menuExpanded = false
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
+        if (normalTabsCapability == ZenSpaces.NormalTabsCapability.DISABLED) {
+            Text(
+                text = stringResource(R.string.settings_save_kind_normal_hint),
+                style = MaterialTheme.typography.labelSmall,
+                color = LocalZenColors.current.ink.copy(alpha = 0.45f),
+                modifier = Modifier.padding(start = 4.dp),
+            )
+        }
+    }
+}
+
+/**
+ * The content blocking page: the three switches for every site and the note on
+ * what feeds them. Nothing else lives here.
+ */
+@Composable
+private fun SettingsContentBlockingScreen(
+    onBack: () -> Unit,
+    onDone: () -> Unit,
+) {
+    Column(
+        Modifier
+            .settingsSheetPage()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp)
+            .padding(top = 28.dp, bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 4.dp),
+        ) {
+            IconButton(onClick = onBack, modifier = Modifier.padding(end = 4.dp)) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                    contentDescription = stringResource(R.string.common_back),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                text = stringResource(R.string.settings_content_blocking),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = onDone, modifier = Modifier.padding(end = 4.dp)) {
+                Icon(
+                    imageVector = Icons.Outlined.Close,
+                    contentDescription = stringResource(R.string.common_done),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        SettingsContentBlockingBody()
+    }
+}
+
+private fun SaveKind.labelRes(): Int = when (this) {
+    SaveKind.PINNED -> R.string.settings_save_kind_pinned
+    SaveKind.NORMAL -> R.string.settings_save_kind_normal
 }

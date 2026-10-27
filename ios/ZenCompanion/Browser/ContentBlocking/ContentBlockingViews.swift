@@ -78,19 +78,14 @@ private struct BlockingSwitches: View {
     }
 }
 
-/// "Content blocking" in Settings: the switches for every site.
-struct ContentBlockingSettingsSection: View {
+/// The body of the "Content blocking" settings page: the switches for every
+/// site and what feeds them. The page title names it, so no header here.
+struct ContentBlockingSettingsView: View {
     let scheme: ColorScheme
     private var blocker: ContentBlocker { .shared }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("CONTENT BLOCKING")
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .tracking(0.8)
-                .foregroundStyle(Palette.ink(scheme).opacity(0.4))
-                .padding(.horizontal, 4)
-
             BlockingSwitches(
                 scheme: scheme,
                 isOn: { blocker.settings.isOn($0) },

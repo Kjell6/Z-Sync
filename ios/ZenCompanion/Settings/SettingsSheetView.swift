@@ -2,6 +2,9 @@ import SwiftUI
 
 // MARK: - Settings sheet
 
+/// The settings screen. Rows are grouped, and exactly one group leads to a
+/// subpage (Content blocking); everything else changes in place. The account
+/// and the "Save shared link as" choice sit on their own above the groups.
 struct SettingsSheet: View {
     let account: AccountSnapshot
     let loadError: String?
@@ -17,6 +20,7 @@ struct SettingsSheet: View {
     @State private var model = SettingsModel()
     @State private var isShowingSignOutConfirm: Bool = false
     @State private var isShowingWhatsNew: Bool = false
+    @State private var isShowingAddEngine: Bool = false
 
     private var appVersionString: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -35,456 +39,19 @@ struct SettingsSheet: View {
 
         NavigationStack {
             ScrollView {
-                VStack(spacing: 24) {
-                    // MARK: - 1. Account Section
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("ACCOUNT")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
-                            .tracking(0.8)
-                            .foregroundStyle(Palette.ink(scheme).opacity(0.4))
-                            .padding(.horizontal, 4)
-
-                        HStack(spacing: 10) {
-                            // Left: Email Info Card
-                            HStack(spacing: 12) {
-                                Image(systemName: "person.crop.circle")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(Palette.ink(scheme).opacity(0.6))
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(account.isDemo ? String(localized: "demo.account_name") : account.email)
-                                        .font(.system(size: 16, weight: .medium, design: .rounded))
-                                        .foregroundStyle(Palette.ink(scheme))
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.8)
-                                    if account.isDemo {
-                                        Text("demo.account_caption")
-                                            .font(.system(size: 12, design: .rounded))
-                                            .foregroundStyle(Palette.ink(scheme).opacity(0.5))
-                                    }
-                                }
-
-                                Spacer(minLength: 0)
-                            }
-                            .padding(.horizontal, 16)
-                            .frame(height: 54)
-                            .liftCard(scheme)
-
-                            // Right: Sign Out Icon-Only Card (Narrower, compact sleek card)
-                            Button(role: .destructive) {
-                                isShowingSignOutConfirm = true
-                            } label: {
-                                Image(systemName: "rectangle.portrait.and.arrow.right")
-                                    .font(.system(size: 16.5, weight: .semibold))
-                                    .foregroundStyle(Color.red)
-                                    .offset(x: 2.5) // Shifts icon right so left and right edge margins are identical
-                                    .frame(width: 44, height: 54)
-                                    .background(Color.red.opacity(scheme == .dark ? 0.15 : 0.08), in: RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous))
-                                    .glassRim(cornerRadius: Palette.liftCornerRadius)
-                            }
-                            .buttonStyle(PressedButtonStyle())
-                            .accessibilityLabel(Text("home.sign_out"))
-                        }
-
-                        if let loadError {
-                            HStack(alignment: .top, spacing: 8) {
-                                Image(systemName: "exclamationmark.circle.fill")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundStyle(.orange)
-                                    .padding(.top, 1)
-
-                                Text(loadError)
-                                    .font(.system(size: 13, design: .rounded))
-                                    .foregroundStyle(Palette.ink(scheme).opacity(0.75))
-                                    .lineSpacing(2)
-                            }
-                            .padding(12)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.orange.opacity(scheme == .dark ? 0.12 : 0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        }
-                    }
-
-                    // MARK: - 2. Preferences
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("PREFERENCES")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
-                            .tracking(0.8)
-                            .foregroundStyle(Palette.ink(scheme).opacity(0.4))
-                            .padding(.horizontal, 4)
-
-                        VStack(spacing: 0) {
-                            NavigationLink {
-                                SearchEngineSettingsView(model: model, scheme: scheme)
-                            } label: {
-                                HStack {
-                                    Label {
-                                        Text("settings.search_engine")
-                                            .font(.system(size: 16, weight: .medium, design: .rounded))
-                                    } icon: {
-                                        Image(systemName: "magnifyingglass")
-                                            .font(.system(size: 15, weight: .semibold))
-                                            .foregroundStyle(Palette.ink(scheme).opacity(0.6))
-                                    }
-                                    .foregroundStyle(Palette.ink(scheme))
-
-                                    Spacer()
-
-                                    Text(model.selectedSearchEngine.displayName)
-                                        .font(.system(size: 15.5, design: .rounded))
-                                        .foregroundStyle(Palette.ink(scheme).opacity(0.65))
-
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundStyle(Palette.ink(scheme).opacity(0.3))
-                                }
-                                .padding(.horizontal, 16)
-                                .frame(minHeight: 54)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(PressedButtonStyle())
-
-                            Rectangle()
-                                .fill(Palette.ink(scheme).opacity(0.15))
-                                .frame(height: 0.5)
-                                .padding(.leading, 44)
-
-                            Toggle(isOn: $model.alwaysOpenExternally) {
-                                Label {
-                                    Text("settings.external_browser")
-                                        .font(.system(size: 16, weight: .medium, design: .rounded))
-                                } icon: {
-                                    Image(systemName: "safari")
-                                        .font(.system(size: 15, weight: .semibold))
-                                        .foregroundStyle(Palette.ink(scheme).opacity(0.6))
-                                }
-                                .foregroundStyle(Palette.ink(scheme))
-                            }
-                            .tint(Palette.coral(scheme))
-                            .padding(.horizontal, 16)
-                            .frame(minHeight: 54)
-
-                            Rectangle()
-                                .fill(Palette.ink(scheme).opacity(0.15))
-                                .frame(height: 0.5)
-                                .padding(.leading, 44)
-
-                            Toggle(isOn: $model.openIntoSearch) {
-                                Label {
-                                    Text("settings.open_into_search")
-                                        .font(.system(size: 16, weight: .medium, design: .rounded))
-                                } icon: {
-                                    Image(systemName: "keyboard")
-                                        .font(.system(size: 15, weight: .semibold))
-                                        .foregroundStyle(Palette.ink(scheme).opacity(0.6))
-                                }
-                                .foregroundStyle(Palette.ink(scheme))
-                            }
-                            .tint(Palette.coral(scheme))
-                            .padding(.horizontal, 16)
-                            .frame(minHeight: 54)
-                        }
-                        .liftCard(scheme)
-
-                        if normalTabsCapability != .absent {
-                            VStack(spacing: 0) {
-                                HStack {
-                                    Label {
-                                        Text("settings.save_kind")
-                                            .font(.system(size: 16, weight: .medium, design: .rounded))
-                                    } icon: {
-                                        Image(systemName: "pin")
-                                            .font(.system(size: 15, weight: .semibold))
-                                            .foregroundStyle(Palette.ink(scheme).opacity(0.6))
-                                    }
-                                    .foregroundStyle(Palette.ink(scheme))
-
-                                    Spacer()
-
-                                    Menu {
-                                        ForEach(SaveKind.allCases) { kind in
-                                            Button {
-                                                model.saveKind = kind
-                                            } label: {
-                                                if displayedSaveKind == kind {
-                                                    Label(kind.title, systemImage: "checkmark")
-                                                } else {
-                                                    Text(kind.title)
-                                                }
-                                            }
-                                            .disabled(kind == .normal && normalTabsCapability != .enabled)
-                                        }
-                                    } label: {
-                                        HStack(spacing: 4) {
-                                            Text(displayedSaveKind.title)
-                                                .font(.system(size: 15.5, design: .rounded))
-                                            Image(systemName: "chevron.up.chevron.down")
-                                                .font(.system(size: 10, weight: .semibold))
-                                        }
-                                        .foregroundStyle(Palette.ink(scheme).opacity(0.65))
-                                    }
-                                }
-                                .padding(.horizontal, 16)
-                                .frame(minHeight: 54)
-                            }
-                            .liftCard(scheme)
-                            .padding(.top, 8)
-
-                            if normalTabsCapability == .disabled {
-                                Text("settings.save_kind.normal_disabled_caption")
-                                    .font(.system(size: 12, design: .rounded))
-                                    .foregroundStyle(Palette.ink(scheme).opacity(0.45))
-                                    .padding(.horizontal, 4)
-                            }
-                        }
-
-                        // Action bar placement: above the essentials grid or
-                        // below the space switcher. Own card, under
-                        // "Save shared tabs as".
-                        VStack(spacing: 0) {
-                            HStack {
-                                Label {
-                                    Text("settings.toolbar")
-                                        .font(.system(size: 16, weight: .medium, design: .rounded))
-                                } icon: {
-                                    Image(systemName: "arrow.up.and.down")
-                                        .font(.system(size: 15, weight: .semibold))
-                                        .foregroundStyle(Palette.ink(scheme).opacity(0.6))
-                                }
-                                .foregroundStyle(Palette.ink(scheme))
-
-                                Spacer()
-
-                                Menu {
-                                    ForEach(ToolbarPlacement.allCases) { placement in
-                                        Button {
-                                            model.toolbarPlacement = placement
-                                            onToolbarPlacementChange(placement)
-                                        } label: {
-                                            if model.toolbarPlacement == placement {
-                                                Label(placement.title, systemImage: "checkmark")
-                                            } else {
-                                                Text(placement.title)
-                                            }
-                                        }
-                                    }
-                                } label: {
-                                    HStack(spacing: 4) {
-                                        Text(model.toolbarPlacement.title)
-                                            .font(.system(size: 15.5, design: .rounded))
-                                        Image(systemName: "chevron.up.chevron.down")
-                                            .font(.system(size: 10, weight: .semibold))
-                                    }
-                                    .foregroundStyle(Palette.ink(scheme).opacity(0.65))
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                            .frame(minHeight: 54)
-                        }
-                        .liftCard(scheme)
-                        .padding(.top, 8)
-
-                        VStack(spacing: 0) {
-                            NavigationLink {
-                                AdvancedSettingsView(
-                                    model: model,
-                                    scheme: scheme,
-                                    onEssentialsColumnsChange: onEssentialsColumnsChange
-                                )
-                            } label: {
-                                HStack {
-                                    Label {
-                                        Text("settings.advanced")
-                                            .font(.system(size: 16, weight: .medium, design: .rounded))
-                                    } icon: {
-                                        Image(systemName: "gearshape")
-                                            .font(.system(size: 15, weight: .semibold))
-                                            .foregroundStyle(Palette.ink(scheme).opacity(0.6))
-                                    }
-                                    .foregroundStyle(Palette.ink(scheme))
-
-                                    Spacer()
-
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundStyle(Palette.ink(scheme).opacity(0.3))
-                                }
-                                .padding(.horizontal, 16)
-                                .frame(minHeight: 54)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(PressedButtonStyle())
-                        }
-                        .liftCard(scheme)
-                        .padding(.top, 8)
-                    }
-
-                    // MARK: - Content blocking
-                    ContentBlockingSettingsSection(scheme: scheme)
-
-                    // MARK: - 3. Feedback
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("FEEDBACK")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
-                            .tracking(0.8)
-                            .foregroundStyle(Palette.ink(scheme).opacity(0.4))
-                            .padding(.horizontal, 4)
-
-                        VStack(spacing: 0) {
-                            Link(destination: Legal.feedbackURL) {
-                                HStack {
-                                    Label {
-                                        Text("legal.feedback")
-                                            .font(.system(size: 16, weight: .medium, design: .rounded))
-                                    } icon: {
-                                        Image(systemName: "bubble.left.and.text.bubble.right")
-                                            .font(.system(size: 15, weight: .semibold))
-                                            .foregroundStyle(Palette.ink(scheme).opacity(0.6))
-                                    }
-                                    Spacer(minLength: 8)
-                                    Image(systemName: "arrow.up.right")
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .foregroundStyle(Palette.ink(scheme).opacity(0.3))
-                                }
-                                .foregroundStyle(Palette.ink(scheme))
-                                .padding(.horizontal, 16)
-                                .frame(minHeight: 52)
-                                .contentShape(Rectangle())
-                            }
-
-                            Rectangle()
-                                .fill(Palette.ink(scheme).opacity(0.15))
-                                .frame(height: 0.5)
-                                .padding(.leading, 44)
-
-                            Link(destination: Legal.writeReviewURL) {
-                                HStack {
-                                    Label {
-                                        Text("legal.write_review")
-                                            .font(.system(size: 16, weight: .medium, design: .rounded))
-                                    } icon: {
-                                        Image(systemName: "star")
-                                            .font(.system(size: 15, weight: .semibold))
-                                            .foregroundStyle(Palette.ink(scheme).opacity(0.6))
-                                    }
-                                    Spacer(minLength: 8)
-                                }
-                                .foregroundStyle(Palette.ink(scheme))
-                                .padding(.horizontal, 16)
-                                .frame(minHeight: 52)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(PressedButtonStyle())
-                        }
-                        .liftCard(scheme)
-                    }
-
-                    // MARK: - 4. About & Links
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("ABOUT")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
-                            .tracking(0.8)
-                            .foregroundStyle(Palette.ink(scheme).opacity(0.4))
-                            .padding(.horizontal, 4)
-
-                        VStack(spacing: 0) {
-                            Button {
-                                isShowingWhatsNew = true
-                            } label: {
-                                HStack {
-                                    Label {
-                                        Text("settings.whats_new")
-                                            .font(.system(size: 16, weight: .medium, design: .rounded))
-                                    } icon: {
-                                        Image(systemName: "sparkles")
-                                            .font(.system(size: 15, weight: .semibold))
-                                            .foregroundStyle(Palette.ink(scheme).opacity(0.6))
-                                    }
-                                    .foregroundStyle(Palette.ink(scheme))
-
-                                    Spacer(minLength: 8)
-
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundStyle(Palette.ink(scheme).opacity(0.3))
-                                }
-                                .padding(.horizontal, 16)
-                                .frame(minHeight: 52)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(PressedButtonStyle())
-
-                            Rectangle()
-                                .fill(Palette.ink(scheme).opacity(0.15))
-                                .frame(height: 0.5)
-                                .padding(.leading, 44)
-
-                            Link(destination: Legal.publicPolicyURL) {
-                                HStack {
-                                    Label {
-                                        Text("legal.privacy")
-                                            .font(.system(size: 16, weight: .medium, design: .rounded))
-                                    } icon: {
-                                        Image(systemName: "hand.raised")
-                                            .font(.system(size: 15, weight: .semibold))
-                                            .foregroundStyle(Palette.ink(scheme).opacity(0.6))
-                                    }
-                                    Spacer(minLength: 8)
-                                    Image(systemName: "arrow.up.right")
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .foregroundStyle(Palette.ink(scheme).opacity(0.3))
-                                }
-                                .foregroundStyle(Palette.ink(scheme))
-                                .padding(.horizontal, 16)
-                                .frame(minHeight: 52)
-                                .contentShape(Rectangle())
-                            }
-
-                            Rectangle()
-                                .fill(Palette.ink(scheme).opacity(0.15))
-                                .frame(height: 0.5)
-                                .padding(.leading, 44)
-
-                            HStack {
-                                Label {
-                                    Text("app.name")
-                                        .font(.system(size: 16, weight: .medium, design: .rounded))
-                                } icon: {
-                                    Image(systemName: "info.circle")
-                                        .font(.system(size: 15, weight: .semibold))
-                                        .foregroundStyle(Palette.ink(scheme).opacity(0.6))
-                                }
-                                .foregroundStyle(Palette.ink(scheme))
-
-                                Spacer(minLength: 8)
-
-                                Text(appVersionString)
-                                    .font(.system(size: 14, design: .rounded))
-                                    .foregroundStyle(Palette.ink(scheme).opacity(0.4))
-                            }
-                            .padding(.horizontal, 16)
-                            .frame(minHeight: 52)
-                        }
-                        .liftCard(scheme)
-                    }
-
-                    // MARK: - 3. Footer Disclaimer & Attributions
-                    // The disclaimer leads: it is the legal notice, so it sits
-                    // above the icon attribution and reads one step larger.
-                    VStack(spacing: 6) {
-                        Text("home.disclaimer")
-                            .font(.system(size: 13, weight: .regular, design: .rounded))
-                            .foregroundStyle(Palette.ink(scheme).opacity(0.4))
-
-                        Text("home.license_attribution")
-                            .font(.system(size: 11, weight: .regular, design: .rounded))
-                            .foregroundStyle(Palette.ink(scheme).opacity(0.35))
-                    }
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 6)
+                VStack(spacing: 20) {
+                    accountCard
+                    saveKindCard
+                    browsingSection(model: model)
+                    customEnginesSection
+                    layoutSection(model: model)
+                    feedbackSection
+                    aboutSection
+                    footer
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
-                .padding(.bottom, 32)
+                .padding(.bottom, 28)
             }
             .background(Palette.paper(scheme).ignoresSafeArea())
             .navigationTitle(Text("Settings"))
@@ -495,6 +62,9 @@ struct SettingsSheet: View {
                         dismiss()
                     }
                 }
+            }
+            .navigationDestination(isPresented: $isShowingAddEngine) {
+                AddSearchEngineView(model: model, scheme: scheme)
             }
             .confirmationDialog(
                 LocalizedStringKey(account.isDemo ? "demo.exit" : "home.sign_out"),
@@ -514,112 +84,510 @@ struct SettingsSheet: View {
             }
         }
     }
+
+    // MARK: Account
+
+    /// Email on the left, the destructive action as a compact card beside it.
+    private var accountCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                HStack(spacing: 12) {
+                    Image(systemName: "person.crop.circle")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Palette.ink(scheme).opacity(0.6))
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(account.isDemo ? String(localized: "demo.account_name") : account.email)
+                            .font(.system(size: 16, weight: .medium, design: .rounded))
+                            .foregroundStyle(Palette.ink(scheme))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                        if account.isDemo {
+                            Text("demo.account_caption")
+                                .font(.system(size: 12, design: .rounded))
+                                .foregroundStyle(Palette.ink(scheme).opacity(0.5))
+                        }
+                    }
+
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 16)
+                .frame(height: 54)
+                .liftCard(scheme)
+
+                Button(role: .destructive) {
+                    isShowingSignOutConfirm = true
+                } label: {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                        .font(.system(size: 16.5, weight: .semibold))
+                        .foregroundStyle(Color.red)
+                        .offset(x: 2.5) // balances the asymmetric glyph
+                        .frame(width: 44, height: 54)
+                        .background(
+                            Color.red.opacity(scheme == .dark ? 0.15 : 0.08),
+                            in: RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous)
+                        )
+                        .glassRim(cornerRadius: Palette.liftCornerRadius)
+                }
+                .buttonStyle(PressedButtonStyle())
+                .accessibilityLabel(Text(account.isDemo ? "demo.exit" : "home.sign_out"))
+            }
+
+            if let loadError {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.orange)
+                        .padding(.top, 1)
+
+                    Text(loadError)
+                        .font(.system(size: 13, design: .rounded))
+                        .foregroundStyle(Palette.ink(scheme).opacity(0.75))
+                        .lineSpacing(2)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    Color.orange.opacity(scheme == .dark ? 0.12 : 0.08),
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                )
+            }
+        }
+    }
+
+    // MARK: Save shared link
+
+    @ViewBuilder
+    private var saveKindCard: some View {
+        if normalTabsCapability != .absent {
+            VStack(alignment: .leading, spacing: 8) {
+                VStack(spacing: 0) {
+                    SettingsRow(title: "settings.save_kind", systemImage: "pin", scheme: scheme) {
+                        Menu {
+                            ForEach(SaveKind.allCases) { kind in
+                                Button {
+                                    model.saveKind = kind
+                                } label: {
+                                    if displayedSaveKind == kind {
+                                        Label(kind.title, systemImage: "checkmark")
+                                    } else {
+                                        Text(kind.title)
+                                    }
+                                }
+                                .disabled(kind == .normal && normalTabsCapability != .enabled)
+                            }
+                        } label: {
+                            SettingsMenuValue(text: displayedSaveKind.title, scheme: scheme)
+                        }
+                    }
+                }
+                .liftCard(scheme)
+
+                if normalTabsCapability == .disabled {
+                    Text("settings.save_kind.normal_disabled_caption")
+                        .font(.system(size: 12, design: .rounded))
+                        .foregroundStyle(Palette.ink(scheme).opacity(0.45))
+                        .padding(.horizontal, 4)
+                }
+            }
+        }
+    }
+
+    // MARK: Browsing
+
+    private func browsingSection(model: SettingsModel) -> some View {
+        SettingsSection(title: "Browsing", scheme: scheme) {
+            VStack(spacing: 0) {
+                engineRow(model: model)
+
+                SettingsHairline(scheme: scheme)
+
+                SettingsToggleRow(
+                    title: "settings.open_into_search",
+                    systemImage: "keyboard",
+                    scheme: scheme,
+                    subtitle: "settings.open_into_search.subtitle",
+                    isOn: $model.openIntoSearch
+                )
+
+                SettingsHairline(scheme: scheme)
+
+                NavigationLink {
+                    ContentBlockingSettingsPage(scheme: scheme)
+                } label: {
+                    SettingsRow(title: "settings.content_blocking", systemImage: "shield.lefthalf.filled", scheme: scheme) {
+                        SettingsChevron(scheme: scheme)
+                    }
+                }
+                .buttonStyle(PressedButtonStyle())
+
+                SettingsHairline(scheme: scheme)
+
+                SettingsToggleRow(
+                    title: "settings.external_browser",
+                    systemImage: "safari",
+                    scheme: scheme,
+                    isOn: $model.alwaysOpenExternally
+                )
+            }
+            .liftCard(scheme)
+        }
+    }
+
+    /// The engines are picked from a menu on the row itself — the list is
+    /// short enough that a page would only add a tap. Custom engines are
+    /// added from the same menu and managed in their own card below.
+    private func engineRow(model: SettingsModel) -> some View {
+        Menu {
+            ForEach(model.availableSearchEngines) { engine in
+                Button {
+                    model.selectedSearchEngine = engine
+                } label: {
+                    if model.selectedSearchEngine.id == engine.id {
+                        Label(engine.displayName, systemImage: "checkmark")
+                    } else {
+                        Text(engine.displayName)
+                    }
+                }
+            }
+
+            Divider()
+
+            Button {
+                isShowingAddEngine = true
+            } label: {
+                Label("settings.search_engine.add", systemImage: "plus")
+            }
+        } label: {
+            SettingsRow(title: "settings.search_engine", systemImage: "magnifyingglass", scheme: scheme) {
+                SettingsMenuValue(text: model.selectedSearchEngine.displayName, scheme: scheme)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var customEnginesSection: some View {
+        let engines = model.customSearchEngines
+        if !engines.isEmpty {
+            SettingsSection(title: "settings.search_engine.custom_section", scheme: scheme) {
+                VStack(spacing: 0) {
+                    ForEach(Array(engines.enumerated()), id: \.element.id) { index, engine in
+                        HStack(spacing: 12) {
+                            Text(engine.displayName)
+                                .font(.system(size: 16, weight: .medium, design: .rounded))
+                                .foregroundStyle(Palette.ink(scheme))
+                            Spacer(minLength: 8)
+                            Button(role: .destructive) {
+                                model.deleteCustomSearchEngine(engine)
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(Color.red.opacity(0.8))
+                            }
+                            .buttonStyle(PressedButtonStyle())
+                            .accessibilityLabel(Text("Delete"))
+                        }
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 54)
+
+                        if index < engines.count - 1 {
+                            SettingsHairline(scheme: scheme)
+                        }
+                    }
+                }
+                .liftCard(scheme)
+            }
+        }
+    }
+
+    // MARK: Layout
+
+    private func layoutSection(model: SettingsModel) -> some View {
+        SettingsSection(title: "Layout", scheme: scheme) {
+            VStack(spacing: 0) {
+                SettingsRow(title: "settings.essentials_columns", systemImage: "rectangle.grid.3x2", scheme: scheme) {
+                    Menu {
+                        ForEach(EssentialsColumns.allCases) { columns in
+                            Button {
+                                model.essentialsColumns = columns
+                                onEssentialsColumnsChange(columns)
+                            } label: {
+                                if model.essentialsColumns == columns {
+                                    Label(columns.title, systemImage: "checkmark")
+                                } else {
+                                    Text(columns.title)
+                                }
+                            }
+                        }
+                    } label: {
+                        SettingsMenuValue(text: model.essentialsColumns.title, scheme: scheme)
+                    }
+                }
+
+                SettingsHairline(scheme: scheme)
+
+                SettingsRow(title: "settings.toolbar", systemImage: "arrow.up.and.down", scheme: scheme) {
+                    Menu {
+                        ForEach(ToolbarPlacement.allCases) { placement in
+                            Button {
+                                model.toolbarPlacement = placement
+                                onToolbarPlacementChange(placement)
+                            } label: {
+                                if model.toolbarPlacement == placement {
+                                    Label(placement.title, systemImage: "checkmark")
+                                } else {
+                                    Text(placement.title)
+                                }
+                            }
+                        }
+                    } label: {
+                        SettingsMenuValue(text: model.toolbarPlacement.title, scheme: scheme)
+                    }
+                }
+            }
+            .liftCard(scheme)
+        }
+    }
+
+    // MARK: Feedback
+
+    private var feedbackSection: some View {
+        SettingsSection(title: "Feedback", scheme: scheme) {
+            VStack(spacing: 0) {
+                Link(destination: Legal.feedbackURL) {
+                    SettingsRow(title: "legal.feedback", systemImage: "bubble.left.and.text.bubble.right", scheme: scheme) {
+                        SettingsExternalMark(scheme: scheme)
+                    }
+                }
+
+                SettingsHairline(scheme: scheme)
+
+                Link(destination: Legal.writeReviewURL) {
+                    SettingsRow(title: "legal.write_review", systemImage: "star", scheme: scheme) {
+                        EmptyView()
+                    }
+                }
+                .buttonStyle(PressedButtonStyle())
+            }
+            .liftCard(scheme)
+        }
+    }
+
+    // MARK: About
+
+    private var aboutSection: some View {
+        SettingsSection(title: "About", scheme: scheme) {
+            VStack(spacing: 0) {
+                Button {
+                    isShowingWhatsNew = true
+                } label: {
+                    SettingsRow(title: "settings.whats_new", systemImage: "sparkles", scheme: scheme) {
+                        SettingsChevron(scheme: scheme)
+                    }
+                }
+                .buttonStyle(PressedButtonStyle())
+
+                SettingsHairline(scheme: scheme)
+
+                Link(destination: Legal.publicPolicyURL) {
+                    SettingsRow(title: "legal.privacy", systemImage: "hand.raised", scheme: scheme) {
+                        SettingsExternalMark(scheme: scheme)
+                    }
+                }
+
+                SettingsHairline(scheme: scheme)
+
+                SettingsRow(title: "app.name", systemImage: "info.circle", scheme: scheme) {
+                    Text(appVersionString)
+                        .font(.system(size: 14, design: .rounded))
+                        .foregroundStyle(Palette.ink(scheme).opacity(0.4))
+                }
+            }
+            .liftCard(scheme)
+        }
+    }
+
+    // MARK: Footer
+
+    /// Disclaimer and icon attribution. The disclaimer leads: it is the legal
+    /// notice, so it sits above the attribution and reads one step larger.
+    private var footer: some View {
+        VStack(spacing: 6) {
+            Text("home.disclaimer")
+                .font(.system(size: 13, weight: .regular, design: .rounded))
+                .foregroundStyle(Palette.ink(scheme).opacity(0.4))
+
+            Text("home.license_attribution")
+                .font(.system(size: 11, weight: .regular, design: .rounded))
+                .foregroundStyle(Palette.ink(scheme).opacity(0.35))
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .padding(.top, 2)
+    }
 }
 
-// MARK: - Search engine
+// MARK: - Content blocking
 
-/// Selection and management of search engines. Custom engines are added on
-/// their own page (`AddSearchEngineView`), reached from the "Add custom search
-/// engine" row.
-private struct SearchEngineSettingsView: View {
-    @Bindable var model: SettingsModel
+/// The one page under Settings: the three switches for every site plus what
+/// feeds them. Nothing else lives here, which is why it stays a page of its
+/// own instead of six rows on the main screen.
+private struct ContentBlockingSettingsPage: View {
     let scheme: ColorScheme
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 24) {
-                enginesCard
-                addRow
+            VStack(spacing: 16) {
+                ContentBlockingSettingsView(scheme: scheme)
             }
             .padding(.horizontal, 20)
             .padding(.top, 16)
             .padding(.bottom, 32)
         }
         .background(Palette.paper(scheme).ignoresSafeArea())
-        .navigationTitle(Text("settings.search_engine"))
+        .navigationTitle(Text("settings.content_blocking"))
         .navigationBarTitleDisplayMode(.inline)
     }
+}
 
-    // MARK: Engine list
+// MARK: - Row building blocks
 
-    private var enginesCard: some View {
-        let engines = model.availableSearchEngines
-        return VStack(spacing: 0) {
-            ForEach(Array(engines.enumerated()), id: \.element.id) { index, engine in
-                engineRow(engine)
-                if index < engines.count - 1 {
-                    Rectangle()
-                        .fill(Palette.ink(scheme).opacity(0.15))
-                        .frame(height: 0.5)
-                        .padding(.leading, 16)
-                }
-            }
+/// Uppercase label above a card.
+private struct SettingsSection<Content: View>: View {
+    let title: LocalizedStringKey
+    let scheme: ColorScheme
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 13.5, weight: .semibold, design: .rounded))
+                .tracking(0)
+                .foregroundStyle(Palette.ink(scheme).opacity(0.4))
+                .padding(.horizontal, 4)
+
+            content
         }
-        .liftCard(scheme)
     }
+}
 
-    private func engineRow(_ engine: SearchEngine) -> some View {
+private struct SettingsHairline: View {
+    let scheme: ColorScheme
+
+    var body: some View {
+        Rectangle()
+            .fill(Palette.ink(scheme).opacity(0.15))
+            .frame(height: 0.5)
+            .padding(.leading, 44)
+    }
+}
+
+/// Icon, title and an optional subtitle on the left; the caller supplies what
+/// goes on the right. Sized like every other row in the app.
+private struct SettingsRow<Trailing: View>: View {
+    let title: LocalizedStringKey
+    let systemImage: String
+    let scheme: ColorScheme
+    var subtitle: LocalizedStringKey? = nil
+    var color: Color? = nil
+    @ViewBuilder var trailing: () -> Trailing
+
+    var body: some View {
+        let tint = color ?? Palette.ink(scheme)
         HStack(spacing: 12) {
-            Button {
-                model.selectedSearchEngine = engine
-            } label: {
-                HStack(spacing: 12) {
-                    Text(engine.displayName)
-                        .font(.system(size: 16, weight: .medium, design: .rounded))
-                        .foregroundStyle(Palette.ink(scheme))
-                    Spacer(minLength: 8)
-                    if model.selectedSearchEngine.id == engine.id {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Palette.coral(scheme))
-                    }
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(PressedButtonStyle())
+            Image(systemName: systemImage)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(tint.opacity(0.6))
+                .frame(width: 20, alignment: .center)
 
-            if !engine.isBuiltIn {
-                Button(role: .destructive) {
-                    model.deleteCustomSearchEngine(engine)
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.red.opacity(0.8))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                    .foregroundStyle(tint)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 12, design: .rounded))
+                        .foregroundStyle(Palette.ink(scheme).opacity(0.5))
                 }
-                .buttonStyle(PressedButtonStyle())
-                .accessibilityLabel(Text("Delete"))
             }
+
+            Spacer(minLength: 8)
+
+            trailing()
         }
         .padding(.horizontal, 16)
-        .frame(minHeight: 54)
+        .frame(minHeight: subtitle == nil ? 54 : 62)
+        .contentShape(Rectangle())
     }
+}
 
-    // MARK: Add button
+/// The same row shape, but the whole row toggles and the switch sits right.
+private struct SettingsToggleRow: View {
+    let title: LocalizedStringKey
+    let systemImage: String
+    let scheme: ColorScheme
+    var subtitle: LocalizedStringKey? = nil
+    @Binding var isOn: Bool
 
-    private var addRow: some View {
-        NavigationLink {
-            AddSearchEngineView(model: model, scheme: scheme)
-        } label: {
+    var body: some View {
+        Toggle(isOn: $isOn) {
             HStack(spacing: 12) {
-                Image(systemName: "plus")
+                Image(systemName: systemImage)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Palette.coral(scheme))
-                Text("Add custom search engine")
-                    .font(.system(size: 16, weight: .medium, design: .rounded))
-                    .foregroundStyle(Palette.ink(scheme))
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Palette.ink(scheme).opacity(0.3))
-            }
-            .padding(.horizontal, 16)
-            .frame(minHeight: 54)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PressedButtonStyle())
-        .liftCard(scheme)
-    }
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.6))
+                    .frame(width: 20, alignment: .center)
 
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
+                        .font(.system(size: 16, weight: .medium, design: .rounded))
+                        .foregroundStyle(Palette.ink(scheme))
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.system(size: 12, design: .rounded))
+                            .foregroundStyle(Palette.ink(scheme).opacity(0.5))
+                    }
+                }
+            }
+        }
+        .tint(Palette.coral(scheme))
+        .padding(.horizontal, 16)
+        .frame(minHeight: subtitle == nil ? 54 : 62)
+    }
+}
+
+private struct SettingsChevron: View {
+    let scheme: ColorScheme
+
+    var body: some View {
+        Image(systemName: "chevron.right")
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(Palette.ink(scheme).opacity(0.3))
+    }
+}
+
+private struct SettingsExternalMark: View {
+    let scheme: ColorScheme
+
+    var body: some View {
+        Image(systemName: "arrow.up.right")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(Palette.ink(scheme).opacity(0.3))
+    }
+}
+
+private struct SettingsMenuValue: View {
+    let text: String
+    let scheme: ColorScheme
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(text)
+                .font(.system(size: 15.5, design: .rounded))
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.system(size: 10, weight: .semibold))
+        }
+        .foregroundStyle(Palette.ink(scheme).opacity(0.65))
+    }
 }
 
 // MARK: - Add custom search engine
@@ -627,7 +595,7 @@ private struct SearchEngineSettingsView: View {
 /// Own page for adding a user-defined engine. A custom engine is just a URL
 /// template with a `{query}` placeholder; the "paste a search link" shortcut
 /// derives that template from a real search URL. On success the new engine is
-/// selected and this page pops back to the engine list.
+/// selected and this page pops back to the settings screen.
 private struct AddSearchEngineView: View {
     @Bindable var model: SettingsModel
     let scheme: ColorScheme
@@ -782,73 +750,5 @@ private struct AddSearchEngineView: View {
         case .invalidURL: return "Enter a valid http:// or https:// URL."
         case .missingPlaceholder: return "Add {query} where the search term should go."
         }
-    }
-
-}
-
-// MARK: - Advanced
-
-/// Rarely touched settings live here instead of the main page. The
-/// essentials-per-row choice sits here; the essentials grouping resolves
-/// automatically from the synced desktop pref (SPEC §7.4).
-private struct AdvancedSettingsView: View {
-    @Bindable var model: SettingsModel
-    let scheme: ColorScheme
-    /// Mirrors the row choice into `BrowserModel` so the grid behind the sheet
-    /// updates immediately.
-    var onEssentialsColumnsChange: (EssentialsColumns) -> Void = { _ in }
-
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                VStack(spacing: 0) {
-                    HStack {
-                        Label {
-                            Text("settings.essentials_columns")
-                                .font(.system(size: 16, weight: .medium, design: .rounded))
-                        } icon: {
-                            Image(systemName: "rectangle.grid.3x2")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(Palette.ink(scheme).opacity(0.6))
-                        }
-                        .foregroundStyle(Palette.ink(scheme))
-
-                        Spacer()
-
-                        Menu {
-                            ForEach(EssentialsColumns.allCases) { columns in
-                                Button {
-                                    model.essentialsColumns = columns
-                                    onEssentialsColumnsChange(columns)
-                                } label: {
-                                    if model.essentialsColumns == columns {
-                                        Label(columns.title, systemImage: "checkmark")
-                                    } else {
-                                        Text(columns.title)
-                                    }
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Text(model.essentialsColumns.title)
-                                    .font(.system(size: 15.5, design: .rounded))
-                                Image(systemName: "chevron.up.chevron.down")
-                                    .font(.system(size: 10, weight: .semibold))
-                            }
-                            .foregroundStyle(Palette.ink(scheme).opacity(0.65))
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .frame(minHeight: 54)
-                }
-                .liftCard(scheme)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
-            .padding(.bottom, 32)
-        }
-        .background(Palette.paper(scheme).ignoresSafeArea())
-        .navigationTitle(Text("settings.advanced"))
-        .navigationBarTitleDisplayMode(.inline)
     }
 }

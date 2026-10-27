@@ -35,6 +35,7 @@ internal object FixtureLoader {
         "wire-meta-global-write-gate",
         "wire-prefs-normal-tabs",
         "wire-prefs-normal-tabs-capability",
+        "wire-prefs-separate-essentials",
         "wire-space-basic",
         "wire-space-numeric-uuid",
         "wire-space-object-dots",

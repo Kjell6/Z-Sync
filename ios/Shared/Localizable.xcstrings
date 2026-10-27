@@ -987,59 +987,6 @@
         }
       }
     },
-    "settings.essentials_grouping": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Essentials"
-          }
-        }
-      }
-    },
-    "settings.essentials_grouping.automatic": {
-      "extractionState": "stale",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Automatic"
-          }
-        }
-      }
-    },
-    "settings.essentials_grouping.caption": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Automatic follows your browser's \"Enable container-specific essentials\". All spaces shows every essential on every space."
-          }
-        }
-      }
-    },
-    "settings.essentials_grouping.container_specific": {
-      "extractionState": "stale",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Container-specific"
-          }
-        }
-      }
-    },
-    "settings.essentials_grouping.shared": {
-      "extractionState": "stale",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "All spaces"
-          }
-        }
-      }
-    },
     "settings.external_browser": {
       "localizations": {
         "en": {

@@ -13,7 +13,6 @@ enum PreferenceKeys {
     static let didArmReviewPrompt = "didArmReviewPrompt"
     static let selectedSearchEngine = "selected_search_engine"
     static let alwaysOpenExternally = "always_open_links_externally"
-    static let essentialsGrouping = "essentials_grouping"
     static let saveKind = "save_kind"
     static let toolbarPlacement = "toolbar_placement"
     static let openIntoSearch = "open_into_search"

@@ -133,22 +133,6 @@ final class BrowserModel {
         return preferences.bool(key, scope: .standard)
     }
 
-    /// The user's essentials grouping: an explicit app choice when set,
-    /// otherwise `.automatic` (synced Zen pref, else wire-bucket inference).
-    var essentialsGrouping: EssentialsGrouping {
-        let key = PreferenceKeys.essentialsGrouping
-        if preferences.hasObject(key, scope: .appGroup),
-           let raw = preferences.string(key, scope: .appGroup),
-           let value = EssentialsGrouping(rawValue: raw) {
-            return value
-        }
-        if let raw = preferences.string(key, scope: .standard),
-           let value = EssentialsGrouping(rawValue: raw) {
-            return value
-        }
-        return .automatic
-    }
-
     /// Where the action bar renders: the user's choice, else `.bottom`.
     ///
     /// Stored rather than re-read from `preferences` on every access so the
@@ -175,9 +159,9 @@ final class BrowserModel {
         essentialsColumns = columns
     }
 
-    /// Essentials to show above `space` under the current grouping.
+    /// Essentials to show above `space` under the resolved desktop grouping.
     func essentials(for space: ZenSpace) -> [ZenTab] {
-        snapshot.essentials(for: space, grouping: essentialsGrouping)
+        snapshot.essentials(for: space)
     }
 
     // MARK: - Pager

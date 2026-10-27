@@ -10,9 +10,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Container-specific essentials: the synced Zen pref wins, `.automatic`
- * falls back to wire-bucket inference, an explicit app choice overrides both,
- * and the per-space lookup mirrors Zen Desktop's `_shouldShowTab` rules.
+ * Container-specific essentials: the synced Zen pref wins, a pref the browser
+ * does not sync falls back to wire-bucket inference, and the per-space lookup
+ * mirrors Zen Desktop's `_shouldShowTab` rules.
  */
 class EssentialsGroupingTests {
     private fun tab(id: String) = ZenSpaces.ZenTab(id = id, url = "https://$id.example", title = id)
@@ -42,7 +42,7 @@ class EssentialsGroupingTests {
             spaces = listOf(space("work", "container-work")),
             essentials = mapOf("default" to listOf(tab("a"), tab("b"))),
         )
-        assertFalse(snap.isContainerSpecific(ZenSpaces.EssentialsGrouping.AUTOMATIC))
+        assertFalse(snap.isContainerSpecific)
         assertEquals(
             "all-default essentials must show on container spaces too",
             listOf("a", "b"),
@@ -53,7 +53,7 @@ class EssentialsGroupingTests {
     @Test
     fun emptyEssentialsInferShared() {
         val snap = snapshot(spaces = listOf(space("s")), essentials = emptyMap())
-        assertFalse(snap.isContainerSpecific(ZenSpaces.EssentialsGrouping.AUTOMATIC))
+        assertFalse(snap.isContainerSpecific)
         assertTrue(snap.essentialsFor(space("s")).isEmpty())
     }
 
@@ -63,11 +63,11 @@ class EssentialsGroupingTests {
             spaces = listOf(space("work", "container-work")),
             essentials = mapOf("container-work" to listOf(tab("a"))),
         )
-        assertTrue(snap.isContainerSpecific(ZenSpaces.EssentialsGrouping.AUTOMATIC))
+        assertTrue(snap.isContainerSpecific)
         assertEquals(listOf("a"), ids(snap.essentialsFor(space("work", "container-work"))))
     }
 
-    // MARK: Synced pref and explicit override
+    // MARK: Synced pref
 
     @Test
     fun syncedPrefWinsOverInference() {
@@ -76,42 +76,18 @@ class EssentialsGroupingTests {
             essentials = mapOf("container-work" to listOf(tab("a"))),
             separatePref = true,
         )
-        assertTrue(separate.isContainerSpecific(ZenSpaces.EssentialsGrouping.AUTOMATIC))
+        assertTrue(separate.isContainerSpecific)
 
         val shared = snapshot(
             spaces = listOf(space("work", "container-work")),
             essentials = mapOf("container-work" to listOf(tab("a"))),
             separatePref = false,
         )
-        assertFalse(shared.isContainerSpecific(ZenSpaces.EssentialsGrouping.AUTOMATIC))
+        assertFalse(shared.isContainerSpecific)
         assertEquals(
             "pref off shows every essential on every space",
             listOf("a"),
             ids(shared.essentialsFor(space("work", "container-work"))),
-        )
-    }
-
-    @Test
-    fun explicitOverrideWinsOverSyncedPref() {
-        val prefOn = snapshot(
-            spaces = listOf(space("work", "container-work"), space("plain")),
-            essentials = mapOf("container-work" to listOf(tab("a"))),
-            separatePref = true,
-        )
-        assertEquals(
-            listOf("a"),
-            ids(prefOn.essentialsFor(space("plain"), ZenSpaces.EssentialsGrouping.SHARED)),
-        )
-
-        val prefOff = snapshot(
-            spaces = listOf(space("work", "container-work"), space("plain")),
-            essentials = mapOf("container-work" to listOf(tab("a"))),
-            separatePref = false,
-        )
-        assertTrue(prefOff.essentialsFor(space("plain"), ZenSpaces.EssentialsGrouping.CONTAINER_SPECIFIC).isEmpty())
-        assertEquals(
-            listOf("a"),
-            ids(prefOff.essentialsFor(space("work", "container-work"), ZenSpaces.EssentialsGrouping.CONTAINER_SPECIFIC)),
         )
     }
 
@@ -226,7 +202,7 @@ class EssentialsGroupingTests {
         )
         val decoded = ZenSpaces.decodeSnapshot(ZenSpaces.encodeSnapshot(snap))
         assertEquals(false, decoded?.separateEssentialsPref)
-        assertFalse(decoded!!.isContainerSpecific(ZenSpaces.EssentialsGrouping.AUTOMATIC))
+        assertFalse(decoded!!.isContainerSpecific)
     }
 
     @Test
@@ -240,20 +216,6 @@ class EssentialsGroupingTests {
         )
         val decoded = ZenSpaces.decodeSnapshot(root)
         assertNull(decoded?.separateEssentialsPref)
-        assertFalse(decoded!!.isContainerSpecific(ZenSpaces.EssentialsGrouping.AUTOMATIC))
-    }
-
-    @Test
-    fun groupingStorageRoundTrip() {
-        assertEquals(
-            ZenSpaces.EssentialsGrouping.CONTAINER_SPECIFIC,
-            ZenSpaces.EssentialsGrouping.fromStorage("container-specific"),
-        )
-        assertEquals(
-            ZenSpaces.EssentialsGrouping.SHARED,
-            ZenSpaces.EssentialsGrouping.fromStorage("shared"),
-        )
-        assertEquals(ZenSpaces.EssentialsGrouping.AUTOMATIC, ZenSpaces.EssentialsGrouping.fromStorage(null))
-        assertEquals(ZenSpaces.EssentialsGrouping.AUTOMATIC, ZenSpaces.EssentialsGrouping.fromStorage("garbage"))
+        assertFalse(decoded!!.isContainerSpecific)
     }
 }

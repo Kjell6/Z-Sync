@@ -214,7 +214,6 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
         SpacesBrowserScreen(
             isDemo = account.isDemo,
             state = browser,
-            essentialsGrouping = preferences.essentialsGrouping,
             essentialsColumns = preferences.essentialsColumns,
             toolbarPlacement = preferences.toolbarPlacement,
             onSelectSpace = { viewModel.selectSpace(it) },
@@ -266,7 +265,6 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
             onAddSearchEngine = { name, template -> viewModel.addSearchEngine(name, template) },
             onDeleteSearchEngine = { viewModel.deleteSearchEngine(it) },
             onSetAlwaysOpenExternally = { viewModel.setAlwaysOpenExternally(it) },
-            onSetEssentialsGrouping = { viewModel.setEssentialsGrouping(it) },
             onSetEssentialsColumns = { viewModel.setEssentialsColumns(it) },
             onSetSaveKind = { viewModel.setSaveKind(it) },
             onSetToolbarPlacement = { viewModel.setToolbarPlacement(it) },

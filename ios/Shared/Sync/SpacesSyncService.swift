@@ -19,8 +19,8 @@ enum SpacesSyncService {
     static let prefsCollection = "prefs"
     /// Desktop setting "Include unpinned tabs" (`zen.spaces-sync.normal-tabs`).
     static let normalTabsPrefKey = "zen.spaces-sync.normal-tabs"
-    /// Desktop setting "Enable container-specific essentials". Not in Zen's
-    /// synced-prefs list today, so callers must tolerate it being absent.
+    /// Desktop setting "Enable container-specific essentials". Zen 1.23+
+    /// registers it for sync; older versions leave it absent.
     static let separateEssentialsPrefKey = "zen.workspaces.separate-essentials"
 
     /// Test seam: when non-nil it wins over the AppGroup default. Production
@@ -173,8 +173,8 @@ enum SpacesSyncService {
     struct SyncedPrefs: Equatable {
         /// "Include unpinned tabs" (`zen.spaces-sync.normal-tabs`), default true.
         var normalTabs: Bool = true
-        /// "Enable container-specific essentials" when Zen synced it; nil when
-        /// absent (Zen does not mark it for sync today).
+        /// "Enable container-specific essentials". `nil` when the browser does
+        /// not sync the pref (Zen 1.22 and older).
         var separateEssentials: Bool?
         /// Derived write gate (SPEC §7): `enabled` only when the record and
         /// the key are present and the value parses true.
@@ -195,11 +195,25 @@ enum SpacesSyncService {
             if let raw = values[normalTabsPrefKey], let parsed = prefBool(raw) {
                 prefs.normalTabs = parsed
             }
-            if let raw = values[separateEssentialsPrefKey], let parsed = prefBool(raw) {
-                prefs.separateEssentials = parsed
+            if let resolved = separateEssentialsPref(values: values) {
+                prefs.separateEssentials = resolved
             }
         }
         return prefs
+    }
+
+    /// Resolves `zen.workspaces.separate-essentials` from one synced prefs
+    /// value map (fixture `wire-prefs-separate-essentials`). Zen 1.23+ registers
+    /// the pref for sync. Firefox's prefs engine writes `null` for a pref the
+    /// user never changed, and Zen's default is `true` (container-specific), so
+    /// a present key with a missing or unreadable value means container-specific.
+    /// A missing key means the browser does not sync the pref at all; callers
+    /// then infer from the layout buckets.
+    static func separateEssentialsPref(values: [String: Any]?) -> Bool? {
+        guard let values, values.index(forKey: separateEssentialsPrefKey) != nil else {
+            return nil
+        }
+        return prefBool(values[separateEssentialsPrefKey]) ?? true
     }
 
     /// Convenience for the normal-tabs flag alone (legacy call sites/tests).

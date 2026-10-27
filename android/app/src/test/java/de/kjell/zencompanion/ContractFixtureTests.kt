@@ -55,7 +55,7 @@ class ContractFixtureTests {
     /** Every golden fixture must load with contract == 1 and id == basename. */
     @Test
     fun everyGoldenFixtureLoads() {
-        assertEquals(32, FixtureLoader.allFixtureNames.size)
+        assertEquals(33, FixtureLoader.allFixtureNames.size)
         for (name in FixtureLoader.allFixtureNames) {
             FixtureLoader.json(name)
             FixtureLoader.data(name)
@@ -264,6 +264,27 @@ class ContractFixtureTests {
         }
     }
 
+    /**
+     * Essentials grouping (SPEC §7.4, `wire-prefs-separate-essentials`): a
+     * missing key means the browser does not sync the pref and the caller
+     * infers; a present key is decisive, and null/unparseable means the
+     * untouched Zen default true (container-specific).
+     */
+    @Test
+    fun separateEssentialsPreferenceResolves() {
+        val cases = FixtureLoader.cases("wire-prefs-separate-essentials")
+        for (i in 0 until cases.length()) {
+            val case = cases.getJSONObject(i)
+            val expect = case.getJSONObject("expect")
+            val actual = SpacesSyncService.separateEssentialsPref(case.getJSONObject("input").optJSONObject("values"))
+            assertEquals(
+                "case '${case.getString("id")}'",
+                if (expect.isNull("separateEssentials")) null else expect.getBoolean("separateEssentials"),
+                actual,
+            )
+        }
+    }
+
     // MARK: meta/global write gate (SPEC §7.5)
 
     /**
@@ -314,14 +335,14 @@ class ContractFixtureTests {
                 theme = null,
                 pinned = emptyList(),
             )
-            val snapshot = ZenSpaces.ZenSnapshot(listOf(space), essentials, 0L)
+            val snapshot = ZenSpaces.ZenSnapshot(listOf(space), essentials, 0L, separateEssentialsPref = false)
             val expected = case.getJSONObject("expect").getJSONArray("ids").let { arr ->
                 (0 until arr.length()).map { arr.getString(it) }
             }
             assertEquals(
                 "case '${case.getString("id")}'",
                 expected,
-                snapshot.essentialsFor(space, ZenSpaces.EssentialsGrouping.SHARED).map { it.id },
+                snapshot.essentialsFor(space).map { it.id },
             )
         }
     }

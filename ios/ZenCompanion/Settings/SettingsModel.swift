@@ -24,14 +24,6 @@ final class SettingsModel {
         }
     }
 
-    var essentialsGrouping: EssentialsGrouping {
-        didSet {
-            guard essentialsGrouping != oldValue else { return }
-            preferences.setString(essentialsGrouping.rawValue, PreferenceKeys.essentialsGrouping, scope: .appGroup)
-            preferences.setString(essentialsGrouping.rawValue, PreferenceKeys.essentialsGrouping, scope: .standard)
-        }
-    }
-
     /// How shared/in-app tabs are saved: pinned (default) or normal. Written
     /// to both stores so the Share Extension reads the same choice.
     var saveKind: SaveKind {
@@ -85,7 +77,6 @@ final class SettingsModel {
         self.alwaysOpenExternally = preferences.hasObject(key, scope: .appGroup)
             ? preferences.bool(key, scope: .appGroup)
             : preferences.bool(key, scope: .standard)
-        self.essentialsGrouping = Self.loadEssentialsGrouping(preferences)
         self.saveKind = Self.loadSaveKind(preferences)
         self.toolbarPlacement = Self.loadToolbarPlacement(preferences)
         self.openIntoSearch = preferences.bool(PreferenceKeys.openIntoSearch, scope: .standard)
@@ -99,17 +90,6 @@ final class SettingsModel {
             return value
         }
         if let raw = preferences.string(key, scope: .standard), let value = EssentialsColumns(rawValue: raw) {
-            return value
-        }
-        return .automatic
-    }
-
-    private static func loadEssentialsGrouping(_ preferences: PreferencesStoring) -> EssentialsGrouping {
-        let key = PreferenceKeys.essentialsGrouping
-        if let raw = preferences.string(key, scope: .appGroup), let value = EssentialsGrouping(rawValue: raw) {
-            return value
-        }
-        if let raw = preferences.string(key, scope: .standard), let value = EssentialsGrouping(rawValue: raw) {
             return value
         }
         return .automatic

@@ -20,7 +20,7 @@ final class ContractFixtureTests: XCTestCase {
     /// every fixture must declare contract 1 (the loader fatalErrors loudly
     /// on drift; the explicit asserts below double-check).
     func testEveryFixtureDeclaresContractVersion1() {
-        XCTAssertEqual(ContractFixtures.all.count, 32, "fixture list must track shared/contract/fixtures")
+        XCTAssertEqual(ContractFixtures.all.count, 33, "fixture list must track shared/contract/fixtures")
         for name in ContractFixtures.all {
             let obj = ContractFixtures.json(name)
             XCTAssertEqual(obj["contract"] as? Int, 1, name)
@@ -161,6 +161,23 @@ final class ContractFixtureTests: XCTestCase {
         }
     }
 
+    /// Essentials grouping (SPEC §7.4): a missing key means the browser does
+    /// not sync the pref and the caller infers; a present key is decisive, and
+    /// `null`/unparseable means the untouched Zen default `true`.
+    /// Covers `wire-prefs-separate-essentials`.
+    func testPrefsSeparateEssentialsTable() {
+        for record in ContractFixtures.cases("wire-prefs-separate-essentials") {
+            let caseId = record["id"] as? String ?? "?"
+            let input = record["input"] as! [String: Any]
+            let expect = record["expect"] as! [String: Any]
+            XCTAssertEqual(
+                SpacesSyncService.separateEssentialsPref(values: input["values"] as? [String: Any]),
+                expect["separateEssentials"] as? Bool,
+                "case \(caseId)"
+            )
+        }
+    }
+
     // MARK: - meta/global write gate (SPEC §7.5)
 
     /// `wire-meta-global-write-gate`: an absent record or a known engine
@@ -201,10 +218,15 @@ final class ContractFixtureTests: XCTestCase {
                 }
             }
             let space = ZenSpace(id: "s", name: "s")
-            let snapshot = ZenSnapshot(spaces: [space], essentials: essentials, fetchedAt: .distantPast)
+            let snapshot = ZenSnapshot(
+                spaces: [space],
+                essentials: essentials,
+                separateEssentialsPref: false,
+                fetchedAt: .distantPast
+            )
             XCTAssertEqual(
                 expect["ids"] as? [String],
-                snapshot.essentials(for: space, grouping: .shared).map(\.id),
+                snapshot.essentials(for: space).map(\.id),
                 "case \(caseId)"
             )
         }

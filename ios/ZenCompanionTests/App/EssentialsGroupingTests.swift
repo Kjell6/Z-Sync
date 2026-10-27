@@ -2,9 +2,9 @@ import XCTest
 
 @testable import ZenCompanion
 
-/// Container-specific essentials: the synced Zen pref wins, `.automatic`
-/// falls back to wire-bucket inference, an explicit app choice overrides both,
-/// and the per-space lookup mirrors Zen Desktop's `_shouldShowTab` rules.
+/// Container-specific essentials: the synced Zen pref wins, a pref the browser
+/// does not sync falls back to wire-bucket inference, and the per-space lookup
+/// mirrors Zen Desktop's `_shouldShowTab` rules.
 final class EssentialsGroupingTests: XCTestCase {
     private func tab(_ id: String) -> ZenTab {
         ZenTab(id: id, url: "https://\(id).example", title: id)
@@ -36,7 +36,7 @@ final class EssentialsGroupingTests: XCTestCase {
             spaces: [space("work", containerGuid: "container-work")],
             essentials: ["default": [tab("a"), tab("b")]]
         )
-        XCTAssertFalse(snap.isContainerSpecific(grouping: .automatic))
+        XCTAssertFalse(snap.isContainerSpecific)
         XCTAssertEqual(
             ["a", "b"],
             ids(snap.essentials(for: space("work", containerGuid: "container-work"))),
@@ -46,7 +46,7 @@ final class EssentialsGroupingTests: XCTestCase {
 
     func testEmptyEssentialsInferShared() {
         let snap = snapshot(spaces: [space("s")], essentials: [:])
-        XCTAssertFalse(snap.isContainerSpecific(grouping: .automatic))
+        XCTAssertFalse(snap.isContainerSpecific)
         XCTAssertTrue(snap.essentials(for: space("s")).isEmpty)
     }
 
@@ -55,11 +55,11 @@ final class EssentialsGroupingTests: XCTestCase {
             spaces: [space("work", containerGuid: "container-work")],
             essentials: ["container-work": [tab("a")]]
         )
-        XCTAssertTrue(snap.isContainerSpecific(grouping: .automatic))
+        XCTAssertTrue(snap.isContainerSpecific)
         XCTAssertEqual(["a"], ids(snap.essentials(for: space("work", containerGuid: "container-work"))))
     }
 
-    // MARK: Synced pref and explicit override
+    // MARK: Synced pref
 
     func testSyncedPrefWinsOverInference() {
         let separate = snapshot(
@@ -67,41 +67,18 @@ final class EssentialsGroupingTests: XCTestCase {
             essentials: ["container-work": [tab("a")]],
             separatePref: true
         )
-        XCTAssertTrue(separate.isContainerSpecific(grouping: .automatic))
+        XCTAssertTrue(separate.isContainerSpecific)
 
         let shared = snapshot(
             spaces: [space("work", containerGuid: "container-work")],
             essentials: ["container-work": [tab("a")]],
             separatePref: false
         )
-        XCTAssertFalse(shared.isContainerSpecific(grouping: .automatic))
+        XCTAssertFalse(shared.isContainerSpecific)
         XCTAssertEqual(
             ["a"],
             ids(shared.essentials(for: space("work", containerGuid: "container-work"))),
             "pref off shows every essential on every space"
-        )
-    }
-
-    func testExplicitOverrideWinsOverSyncedPref() {
-        let prefOn = snapshot(
-            spaces: [space("work", containerGuid: "container-work"), space("plain")],
-            essentials: ["container-work": [tab("a")]],
-            separatePref: true
-        )
-        XCTAssertEqual(
-            ["a"],
-            ids(prefOn.essentials(for: space("plain"), grouping: .shared))
-        )
-
-        let prefOff = snapshot(
-            spaces: [space("work", containerGuid: "container-work"), space("plain")],
-            essentials: ["container-work": [tab("a")]],
-            separatePref: false
-        )
-        XCTAssertTrue(prefOff.essentials(for: space("plain"), grouping: .containerSpecific).isEmpty)
-        XCTAssertEqual(
-            ["a"],
-            ids(prefOff.essentials(for: space("work", containerGuid: "container-work"), grouping: .containerSpecific))
         )
     }
 
@@ -211,7 +188,7 @@ final class EssentialsGroupingTests: XCTestCase {
         )
         let decoded = try JSONDecoder().decode(ZenSnapshot.self, from: JSONEncoder().encode(snap))
         XCTAssertEqual(decoded.separateEssentialsPref, false)
-        XCTAssertFalse(decoded.isContainerSpecific(grouping: .automatic))
+        XCTAssertFalse(decoded.isContainerSpecific)
     }
 
     func testLegacyCacheWithoutPrefDecodesAndInfers() throws {
@@ -222,7 +199,7 @@ final class EssentialsGroupingTests: XCTestCase {
         """
         let decoded = try JSONDecoder().decode(ZenSnapshot.self, from: Data(json.utf8))
         XCTAssertNil(decoded.separateEssentialsPref)
-        XCTAssertFalse(decoded.isContainerSpecific(grouping: .automatic))
+        XCTAssertFalse(decoded.isContainerSpecific)
     }
 
     // MARK: Synced prefs record
@@ -249,6 +226,32 @@ final class EssentialsGroupingTests: XCTestCase {
         let prefs = await SpacesSyncService.syncedPrefs(client: makeClient(keys: keys, transport: server))
 
         XCTAssertFalse(prefs.normalTabs)
+        XCTAssertEqual(prefs.separateEssentials, true)
+    }
+
+    /// Firefox's prefs engine writes `null` for a pref the user never changed;
+    /// Zen's default is container-specific, so a present key decides.
+    func testSyncedPrefsNullSeparateKeyMeansContainerSpecific() async throws {
+        let keys = SyncCrypto.KeyBundle(
+            encryptionKey: Data(repeating: 0x55, count: 32),
+            hmacKey: Data(repeating: 0x66, count: 32)
+        )
+        let server = MutableSyncServer()
+        let cleartext: [String: Any] = [
+            "id": "prefs",
+            "value": [
+                SpacesSyncService.normalTabsPrefKey: true,
+                SpacesSyncService.separateEssentialsPrefKey: NSNull(),
+            ],
+        ]
+        let payload = try SyncCrypto.encryptBSO(
+            plaintext: try JSONSerialization.data(withJSONObject: cleartext),
+            keys: keys
+        )
+        server.setRecord(collection: "prefs", id: "prefs", payload: payload)
+
+        let prefs = await SpacesSyncService.syncedPrefs(client: makeClient(keys: keys, transport: server))
+
         XCTAssertEqual(prefs.separateEssentials, true)
     }
 

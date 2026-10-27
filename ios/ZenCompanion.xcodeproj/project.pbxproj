@@ -109,6 +109,7 @@
 		75A2BA4D819996D165815FF7 /* SettingsSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3790E4F893F6F84606F5ACA6 /* SettingsSheetView.swift */; };
 		75C808195C37C8798564D24A /* AccountStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0ACBE9A3AC25E6E8B2DF0A /* AccountStore.swift */; };
 		7614687FCB24EBBC83450A48 /* wire-prefs-normal-tabs-capability.json in Resources */ = {isa = PBXBuildFile; fileRef = CF550030A8B47753B9F938AA /* wire-prefs-normal-tabs-capability.json */; };
+		A1B2C3D4E5F60718293A4B5D /* wire-prefs-separate-essentials.json in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* wire-prefs-separate-essentials.json */; };
 		7B3027AC20331B81C1E1C13E /* FxASocialAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDF1BEF432DF5CE8C0BA6155 /* FxASocialAuth.swift */; };
 		7CA92F63A850939C64756259 /* FaviconDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4457DD7508DE68B268E278B7 /* FaviconDiscovery.swift */; };
 		7DDE33DC6B4365C8431A9AD3 /* SessionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0645E086D905B55853588FF6 /* SessionModel.swift */; };
@@ -390,6 +391,7 @@
 		CCCFAC8D0D4BFBA2D7F31FB5 /* ThemeViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeViews.swift; sourceTree = "<group>"; };
 		CE4B617E2F02FB56B22D127A /* http-get-pagination-page2.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "http-get-pagination-page2.json"; sourceTree = "<group>"; };
 		CF550030A8B47753B9F938AA /* wire-prefs-normal-tabs-capability.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "wire-prefs-normal-tabs-capability.json"; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B5C /* wire-prefs-separate-essentials.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "wire-prefs-separate-essentials.json"; sourceTree = "<group>"; };
 		D1491DD9BAC67998EE6A6C56 /* BrowserPageErrorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserPageErrorTests.swift; sourceTree = "<group>"; };
 		D415E712985EFC02E1BB9D65 /* wire-tab-normal-pinned-false.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "wire-tab-normal-pinned-false.json"; sourceTree = "<group>"; };
 		DF41F4460A4B104133824554 /* ZenSpaces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZenSpaces.swift; sourceTree = "<group>"; };
@@ -624,6 +626,7 @@
 				66E39A342A69F1C2572410E7 /* wire-layout-essentials-dup-url.json */,
 				5F6674C8AD3277B2EC957CAF /* wire-meta-global-write-gate.json */,
 				CF550030A8B47753B9F938AA /* wire-prefs-normal-tabs-capability.json */,
+				A1B2C3D4E5F60718293A4B5C /* wire-prefs-separate-essentials.json */,
 				1E0B51BE55E2A04B77FDF241 /* wire-prefs-normal-tabs.json */,
 				2F853F34891E97186D2FBF85 /* wire-space-basic.json */,
 				85500AE3EC45E64832ABF80F /* wire-space-numeric-uuid.json */,
@@ -960,6 +963,7 @@
 				807D9AAAADC59391F05B26A9 /* wire-layout-essentials-dup-url.json in Resources */,
 				64278C1915A15D32071E3381 /* wire-meta-global-write-gate.json in Resources */,
 				7614687FCB24EBBC83450A48 /* wire-prefs-normal-tabs-capability.json in Resources */,
+				A1B2C3D4E5F60718293A4B5D /* wire-prefs-separate-essentials.json in Resources */,
 				98AB9C680267B692CB41419E /* wire-prefs-normal-tabs.json in Resources */,
 				3CFCC61A5B7BB95439940D09 /* wire-space-basic.json in Resources */,
 				115BD1CA68D68072A0E1869E /* wire-space-numeric-uuid.json in Resources */,

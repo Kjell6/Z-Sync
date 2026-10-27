@@ -1,0 +1,54 @@
+{
+  "contract": 1,
+  "id": "wire-prefs-separate-essentials",
+  "purpose": "Resolves container-specific essentials from the synced prefs map. A missing key means the browser does not sync the pref (Zen before 1.23), and the caller infers from the layout buckets. Zen 1.23 registers the pref for sync; Firefox's prefs engine writes null for a pref the user never changed, and Zen's default is true (container-specific), so a present key with a null or unreadable value means container-specific.",
+  "cases": [
+    {
+      "id": "key-absent",
+      "input": { "values": {} },
+      "expect": { "separateEssentials": null }
+    },
+    {
+      "id": "key-present-null",
+      "input": {
+        "values": { "zen.workspaces.separate-essentials": null }
+      },
+      "expect": { "separateEssentials": true }
+    },
+    {
+      "id": "key-present-true",
+      "input": {
+        "values": { "zen.workspaces.separate-essentials": true }
+      },
+      "expect": { "separateEssentials": true }
+    },
+    {
+      "id": "key-present-false",
+      "input": {
+        "values": { "zen.workspaces.separate-essentials": false }
+      },
+      "expect": { "separateEssentials": false }
+    },
+    {
+      "id": "key-present-string-false",
+      "input": {
+        "values": { "zen.workspaces.separate-essentials": "false" }
+      },
+      "expect": { "separateEssentials": false }
+    },
+    {
+      "id": "key-present-number-zero",
+      "input": {
+        "values": { "zen.workspaces.separate-essentials": 0 }
+      },
+      "expect": { "separateEssentials": false }
+    },
+    {
+      "id": "key-present-unparseable-string",
+      "input": {
+        "values": { "zen.workspaces.separate-essentials": "perhaps" }
+      },
+      "expect": { "separateEssentials": true }
+    }
+  ]
+}

@@ -75,7 +75,6 @@ fun SettingsSheet(
     onAddSearchEngine: (String, String) -> SearchEngineValidation?,
     onDeleteSearchEngine: (String) -> Unit,
     onSetAlwaysOpenExternally: (Boolean) -> Unit,
-    onSetEssentialsGrouping: (ZenSpaces.EssentialsGrouping) -> Unit,
     onSetEssentialsColumns: (EssentialsColumns) -> Unit,
     onSetSaveKind: (SaveKind) -> Unit,
     onSetToolbarPlacement: (ToolbarPlacement) -> Unit,
@@ -157,7 +156,6 @@ fun SettingsSheet(
         if (showAdvanced) {
             SettingsAdvancedScreen(
                 preferences = preferences,
-                onSetEssentialsGrouping = onSetEssentialsGrouping,
                 onSetEssentialsColumns = onSetEssentialsColumns,
                 onBack = { showAdvanced = false },
                 onDone = onDone,

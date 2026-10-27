@@ -461,8 +461,8 @@ private struct SettingsSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .tracking(0.2)
+                .font(.system(size: 13.5, weight: .semibold, design: .rounded))
+                .tracking(0)
                 .foregroundStyle(Palette.ink(scheme).opacity(0.4))
                 .padding(.horizontal, 4)
 

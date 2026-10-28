@@ -10,7 +10,7 @@ have?" without guessing.
 | Platform | Channel    | Version | Last build |
 | -------- | ---------- | ------- | ---------- |
 | iOS      | App Store  | 1.5     | released   |
-| iOS      | TestFlight | 1.6     | 7          |
+| iOS      | TestFlight | 1.6     | 8          |
 
 Keep this table current when a build ships. iOS is the only platform using
 TestFlight; Android releases go through Google Play, shipped by the maintainer.

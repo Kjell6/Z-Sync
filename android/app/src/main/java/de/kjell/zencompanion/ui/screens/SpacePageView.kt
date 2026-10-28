@@ -90,7 +90,7 @@ internal fun SpacePageView(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp),
+            contentPadding = PaddingValues(top = 4.dp, bottom = 10.dp),
         ) {
             for (item in space.pinned) {
                 when (item) {

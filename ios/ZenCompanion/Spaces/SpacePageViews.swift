@@ -211,7 +211,10 @@ private struct SpacePageView: View {
                         }
                     }
                     .padding(.top, 4)
-                    .padding(.bottom, 24)
+                    // Air between the last row and the space switcher below.
+                    // 10 is what the switcher band's own 6pt does not already
+                    // cover; 24 read as a hole above the switcher.
+                    .padding(.bottom, 10)
                     .background(
                         GeometryReader { contentGeo in
                             Color.clear.preference(

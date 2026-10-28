@@ -49,7 +49,9 @@ struct SpacePageContainer: View {
                         onOpen: { tab in onOpenTab(tab, space) },
                         onRenameTab: onRenameTab
                     )
-                    .padding(.top, 8)
+                    // 4pt under the status-bar inset: the grid is the first
+                    // thing on screen, anything more reads as a gap.
+                    .padding(.top, 4)
                     .padding(.bottom, 6)
                     .offset(x: xOffset)
                     .opacity(opacity)
@@ -288,7 +290,7 @@ private struct SpacePageView: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 20)
-        .padding(.top, 6)
+        .padding(.top, 2)
         .padding(.bottom, 8)
         .accessibilityElement(children: .combine)
     }

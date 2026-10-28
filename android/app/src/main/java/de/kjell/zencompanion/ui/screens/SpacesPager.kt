@@ -204,7 +204,7 @@ internal fun SpacePageContainer(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp, bottom = 6.dp)
+                    .padding(top = 4.dp, bottom = 6.dp)
                     .offset { IntOffset(xOffsetPx.toInt(), 0) }
                     .alpha(gridOpacity),
             ) {

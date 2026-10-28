@@ -66,9 +66,10 @@ fun SpaceSwitcher(
     }
 
     val listState = rememberLazyListState()
-    // Row height. 34dp leaves the 22dp icons 6dp of air below them — the gap
-    // to the action bar. It used to be 40dp (9dp), which read as a loose band.
-    val itemHeight = 34.dp
+    // Row height. The icons here are smaller than iOS's (22dp vs 26pt), so a
+    // 6dp gap read tighter than the same 6pt there. 38dp leaves 8dp of air,
+    // which matches the gap the iOS switcher shows next to the action bar.
+    val itemHeight = 38.dp
 
     // Keep a restored selection (e.g. index 7 of 8) visible on first composition.
     LaunchedEffect(spaces.size) {

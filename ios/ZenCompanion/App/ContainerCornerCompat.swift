@@ -1,4 +1,25 @@
 import SwiftUI
+import UIKit
+
+/// Where a bottom dock — the spaces screen's switcher and action bar — sits
+/// relative to the screen edge.
+///
+/// The home indicator only occupies the bottom few points of the safe area, so
+/// the dock shaves a hair off the inset instead of floating a full inset above
+/// the edge. A view that ignores the safe area cannot read the inset from its
+/// own `GeometryProxy`, so it is taken from the key window here. Devices
+/// without an indicator fall back to 8pt.
+@MainActor
+enum BottomDock {
+    static var padding: CGFloat {
+        let inset = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)?
+            .safeAreaInsets.bottom ?? 0
+        return max(8, inset - 4)
+    }
+}
 
 extension View {
     /// Dodges the container's corner insets on the given edges.

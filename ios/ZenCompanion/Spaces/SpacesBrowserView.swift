@@ -217,6 +217,11 @@ struct SpacesBrowserView: View {
                         statusLine(scheme: effectiveScheme)
                     }
                 }
+                // 30pt on a phone with a home indicator: the inset minus a
+                // hair, so the dock hugs the safe-area edge without falling
+                // into the indicator or the display corners.
+                .padding(.bottom, BottomDock.padding)
+                .ignoresSafeArea(.container, edges: .bottom)
             }
         }
         // Keyboard from the mini-browser sheet must not lift the space switcher.

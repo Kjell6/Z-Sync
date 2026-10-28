@@ -66,6 +66,9 @@ fun SpaceSwitcher(
     }
 
     val listState = rememberLazyListState()
+    // Row height. 34dp leaves the 22dp icons 6dp of air below them — the gap
+    // to the action bar. It used to be 40dp (9dp), which read as a loose band.
+    val itemHeight = 34.dp
 
     // Keep a restored selection (e.g. index 7 of 8) visible on first composition.
     LaunchedEffect(spaces.size) {
@@ -100,6 +103,7 @@ fun SpaceSwitcher(
                 isSelected = index == selectedIndex,
                 label = space.name.ifEmpty { fallbackName },
                 itemWidth = itemWidth,
+                itemHeight = itemHeight,
                 iconSize = iconSize,
                 onClick = { onSelect(index) },
             )
@@ -113,6 +117,7 @@ private fun SwitcherItem(
     isSelected: Boolean,
     label: String,
     itemWidth: Dp,
+    itemHeight: Dp,
     iconSize: Dp,
     onClick: () -> Unit,
 ) {
@@ -127,7 +132,7 @@ private fun SwitcherItem(
     )
     Box(
         Modifier
-            .size(width = itemWidth, height = 40.dp)
+            .size(width = itemWidth, height = itemHeight)
             .alpha(opacity)
             .clickable(
                 onClick = onClick,

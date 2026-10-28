@@ -366,9 +366,10 @@ struct SpacesBrowserView: View {
         .padding(.horizontal, 20)
         // Breathing room so the bar and the tile group beside it don't read as
         // one block: below the bar at the top placement (toward the essentials
-        // grid), toward the screen edge at the bottom placement, where it is
-        // the last row.
-        .padding(.bottom, placement == .bottom ? 4 : 6)
+        // grid). At the bottom placement the safe-area inset is the only gap
+        // between the bar and the screen edge, so the dock stays as short as
+        // possible.
+        .padding(.bottom, placement == .bottom ? 0 : 6)
         // iPadOS 26 windowed mode puts the system window controls on the
         // window's top-leading corner; the bar makes room on the leading edge
         // so the Activity button stays reachable. No-op when the insets are

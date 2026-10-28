@@ -82,8 +82,9 @@ fun SpacesBrowserScreen(
             onOpenBrowser = onOpenBrowser,
             onOpenActivity = onOpenActivity,
             onOpenAccount = onOpenAccount,
-            // Toward the screen edge when the bar is the last row.
-            bottomPadding = if (toolbarPlacement == ToolbarPlacement.BOTTOM) 4.dp else 6.dp,
+            // Toward the screen edge when the bar is the last row: the
+            // navigation-bar inset is the only gap, so no extra padding.
+            bottomPadding = if (toolbarPlacement == ToolbarPlacement.BOTTOM) 0.dp else 6.dp,
         )
     }
 
@@ -180,8 +181,7 @@ fun SpacesBrowserScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .padding(bottom = 4.dp),
+                            .navigationBarsPadding(),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         SpaceSwitcher(

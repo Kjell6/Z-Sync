@@ -200,6 +200,11 @@ struct SpacesBrowserView: View {
                         // action bar already owns the top edge.
                         .containerCornerOffsetCompat(.top)
 
+                        // Sits between the content and the switcher: the dock
+                        // keeps its shape and the text never reads as part of
+                        // the toolbar below it.
+                        statusLine(scheme: effectiveScheme)
+
                         SpaceSwitcher(
                             spaces: model.snapshot.spaces,
                             selectedIndex: $model.selectedIndex,
@@ -213,10 +218,13 @@ struct SpacesBrowserView: View {
                         if placement == .bottom {
                             actionBar(scheme: effectiveScheme, placement: placement)
                         }
-
-                        statusLine(scheme: effectiveScheme)
                     }
                 }
+                // 30pt on a phone with a home indicator: the inset minus a
+                // hair, so the dock hugs the safe-area edge without falling
+                // into the indicator or the display corners.
+                .padding(.bottom, BottomDock.padding)
+                .ignoresSafeArea(.container, edges: .bottom)
             }
         }
         // Keyboard from the mini-browser sheet must not lift the space switcher.
@@ -366,9 +374,10 @@ struct SpacesBrowserView: View {
         .padding(.horizontal, 20)
         // Breathing room so the bar and the tile group beside it don't read as
         // one block: below the bar at the top placement (toward the essentials
-        // grid), toward the screen edge at the bottom placement, where it is
-        // the last row.
-        .padding(.bottom, placement == .bottom ? 4 : 6)
+        // grid). At the bottom placement the safe-area inset is the only gap
+        // between the bar and the screen edge, so the dock stays as short as
+        // possible.
+        .padding(.bottom, placement == .bottom ? 0 : 6)
         // iPadOS 26 windowed mode puts the system window controls on the
         // window's top-leading corner; the bar makes room on the leading edge
         // so the Activity button stays reachable. No-op when the insets are
@@ -470,9 +479,9 @@ struct SpacesBrowserView: View {
 
     // MARK: States (shown until the first successful sync)
 
-    /// A line at the bottom of the dock, shown only when a delete or a
-    /// refresh over cached spaces failed, so sync problems are visible
-    /// without a banner.
+    /// A quiet line between the content and the space switcher, shown only
+    /// when a delete or a refresh over cached spaces failed. Sitting above the
+    /// switcher keeps it out of the toolbar and it reads as part of the list.
     @ViewBuilder
     private func statusLine(scheme: ColorScheme) -> some View {
         if let deleteError = model.deleteError {
@@ -481,7 +490,7 @@ struct SpacesBrowserView: View {
                 .foregroundStyle(Palette.ink(scheme).opacity(0.7))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)
-                .padding(.bottom, 6)
+                .padding(.bottom, 2)
                 .accessibilityAddTraits(.updatesFrequently)
         } else if model.loadError != nil, !model.reloading {
             Button {
@@ -491,7 +500,7 @@ struct SpacesBrowserView: View {
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(Palette.ink(scheme).opacity(0.55))
                     .padding(.horizontal, 20)
-                    .padding(.vertical, 6)
+                    .padding(.vertical, 4)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

@@ -82,8 +82,9 @@ fun SpacesBrowserScreen(
             onOpenBrowser = onOpenBrowser,
             onOpenActivity = onOpenActivity,
             onOpenAccount = onOpenAccount,
-            // Toward the screen edge when the bar is the last row.
-            bottomPadding = if (toolbarPlacement == ToolbarPlacement.BOTTOM) 4.dp else 6.dp,
+            // Toward the screen edge when the bar is the last row: the
+            // navigation-bar inset is the only gap, so no extra padding.
+            bottomPadding = if (toolbarPlacement == ToolbarPlacement.BOTTOM) 0.dp else 6.dp,
         )
     }
 
@@ -180,10 +181,13 @@ fun SpacesBrowserScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .padding(bottom = 4.dp),
+                            .navigationBarsPadding(),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
+                        // Sits between the content and the switcher: the dock
+                        // keeps its shape and the text never reads as part of
+                        // the toolbar below it.
+                        StatusLine(state = state, onRetry = onRefresh)
                         SpaceSwitcher(
                             spaces = spaces,
                             selectedIndex = state.selectedIndex,
@@ -192,7 +196,6 @@ fun SpacesBrowserScreen(
                         if (toolbarPlacement == ToolbarPlacement.BOTTOM) {
                             actionBar()
                         }
-                        StatusLine(state = state, onRetry = onRefresh)
                     }
                 } else {
                     if (toolbarPlacement == ToolbarPlacement.BOTTOM) {
@@ -235,9 +238,9 @@ fun SpacesBrowserScreen(
 }
 
 /**
- * A line at the bottom of the dock, shown only when a delete or a refresh
- * over cached spaces failed, so sync problems are visible without a banner.
- * Mirrors iOS `statusLine`.
+ * A quiet line between the content and the space switcher, shown only when a
+ * delete or a refresh over cached spaces failed. Sitting above the switcher
+ * keeps it out of the toolbar; mirrors iOS `statusLine`.
  */
 @Composable
 private fun StatusLine(state: BrowserState, onRetry: () -> Unit) {
@@ -251,7 +254,7 @@ private fun StatusLine(state: BrowserState, onRetry: () -> Unit) {
             textAlign = TextAlign.Center,
             modifier = Modifier
                 .padding(horizontal = 20.dp)
-                .padding(bottom = 6.dp)
+                .padding(bottom = 2.dp)
                 .semantics { liveRegion = LiveRegionMode.Polite },
         )
         state.loadErrorRes != null && !state.loading -> Text(
@@ -260,7 +263,7 @@ private fun StatusLine(state: BrowserState, onRetry: () -> Unit) {
             color = ink.copy(alpha = 0.55f),
             modifier = Modifier
                 .clickable(role = Role.Button, onClick = onRetry)
-                .padding(horizontal = 20.dp, vertical = 6.dp),
+                .padding(horizontal = 20.dp, vertical = 4.dp),
         )
     }
 }

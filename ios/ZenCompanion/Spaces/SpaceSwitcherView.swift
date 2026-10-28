@@ -30,6 +30,13 @@ struct SpaceSwitcher: View {
         itemSize * 0.65
     }
 
+    /// Height of the switcher row, and of the band it sits in. 38 leaves the
+    /// 26pt icons 6pt of air below them — the gap the action bar draws its top
+    /// edge into. The row used to be 40 (9pt of air), which read as a loose
+    /// band between the switcher and the toolbar; the tap target stays as wide
+    /// as `itemSize`.
+    private var rowHeight: CGFloat { 38 }
+
     var body: some View {
         GeometryReader { geo in
             let available = geo.size.width
@@ -50,7 +57,7 @@ struct SpaceSwitcher: View {
                                 }
                             } label: {
                                 itemContent(for: space, isSelected: isSelected)
-                                    .frame(width: itemSize, height: 40)
+                                    .frame(width: itemSize, height: rowHeight)
                                     .contentShape(Rectangle())
                             }
                             .buttonStyle(PressedButtonStyle())
@@ -62,7 +69,7 @@ struct SpaceSwitcher: View {
                     .padding(.horizontal, 20)
                     // Center the row while it fits; grow beyond the screen
                     // (and thus scroll) once there are too many spaces.
-                    .frame(minWidth: available, minHeight: 40, alignment: .center)
+                    .frame(minWidth: available, minHeight: rowHeight, alignment: .center)
                 }
                 .scrollDisabled(!needsScroll)
                 .onChange(of: selectedIndex) { _, newIndex in
@@ -80,9 +87,8 @@ struct SpaceSwitcher: View {
         }
         // Fixed height + clipped: the switcher can never push the parent
         // VStack wider than the screen, no matter how many spaces exist.
-        // 44 keeps the 40pt row plus a 2pt hair of air above and below — the
-        // old 56 reserved an extra 8pt band the bottom placement never used.
-        .frame(height: 44)
+        // Exactly the row: no extra hair above or below it.
+        .frame(height: rowHeight)
         .frame(maxWidth: .infinity, alignment: .center)
         .clipped()
         .animation(.spring(response: 0.25, dampingFraction: 0.8), value: selectedIndex)

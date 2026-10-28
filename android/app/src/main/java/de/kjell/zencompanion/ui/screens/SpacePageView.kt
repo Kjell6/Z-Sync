@@ -67,7 +67,7 @@ internal fun SpacePageView(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
-                .padding(top = 6.dp, bottom = 8.dp),
+                .padding(top = 2.dp, bottom = 8.dp),
         ) {
             if (!space.icon.isNullOrEmpty()) {
                 // Same 28dp slot + 12dp gap as a tab row's favicon, so the
@@ -90,7 +90,7 @@ internal fun SpacePageView(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp),
+            contentPadding = PaddingValues(top = 4.dp, bottom = 10.dp),
         ) {
             for (item in space.pinned) {
                 when (item) {

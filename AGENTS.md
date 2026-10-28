@@ -20,6 +20,10 @@ The whole app is English-only. Never add or keep localizations (de, fr, …) —
 
 Run the full test suite once a complete piece of work is finished **and the user has given the go-ahead to run it**. Do not run the full suite after every intermediate step. Intermediate work should implement and may do a cheap compile check when useful, but must not block on full test runs. Wait for the user's go-ahead, then run the suite once and report the results from that single consolidated run.
 
+The simulator's keychain and app group outlive the app: a simulator left in demo mode feeds the iOS suite demo data, and `ConflictSafeSyncTests` fails on `demo-normal-hn` / space "Work" instead of its own fixtures. Exit demo in the app, or run the suite on a clean simulator.
+
 ## Signing and stores
 
 Do not commit keystores, Team IDs, `.p8` keys, or store credentials. Do not upload to App Store Connect or Google Play. Store releases are maintainer-only. Never bump build or version numbers yourself — that is maintainer-only too.
+
+Current App Store / TestFlight versions and the upload flow: `docs/release.md`. Keep its table current when a build ships.

@@ -66,6 +66,10 @@ fun SpaceSwitcher(
     }
 
     val listState = rememberLazyListState()
+    // Row height. The icons here are smaller than iOS's (22dp vs 26pt), so a
+    // 6dp gap read tighter than the same 6pt there. 38dp leaves 8dp of air,
+    // which matches the gap the iOS switcher shows next to the action bar.
+    val itemHeight = 38.dp
 
     // Keep a restored selection (e.g. index 7 of 8) visible on first composition.
     LaunchedEffect(spaces.size) {
@@ -100,6 +104,7 @@ fun SpaceSwitcher(
                 isSelected = index == selectedIndex,
                 label = space.name.ifEmpty { fallbackName },
                 itemWidth = itemWidth,
+                itemHeight = itemHeight,
                 iconSize = iconSize,
                 onClick = { onSelect(index) },
             )
@@ -113,6 +118,7 @@ private fun SwitcherItem(
     isSelected: Boolean,
     label: String,
     itemWidth: Dp,
+    itemHeight: Dp,
     iconSize: Dp,
     onClick: () -> Unit,
 ) {
@@ -127,7 +133,7 @@ private fun SwitcherItem(
     )
     Box(
         Modifier
-            .size(width = itemWidth, height = 40.dp)
+            .size(width = itemWidth, height = itemHeight)
             .alpha(opacity)
             .clickable(
                 onClick = onClick,

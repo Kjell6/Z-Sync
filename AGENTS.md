@@ -23,3 +23,5 @@ Run the full test suite once a complete piece of work is finished **and the user
 ## Signing and stores
 
 Do not commit keystores, Team IDs, `.p8` keys, or store credentials. Do not upload to App Store Connect or Google Play. Store releases are maintainer-only. Never bump build or version numbers yourself — that is maintainer-only too.
+
+Current App Store / TestFlight versions and the upload flow: `docs/release.md`. Keep its table current when a build ships.

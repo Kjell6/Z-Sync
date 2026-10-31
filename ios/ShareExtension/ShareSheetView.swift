@@ -140,11 +140,17 @@ struct ShareSheetView: View {
                     titleSize: 17,
                     allowsFolders: model.saveKind == .pinned,
                     isEnabled: model.phase != .saving,
+                    inkColor: UIColor(Palette.ink(effectiveScheme)),
                     onSelect: { chosen in
                         model.selectDestination(chosen)
                     }
                 )
-                .padding(.horizontal, 18)
+                // The space icon's art sits inside its 24pt frame with a
+                // transparent margin the system chevron does not have, so an
+                // even pad reads a point heavier on the leading side. 17/18
+                // keeps the white space either side of the pill equal.
+                .padding(.leading, 17)
+                .padding(.trailing, 18)
                 .padding(.vertical, 11)
                 .background(
                     Capsule(style: .continuous)

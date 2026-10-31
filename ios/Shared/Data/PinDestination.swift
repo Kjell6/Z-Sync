@@ -291,6 +291,13 @@ struct PinDestinationMenuButton: UIViewRepresentable {
 
         let fallbackInk = scheme == .dark ? UIColor.white : UIColor(red: 0.1, green: 0.1, blue: 0.12, alpha: 1.0)
         let ink = inkColor ?? fallbackInk
+        // The popup chevron (`config.indicator`) is drawn by UIKit and takes
+        // its color from the button's tint, not from the attributed title, so
+        // without this it stays the system accent blue while every other mark
+        // in the pill is ink. Title and leading icon set their own color, so
+        // only the chevron is affected.
+        button.tintColor = ink
+        config.baseForegroundColor = ink
         let currentSpace = spaces.first(where: { $0.id == destination.spaceId })
         let hasFolder = !(destination.folderId?.isEmpty ?? true)
 

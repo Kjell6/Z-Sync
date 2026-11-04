@@ -94,7 +94,11 @@ enum FxACrypto {
 
 enum SyncError: LocalizedError {
     case crypto(String)
-    case auth(String)
+    /// A Mozilla account failure. `sessionInvalid` is set only when the
+    /// server definitively rejected the stored session (the token itself was
+    /// refused), so signing in again is the only fix. Network failures,
+    /// HTTP 5xx and rate limits stay `false`.
+    case auth(String, sessionInvalid: Bool = false)
     case network(String)
     case notSignedIn
     case totpRequired
@@ -111,12 +115,14 @@ enum SyncError: LocalizedError {
     /// does not know (SPEC §7.5).
     case unsupportedSyncVersion
     /// The storage server rejected the token-server credentials (HTTP 401).
-    /// `AccountStore.withClient` drops them and retries once.
-    case unauthorized
+    /// `AccountStore.withClient` drops them and retries once. `sessionInvalid`
+    /// is false for device-environment rejections (clock skew, stale
+    /// generation) that a new sign-in would not fix.
+    case unauthorized(sessionInvalid: Bool = true)
 
     var errorDescription: String? {
         switch self {
-        case .crypto(let m), .auth(let m), .network(let m): m
+        case .crypto(let m), .auth(let m, _), .network(let m): m
         case .notSignedIn: String(localized: "error.not_signed_in")
         case .totpRequired: String(localized: "error.totp")
         case .storageUnavailable: String(localized: "error.storage_unavailable")
@@ -125,6 +131,21 @@ enum SyncError: LocalizedError {
         case .incompleteRead: String(localized: "error.incomplete_read")
         case .unsupportedSyncVersion: String(localized: "error.unsupported_sync_version")
         case .unauthorized: String(localized: "error.auth")
+        }
+    }
+
+    /// True only when the server definitively rejected the stored Mozilla
+    /// account session, so the app must sign out and ask for a new sign-in.
+    /// Temporary conditions (offline, timeouts, HTTP 5xx, rate limits) and
+    /// recoverable states (TOTP, unverified account) stay `false`.
+    var isSessionInvalid: Bool {
+        switch self {
+        case .auth(_, let sessionInvalid): sessionInvalid
+        // `withClient` retries a storage 401 once with fresh credentials, so
+        // an `unauthorized` that escapes means the fresh credentials were
+        // rejected too. The flag keeps clock-skew/generation rejections out.
+        case .unauthorized(let sessionInvalid): sessionInvalid
+        default: false
         }
     }
 }

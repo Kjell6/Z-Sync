@@ -14,6 +14,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
@@ -100,8 +101,47 @@ class AccountSessionTests {
             fail("expected SyncError.Unauthorized")
         } catch (expected: SyncError.Unauthorized) {
             // Expected: one retry, then the error surfaces.
+            assertTrue(expected.isSessionInvalid)
         }
         assertEquals(2, server.tokenServerCalls)
+    }
+
+    /**
+     * A 401 caused by a device-environment problem is not a revoked session.
+     * Clock skew, a stale credential generation and a node that disabled new
+     * users must never sign the user out: a new sign-in would not fix them.
+     */
+    @Test
+    fun storage401DeviceEnvironmentReasonsDoNotInvalidateSession() {
+        for (reason in listOf("invalid-timestamp", "invalid-generation", "new-users-disabled", "error")) {
+            server.storage401Remaining = 2
+            server.storage401Reason = reason
+            AccountStore.invalidateCreds()
+
+            try {
+                runBlocking { SpacesSyncService.loadSnapshot(context) }
+                fail("$reason: expected SyncError.Unauthorized")
+            } catch (expected: SyncError.Unauthorized) {
+                assertFalse(reason, expected.sessionInvalid)
+            }
+        }
+    }
+
+    /** A bare 401 without the storage node's Hawk challenge (proxy, captive
+     * portal) is not a verdict on the account either. */
+    @Test
+    fun bareStorage401IsNotASessionVerdict() {
+        server.storage401Remaining = 2
+        server.storage401IncludesHawk = false
+        server.storage401Reason = ""
+        AccountStore.invalidateCreds()
+
+        try {
+            runBlocking { SpacesSyncService.loadSnapshot(context) }
+            fail("expected SyncError.Unauthorized")
+        } catch (expected: SyncError.Unauthorized) {
+            assertFalse(expected.sessionInvalid)
+        }
     }
 
     @Test
@@ -153,6 +193,12 @@ private class FxAAndSyncServer(
 
     @Volatile var storage401Remaining = 0
 
+    /** Reason the storage node reports on its 401 (`invalid-timestamp` = clock skew). */
+    @Volatile var storage401Reason = "invalid-credentials"
+
+    /** False simulates a bare 401 from a proxy/captive portal without Hawk material. */
+    @Volatile var storage401IncludesHawk = true
+
     var onTokenServer: (() -> Unit)? = null
 
     @Synchronized
@@ -201,7 +247,20 @@ private class FxAAndSyncServer(
             }
             path.endsWith("/storage/spaces") && storage401Remaining > 0 -> {
                 storage401Remaining--
-                SyncHttpResponse(401, emptyMap(), ByteArray(0))
+                val headers = mutableMapOf<String, String>()
+                if (storage401IncludesHawk) {
+                    headers["www-authenticate"] = "Hawk ts=\"1700000050.00\", ttl=\"60\", nonce=\"dGVzdG5vbmNl\""
+                    headers["x-timestamp"] = "1700000050.00"
+                }
+                SyncHttpResponse(
+                    401,
+                    headers,
+                    if (storage401Reason.isEmpty()) {
+                        ByteArray(0)
+                    } else {
+                        JSONObject().put("status", storage401Reason).toString().toByteArray(Charsets.UTF_8)
+                    },
+                )
             }
             else -> json(JSONArray())
         }

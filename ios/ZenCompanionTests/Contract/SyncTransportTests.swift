@@ -522,10 +522,57 @@ final class SyncTransportTests: XCTestCase {
         }
     }
 
-    /// A 401 that persists after the refresh surfaces instead of looping.
+    /// A 401 that persists after the refresh surfaces instead of looping, and
+    /// tells the app to sign out: refreshing credentials did not help, so the
+    /// stored session is dead.
     func testPersistentStorage401SurfacesAfterOneRetry() async throws {
         let server = FxAAndSyncServer(kB: accountKB, storageKeys: defaultKeys)
         server.storage401Remaining = 10
+        try installAccount(transport: server)
+        defer { restoreAccountStore() }
+        let invalidated = expectation(forNotification: .zenCompanionSessionInvalidated, object: nil)
+
+        do {
+            _ = try await SpacesSyncService.loadSnapshot()
+            XCTFail("expected SyncError.unauthorized")
+        } catch let error as SyncError {
+            guard case .unauthorized = error else { return XCTFail("expected .unauthorized, got \(error)") }
+            XCTAssertTrue(error.isSessionInvalid)
+        }
+        await fulfillment(of: [invalidated], timeout: 1)
+        XCTAssertEqual(server.tokenServerCalls, 2)
+    }
+
+    /// A 401 caused by a device-environment problem is not a revoked session.
+    /// Clock skew, a stale credential generation and a node that disabled new
+    /// users must never sign the user out: a new sign-in would not fix them.
+    func testStorage401DeviceEnvironmentReasonsDoNotInvalidateSession() async throws {
+        for reason in ["invalid-timestamp", "invalid-generation", "new-users-disabled", "error"] {
+            let server = FxAAndSyncServer(kB: accountKB, storageKeys: defaultKeys)
+            server.storage401Remaining = 10
+            server.storage401Reason = reason
+            try installAccount(transport: server)
+            defer { restoreAccountStore() }
+
+            do {
+                _ = try await SpacesSyncService.loadSnapshot()
+                XCTFail("\(reason): expected SyncError.unauthorized")
+            } catch let error as SyncError {
+                guard case .unauthorized(let sessionInvalid) = error else {
+                    return XCTFail("\(reason): expected .unauthorized, got \(error)")
+                }
+                XCTAssertFalse(sessionInvalid, reason)
+            }
+        }
+    }
+
+    /// A bare 401 without the storage node's Hawk challenge (proxy, captive
+    /// portal) is not a verdict on the account either.
+    func testBareStorage401IsNotASessionVerdict() async throws {
+        let server = FxAAndSyncServer(kB: accountKB, storageKeys: defaultKeys)
+        server.storage401Remaining = 10
+        server.storage401IncludesHawk = false
+        server.storage401Reason = ""
         try installAccount(transport: server)
         defer { restoreAccountStore() }
 
@@ -533,9 +580,11 @@ final class SyncTransportTests: XCTestCase {
             _ = try await SpacesSyncService.loadSnapshot()
             XCTFail("expected SyncError.unauthorized")
         } catch let error as SyncError {
-            guard case .unauthorized = error else { return XCTFail("expected .unauthorized, got \(error)") }
+            guard case .unauthorized(let sessionInvalid) = error else {
+                return XCTFail("expected .unauthorized, got \(error)")
+            }
+            XCTAssertFalse(sessionInvalid)
         }
-        XCTAssertEqual(server.tokenServerCalls, 2)
     }
 
     /// Signing out while credentials are being fetched must not leave them
@@ -693,6 +742,12 @@ final class FxAAndSyncServer: SyncHTTPTransport {
     private let storageKeys: SyncCrypto.KeyBundle
     private var _tokenServerCalls = 0
     private var _storage401Remaining = 0
+    /// Reason string the storage node reports on its 401 (`invalid-credentials`
+    /// for a real dead session, `invalid-timestamp` for clock skew, …).
+    var storage401Reason = "invalid-credentials"
+    /// False simulates a bare 401 from a proxy/captive portal without Hawk
+    /// challenge or X-Timestamp.
+    var storage401IncludesHawk = true
     var onTokenServer: (() -> Void)?
 
     init(kB: Data, storageKeys: SyncCrypto.KeyBundle) {
@@ -759,7 +814,17 @@ final class FxAAndSyncServer: SyncHTTPTransport {
                 _storage401Remaining -= 1
                 return true
             }
-            if reject { return SyncHTTPResponse(statusCode: 401, headers: [:], body: Data()) }
+            if reject {
+                var headers: [String: String] = [:]
+                if storage401IncludesHawk {
+                    headers["www-authenticate"] = "Hawk ts=\"1700000050.00\", ttl=\"60\", nonce=\"dGVzdG5vbmNl\""
+                    headers["x-timestamp"] = "1700000050.00"
+                }
+                let body = storage401Reason.isEmpty
+                    ? Data()
+                    : (try? JSONSerialization.data(withJSONObject: ["status": storage401Reason])) ?? Data()
+                return SyncHTTPResponse(statusCode: 401, headers: headers, body: body)
+            }
         }
         return json([] as [Any])
     }

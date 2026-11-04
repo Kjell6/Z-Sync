@@ -364,17 +364,17 @@ final class ContractFixtureTests: XCTestCase {
     }
 
     func testNon103AuthErrorsMapToAuthMessage() {
-        guard case .auth(let message) = FxAClient.authError(
+        guard case .auth(let message, _) = FxAClient.authError(
             status: 400, body: ["errno": 107, "error": "Bad request", "message": "Invalid parameter"]
         ) else { return XCTFail("expected .auth") }
         XCTAssertEqual(message, "Invalid parameter")
 
-        guard case .auth(let fallback) = FxAClient.authError(status: 503, body: ["error": "Service unavailable"]) else {
+        guard case .auth(let fallback, _) = FxAClient.authError(status: 503, body: ["error": "Service unavailable"]) else {
             return XCTFail("expected .auth")
         }
         XCTAssertEqual(fallback, "Service unavailable")
 
-        guard case .auth(let statusText) = FxAClient.authError(status: 500, body: [:]) else {
+        guard case .auth(let statusText, _) = FxAClient.authError(status: 500, body: [:]) else {
             return XCTFail("expected .auth")
         }
         XCTAssertEqual(statusText, "HTTP 500")

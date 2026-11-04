@@ -90,11 +90,13 @@ private fun LandingRoot(viewModel: AppViewModel) {
     val context = LocalContext.current
     var showSignIn by remember { mutableStateOf(false) }
     var showSignInHelp by remember { mutableStateOf(false) }
+    val sessionNotice by viewModel.sessionNotice.collectAsState()
 
     SignInLandingView(
         onOpenSignIn = { showSignIn = true },
         onOpenHelp = { showSignInHelp = true },
         onEnterDemo = { viewModel.enterDemo() },
+        sessionNotice = sessionNotice,
     )
 
     if (showSignIn) {

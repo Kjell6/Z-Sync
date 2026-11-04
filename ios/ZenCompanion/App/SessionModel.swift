@@ -10,6 +10,9 @@ final class SessionModel {
     var saveError: String?
     var showMozilla = false
     var showSignInHelp = false
+    /// Explains an automatic sign-out on the landing screen (e.g. the Mozilla
+    /// account password changed on another device).
+    var sessionNotice: String?
 
     private var demoTapCount = 0
     private var lastDemoTap = Date.distantPast
@@ -18,6 +21,7 @@ final class SessionModel {
     private let spaces: SpacesRepository
     private let preferences: PreferencesStoring
     private let haptics: HapticsPlaying
+    private let signerOut: SessionSigningOut
     private let now: () -> Date
 
     init(
@@ -25,12 +29,14 @@ final class SessionModel {
         spaces: SpacesRepository = AppServices.spaces,
         preferences: PreferencesStoring = AppServices.preferences,
         haptics: HapticsPlaying = AppServices.haptics,
+        signerOut: SessionSigningOut = AppServices.sessionSignerOut,
         now: @escaping () -> Date = Date.init
     ) {
         self.accounts = accounts
         self.spaces = spaces
         self.preferences = preferences
         self.haptics = haptics
+        self.signerOut = signerOut
         self.now = now
     }
 
@@ -44,12 +50,21 @@ final class SessionModel {
         preferences.remove(PreferenceKeys.didDismissSyncSetupHint, scope: .standard)
     }
 
+    /// The stored session was rejected by the server: sign out and explain
+    /// why on the landing screen. Temporary sync failures never come here.
+    func sessionExpired() {
+        signerOut.signOut()
+        signedOut()
+        sessionNotice = String(localized: "session.expired")
+    }
+
     /// Called after `MozillaSignInView` finished. Never enters the signed-in
     /// state when the secret could not be persisted securely.
     func completeSignIn(_ snapshot: AccountSnapshot) {
         do {
             try accounts.save(snapshot)
             account = snapshot
+            sessionNotice = nil
         } catch {
             saveError = error.zenUserMessage
         }
@@ -87,5 +102,6 @@ final class SessionModel {
         spaces.cache(DemoCatalog.snapshot)
         try? accounts.save(snap)
         account = snap
+        sessionNotice = nil
     }
 }

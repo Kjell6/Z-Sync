@@ -3,6 +3,7 @@ package de.kjell.zencompanion
 import android.content.ContextWrapper
 import android.content.SharedPreferences
 import de.kjell.zencompanion.data.AccountStore
+import de.kjell.zencompanion.data.AppEvents
 import de.kjell.zencompanion.data.DemoCatalog
 import de.kjell.zencompanion.data.EssentialsColumns
 import de.kjell.zencompanion.data.SaveKind
@@ -21,9 +22,11 @@ import de.kjell.zencompanion.ui.BrowserRepository
 import de.kjell.zencompanion.ui.LoginCompleter
 import de.kjell.zencompanion.ui.PreferencesRepository
 import de.kjell.zencompanion.ui.PreferencesState
+import androidx.lifecycle.viewModelScope
 import de.kjell.zencompanion.ui.screens.FxAWebLogin
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -52,6 +55,9 @@ class AppViewModelTests {
 
     private val context = FakeAppContext()
     private lateinit var secure: FakeSecurePrefsStore
+    /** Every VM built here, so its app-wide event collectors cannot leak into
+     * a later test class after this class's Main dispatcher is reset. */
+    private val createdViewModels = mutableListOf<AppViewModel>()
 
     @Before
     fun setUp() {
@@ -64,6 +70,8 @@ class AppViewModelTests {
 
     @After
     fun tearDown() {
+        createdViewModels.forEach { it.viewModelScope.cancel() }
+        createdViewModels.clear()
         AccountStore.resetForTests()
         AccountStore.restoreDefaultFactoriesForTests()
         SnapshotCache.invalidateMemory()
@@ -83,15 +91,17 @@ class AppViewModelTests {
         activity: ActivityRepository = FakeActivityRepository(),
         whatsNew: WhatsNewRepository = FakeWhatsNewRepository(),
         appVersion: String = "1.5",
+        revokeSession: suspend (String) -> Unit = {},
     ) = AppViewModel(
         context,
         login,
         browser,
         preferences,
         activity,
+        revokeSession = revokeSession,
         whatsNewRepository = whatsNew,
         appVersion = appVersion,
-    )
+    ).also { createdViewModels += it }
 
     @Test
     fun completeWebLoginSuccessSetsSession() = runTest(mainDispatcherRule.testDispatcher) {
@@ -150,6 +160,22 @@ class AppViewModelTests {
 
         assertTrue(thrown?.cause is SyncError.StorageUnavailable)
         assertNull(vm.session.value)
+    }
+
+    @Test
+    fun sessionExpirySignsOutAndExplainsWhy() = runTest(mainDispatcherRule.testDispatcher) {
+        AccountStore.save(context, snapshot())
+        val vm = newViewModel()
+        vm.bootstrap()
+        runCurrent()
+        assertEquals("uid-1", vm.session.value?.uid)
+
+        AppEvents.emitSessionExpired()
+        advanceUntilIdle()
+
+        assertNull(vm.session.value)
+        assertEquals(R.string.session_expired, vm.sessionNotice.value)
+        assertFalse(AccountStore.isSignedIn(context))
     }
 
     @Test

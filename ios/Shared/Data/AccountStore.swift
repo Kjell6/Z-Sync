@@ -151,12 +151,35 @@ enum AccountStore {
     /// safe. The legacy multi-PUT paths (safe-sync off) are the exception: a
     /// 401 on a later PUT leaves the earlier ones applied, and the retry
     /// cannot tell that apart from a cold call.
+    ///
+    /// When a failure proves the stored account session is dead, the app is
+    /// told via `.zenCompanionSessionInvalidated` so it can sign out and show
+    /// the sign-in screen instead of a passive error line.
     static func withClient<T>(_ operation: (SyncClient) async throws -> T) async throws -> T {
         do {
             return try await operation(try await connect())
-        } catch SyncError.unauthorized {
-            invalidateCreds()
-            return try await operation(try await connect())
+        } catch {
+            if let sync = error as? SyncError, case .unauthorized = sync {
+                invalidateCreds()
+                do {
+                    return try await operation(try await connect())
+                } catch {
+                    reportIfSessionInvalid(error)
+                    throw error
+                }
+            }
+            reportIfSessionInvalid(error)
+            throw error
+        }
+    }
+
+    private static func reportIfSessionInvalid(_ error: Error) {
+        guard let sync = error as? SyncError, sync.isSessionInvalid else { return }
+        os_log("AccountStore: account session rejected; signing out", log: .default, type: .error)
+        // Sync work resumes off the main actor; deliver the event where the
+        // session owner lives.
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .zenCompanionSessionInvalidated, object: nil)
         }
     }
 
@@ -202,6 +225,15 @@ enum AccountStore {
         fileStore.remove(legacyFileURL)
         fileStore.remove(legacyCredsURL)
     }
+}
+
+// MARK: - Session events
+
+extension Notification.Name {
+    /// Posted by `AccountStore.withClient` when the server definitively
+    /// rejected the stored Mozilla account session. The app signs out and
+    /// lands on the sign-in screen with an explanation.
+    static let zenCompanionSessionInvalidated = Notification.Name("zenCompanionSessionInvalidated")
 }
 
 // MARK: - Default stores

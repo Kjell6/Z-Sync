@@ -2,6 +2,7 @@ package de.kjell.zencompanion.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -56,6 +57,8 @@ fun SignInLandingView(
     onOpenSignIn: () -> Unit,
     onOpenHelp: () -> Unit = {},
     onEnterDemo: () -> Unit = {},
+    /** Explains an automatic sign-out, e.g. an expired Mozilla account session. */
+    @StringRes sessionNotice: Int? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -121,6 +124,22 @@ fun SignInLandingView(
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 24.dp),
         )
+
+        if (sessionNotice != null) {
+            Text(
+                text = stringResource(sessionNotice),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
+                        RoundedCornerShape(12.dp),
+                    )
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+            )
+        }
 
         Spacer(Modifier.weight(1f))
 

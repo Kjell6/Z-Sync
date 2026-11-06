@@ -44,6 +44,13 @@ struct MiniBrowserChrome<NavBar: View>: View {
     var onPickSuggestion: (String) -> Void
     /// Opens the overview of the open pages.
     var onOpenPages: () -> Void
+    /// The overview is up. The dock stays in place and its outer controls turn
+    /// into the overview's: one set of buttons, never two stacked on each other.
+    var overviewShown = false
+    /// Whether a page is open behind the overview, so there is a browser to leave.
+    var onNewPage: () -> Void = {}
+    var onDone: () -> Void = {}
+    var onCloseAll: () -> Void = {}
     /// The navigation bar. It stays in place while the menu grows above it.
     @ViewBuilder var navBar: () -> NavBar
 
@@ -103,24 +110,23 @@ struct MiniBrowserChrome<NavBar: View>: View {
             }
 
             navBar()
+                .opacity(overviewShown ? 0 : 1)
+                .allowsHitTesting(!overviewShown)
+                .accessibilityHidden(overviewShown)
 
             if !addressEditing {
                 HStack(spacing: 10) {
-                    pagesButton
+                    leadingControl
                     Spacer(minLength: 0)
                     // Closes the mini-browser.
                     closeButton
                     Spacer(minLength: 0)
-                    dockButton(
-                        systemName: "ellipsis",
-                        label: menuOpen ? "browser.close_menu" : "browser.more"
-                    ) {
-                        withAnimation(motion) { onToggleMenu() }
-                    }
+                    trailingControl
                 }
                 // Pulls the outer buttons inwards. The navigation bar above
                 // keeps its full width.
                 .padding(.horizontal, 7)
+                .transition(.opacity)
             }
         }
         // No `GlassEffectContainer` around the chrome on purpose. A container
@@ -180,18 +186,82 @@ struct MiniBrowserChrome<NavBar: View>: View {
         .accessibilityElement(children: .contain)
     }
 
-    /// The overview, with the number of open pages.
-    private var pagesButton: some View {
+    /// The open pages, or a new one once the overview is up. One piece of
+    /// glass: only what is printed on it changes.
+    private var leadingControl: some View {
         let count = pages.pages.count
-        return Button(action: onOpenPages) {
-            PageCountBadge(count: count)
-                .foregroundStyle(Palette.ink(scheme))
-                .frame(width: controlSide, height: controlSide)
-                .contentShape(Capsule())
-                .floatingGlassCapsule()
+        return ZStack {
+            Button(action: onOpenPages) {
+                PageCountBadge(count: count)
+                    .foregroundStyle(Palette.ink(scheme))
+                    .frame(width: controlSide, height: controlSide)
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(GlassPressStyle())
+            .opacity(overviewShown ? 0 : 1)
+            .allowsHitTesting(!overviewShown)
+            .accessibilityHidden(overviewShown)
+            .accessibilityLabel(Text("browser.page_count \(count)"))
+
+            Button(action: onNewPage) {
+                Image(systemName: "plus")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Palette.ink(scheme))
+                    .frame(width: controlSide, height: controlSide)
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(GlassPressStyle())
+            .opacity(overviewShown ? 1 : 0)
+            .allowsHitTesting(overviewShown)
+            .accessibilityHidden(!overviewShown)
+            .accessibilityLabel(Text("kept.new_page"))
         }
-        .buttonStyle(GlassPressStyle())
-        .accessibilityLabel(Text("browser.page_count \(count)"))
+        .floatingGlassCapsule()
+    }
+
+    /// The page menu, or Done once the overview is up. A long press on Done
+    /// closes everything, as a long press on Safari's Done does.
+    private var trailingControl: some View {
+        ZStack {
+            Button {
+                withAnimation(motion) { onToggleMenu() }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Palette.ink(scheme))
+                    .frame(width: controlSide, height: controlSide)
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(GlassPressStyle())
+            .opacity(overviewShown ? 0 : 1)
+            .allowsHitTesting(!overviewShown)
+            .accessibilityHidden(overviewShown)
+            .accessibilityLabel(Text(menuOpen ? "browser.close_menu" : "browser.more"))
+
+            Menu {
+                Button(role: .destructive, action: onCloseAll) {
+                    Label {
+                        Text("kept.close_all")
+                    } icon: {
+                        Image(systemName: "xmark")
+                    }
+                }
+                .disabled(pages.pages.isEmpty)
+            } label: {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Palette.ink(scheme))
+                    .frame(width: controlSide, height: controlSide)
+                    .contentShape(Capsule())
+            } primaryAction: {
+                onDone()
+            }
+            .opacity(overviewShown ? 1 : 0)
+            .allowsHitTesting(overviewShown)
+            .accessibilityHidden(!overviewShown)
+            .accessibilityLabel(Text("common.done"))
+        }
+        .floatingGlassCapsule()
     }
 
     /// Smaller than the side buttons, as the middle control of the row.
@@ -208,25 +278,6 @@ struct MiniBrowserChrome<NavBar: View>: View {
         }
         .buttonStyle(GlassPressStyle())
         .accessibilityLabel(Text("browser.close"))
-    }
-
-    private func dockButton(
-        systemName: String,
-        label: LocalizedStringKey? = nil,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(Palette.ink(scheme))
-                .frame(width: controlSide, height: controlSide)
-                .contentShape(Capsule())
-                // Same as the close control: the glass is the button, so it has
-                // to answer the finger as a whole.
-                .floatingGlassCapsule()
-        }
-        .buttonStyle(GlassPressStyle())
-        .accessibilityLabel(Text(label ?? LocalizedStringKey(systemName)))
     }
 
     // MARK: - Expanded menu

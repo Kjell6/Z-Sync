@@ -10,8 +10,9 @@ struct OverviewCardFrames: PreferenceKey {
     }
 }
 
-/// Every open page as a card, full screen over the browser,
-/// the way Safari lays out its tabs. A card opens with a tap and closes with
+/// Every open page as a card, the way Safari lays out its tabs. It sits between
+/// the page and the browser's dock, which stays on screen and changes its
+/// controls, so the two never stack. A card opens with a tap and closes with
 /// its X or a swipe; long press has the rest.
 struct OpenPagesOverview: View {
     let pages: OpenPagesStore
@@ -24,12 +25,11 @@ struct OpenPagesOverview: View {
     var excludedCardID: String?
     /// Where the cards sit on screen, so a page can zoom into one.
     var onCardFrames: ([String: CGRect]) -> Void
+    /// Height of the browser's dock, which stays over the overview.
+    var bottomClearance: CGFloat
     var onOpen: (OpenPage) -> Void
-    var onNewPage: () -> Void
-    var onDone: () -> Void
 
     @Environment(\.colorScheme) private var scheme
-    @State private var confirmCloseAll = false
     @State private var pinError: String?
     /// The card being dragged to a new place.
     @State private var draggedID: String?
@@ -38,35 +38,20 @@ struct OpenPagesOverview: View {
     private let columns = [GridItem(.adaptive(minimum: 150, maximum: 260), spacing: 16)]
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if pages.pages.isEmpty {
-                    emptyState
-                } else {
-                    grid
-                }
+        ZStack {
+            Color(uiColor: .systemGroupedBackground)
+                .ignoresSafeArea()
+                // Nothing reaches the browser underneath.
+                .contentShape(Rectangle())
+                .onTapGesture {}
+
+            if pages.pages.isEmpty {
+                emptyState
+            } else {
+                grid
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
-            .onPreferenceChange(OverviewCardFrames.self, perform: onCardFrames)
-            .toolbar(.hidden, for: .navigationBar)
-            .toolbar { bottomBar }
-            .toolbarBackground(.hidden, for: .bottomBar)
         }
-        .tint(Color.primary)
-        .confirmationDialog(
-            Text("kept.close_all_title"),
-            isPresented: $confirmCloseAll,
-            titleVisibility: .visible
-        ) {
-            Button(role: .destructive) {
-                withAnimation(.spring(duration: 0.3, bounce: 0)) { pages.closeAll() }
-            } label: {
-                Text("kept.close_all")
-            }
-        } message: {
-            Text("kept.close_all_message")
-        }
+        .onPreferenceChange(OverviewCardFrames.self, perform: onCardFrames)
         .alert(
             Text("browser.pin_failed"),
             isPresented: Binding(get: { pinError != nil }, set: { if !$0 { pinError = nil } })
@@ -105,67 +90,28 @@ struct OpenPagesOverview: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.top, 12)
+
+                lifetimeNote
+                    .padding(.top, 18)
+                    .padding(.bottom, 12)
             }
+            .safeAreaPadding(.bottom, bottomClearance)
             .onAppear {
                 if let id = pages.activeID { proxy.scrollTo(id, anchor: .center) }
             }
         }
     }
 
-    // MARK: - Bottom bar
-
-    /// The system's own toolbar, so buttons, glass and the home indicator's
-    /// space are the platform's. Long press on the check closes everything,
-    /// as a long press on Safari's Done does.
-    @ToolbarContentBuilder
-    private var bottomBar: some ToolbarContent {
-        ToolbarItem(placement: .bottomBar) {
-            Button(action: onNewPage) {
-                Image(systemName: "plus")
-            }
-            .accessibilityLabel(Text("kept.new_page"))
+    /// A small note under the cards, so nothing closes by surprise.
+    private var lifetimeNote: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "archivebox")
+            Text(verbatim: pages.lifetimeHint)
         }
-
-        // Says what happens to the pages, so nothing closes by surprise. Plain
-        // text: on glass it would read as a button.
-        if #available(iOS 26.0, *) {
-            lifetimeHint.sharedBackgroundVisibility(.hidden)
-        } else {
-            lifetimeHint
-        }
-
-        ToolbarItem(placement: .bottomBar) {
-            Menu {
-                Button(role: .destructive) {
-                    confirmCloseAll = true
-                } label: {
-                    Label {
-                        Text("kept.close_all")
-                    } icon: {
-                        Image(systemName: "xmark")
-                    }
-                }
-                .disabled(pages.pages.isEmpty)
-            } label: {
-                Image(systemName: "checkmark")
-            } primaryAction: {
-                onDone()
-            }
-            .accessibilityLabel(Text("common.done"))
-        }
-    }
-
-    private var lifetimeHint: some ToolbarContent {
-        ToolbarItem(placement: .status) {
-            HStack(spacing: 5) {
-                Image(systemName: "archivebox")
-                Text(verbatim: pages.lifetimeHint)
-            }
-            .font(.footnote)
-            .foregroundStyle(Color.secondary)
-            .lineLimit(1)
-        }
+        .font(.footnote)
+        .foregroundStyle(Color.secondary)
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Empty
@@ -361,6 +307,7 @@ private struct OpenPageCard<Menu: View>: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .opacity(hidesPicture ? 0 : 1)
                     .accessibilityLabel(Text("kept.close_page_named \(page.title)"))
                 }
                 .contentShape(.contextMenuPreview, shape)

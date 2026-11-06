@@ -1,14 +1,18 @@
 package de.kjell.zencompanion.ui.screens
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -22,7 +26,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
@@ -87,6 +91,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.SolidColor
@@ -106,6 +111,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
@@ -172,6 +178,9 @@ private val RowHeight = 44.dp
 private val TileHeight = 60.dp
 private val PanelInset = 14.dp
 private val RowGap = 8.dp
+
+/** The bar turning into the composer, and the dock fading as it does. */
+private const val BarMorphMs = 160
 /** How far the dock drops into the gesture area: the safe area is not touched,
  * only the slack above it is used up. */
 private val BottomLift = 15.dp
@@ -222,6 +231,8 @@ internal fun MiniBrowserBar(
     addressText: TextFieldValue,
     onAddressTextChange: (TextFieldValue) -> Unit,
     focusRequester: FocusRequester,
+    /** The composer is on the keyboard, on its way up or down. */
+    ridesKeyboard: Boolean,
     onAddressFocusedChange: (Boolean) -> Unit,
     onBeginAddressEdit: () -> Unit,
     onCancelAddressEdit: () -> Unit,
@@ -313,63 +324,87 @@ internal fun MiniBrowserBar(
             }
         }
 
-        if (state.isAddressFocused) {
-            // Part of the address editing state: the list sits in the space
-            // above the composer, on the same plate, and goes away with it.
-            if (state.suggestions.isNotEmpty()) {
-                SuggestionPanel(
-                    suggestions = state.suggestions,
-                    onSelect = onPickSuggestion,
-                )
-            }
-            // The bar rides on the keyboard while typing; the dock would only
-            // sit under the keys.
-            ComposerBar(
-                addressText = addressText,
-                onAddressTextChange = onAddressTextChange,
-                focusRequester = focusRequester,
-                onAddressFocusedChange = onAddressFocusedChange,
-                onSubmitAddress = onSubmitAddress,
-                onCancel = onCancelAddressEdit,
-                barColor = barColor,
+        // Part of the address editing state: the list sits in the space
+        // above the composer, on the same plate, and goes away with it.
+        if (state.isAddressFocused && state.suggestions.isNotEmpty()) {
+            SuggestionPanel(
+                suggestions = state.suggestions,
+                onSelect = onPickSuggestion,
             )
-        } else {
-            SwipeableNavBar(swipe = swipe) {
-            NavBar(
-                canGoBack = state.canGoBack || canReturnToOpener,
-                canGoForward = state.canGoForward,
-                effectiveUrl = effectiveUrl,
-                title = state.currentTitle,
-                isLoading = state.isLoading,
-                progress = state.progress,
-                onBack = if (state.canGoBack) onBack else onReturnToOpener,
-                onForward = onForward,
-                onReload = onReload,
-                onStop = onStop,
-                onBeginAddressEdit = onBeginAddressEdit,
-                barColor = barColor,
-            )
-            }
+        }
 
-            Dock(
-                menuOpen = state.menuExpanded,
-                ink = zen.ink,
-                pageCount = pageCount,
-                onOpenPages = onOpenPages,
-                onClose = onClose,
-                onToggleMenu = {
-                    if (state.menuExpanded) viewModel.collapseMenu() else viewModel.toggleMenu()
-                },
-            )
+        // The bar turns into the composer in place.
+        Crossfade(
+            targetState = state.isAddressFocused,
+            animationSpec = tween(BarMorphMs),
+            label = "addressBar",
+        ) { composing ->
+            if (composing) {
+                ComposerBar(
+                    addressText = addressText,
+                    onAddressTextChange = onAddressTextChange,
+                    focusRequester = focusRequester,
+                    onAddressFocusedChange = onAddressFocusedChange,
+                    onSubmitAddress = onSubmitAddress,
+                    onCancel = onCancelAddressEdit,
+                    barColor = barColor,
+                )
+            } else {
+                SwipeableNavBar(swipe = swipe) {
+                    NavBar(
+                        canGoBack = state.canGoBack || canReturnToOpener,
+                        canGoForward = state.canGoForward,
+                        effectiveUrl = effectiveUrl,
+                        title = state.currentTitle,
+                        isLoading = state.isLoading,
+                        progress = state.progress,
+                        onBack = if (state.canGoBack) onBack else onReturnToOpener,
+                        onForward = onForward,
+                        onReload = onReload,
+                        onStop = onStop,
+                        onBeginAddressEdit = onBeginAddressEdit,
+                        barColor = barColor,
+                    )
+                }
+            }
         }
 
         val navigationInset = WindowInsets.navigationBars
             .asPaddingValues()
             .calculateBottomPadding()
-        // While the composer rides the keyboard, the gesture area is behind it:
-        // only a small gap keeps the row off the keys.
-        val imeVisible = WindowInsets.isImeVisible
-        Spacer(Modifier.height(if (imeVisible) 8.dp else barBottomGap(navigationInset)))
+        val keyboard = WindowInsets.ime
+        val dockAlpha by animateFloatAsState(
+            targetValue = if (state.isAddressFocused) 0f else 1f,
+            animationSpec = tween(BarMorphMs),
+            label = "dockAlpha",
+        )
+        // The dock's room stays when the composer takes over: the keyboard
+        // uses it up as it rises, so the bar holds its place until the keys
+        // reach it and goes up in one move, never down first. Once it rides
+        // them, only a small gap keeps the row off the keys.
+        Box(
+            Modifier.layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
+                val resting = (DockSide + RowGap + barBottomGap(navigationInset)).roundToPx()
+                val lifted = if (ridesKeyboard) keyboard.getBottom(this) else 0
+                val height = if (lifted > 0) maxOf(resting - lifted, 8.dp.roundToPx()) else resting
+                layout(constraints.maxWidth, height) { placeable.place(0, 0) }
+            },
+        ) {
+            if (dockAlpha > 0f) {
+                Dock(
+                    modifier = Modifier.graphicsLayer { alpha = dockAlpha },
+                    menuOpen = state.menuExpanded,
+                    ink = zen.ink,
+                    pageCount = pageCount,
+                    onOpenPages = onOpenPages,
+                    onClose = onClose,
+                    onToggleMenu = {
+                        if (state.menuExpanded) viewModel.collapseMenu() else viewModel.toggleMenu()
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -683,6 +718,7 @@ private fun NavGlyph(
 
 @Composable
 private fun Dock(
+    modifier: Modifier = Modifier,
     menuOpen: Boolean,
     ink: Color,
     pageCount: Int,
@@ -691,7 +727,7 @@ private fun Dock(
     onToggleMenu: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = DockInset),
         verticalAlignment = Alignment.CenterVertically,
@@ -712,15 +748,7 @@ private fun Dock(
 
         Spacer(Modifier.weight(1f))
 
-        // The only way out of the mini-browser.
-        DockButton(
-            icon = Icons.Outlined.Close,
-            description = stringResource(R.string.browser_close),
-            tint = ink,
-            width = CloseWidth,
-            height = CloseHeight,
-            onClick = onClose,
-        )
+        LeaveBrowserButton(ink = ink, onClick = onClose)
 
         Spacer(Modifier.weight(1f))
 
@@ -733,6 +761,66 @@ private fun Dock(
     }
 }
 
+/** The way out of the browser. */
+@Composable
+private fun LeaveBrowserButton(ink: Color, onClick: () -> Unit) {
+    DockButton(
+        icon = Icons.Outlined.Close,
+        description = stringResource(R.string.browser_close),
+        tint = ink,
+        width = CloseWidth,
+        height = CloseHeight,
+        onClick = onClick,
+    )
+}
+
+/**
+ * The overview's controls, drawn exactly where the browser's dock has its own.
+ * The two fade into each other as the overview opens, so nothing may move:
+ * only the outer glyphs change, and the close control looks like it stayed.
+ */
+@Composable
+internal fun OverviewDock(
+    onNewPage: () -> Unit,
+    onDone: () -> Unit,
+    onDoneLongPress: () -> Unit,
+    onLeave: () -> Unit,
+    doneMenu: @Composable () -> Unit,
+) {
+    val zen = LocalZenColors.current
+    val navigationInset = WindowInsets.navigationBars
+        .asPaddingValues()
+        .calculateBottomPadding()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            // The browser's bar spaces its rows with RowGap, the gap below the dock included.
+            .padding(start = 16.dp + DockInset, end = 16.dp + DockInset, bottom = barBottomGap(navigationInset) + RowGap),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        DockButton(
+            icon = Icons.Outlined.Add,
+            description = stringResource(R.string.kept_new_page),
+            tint = zen.ink,
+            onClick = onNewPage,
+        )
+        Spacer(Modifier.weight(1f))
+        LeaveBrowserButton(ink = zen.ink, onClick = onLeave)
+        Spacer(Modifier.weight(1f))
+        Box {
+            DockButton(
+                icon = Icons.Outlined.Check,
+                description = stringResource(R.string.common_done),
+                tint = zen.ink,
+                onLongClick = onDoneLongPress,
+                onClick = onDone,
+            )
+            doneMenu()
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DockButton(
     icon: ImageVector,
@@ -740,6 +828,7 @@ private fun DockButton(
     tint: Color,
     width: androidx.compose.ui.unit.Dp = DockSide,
     height: androidx.compose.ui.unit.Dp = DockSide,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     val zen = LocalZenColors.current
@@ -749,7 +838,13 @@ private fun DockButton(
             .height(height)
             .background(zen.lift, DockShape)
             .border(liftBorder(), DockShape)
-            .barClickable(onClick = onClick),
+            .then(
+                if (onLongClick != null) {
+                    Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                } else {
+                    Modifier.barClickable(onClick = onClick)
+                },
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Icon(

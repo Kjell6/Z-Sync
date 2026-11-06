@@ -41,6 +41,7 @@ struct MiniBrowserView: View {
     @State private var safeBottom: CGFloat = Self.windowSafeBottom()
     /// The overview is up, over the page and the chrome.
     @State private var showOverview: Bool
+    @State private var confirmCloseAll = false
     /// Fades the overview while a page zooms into or out of it.
     @State private var overviewVisible: Bool
     /// The picture flying between the full page and its card.
@@ -93,9 +94,14 @@ struct MiniBrowserView: View {
 
     /// The bar rides above the keyboard while the address is edited, so the
     /// text being typed stays visible. Otherwise it sits on the screen bottom.
+    /// The dock leaves before the keyboard has moved, so the bar holds its
+    /// place until the keyboard reaches it: it goes up in one move, never
+    /// down first.
     private var chromeBottomInset: CGFloat {
-        if addressEditing, keyboardOverlap > 1 { return keyboardOverlap + 10 }
-        return chromeBottomPadding
+        guard addressEditing else { return chromeBottomPadding }
+        let aboveDock = chromeBottomPadding + MiniBrowserChromeMetrics.dockHeight
+            + MiniBrowserChromeMetrics.rowSpacing
+        return max(aboveDock, keyboardOverlap + 10)
     }
 
     /// Air between the controls and the physical bottom. The home indicator
@@ -108,6 +114,7 @@ struct MiniBrowserView: View {
     /// up. Editing the address, an open menu and a live toast keep it in place.
     private var barCollapsed: Bool {
         guard model.scrollHidesBar,
+              !showOverview,
               !addressEditing,
               !model.menuExpanded,
               model.pinNotice == nil else { return false }
@@ -144,45 +151,10 @@ struct MiniBrowserView: View {
         barBackground.isDarkBackground ? .dark : .light
     }
 
-    /// The browser, the overview above it and the picture flying between them.
-    /// The overview sits outside the browser's own stack: the page runs to the
-    /// screen edge, the overview keeps the safe areas.
+    /// Bottom to top: the page, the overview, the picture flying between them,
+    /// and the chrome. The dock stays on top of it all, so a page zooming into
+    /// its card passes under the buttons, never over them.
     var body: some View {
-        ZStack {
-            // Only with a page to show. The browser must not stand in for one,
-            // not even for the frame between the overview going and the cover
-            // closing: from home there is no page behind it at all.
-            if pages.active != nil {
-                browser
-            }
-
-            if showOverview {
-                overview
-                    .opacity(overviewVisible ? 1 : 0)
-            }
-
-            heroLayer
-        }
-        .presentationBackground(pages.active == nil ? Color(uiColor: .systemGroupedBackground) : barBackground)
-        .onChange(of: pageSwipe) { _, offset in
-            if offset < 0, pages.neighbours.next == nil, !revealingNewPage { revealingNewPage = true }
-        }
-        .onChange(of: pages.activeID) { _, id in
-            guard id != nil else {
-                // The overview stays up empty, like Safari's; its Done goes.
-                if !showOverview { onDismiss() }
-                return
-            }
-            activePageChanged()
-        }
-        .onDisappear {
-            // The cover can go without the close button, for one with the
-            // session. Whatever is still open ends the same way.
-            if pages.activeID != nil { pages.endBrowserSession() }
-        }
-    }
-
-    private var browser: some View {
         NavigationStack {
             ZStack {
                 ZStack {
@@ -232,11 +204,18 @@ struct MiniBrowserView: View {
                     paneWidth = $0.width
                 }
 
+                if showOverview {
+                    overview
+                        .opacity(overviewVisible ? 1 : 0)
+                }
+
+                heroLayer
+
                 // The page runs out into a soft blur at the bottom instead of
                 // stopping against the controls.
                 PageBottomFade()
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .opacity(barCollapsed ? 0 : 1)
+                    .opacity(barCollapsed || showOverview ? 0 : 1)
                     .animation(barMotion, value: barCollapsed)
 
                 if let notice = model.pinNotice {
@@ -257,6 +236,16 @@ struct MiniBrowserView: View {
                     addressEditing: addressEditing,
                     onPickSuggestion: pickSuggestion,
                     onOpenPages: openOverview,
+                    overviewShown: overviewVisible,
+                    onNewPage: openNewPage,
+                    onDone: {
+                        if let page = pages.active {
+                            closeOverview(to: page)
+                        } else {
+                            onDismiss()
+                        }
+                    },
+                    onCloseAll: { confirmCloseAll = true },
                     navBar: {
                         MiniBrowserTopBar(
                             model: model,
@@ -279,13 +268,44 @@ struct MiniBrowserView: View {
                 .padding(.bottom, chromeBottomInset)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 .offset(y: barCollapsed ? 220 : 0)
-                .opacity(barCollapsed ? 0 : 1)
-                .accessibilityHidden(barCollapsed || showOverview)
+                // With nothing left to show, the cover is on its way out.
+                .opacity(barCollapsed || (pages.active == nil && !showOverview) ? 0 : 1)
+                .accessibilityHidden(barCollapsed)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .background(sheetBackground.ignoresSafeArea())
             .ignoresSafeArea(edges: .bottom)
             .ignoresSafeArea(.keyboard)
+            .presentationBackground(pages.active == nil ? Color(uiColor: .systemGroupedBackground) : barBackground)
+            .confirmationDialog(
+                Text("kept.close_all_title"),
+                isPresented: $confirmCloseAll,
+                titleVisibility: .visible
+            ) {
+                Button(role: .destructive) {
+                    withAnimation(.spring(duration: 0.3, bounce: 0)) { pages.closeAll() }
+                } label: {
+                    Text("kept.close_all")
+                }
+            } message: {
+                Text("kept.close_all_message")
+            }
+            .onChange(of: pageSwipe) { _, offset in
+                if offset < 0, pages.neighbours.next == nil, !revealingNewPage { revealingNewPage = true }
+            }
+            .onChange(of: pages.activeID) { _, id in
+                guard id != nil else {
+                    // The overview stays up empty, like Safari's; its Done goes.
+                    if !showOverview { onDismiss() }
+                    return
+                }
+                activePageChanged()
+            }
+            .onDisappear {
+                // The cover can go without the close button, for one with the
+                // session. Whatever is still open ends the same way.
+                if pages.activeID != nil { pages.endBrowserSession() }
+            }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
                 let overlap = Self.keyboardOverlap(from: note)
                 withAnimation(Self.keyboardAnimation(from: note)) {
@@ -304,7 +324,8 @@ struct MiniBrowserView: View {
             .tint(Palette.ink(scheme))
             .onAppear {
                 safeBottom = Self.windowSafeBottom()
-                if model.opensWithSearch {
+                // Opened from home for the overview, no page has asked for this.
+                if pages.active != nil, model.opensWithSearch {
                     isAddressFocused = true
                 }
                 Task { @MainActor in
@@ -355,15 +376,8 @@ struct MiniBrowserView: View {
             hiddenCardID: hiddenCardID,
             excludedCardID: overviewHoldsCards ? pages.activeID : nil,
             onCardFrames: { cardFrames = $0 },
-            onOpen: closeOverview(to:),
-            onNewPage: openNewPage,
-            onDone: {
-                if let page = pages.active {
-                    closeOverview(to: page)
-                } else {
-                    onDismiss()
-                }
-            }
+            bottomClearance: MiniBrowserChromeMetrics.dockHeight + chromeBottomPadding + 12,
+            onOpen: closeOverview(to:)
         )
     }
 
@@ -499,12 +513,13 @@ private extension MiniBrowserView {
     }
 
     /// Another page came on screen: the chrome starts over for it, in one
-    /// step. A new page goes straight into the address field.
+    /// step. A new page goes straight into the address field, the same way a
+    /// tap on the bar does: the bar opens up while the keyboard comes.
     private func activePageChanged() {
-        holdChromeAnimation()
         if isAddressFocused { isAddressFocused = false }
         keyboardOverlap = 0
         guard model.opensWithSearch else {
+            holdChromeAnimation()
             editingAddress = false
             startsInSearch = false
             model.restoreAddressDisplay()
@@ -606,7 +621,6 @@ private extension MiniBrowserView {
 
     /// A blank page takes over under the overview, which then fades away.
     private func openNewPage() {
-        holdChromeAnimation()
         // The grid stays as it was while it fades: no card joins it on the way out.
         overviewHoldsCards = true
         pages.open(url: nil)

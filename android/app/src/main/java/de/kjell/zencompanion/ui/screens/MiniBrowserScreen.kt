@@ -75,6 +75,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -129,7 +130,7 @@ import de.kjell.zencompanion.util.Haptics
 import de.kjell.zencompanion.util.PageTitle
 import kotlin.math.abs
 import kotlin.math.roundToInt
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /** Mutable scroll bookkeeping: read on every packet, never rendered directly. */
@@ -311,6 +312,18 @@ fun MiniBrowserScreen(
                             }
                         }
                     },
+                    onLeave = {
+                        if (pages.active != null) {
+                            pages.leaveBrowser()
+                            onDismiss()
+                        } else {
+                            // Over home nothing is open behind it, only the overview goes.
+                            scope.launch {
+                                overviewAlpha.animateTo(0f, tween(200))
+                                showOverview = false
+                            }
+                        }
+                    },
                     onPin = { page, destination ->
                         scope.launch {
                             val kind = if (browserRepository.cachedSnapshot?.normalTabsCapability == ZenSpaces.NormalTabsCapability.ENABLED) {
@@ -388,6 +401,7 @@ private fun BrowserPageScreen(
     val pageSwipe = remember { Animatable(0f) }
     // At the end of a swipe the plate already shows the new page's color.
     var colorJumps by remember { mutableStateOf(false) }
+    val shownSession by rememberUpdatedState(session)
     var paneWidth by remember { mutableIntStateOf(0) }
     val pageGapPx = with(LocalDensity.current) { PageGap.toPx() }
     /** The link a long press is asking about. */
@@ -446,7 +460,6 @@ private fun BrowserPageScreen(
     LaunchedEffect(session.id) {
         if (session.opensWithSearch) {
             session.opensWithSearch = false
-            delay(200)
             viewModel.beginAddressEdit()
         }
     }
@@ -633,18 +646,27 @@ private fun BrowserPageScreen(
                     Haptics.perform(context, Haptics.Kind.SELECTION)
                     pageSwipe.animateTo(
                         if (moved < 0) -span else span,
-                        spring(stiffness = 500f),
+                        PageSpring,
                         initialVelocity = velocity,
                     )
-                    // No frame between these: the page is already where it belongs.
                     colorJumps = true
-                    if (target != null) pages.activate(target.id) else pages.open(null)
+                    val arriving = if (target != null) {
+                        pages.activate(target.id)
+                        target.id
+                    } else {
+                        pages.open(null).id
+                    }
+                    // The old page only comes off the swipe once the new one
+                    // has taken over, its color included. Any earlier and the
+                    // old page is back on screen for a moment.
+                    while (shownSession.id != arriving) withFrameNanos { }
+                    withFrameNanos { }
                     pageSwipe.snapTo(0f)
                     withFrameNanos { }
                     withFrameNanos { }
                     colorJumps = false
                 } else {
-                    pageSwipe.animateTo(0f, spring(stiffness = 500f), initialVelocity = velocity)
+                    pageSwipe.animateTo(0f, PageSpring, initialVelocity = velocity)
                 }
             }
         },
@@ -667,6 +689,19 @@ private fun BrowserPageScreen(
             val imeHeight = with(LocalDensity.current) {
                 WindowInsets.ime.getBottom(this).toDp()
             }
+            // The composer goes back down on the keyboard it came up on.
+            val keyboard = WindowInsets.ime
+            val density = LocalDensity.current
+            var keyboardCarriesBar by remember { mutableStateOf(false) }
+            LaunchedEffect(state.isAddressFocused) {
+                if (state.isAddressFocused) {
+                    keyboardCarriesBar = true
+                } else {
+                    snapshotFlow { keyboard.getBottom(density) }.first { it == 0 }
+                    keyboardCarriesBar = false
+                }
+            }
+            val ridesKeyboard = state.isAddressFocused || keyboardCarriesBar
             Column(Modifier.fillMaxSize()) {
             // Page pane: the page ends where the collapsed bar begins. The open
             // menu draws over the page instead of pushing it up.
@@ -793,7 +828,7 @@ private fun BrowserPageScreen(
                     .align(Alignment.BottomCenter)
                     // Only the address composer rides the keyboard. A page
                     // field must not push the whole bar up into the page.
-                    .then(if (state.isAddressFocused) Modifier.imePadding() else Modifier),
+                    .then(if (ridesKeyboard) Modifier.imePadding() else Modifier),
             ) {
                 ZenTheme(darkTheme = barIsDark) {
                     MiniBrowserBar(
@@ -813,6 +848,7 @@ private fun BrowserPageScreen(
                         addressText = state.addressText,
                         onAddressTextChange = viewModel::onAddressTextChange,
                         focusRequester = focusRequester,
+                        ridesKeyboard = ridesKeyboard,
                         onAddressFocusedChange = viewModel::onAddressFocusChange,
                         onBeginAddressEdit = viewModel::beginAddressEdit,
                         onCancelAddressEdit = {
@@ -945,6 +981,13 @@ private fun BrowserPageScreen(
 
 // MARK: - Pages
 
+/**
+ * Pages settle on this. It ends once they stop visibly moving: the spring's
+ * own threshold keeps it going for half a second after that, with the bar
+ * waiting on it.
+ */
+private val PageSpring = spring<Float>(stiffness = 500f, visibilityThreshold = 3f)
+
 /** The plate color a page brings with it. */
 private fun peekColor(session: PageSession, surface: Color): Color {
     val state = session.viewModel.state.value
@@ -985,7 +1028,8 @@ private fun PageStack(
     val previousId = openPages.getOrNull(index - 1)?.id
     val nextId = openPages.getOrNull(index + 1)?.id
     val currentActive by rememberUpdatedState(active)
-    val surface = MaterialTheme.colorScheme.surface
+    // A blank page is the bare plate, so the sheet arrives in its color.
+    val surface = MaterialTheme.colorScheme.surface.nudgedForBar()
     val pageCorners = RoundedCornerShape(28.dp)
 
     // What waits past the last page: not a page yet, so it does not pretend to

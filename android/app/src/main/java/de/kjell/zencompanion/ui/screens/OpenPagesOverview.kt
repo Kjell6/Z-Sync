@@ -7,12 +7,10 @@ import androidx.annotation.StringRes
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -26,12 +24,12 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -39,10 +37,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.ContentCopy
@@ -53,7 +49,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -112,7 +107,6 @@ private val CardShape = RoundedCornerShape(18.dp)
  * the way Safari lays out its tabs (port of iOS `OpenPagesOverview`). A card
  * opens with a tap and closes with its X or a swipe; long press has the rest.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun OpenPagesOverview(
     pages: BrowserPages,
@@ -128,6 +122,8 @@ internal fun OpenPagesOverview(
     onOpen: (OpenPage) -> Unit,
     onNewPage: () -> Unit,
     onDone: () -> Unit,
+    /** Back to the spaces, the same way out as the browser's own close control. */
+    onLeave: () -> Unit,
     onPin: (OpenPage, PinDestination) -> Unit,
     onShare: (OpenPage) -> Unit,
 ) {
@@ -238,58 +234,38 @@ internal fun OpenPagesOverview(
                                 ),
                         )
                     }
+                    // A small note under the cards, so nothing closes by surprise.
+                    item(key = "lifetime-note", span = { GridItemSpan(maxLineSpan) }) {
+                        Row(
+                            modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
+                        ) {
+                            Icon(
+                                Icons.Outlined.Inventory2,
+                                contentDescription = null,
+                                tint = zen.ink.copy(alpha = 0.6f),
+                                modifier = Modifier.size(14.dp),
+                            )
+                            Text(
+                                text = stringResource(lifetimeHint(pages.lifetime())),
+                                style = ZenType.rounded(12, FontWeight.Normal),
+                                color = zen.ink.copy(alpha = 0.6f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        // A plain bar on the system's own controls, above the navigation
-        // inset. New page on the left and Done on the right, where Safari has them.
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .height(56.dp)
-                .padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            IconButton(onClick = onNewPage) {
-                Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.kept_new_page), tint = zen.ink)
-            }
-            // Says what happens to the pages, so nothing closes by surprise.
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
-            ) {
-                Icon(
-                    Icons.Outlined.Inventory2,
-                    contentDescription = null,
-                    tint = zen.ink.copy(alpha = 0.6f),
-                    modifier = Modifier.size(15.dp),
-                )
-                Text(
-                    text = stringResource(lifetimeHint(pages.lifetime())),
-                    style = ZenType.rounded(13, FontWeight.Normal),
-                    color = zen.ink.copy(alpha = 0.6f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            // Long press closes everything, as a long press on Safari's Done does.
-            Box {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .combinedClickable(
-                            onClick = onDone,
-                            onLongClick = { if (openPages.isNotEmpty()) menuOpen = true },
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(Icons.Outlined.Check, contentDescription = stringResource(R.string.common_done), tint = zen.ink)
-                }
+        OverviewDock(
+            onNewPage = onNewPage,
+            onDone = onDone,
+            onDoneLongPress = { if (openPages.isNotEmpty()) menuOpen = true },
+            onLeave = onLeave,
+            doneMenu = {
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.kept_close_all), color = MaterialTheme.colorScheme.error) },
@@ -299,8 +275,8 @@ internal fun OpenPagesOverview(
                         },
                     )
                 }
-            }
-        }
+            },
+        )
     }
 
     if (confirmCloseAll) {
@@ -326,7 +302,6 @@ internal fun OpenPagesOverview(
 }
 
 /** One page: its picture with a close button, its name underneath. A sideways swipe throws it away. */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun OpenPageCard(
     page: OpenPage,

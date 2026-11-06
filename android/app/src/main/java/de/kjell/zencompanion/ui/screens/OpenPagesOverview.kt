@@ -40,7 +40,7 @@ import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Share
@@ -245,7 +245,7 @@ internal fun OpenPagesOverview(
                             horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
                         ) {
                             Icon(
-                                Icons.Outlined.Inventory2,
+                                Icons.Outlined.Schedule,
                                 contentDescription = null,
                                 tint = zen.ink.copy(alpha = 0.6f),
                                 modifier = Modifier.size(14.dp),

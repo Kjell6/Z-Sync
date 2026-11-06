@@ -2195,7 +2195,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Auto-archive off"
+            "value": "Auto-close off"
           }
         }
       }
@@ -2205,7 +2205,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Auto-archive after 1 day"
+            "value": "Auto-close after 1 day"
           }
         }
       }
@@ -2215,7 +2215,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Auto-archive after 7 days"
+            "value": "Auto-close after 7 days"
           }
         }
       }
@@ -2225,7 +2225,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Auto-archive after 30 days"
+            "value": "Auto-close after 30 days"
           }
         }
       }
@@ -2235,7 +2235,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Auto-archive"
+            "value": "Auto-close"
           }
         }
       }

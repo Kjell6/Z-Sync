@@ -142,7 +142,7 @@
     <string name="settings_open_into_search">Open into search</string>
     <string name="settings_keep_only_chosen">Keep only chosen pages</string>
     <string name="settings_keep_only_chosen_subtitle">Other pages close with the browser</string>
-    <string name="settings_kept_lifetime">Auto-archive</string>
+    <string name="settings_kept_lifetime">Auto-close</string>
     <string name="settings_kept_lifetime_never">Never</string>
     <string name="settings_kept_lifetime_day">After a day</string>
     <string name="settings_kept_lifetime_week">After a week</string>
@@ -211,10 +211,10 @@
     <string name="kept_close_all_message">They are removed from this phone. Tabs in your spaces stay.</string>
     <string name="kept_empty_title">No open pages</string>
     <string name="kept_empty_message">Tap + to open a page.</string>
-    <string name="kept_hint_never">Auto-archive off</string>
-    <string name="kept_hint_day">Auto-archive after 1 day</string>
-    <string name="kept_hint_week">Auto-archive after 7 days</string>
-    <string name="kept_hint_month">Auto-archive after 30 days</string>
+    <string name="kept_hint_never">Auto-close off</string>
+    <string name="kept_hint_day">Auto-close after 1 day</string>
+    <string name="kept_hint_week">Auto-close after 7 days</string>
+    <string name="kept_hint_month">Auto-close after 30 days</string>
     <string name="kept_pin_to_space">Pin to space</string>
     <string name="kept_copy_link">Copy link</string>
     <string name="kept_close_page">Close page</string>

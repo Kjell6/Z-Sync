@@ -106,7 +106,7 @@ struct OpenPagesOverview: View {
     /// A small note under the cards, so nothing closes by surprise.
     private var lifetimeNote: some View {
         HStack(spacing: 5) {
-            Image(systemName: "archivebox")
+            Image(systemName: "clock")
             Text(verbatim: pages.lifetimeHint)
         }
         .font(.footnote)

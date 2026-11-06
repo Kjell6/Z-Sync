@@ -357,6 +357,10 @@ final class MiniBrowserModel {
     var addressText: String = ""
     /// Suggestions for the text being typed. Empty hides the list.
     var suggestions: [String] = []
+    /// Pages from the history for the same text, above the suggestions.
+    var historySuggestions: [BrowserVisit] = []
+    /// The history sheet is up.
+    var historyShown = false
     /// Set while a suggestion was just chosen or the field was submitted, so
     /// the text change that follows does not send another suggest request.
     @ObservationIgnored private var suggestionsSuspended = false
@@ -787,6 +791,18 @@ final class MiniBrowserModel {
         load(url: url)
     }
 
+    /// A page from the history opens here, as a typed address would.
+    func openVisit(_ visit: BrowserVisit) {
+        suggestionsSuspended = true
+        cancelSuggestionRequest()
+        guard let url = URL(string: visit.url) else { return }
+        load(url: url)
+    }
+
+    func recordVisit(title: String) {
+        BrowserHistoryStore.shared.record(currentURL, title: title)
+    }
+
     /// Asks for suggestions when [isEditing] and the text is a search query.
     /// A URL, blank text, a custom engine, or a closed field sends nothing.
     func refreshSuggestions(isEditing: Bool) {
@@ -798,6 +814,8 @@ final class MiniBrowserModel {
         // Keep the current list until the new answer arrives, so it does not
         // flicker on every keystroke.
         cancelSuggestionRequest(keepingList: true)
+        // Local, so it answers right away and also for a typed address.
+        historySuggestions = BrowserHistoryStore.shared.suggestions(for: addressText, excluding: currentURL)
         guard let url = SearchSuggestions.requestURL(for: addressText, engine: searchEngine.current) else {
             suggestions = []
             return
@@ -832,8 +850,9 @@ final class MiniBrowserModel {
         suggestionTask?.cancel()
         suggestionTask = nil
         suggestionGeneration += 1
-        if !keepingList, !suggestions.isEmpty {
-            suggestions = []
+        if !keepingList {
+            if !suggestions.isEmpty { suggestions = [] }
+            if !historySuggestions.isEmpty { historySuggestions = [] }
         }
     }
 

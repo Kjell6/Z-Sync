@@ -239,6 +239,7 @@ struct LiveSessionSigningOut: SessionSigningOut {
         FaviconLoader.shared.removeAll()
         OpenPagesStore.shared.closeAll()
         SitePermissionStore.shared.removeAll()
+        BrowserHistoryStore.shared.removeAll()
         SpacesSyncService.deleteCachedSnapshot()
         NotificationCenter.default.post(name: .zenCompanionSignedOut, object: nil)
     }

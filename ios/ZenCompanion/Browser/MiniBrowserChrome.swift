@@ -42,6 +42,8 @@ struct MiniBrowserChrome<NavBar: View>: View {
     var addressEditing = false
     /// A tapped suggestion goes through the same submit path as typed text.
     var onPickSuggestion: (String) -> Void
+    /// A page from the history, picked from the list.
+    var onPickVisit: (BrowserVisit) -> Void
     /// Opens the overview of the open pages.
     var onOpenPages: () -> Void
     /// The overview is up. The dock stays in place and its outer controls turn
@@ -94,7 +96,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
 
             // Only while the address field is open. The list grows out of the
             // bar the same way the page menu does, and shares its glass.
-            if addressEditing, !model.suggestions.isEmpty {
+            if addressEditing, !model.suggestions.isEmpty || !model.historySuggestions.isEmpty {
                 suggestionList
                     .frame(maxWidth: .infinity)
                     .fixedSize(horizontal: false, vertical: true)
@@ -143,6 +145,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
         .animation(motion, value: model.menuExpanded)
         .animation(motion, value: model.menuSiteSettings)
         .animation(motion, value: model.suggestions)
+        .animation(motion, value: model.historySuggestions)
         // Chrome, not content: the rows have fixed 44pt metrics, so type stops
         // at the first accessibility size instead of overflowing the bar.
         .dynamicTypeSize(...DynamicTypeSize.accessibility1)
@@ -155,6 +158,41 @@ struct MiniBrowserChrome<NavBar: View>: View {
     /// above the bar that only exists while typing.
     private var suggestionList: some View {
         VStack(spacing: 0) {
+            ForEach(model.historySuggestions) { visit in
+                Button {
+                    onPickVisit(visit)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "clock")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Palette.ink(scheme).opacity(0.45))
+                            .frame(width: 22, height: 22)
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(verbatim: visit.title.isEmpty ? visit.host : visit.title)
+                                .zenFont(16, weight: .medium, design: .rounded)
+                                .foregroundStyle(Palette.ink(scheme))
+                                .lineLimit(1)
+                            Text(verbatim: visit.displayAddress)
+                                .zenFont(13, design: .rounded)
+                                .foregroundStyle(Palette.ink(scheme).opacity(0.6))
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.horizontal, 20)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                    .overlay(alignment: .bottom) {
+                        if visit != model.historySuggestions.last || !model.suggestions.isEmpty {
+                            Rectangle()
+                                .fill(Color.primary.opacity(0.08))
+                                .frame(height: 0.5)
+                                .padding(.leading, 52)
+                        }
+                    }
+                }
+                .buttonStyle(SuggestionPressStyle())
+            }
             ForEach(Array(model.suggestions.enumerated()), id: \.offset) { index, suggestion in
                 Button {
                     onPickSuggestion(suggestion)
@@ -393,6 +431,9 @@ struct MiniBrowserChrome<NavBar: View>: View {
 
             // Its own card: one destination, not a group.
             siteSettingsRow
+                .liftCard(scheme)
+
+            historyRow
                 .liftCard(scheme)
 
             actionRow
@@ -749,6 +790,31 @@ struct MiniBrowserChrome<NavBar: View>: View {
         }
         .buttonStyle(CardPressStyle())
         .liftCard(scheme)
+    }
+
+    private var historyRow: some View {
+        Button {
+            model.collapseMenu()
+            model.historyShown = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "clock")
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: 24)
+                    .foregroundStyle(Color.primary)
+                Text("history.title")
+                    .zenFont(16, weight: .medium, design: .rounded)
+                    .foregroundStyle(Color.primary)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.primary.opacity(0.35))
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(CardPressStyle())
     }
 
     private var siteSettingsRow: some View {

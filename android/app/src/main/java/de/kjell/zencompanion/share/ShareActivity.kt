@@ -11,6 +11,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import de.kjell.zencompanion.ui.theme.ZenTheme
 import de.kjell.zencompanion.util.Haptics
 
 /**
@@ -27,47 +28,49 @@ class ShareActivity : ComponentActivity() {
         val (sharedUrl, title) = extractShared()
 
         setContent {
-            val context = LocalContext.current
-            val viewModel: ShareViewModel = viewModel(
-                factory = ShareViewModel.Factory(
-                    repository = AndroidShareRepository(applicationContext),
-                    initialUrl = sharedUrl,
-                    initialPageTitle = title,
-                ),
-            )
-            val state by viewModel.state.collectAsState()
+            ZenTheme {
+                val context = LocalContext.current
+                val viewModel: ShareViewModel = viewModel(
+                    factory = ShareViewModel.Factory(
+                        repository = AndroidShareRepository(applicationContext),
+                        initialUrl = sharedUrl,
+                        initialPageTitle = title,
+                    ),
+                )
+                val state by viewModel.state.collectAsState()
 
-            LaunchedEffect(viewModel) {
-                viewModel.events.collect { event ->
-                    if (event is ShareViewModel.Event.Finished) finishFlow()
+                LaunchedEffect(viewModel) {
+                    viewModel.events.collect { event ->
+                        if (event is ShareViewModel.Event.Finished) finishFlow()
+                    }
                 }
-            }
 
-            // Port of the original save feedback: CONFIRM on success, REJECT
-            // on failure (the 480ms auto-close lives in the ViewModel).
-            LaunchedEffect(state.phase) {
-                when (state.phase) {
-                    SharePhase.saved -> Haptics.perform(context, Haptics.Kind.CONFIRM)
-                    SharePhase.failed -> Haptics.perform(context, Haptics.Kind.REJECT)
-                    else -> Unit
+                // Port of the original save feedback: CONFIRM on success, REJECT
+                // on failure (the 480ms auto-close lives in the ViewModel).
+                LaunchedEffect(state.phase) {
+                    when (state.phase) {
+                        SharePhase.saved -> Haptics.perform(context, Haptics.Kind.CONFIRM)
+                        SharePhase.failed -> Haptics.perform(context, Haptics.Kind.REJECT)
+                        else -> Unit
+                    }
                 }
-            }
 
-            ShareScreen(
-                url = state.url,
-                pageTitle = state.pageTitle,
-                spaces = state.spaces,
-                selected = state.destination,
-                phase = state.phase,
-                errorText = state.errorText,
-                saveKind = state.saveKind,
-                savedAsPinnedFallback = state.savedAsPinnedFallback,
-                allowsNormalTabs = state.allowsNormalTabs,
-                onSelectDestination = viewModel::selectDestination,
-                onSelectSaveKind = viewModel::selectSaveKind,
-                onSave = viewModel::save,
-                onCancel = viewModel::cancel,
-            )
+                ShareScreen(
+                    url = state.url,
+                    pageTitle = state.pageTitle,
+                    spaces = state.spaces,
+                    selected = state.destination,
+                    phase = state.phase,
+                    errorText = state.errorText,
+                    saveKind = state.saveKind,
+                    savedAsPinnedFallback = state.savedAsPinnedFallback,
+                    allowsNormalTabs = state.allowsNormalTabs,
+                    onSelectDestination = viewModel::selectDestination,
+                    onSelectSaveKind = viewModel::selectSaveKind,
+                    onSave = viewModel::save,
+                    onCancel = viewModel::cancel,
+                )
+            }
         }
     }
 

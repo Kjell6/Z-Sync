@@ -14,7 +14,7 @@ enum Palette {
     static func background(_ scheme: ColorScheme) -> Color {
         scheme == .dark
             ? Color(red: 31 / 255, green: 31 / 255, blue: 31 / 255)
-            : Color(red: 251 / 255, green: 251 / 255, blue: 254 / 255)
+            : Color(red: 252 / 255, green: 250 / 255, blue: 246 / 255)
     }
 
     /// The paper base under a space. A space without its own colour shows

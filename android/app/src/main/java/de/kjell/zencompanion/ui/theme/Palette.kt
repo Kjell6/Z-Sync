@@ -25,7 +25,7 @@ val PaperLight = Color(0xFFF3ECE6)
 val PaperDark = Color(0xFF1F1F1F)
 /** The normal surface for chrome, sheets and pages; the warmer paper stays
  *  the base of a space without its own colour. */
-val BackgroundLight = Color(0xFFFBFBFE)
+val BackgroundLight = Color(0xFFFCFAF6)
 val InkLight = Color(0xFF2E2E2E)
 val InkDark = Color(0xFFF3ECE6)
 val ErrorLight = Color(0xFFBA1A1A)

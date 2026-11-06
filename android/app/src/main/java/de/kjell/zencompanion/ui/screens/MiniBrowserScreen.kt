@@ -573,6 +573,16 @@ private fun BrowserPageScreen(
         }
     }
 
+    if (state.historyVisible) {
+        BrowserHistoryScreen(
+            onOpen = { visit ->
+                viewModel.closeHistory()
+                openAddressTarget(viewModel.selectVisit(visit))
+            },
+            onClose = viewModel::closeHistory,
+        )
+    }
+
     fun finishAddressEdit() {
         focusManager.clearFocus()
         keyboardController?.hide()
@@ -908,6 +918,10 @@ private fun BrowserPageScreen(
                         },
                         onPickSuggestion = { suggestion ->
                             openAddressTarget(viewModel.selectSuggestion(suggestion))
+                            finishAddressEdit()
+                        },
+                        onPickVisit = { visit ->
+                            openAddressTarget(viewModel.selectVisit(visit))
                             finishAddressEdit()
                         },
                         // A page that failed to load has nothing worth pinning.

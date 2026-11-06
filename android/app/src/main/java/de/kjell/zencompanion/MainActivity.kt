@@ -287,6 +287,7 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
                 de.kjell.zencompanion.ui.screens.FxAWeb.wipeWebSession()
                 pages.closeAll()
                 de.kjell.zencompanion.data.SitePermissions.clear()
+                de.kjell.zencompanion.data.BrowserHistory.clear()
                 viewModel.signOut()
             },
             onOpenWhatsNew = {

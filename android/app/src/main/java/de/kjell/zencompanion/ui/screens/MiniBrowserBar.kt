@@ -86,6 +86,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -123,6 +124,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
+import de.kjell.zencompanion.data.BrowserVisit
 import de.kjell.zencompanion.data.SitePermission
 import de.kjell.zencompanion.data.SitePermissionChoice
 import de.kjell.zencompanion.data.SitePermissions
@@ -251,6 +253,7 @@ internal fun MiniBrowserBar(
     /** False while a page error covers the page: there is nothing to pin. */
     canPin: Boolean = true,
     onPickSuggestion: (String) -> Unit,
+    onPickVisit: (BrowserVisit) -> Unit,
     onBack: () -> Unit,
     onForward: () -> Unit,
     onReload: () -> Unit,
@@ -337,9 +340,11 @@ internal fun MiniBrowserBar(
 
         // Part of the address editing state: the list sits in the space
         // above the composer, on the same plate, and goes away with it.
-        if (state.isAddressFocused && state.suggestions.isNotEmpty()) {
+        if (state.isAddressFocused && (state.suggestions.isNotEmpty() || state.historySuggestions.isNotEmpty())) {
             SuggestionPanel(
+                visits = state.historySuggestions,
                 suggestions = state.suggestions,
+                onSelectVisit = onPickVisit,
                 onSelect = onPickSuggestion,
             )
         }
@@ -886,7 +891,9 @@ private fun DockButton(
  */
 @Composable
 private fun SuggestionPanel(
+    visits: List<BrowserVisit>,
     suggestions: List<String>,
+    onSelectVisit: (BrowserVisit) -> Unit,
     onSelect: (String) -> Unit,
 ) {
     val zen = LocalZenColors.current
@@ -895,6 +902,41 @@ private fun SuggestionPanel(
             .fillMaxWidth()
             .pane(DockShape, zen.lift),
     ) {
+        visits.forEachIndexed { index, visit ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = RowHeight)
+                    .barClickable { onSelectVisit(visit) }
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Schedule,
+                    contentDescription = null,
+                    tint = zen.ink.copy(alpha = 0.45f),
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = visit.title.ifEmpty { visit.host },
+                        style = ZenType.rounded(16, FontWeight.Medium),
+                        color = zen.ink,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = visit.displayAddress,
+                        style = ZenType.rounded(13, FontWeight.Normal),
+                        color = zen.ink.copy(alpha = 0.6f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            if (index < visits.lastIndex || suggestions.isNotEmpty()) RowDivider()
+        }
         suggestions.forEachIndexed { index, suggestion ->
             Row(
                 modifier = Modifier
@@ -1164,6 +1206,21 @@ private fun ExpandedMenu(
                 )
             },
             onClick = viewModel::openSiteSettings,
+        )
+
+        MenuRow(
+            icon = Icons.Outlined.Schedule,
+            title = stringResource(R.string.history_title),
+            tint = zen.ink,
+            trailing = {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = zen.ink.copy(alpha = 0.5f),
+                    modifier = Modifier.size(20.dp),
+                )
+            },
+            onClick = viewModel::openHistory,
         )
 
         Row(

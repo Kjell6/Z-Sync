@@ -493,7 +493,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
 
     func pageProcessDidTerminate(_ model: MiniBrowserModel) -> Bool {
         guard let page = pages.first(where: { $0.model === model }), page.id != activeID else { return false }
-        model.sleep()
+        putToSleep(page)
         return true
     }
 
@@ -535,8 +535,9 @@ final class OpenPagesStore: MiniBrowserPageHost {
     private func writeShot(_ image: UIImage, of page: OpenPage) {
         guard let data = image.jpegData(compressionQuality: 0.72) else { return }
         ensureDirectory()
-        let file = fileURL(page.id, "jpg")
-        Task.detached(priority: .utility) { try? data.write(to: file, options: .atomic) }
+        // On the main actor, like the removal: a write still under way could
+        // otherwise bring back the file of a page that just went.
+        try? data.write(to: fileURL(page.id, "jpg"), options: .atomic)
     }
 
     // MARK: - History

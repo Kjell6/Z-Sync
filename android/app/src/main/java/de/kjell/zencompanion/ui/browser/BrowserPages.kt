@@ -340,9 +340,17 @@ class BrowserPages(
         } ?: return
         session.history = bundle
         if (store.page(session.id)?.isKept == true) {
-            val id = session.id
-            val file = store.historyFile(id)
-            writes.launch { if (store.page(id) != null) writeHistory(file, bundle) }
+            val file = store.historyFile(session.id)
+            writeKept(session.id, file) { writeHistory(file, bundle) }
+        }
+    }
+
+    /** Nothing of a page outlasts its keeping, whichever comes first. */
+    private fun writeKept(id: String, file: File, write: () -> Unit) {
+        writes.launch {
+            if (store.page(id)?.isKept != true) return@launch
+            write()
+            if (store.page(id)?.isKept != true) file.delete()
         }
     }
 
@@ -383,8 +391,7 @@ class BrowserPages(
 
     private fun writeShot(id: String, bitmap: Bitmap) {
         val target = store.snapshotFile(id)
-        writes.launch {
-            if (store.page(id) == null) return@launch
+        writeKept(id, target) {
             runCatching {
                 target.parentFile?.mkdirs()
                 val temp = File(target.path + ".tmp")

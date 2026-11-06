@@ -53,7 +53,7 @@ fun SyncSetupSheet(
         Column(
             Modifier
                 .fillMaxSize()
-                .background(colors.paper)
+                .background(colors.background)
                 .statusBarsPadding()
                 .navigationBarsPadding(),
         ) {

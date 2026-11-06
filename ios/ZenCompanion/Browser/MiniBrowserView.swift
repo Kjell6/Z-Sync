@@ -88,17 +88,17 @@ struct MiniBrowserView: View {
         reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.35, dampingFraction: 0.86)
     }
 
-    /// A page without a theme color takes the app's paper, so the browser
-    /// starts in the same background the Settings sheet uses. The web view
+    /// A page without a theme color takes the app's normal background, so the
+    /// browser starts on the same surface as the Settings sheet. The web view
     /// paints its own page over it.
     private var defaultBackground: Color {
-        Palette.paper(scheme)
+        Palette.background(scheme)
     }
 
     /// The page's own color, or the error panel's while it covers the page:
     /// the failed load leaves the previous page's color behind.
     private var sheetBackground: Color {
-        if model.pageError != nil { return Palette.paper(scheme) }
+        if model.pageError != nil { return Palette.background(scheme) }
         return model.themeColor ?? defaultBackground
     }
 
@@ -451,7 +451,7 @@ private struct ReaderView: View {
             .frame(maxWidth: 680, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
-        .background(Palette.paper(scheme))
+        .background(Palette.background(scheme))
         .accessibilityLabel(Text("browser.reader"))
     }
 

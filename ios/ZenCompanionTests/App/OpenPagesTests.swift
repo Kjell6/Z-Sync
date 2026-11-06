@@ -48,6 +48,26 @@ final class OpenPagesTests: XCTestCase {
         XCTAssertNil(linked.openerID)
     }
 
+    func testLoadedPageSurvivesTheAppEndingWithoutWarning() {
+        let directory = tempDirectory()
+        let pages = store(directory: directory)
+        let loaded = pages.open(url: a, title: "A")
+
+        pages.pageDidFinishLoading(loaded.model)
+
+        XCTAssertEqual(store(directory: directory).pages.map(\.url), [a])
+    }
+
+    func testLoadedPageIsNotSavedWhenOnlyChosenPagesStay() {
+        let directory = tempDirectory()
+        let pages = store(directory: directory, preferences: choosing())
+        let loaded = pages.open(url: a, title: "A")
+
+        pages.pageDidFinishLoading(loaded.model)
+
+        XCTAssertTrue(store(directory: directory).pages.isEmpty)
+    }
+
     func testPagesStayWhenTheBrowserCloses() {
         let directory = tempDirectory()
         let pages = store(directory: directory)

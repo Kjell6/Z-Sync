@@ -70,6 +70,8 @@ internal fun MiniBrowserWebView(
     /** Long press on a web link. */
     onLinkLongPress: (String) -> Unit,
     onLoadingChange: (Boolean) -> Unit,
+    /** The document finished loading. */
+    onPageLoaded: () -> Unit,
     onSiteThemeColorChange: (Color?) -> Unit,
     onCurrentUrlChange: (String) -> Unit,
     onCanGoBackChange: (Boolean) -> Unit,
@@ -171,6 +173,7 @@ internal fun MiniBrowserWebView(
                         view?.title?.let { onTitleChange(it) }
                         onCanGoBackChange(view?.canGoBack() == true)
                         onCanGoForwardChange(view?.canGoForward() == true)
+                        onPageLoaded()
 
                         // Extract theme-color / background from web page DOM
                         val js = """

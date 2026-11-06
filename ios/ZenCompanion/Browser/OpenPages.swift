@@ -469,8 +469,13 @@ final class OpenPagesStore: MiniBrowserPageHost {
         persist()
     }
 
+    /// A page that stays is saved as soon as it has loaded, not only when the
+    /// browser closes: the app can end at any moment without saying so.
     func pageDidFinishLoading(_ model: MiniBrowserModel) {
-        guard let page = active, page.model === model else { return }
+        guard let page = pages.first(where: { $0.model === model }) else { return }
+        saveIfItStays(page)
+        saveHistory(of: page)
+        guard page.id == activeID else { return }
         Task { await capture(page) }
     }
 

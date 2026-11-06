@@ -292,6 +292,12 @@ class BrowserPages(
         keptShotsToDisk()
     }
 
+    /** A page that stays is saved now: the app can end without saying so. */
+    fun pageLoaded(session: PageSession) {
+        store.promote(session.id, keepEveryPage(), ::exit)
+        saveHistory(session)
+    }
+
     /** The app went to the background and may not come back. */
     fun appWentToBackground() {
         store.promote(keepEveryPage(), ::exit)

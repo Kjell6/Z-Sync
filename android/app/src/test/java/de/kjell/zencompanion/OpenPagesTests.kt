@@ -252,6 +252,28 @@ class OpenPagesTests {
     }
 
     @Test
+    fun aLoadedPageSurvivesTheAppEndingWithoutWarning() {
+        val pages = store()
+        val loaded = pages.open(a)
+        val blank = pages.open("")
+
+        pages.promote(loaded.id, keepEveryPage = true) { exit }
+        pages.promote(blank.id, keepEveryPage = true) { exit }
+
+        assertEquals(listOf(loaded.id), store().pages.value.map { it.id })
+    }
+
+    @Test
+    fun aLoadedPageIsNotSavedWhenOnlyChosenPagesStay() {
+        val pages = store()
+        val loaded = pages.open(a)
+
+        pages.promote(loaded.id, keepEveryPage = false) { exit }
+
+        assertEquals(emptyList<String>(), store().pages.value.map { it.id })
+    }
+
+    @Test
     fun aFailedPinLeavesThePageItsOwn() {
         val pages = store()
         val page = pages.open(a)

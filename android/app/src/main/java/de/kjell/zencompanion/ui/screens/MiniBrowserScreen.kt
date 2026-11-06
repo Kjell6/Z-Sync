@@ -1157,6 +1157,7 @@ private fun PageStack(
                         },
                         onCloseWindow = { pages.close(session.id) },
                         onLinkLongPress = onLinkLongPress,
+                        onPageLoaded = { pages.pageLoaded(session) },
                         onLoadingChange = { loading ->
                             viewModel.onLoadingChange(loading)
                             if (!loading) {

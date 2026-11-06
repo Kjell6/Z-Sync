@@ -256,20 +256,27 @@ class OpenPagesStore(
      * store cannot know about a page: whether it failed and has history.
      */
     fun promote(keepEveryPage: Boolean, leaving: (OpenPage) -> PageExit) {
-        for (page in _pages.value) {
-            val exit = leaving(page)
-            val action = KeptPagesPolicy.onLeave(
-                isKept = page.isKept,
-                keepEveryPage = keepEveryPage,
-                url = page.url,
-                failed = exit.failed,
-                pinnedHere = exit.pinnedHere,
-                releasedHere = page.released,
-                openedFromSpace = page.openedFromSpace,
-                browsedAway = exit.browsedAway,
-            )
-            if (action == LeaveAction.KEEP) keep(page.id)
-        }
+        for (page in _pages.value) promote(page, keepEveryPage, leaving(page))
+    }
+
+    /** One page, as soon as it has loaded: the app can end without saying so. */
+    fun promote(id: String, keepEveryPage: Boolean, leaving: (OpenPage) -> PageExit) {
+        val page = page(id) ?: return
+        promote(page, keepEveryPage, leaving(page))
+    }
+
+    private fun promote(page: OpenPage, keepEveryPage: Boolean, exit: PageExit) {
+        val action = KeptPagesPolicy.onLeave(
+            isKept = page.isKept,
+            keepEveryPage = keepEveryPage,
+            url = page.url,
+            failed = exit.failed,
+            pinnedHere = exit.pinnedHere,
+            releasedHere = page.released,
+            openedFromSpace = page.openedFromSpace,
+            browsedAway = exit.browsedAway,
+        )
+        if (action == LeaveAction.KEEP) keep(page.id)
     }
 
     /** The browser is closing: pages that were not saved to stay go. */

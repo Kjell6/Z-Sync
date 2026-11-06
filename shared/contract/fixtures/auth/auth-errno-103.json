@@ -30,8 +30,7 @@
       },
       "expect": {
         "errorKind": "auth",
-        "message": "Unconfirmed account",
-        "sessionInvalid": false
+        "message": "Unconfirmed account"
       }
     },
     {

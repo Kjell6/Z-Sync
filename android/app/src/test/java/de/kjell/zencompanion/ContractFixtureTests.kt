@@ -445,7 +445,7 @@ class ContractFixtureTests {
             val expect = fixtureCase.getJSONObject("expect")
             val body = input.getJSONObject("body").toString().toByteArray(Charsets.UTF_8)
             try {
-                client.parseBodyOrThrow(FxAClient.RawResponse(input.getInt("httpStatus"), body))
+                client.parseBodyOrThrow(FxAClient.RawResponse(input.getInt("httpStatus"), body), sessionContext = true)
                 fail("case ${fixtureCase.optString("id")}: expected an error")
             } catch (e: SyncError.TotpRequired) {
                 assertEquals(fixtureCase.optString("id"), "totpRequired", expect.getString("errorKind"))
@@ -454,6 +454,11 @@ class ContractFixtureTests {
                 if (!expect.isNull("message")) {
                     assertEquals(fixtureCase.optString("id"), expect.getString("message"), e.message)
                 }
+                assertEquals(
+                    fixtureCase.optString("id"),
+                    expect.optBoolean("sessionInvalid", false),
+                    e.isSessionInvalid,
+                )
             }
         }
     }

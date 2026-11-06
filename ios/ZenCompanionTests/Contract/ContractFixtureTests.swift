@@ -354,9 +354,15 @@ final class ContractFixtureTests: XCTestCase {
                     return XCTFail("case \(fixtureCase["id"] as? String ?? "?"): expected totpRequired, got \(String(describing: result))")
                 }
             case "auth":
-                guard case .auth = result else {
+                guard let result, case .auth = result else {
                     return XCTFail("case \(fixtureCase["id"] as? String ?? "?"): expected .auth, got \(String(describing: result))")
                 }
+                let marked = FxAClient.sessionAuthError(result, status: input["httpStatus"] as! Int, body: body)
+                XCTAssertEqual(
+                    marked.isSessionInvalid,
+                    expect["sessionInvalid"] as? Bool ?? false,
+                    "case \(fixtureCase["id"] as? String ?? "?")"
+                )
             default:
                 XCTFail("case \(fixtureCase["id"] as? String ?? "?"): unknown expect errorKind \(expect["errorKind"] as! String)")
             }

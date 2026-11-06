@@ -53,6 +53,7 @@ final class SessionModel {
     /// The stored session was rejected by the server: sign out and explain
     /// why on the landing screen. Temporary sync failures never come here.
     func sessionExpired() {
+        guard let account, !account.isDemo else { return }
         signerOut.signOut()
         signedOut()
         sessionNotice = String(localized: "session.expired")

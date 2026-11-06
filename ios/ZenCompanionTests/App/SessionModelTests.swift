@@ -106,12 +106,48 @@ final class SessionModelTests: XCTestCase {
             haptics: FakeSessionHaptics(),
             signerOut: FakeSessionSignerOut()
         )
+        model.account = snapshot()
         model.sessionExpired()
+        XCTAssertNotNil(model.sessionNotice)
 
         model.completeSignIn(snapshot())
 
         XCTAssertNil(model.sessionNotice)
         XCTAssertEqual(model.account?.uid, "u1")
+    }
+
+    func testSessionExpiredIsIgnoredWhenAlreadySignedOut() {
+        let signer = FakeSessionSignerOut()
+        let model = SessionModel(
+            accounts: FakeAccountSession(),
+            spaces: FakeSessionSpaces(),
+            preferences: FakePreferences(),
+            haptics: FakeSessionHaptics(),
+            signerOut: signer
+        )
+
+        model.sessionExpired()
+
+        XCTAssertEqual(signer.signOutCount, 0)
+        XCTAssertNil(model.sessionNotice)
+    }
+
+    func testSessionExpiredIsIgnoredInDemo() {
+        let signer = FakeSessionSignerOut()
+        let model = SessionModel(
+            accounts: FakeAccountSession(),
+            spaces: FakeSessionSpaces(),
+            preferences: FakePreferences(),
+            haptics: FakeSessionHaptics(),
+            signerOut: signer
+        )
+        model.account = snapshot(isDemo: true)
+
+        model.sessionExpired()
+
+        XCTAssertEqual(signer.signOutCount, 0)
+        XCTAssertNil(model.sessionNotice)
+        XCTAssertEqual(model.account?.isDemo, true)
     }
 
     func testFiveDemoTapsWithinWindowEnterDemo() {

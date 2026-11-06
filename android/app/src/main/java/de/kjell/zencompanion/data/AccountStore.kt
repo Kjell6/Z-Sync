@@ -341,24 +341,28 @@ object AccountStore {
      * told via [AppEvents.sessionExpired] so it can sign out and show the
      * sign-in screen instead of a passive error line.
      */
-    suspend fun <T> withClient(context: Context, operation: suspend (SyncClient) -> T): T =
-        try {
-            operation(connect(context))
-        } catch (e: SyncError.Unauthorized) {
-            invalidateCreds()
+    suspend fun <T> withClient(context: Context, operation: suspend (SyncClient) -> T): T {
+        val generation = currentGeneration
+        return try {
             try {
                 operation(connect(context))
-            } catch (e2: Throwable) {
-                reportIfSessionInvalid(e2)
-                throw e2
+            } catch (_: SyncError.Unauthorized) {
+                invalidateCreds()
+                operation(connect(context))
             }
         } catch (e: Throwable) {
-            reportIfSessionInvalid(e)
+            reportIfSessionInvalid(e, generation)
             throw e
         }
+    }
 
-    private fun reportIfSessionInvalid(error: Throwable) {
-        if ((error as? SyncError)?.isSessionInvalid != true) return
+    /**
+     * A rejection only counts for the sign-in that made the request. Signing
+     * out revokes the session itself, so a request still in flight can come
+     * back rejected after the user left or signed in again.
+     */
+    private fun reportIfSessionInvalid(error: Throwable, generation: Int) {
+        if ((error as? SyncError)?.isSessionInvalid != true || !isCurrent(generation)) return
         android.util.Log.e("AccountStore", "Account session rejected; signing out")
         AppEvents.emitSessionExpired()
     }

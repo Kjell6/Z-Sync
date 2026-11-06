@@ -115,10 +115,8 @@ enum SyncError: LocalizedError {
     /// does not know (SPEC §7.5).
     case unsupportedSyncVersion
     /// The storage server rejected the token-server credentials (HTTP 401).
-    /// `AccountStore.withClient` drops them and retries once. `sessionInvalid`
-    /// is false for device-environment rejections (clock skew, stale
-    /// generation) that a new sign-in would not fix.
-    case unauthorized(sessionInvalid: Bool = true)
+    /// `AccountStore.withClient` drops them and retries once.
+    case unauthorized
 
     var errorDescription: String? {
         switch self {
@@ -137,15 +135,12 @@ enum SyncError: LocalizedError {
     /// True only when the server definitively rejected the stored Mozilla
     /// account session, so the app must sign out and ask for a new sign-in.
     /// Temporary conditions (offline, timeouts, HTTP 5xx, rate limits) and
-    /// recoverable states (TOTP, unverified account) stay `false`.
+    /// recoverable states (TOTP, unverified account) stay `false`, and so does
+    /// `unauthorized`: `withClient` retries a storage 401 with credentials
+    /// fetched through this session, so one that still escapes proves the
+    /// session is alive and the problem is elsewhere.
     var isSessionInvalid: Bool {
-        switch self {
-        case .auth(_, let sessionInvalid): sessionInvalid
-        // `withClient` retries a storage 401 once with fresh credentials, so
-        // an `unauthorized` that escapes means the fresh credentials were
-        // rejected too. The flag keeps clock-skew/generation rejections out.
-        case .unauthorized(let sessionInvalid): sessionInvalid
-        default: false
-        }
+        if case .auth(_, let sessionInvalid) = self { return sessionInvalid }
+        return false
     }
 }

@@ -458,12 +458,7 @@ class SyncClient internal constructor(
         )
         if (response.statusCode == 412 && allowPreconditionFailed) return response
         if (response.statusCode == 404 && allowMissing) return response
-        if (response.statusCode == 401) {
-            throw SyncError.Unauthorized(
-                "HTTP 401 $method $path",
-                sessionInvalid = isSessionRejection(response),
-            )
-        }
+        if (response.statusCode == 401) throw SyncError.Unauthorized("HTTP 401 $method $path")
         if (response.statusCode !in 200..299) {
             // Hawk auth failures carry the server's verdict here.
             val detailText = String(response.body, Charsets.UTF_8).take(400)
@@ -474,43 +469,6 @@ class SyncClient internal constructor(
             throw SyncError.Network(detail)
         }
         return response
-    }
-
-    /**
-     * A storage 401 is a dead session only when it is the node's own Hawk
-     * rejection and not one of the device-environment statuses. Clock skew
-     * (`invalid-timestamp`), a stale generation number and a server that
-     * disabled new users are not an account revocation, so they must never
-     * trigger an automatic sign-out.
-     */
-    private fun isSessionRejection(response: SyncHttpResponse): Boolean {
-        val body = runCatching { JSONObject(String(response.body, Charsets.UTF_8)) }.getOrNull()
-        val status = body?.optString("status")?.takeIf { it.isNotEmpty() }?.lowercase()
-        val evidence = buildString {
-            if (status != null) append(' ').append(status)
-            for (key in listOf("error", "message")) {
-                body?.optString(key)?.takeIf { it.isNotEmpty() }?.let {
-                    append(' ').append(it.lowercase())
-                }
-            }
-            response.header("WWW-Authenticate")?.let { append(' ').append(it.lowercase()) }
-        }
-        if ("invalid-timestamp" in evidence ||
-            "invalid-generation" in evidence ||
-            "new-users-disabled" in evidence
-        ) {
-            return false
-        }
-        // Only the statuses that actually mean "these credentials are not
-        // usable" count. An unexpected server status is not a session verdict.
-        if (status != null) {
-            return status == "invalid-credentials" || status == "invalid-client-state"
-        }
-        // No structured status: the node marks its 401 with a Hawk challenge
-        // and sends X-Timestamp. A bare 401 (proxy, captive portal) is not a
-        // verdict on the account.
-        val hawk = response.header("WWW-Authenticate")?.contains("hawk", ignoreCase = true) == true
-        return hawk || response.header("X-Timestamp") != null
     }
 
     companion object {

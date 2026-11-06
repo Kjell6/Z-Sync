@@ -156,29 +156,30 @@ enum AccountStore {
     /// told via `.zenCompanionSessionInvalidated` so it can sign out and show
     /// the sign-in screen instead of a passive error line.
     static func withClient<T>(_ operation: (SyncClient) async throws -> T) async throws -> T {
+        let generation = currentGeneration
         do {
-            return try await operation(try await connect())
-        } catch {
-            if let sync = error as? SyncError, case .unauthorized = sync {
+            do {
+                return try await operation(try await connect())
+            } catch SyncError.unauthorized {
                 invalidateCreds()
-                do {
-                    return try await operation(try await connect())
-                } catch {
-                    reportIfSessionInvalid(error)
-                    throw error
-                }
+                return try await operation(try await connect())
             }
-            reportIfSessionInvalid(error)
+        } catch {
+            reportIfSessionInvalid(error, generation: generation)
             throw error
         }
     }
 
-    private static func reportIfSessionInvalid(_ error: Error) {
+    /// A rejection only counts for the sign-in that made the request. Signing
+    /// out revokes the session itself, so a request still in flight can come
+    /// back rejected after the user left or signed in again.
+    private static func reportIfSessionInvalid(_ error: Error, generation: Int) {
         guard let sync = error as? SyncError, sync.isSessionInvalid else { return }
-        os_log("AccountStore: account session rejected; signing out", log: .default, type: .error)
         // Sync work resumes off the main actor; deliver the event where the
         // session owner lives.
         DispatchQueue.main.async {
+            guard isCurrent(generation) else { return }
+            os_log("AccountStore: account session rejected; signing out", log: .default, type: .error)
             NotificationCenter.default.post(name: .zenCompanionSessionInvalidated, object: nil)
         }
     }

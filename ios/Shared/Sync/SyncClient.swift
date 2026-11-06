@@ -431,38 +431,6 @@ actor SyncClient {
         try await Self.requestAny(creds: creds, method: method, path: path, json: json, allowMissing: allowMissing, transport: transport)
     }
 
-    /// A storage 401 is a dead session only when it is the node's own Hawk
-    /// rejection and not one of the device-environment statuses. Clock skew
-    /// (`invalid-timestamp`), a stale generation number and a server that
-    /// disabled new users are not an account revocation, so they must never
-    /// trigger an automatic sign-out.
-    private static func isSessionRejection(_ http: SyncHTTPResponse) -> Bool {
-        let body = (try? JSONSerialization.jsonObject(with: http.body)) as? [String: Any]
-        let status = (body?["status"] as? String)?.lowercased()
-        var evidence = status ?? ""
-        for key in ["error", "message"] {
-            if let value = body?[key] as? String { evidence += " " + value.lowercased() }
-        }
-        if let challenge = http.header("www-authenticate") {
-            evidence += " " + challenge.lowercased()
-        }
-        if evidence.contains("invalid-timestamp")
-            || evidence.contains("invalid-generation")
-            || evidence.contains("new-users-disabled") {
-            return false
-        }
-        // Only the statuses that actually mean "these credentials are not
-        // usable" count. An unexpected server status is not a session verdict.
-        if let status {
-            return status == "invalid-credentials" || status == "invalid-client-state"
-        }
-        // No structured status: the node marks its 401 with a Hawk challenge
-        // and sends X-Timestamp. A bare 401 (proxy, captive portal) is not a
-        // verdict on the account.
-        let hawk = http.header("www-authenticate")?.lowercased().contains("hawk") == true
-        return hawk || http.header("x-timestamp") != nil
-    }
-
     private static func requestRaw(
         creds: TokenServerCreds,
         method: String,
@@ -527,7 +495,7 @@ actor SyncClient {
         if http.statusCode == 404, allowMissing { return (Data(), http) }
         if http.statusCode == 401 {
             log.error("storage 401 \(method, privacy: .public) \(path, privacy: .public)")
-            throw SyncError.unauthorized(sessionInvalid: Self.isSessionRejection(http))
+            throw SyncError.unauthorized
         }
         guard (200..<300).contains(http.statusCode) else {
             let text = String(data: http.body, encoding: .utf8) ?? ""

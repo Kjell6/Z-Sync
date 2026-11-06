@@ -32,15 +32,9 @@ sealed class SyncError(message: String?) : Exception(message) {
 
     /**
      * The storage server rejected the token-server credentials (HTTP 401).
-     * [de.kjell.zencompanion.data.AccountStore.withClient] drops them and
-     * retries once. [sessionInvalid] is false for device-environment
-     * rejections (clock skew, stale generation) that a new sign-in would not
-     * fix.
+     * [de.kjell.zencompanion.data.AccountStore.withClient] drops them and retries once.
      */
-    class Unauthorized(
-        detail: String? = null,
-        val sessionInvalid: Boolean = true,
-    ) : SyncError(detail)
+    class Unauthorized(detail: String? = null) : SyncError(detail)
     object NotSignedIn : SyncError(null)
     object TotpRequired : SyncError(null)
     object StorageUnavailable : SyncError(null)
@@ -49,16 +43,13 @@ sealed class SyncError(message: String?) : Exception(message) {
      * True only when the server definitively rejected the stored Mozilla
      * account session, so the app must sign out and ask for a new sign-in.
      * Temporary conditions (offline, timeouts, HTTP 5xx, rate limits) and
-     * recoverable states (TOTP, unverified account) stay `false`.
+     * recoverable states (TOTP, unverified account) stay `false`, and so does
+     * [Unauthorized]: `withClient` retries a storage 401 with credentials
+     * fetched through this session, so one that still escapes proves the
+     * session is alive and the problem is elsewhere.
      */
     val isSessionInvalid: Boolean
-        get() = when (this) {
-            is Auth -> sessionInvalid
-            // `AccountStore.withClient` retries a storage 401 once with fresh
-            // credentials; the flag keeps clock-skew/generation rejections out.
-            is Unauthorized -> sessionInvalid
-            else -> false
-        }
+        get() = this is Auth && sessionInvalid
 
     companion object {
         const val CRYPTO_INVALID_HEX = "invalid hex"

@@ -41,8 +41,7 @@ reviews:
     - "!android/build/**"
     - "!android/app/build/**"
     - "!android/.gradle/**"
-    - "!android/gradle/wrapper/**"
-    - "!ios/ZenCompanion.xcodeproj/**"
+    - "!android/gradle/wrapper/*.jar"
     - "!ios/AppIcon.icon/**"
     - "!ios/build/**"
     - "!**/DerivedData/**"
@@ -91,7 +90,8 @@ reviews:
         mode: "warning"
         instructions: |
           iOS and Android ship together. If the diff changes user-facing behaviour on one platform
-          (files under `ios/ZenCompanion/**` or `android/app/src/main/**`) without a corresponding
+          (files under `ios/ZenCompanion/**`, `ios/Shared/**` (including `ios/Shared/Sync/**`), or
+          `android/app/src/main/**`) without a corresponding
           change on the other, report the missing counterpart. Skip when the PR is explicitly
           scoped to one platform, or when the change is platform-only plumbing (build files,
           signing config, platform-specific APIs with no behaviour counterpart).

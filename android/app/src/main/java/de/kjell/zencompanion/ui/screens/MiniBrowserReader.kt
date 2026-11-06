@@ -52,7 +52,7 @@ internal fun MiniBrowserReader(
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(colors.paper),
+            .background(colors.background),
         contentPadding = PaddingValues(horizontal = 22.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {

@@ -125,11 +125,11 @@ struct MiniBrowserView: View {
         reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.35, dampingFraction: 0.86)
     }
 
-    /// A page without a theme color takes the app's paper, so the browser
-    /// starts in the same background the Settings sheet uses. The web view
+    /// A page without a theme color takes the app's normal background, so the
+    /// browser starts on the same surface as the Settings sheet. The web view
     /// paints its own page over it.
     private var defaultBackground: Color {
-        Palette.paper(scheme)
+        Palette.background(scheme)
     }
 
     /// The page's own color, or the error panel's while it covers the page:
@@ -137,7 +137,7 @@ struct MiniBrowserView: View {
     private var sheetBackground: Color { pageColor(of: model) }
 
     private func pageColor(of page: MiniBrowserModel) -> Color {
-        if page.pageError != nil { return Palette.paper(scheme) }
+        if page.pageError != nil { return Palette.background(scheme) }
         return page.themeColor ?? defaultBackground
     }
 
@@ -279,7 +279,7 @@ struct MiniBrowserView: View {
             .background(sheetBackground.ignoresSafeArea())
             .ignoresSafeArea(edges: .bottom)
             .ignoresSafeArea(.keyboard)
-            .presentationBackground(pages.active == nil ? Palette.paper(scheme) : barBackground)
+            .presentationBackground(pages.active == nil ? Palette.background(scheme) : barBackground)
             .confirmationDialog(
                 Text("kept.close_all_title"),
                 isPresented: $confirmCloseAll,
@@ -444,7 +444,7 @@ struct MiniBrowserView: View {
         let span = paneWidth + PageHostView.pageGap
         let progress = span > 0 ? min(1, max(0, -pageSwipe / span)) : 0
         return ZStack {
-            Palette.paper(scheme)
+            Palette.background(scheme)
                 .ignoresSafeArea()
             RoundedRectangle(cornerRadius: Self.screenCornerRadius, style: .continuous)
                 .fill(defaultBackground)
@@ -863,7 +863,7 @@ private struct ReaderView: View {
             .frame(maxWidth: 680, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
-        .background(Palette.paper(scheme))
+        .background(Palette.background(scheme))
         .accessibilityLabel(Text("browser.reader"))
     }
 

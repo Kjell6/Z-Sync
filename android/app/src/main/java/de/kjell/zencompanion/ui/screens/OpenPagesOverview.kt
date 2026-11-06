@@ -150,7 +150,7 @@ internal fun OpenPagesOverview(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(zen.paper)
+            .background(zen.background)
             // Nothing reaches the browser underneath.
             .pointerInput(Unit) { detectTapGestures { } }
             .semantics { isTraversalGroup = true }

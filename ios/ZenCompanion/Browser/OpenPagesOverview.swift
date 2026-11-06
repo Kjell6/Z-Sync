@@ -39,7 +39,7 @@ struct OpenPagesOverview: View {
 
     var body: some View {
         ZStack {
-            Palette.paper(scheme)
+            Palette.background(scheme)
                 .ignoresSafeArea()
                 // Nothing reaches the browser underneath.
                 .contentShape(Rectangle())

@@ -39,7 +39,7 @@ private struct SignInLandingView: View {
 
     var body: some View {
         ZStack {
-            Palette.paper(scheme).ignoresSafeArea()
+            Palette.background(scheme).ignoresSafeArea()
             VStack(spacing: 18) {
                 Spacer()
                 ZenMark(scheme: scheme, size: 64)
@@ -129,7 +129,7 @@ private struct SignInHelpSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(24)
             }
-            .background(Palette.paper(scheme).ignoresSafeArea())
+            .background(Palette.background(scheme).ignoresSafeArea())
             .navigationTitle(Text("signin.help.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

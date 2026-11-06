@@ -31,7 +31,7 @@ struct SyncedActivitySheet: View {
                     errorArea(loadError)
                 }
             }
-            .background(Palette.paper(scheme).ignoresSafeArea())
+            .background(Palette.background(scheme).ignoresSafeArea())
             .navigationTitle(Text("activity.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

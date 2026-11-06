@@ -53,7 +53,7 @@ struct BrowserErrorPanel: View {
         .padding(.horizontal, 32)
         .padding(.top, 72)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Palette.paper(scheme))
+        .background(Palette.background(scheme))
         .task(id: error) {
             guard error == .offline else { return }
             if await Self.connectionReturned() {

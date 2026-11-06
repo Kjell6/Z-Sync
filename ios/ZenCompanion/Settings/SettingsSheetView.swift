@@ -53,7 +53,7 @@ struct SettingsSheet: View {
                 .padding(.top, 16)
                 .padding(.bottom, 28)
             }
-            .background(Palette.paper(scheme).ignoresSafeArea())
+            .background(Palette.background(scheme).ignoresSafeArea())
             .navigationTitle(Text("Settings"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -474,7 +474,7 @@ private struct ContentBlockingSettingsPage: View {
             .padding(.top, 16)
             .padding(.bottom, 32)
         }
-        .background(Palette.paper(scheme).ignoresSafeArea())
+        .background(Palette.background(scheme).ignoresSafeArea())
         .navigationTitle(Text("settings.content_blocking"))
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -657,7 +657,7 @@ private struct AddSearchEngineView: View {
             .padding(.top, 16)
             .padding(.bottom, 32)
         }
-        .background(Palette.paper(scheme).ignoresSafeArea())
+        .background(Palette.background(scheme).ignoresSafeArea())
         .navigationTitle(Text("Add Search Engine"))
         .navigationBarTitleDisplayMode(.inline)
     }

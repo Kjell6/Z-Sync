@@ -1,0 +1,115 @@
+# CodeRabbit configuration for Z-Sync.
+# Reference: https://docs.coderabbit.ai/reference/configuration
+# The app is English-only, so reviews and chat stay in English too.
+language: "en-US"
+early_access: false
+enable_free_tier: true
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  high_level_summary_in_walkthrough: true
+  collapse_walkthrough: true
+  sequence_diagrams: false
+  estimate_code_review_effort: true
+  poem: false
+  in_progress_fortune: false
+  review_status: true
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    auto_pause_after_reviewed_commits: 3
+    drafts: false
+    ignore_title_keywords:
+      - "wip"
+      - "[wip]"
+      - "do not merge"
+  path_filters:
+    # Never worth a review pass.
+    - "!**/*.png"
+    - "!**/*.jpg"
+    - "!**/*.jpeg"
+    - "!**/*.pdf"
+    - "!**/*.heic"
+    - "!**/*.icns"
+    - "!**/*.jar"
+    - "!**/*.jks"
+    - "!**/*.xcuserstate"
+    - "!**/.DS_Store"
+    # Generated or vendored output.
+    - "!android/build/**"
+    - "!android/app/build/**"
+    - "!android/.gradle/**"
+    - "!android/gradle/wrapper/*.jar"
+    - "!ios/AppIcon.icon/**"
+    - "!ios/build/**"
+    - "!**/DerivedData/**"
+    # Non-product content.
+    - "!marketing/**"
+    - "!store-listings/**"
+    - "!docs/images/**"
+    - "!docs/og.png"
+  path_instructions:
+    - path: "ios/**"
+      instructions: |
+        - Swift 6 / modern SwiftUI. Flag data races, missing @MainActor isolation, and non-Sendable values crossing actor boundaries.
+        - The app is English-only. Flag any user-facing string localized to another language or any new .lproj/Strings table.
+        - Feature changes must land on Android in the same PR. If this PR only touches iOS for a user-facing feature, say so.
+        - `ios/ZenCompanion.xcodeproj` is generated from `ios/project.yml` with XcodeGen. Flag manual .pbxproj edits; the source of truth is project.yml.
+        - Never bump MARKETING_VERSION / CURRENT_PROJECT_VERSION or App Store metadata; that is maintainer-only.
+        - Never commit signing material, Team IDs, or .p8 keys. `ios/Config/Team.local.xcconfig` is gitignored by design.
+        - Keep the sync contract in `shared/contract/SPEC.md` intact; flag any wire or crypto change that does not touch the spec.
+    - path: "android/**"
+      instructions: |
+        - Kotlin + Jetpack Compose. Prefer state hoisting, stable keys, and remember/derivedStateOf over recomposition-prone patterns.
+        - The app is English-only. Flag new res/values-*/strings.xml translations.
+        - Feature changes must land on iOS in the same PR. If this PR only touches Android for a user-facing feature, say so.
+        - Never bump versionName / versionCode or store listing metadata; that is maintainer-only.
+        - Never commit keystores, keystore.properties with real values, or signing credentials.
+        - Keep the sync contract in `shared/contract/SPEC.md` intact; flag any wire or crypto change that does not touch the spec.
+    - path: "shared/**"
+      instructions: |
+        - This folder is contract only: SPEC.md plus golden fixtures. Executable code does not belong here.
+        - Any wire-format, crypto, or auth change must update the spec and the affected fixtures in the same PR, and both platforms must follow.
+    - path: "**/*Test*.swift"
+      instructions: |
+        - iOS tests: XCTest. Flag tests that depend on demo mode state or shared simulator keychain/app group state instead of their own fixtures.
+    - path: "**/*Test*.kt"
+      instructions: |
+        - Android tests: JUnit + Compose test rules. Flag assertions that would pass on an empty/zero value.
+  pre_merge_checks:
+    title:
+      mode: "off"
+    description:
+      mode: "off"
+    issue_assessment:
+      mode: "off"
+    custom_checks:
+      - name: "Platform parity"
+        mode: "warning"
+        instructions: |
+          iOS and Android ship together. If the diff changes user-facing behaviour on one platform
+          (files under `ios/ZenCompanion/**`, `ios/Shared/**` (including `ios/Shared/Sync/**`), or
+          `android/app/src/main/**`) without a corresponding
+          change on the other, report the missing counterpart. Skip when the PR is explicitly
+          scoped to one platform, or when the change is platform-only plumbing (build files,
+          signing config, platform-specific APIs with no behaviour counterpart).
+  tools:
+    swiftlint:
+      enabled: true
+    detekt:
+      enabled: true
+    shellcheck:
+      enabled: true
+    markdownlint:
+      enabled: true
+    actionlint:
+      enabled: true
+    gitleaks:
+      enabled: true
+    trufflehog:
+      enabled: true
+
+chat:
+  auto_reply: true

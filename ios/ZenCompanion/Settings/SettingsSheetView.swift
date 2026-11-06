@@ -54,7 +54,7 @@ struct SettingsSheet: View {
                 .padding(.top, 16)
                 .padding(.bottom, 28)
             }
-            .background(Palette.paper(scheme).ignoresSafeArea())
+            .background(Palette.background(scheme).ignoresSafeArea())
             .navigationTitle(Text("Settings"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -228,6 +228,36 @@ struct SettingsSheet: View {
                     subtitle: "settings.open_into_search.subtitle",
                     isOn: $model.openIntoSearch
                 )
+
+                SettingsHairline(scheme: scheme)
+
+                SettingsToggleRow(
+                    title: "settings.keep_only_chosen",
+                    systemImage: "bookmark",
+                    scheme: scheme,
+                    subtitle: "settings.keep_only_chosen.subtitle",
+                    isOn: $model.keepOnlyChosenPages
+                )
+
+                SettingsHairline(scheme: scheme)
+
+                SettingsRow(title: "settings.kept_lifetime", systemImage: "clock", scheme: scheme) {
+                    Menu {
+                        ForEach(KeptPageLifetime.allCases) { lifetime in
+                            Button {
+                                model.keptPageLifetime = lifetime
+                            } label: {
+                                if model.keptPageLifetime == lifetime {
+                                    Label(lifetime.title, systemImage: "checkmark")
+                                } else {
+                                    Text(lifetime.title)
+                                }
+                            }
+                        }
+                    } label: {
+                        SettingsMenuValue(text: model.keptPageLifetime.title, scheme: scheme)
+                    }
+                }
 
                 SettingsHairline(scheme: scheme)
 
@@ -463,7 +493,7 @@ private struct ContentBlockingSettingsPage: View {
             .padding(.top, 16)
             .padding(.bottom, 32)
         }
-        .background(Palette.paper(scheme).ignoresSafeArea())
+        .background(Palette.background(scheme).ignoresSafeArea())
         .navigationTitle(Text("settings.content_blocking"))
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -664,7 +694,7 @@ private struct AddSearchEngineView: View {
             .padding(.top, 16)
             .padding(.bottom, 32)
         }
-        .background(Palette.paper(scheme).ignoresSafeArea())
+        .background(Palette.background(scheme).ignoresSafeArea())
         .navigationTitle(Text("Add Search Engine"))
         .navigationBarTitleDisplayMode(.inline)
     }

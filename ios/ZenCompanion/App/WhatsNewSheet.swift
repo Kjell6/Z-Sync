@@ -35,9 +35,9 @@ struct WhatsNewSheet: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 4)
                 .padding(.bottom, 20)
-                .background(Palette.paper(scheme))
+                .background(Palette.background(scheme))
         }
-        .background(Palette.paper(scheme).ignoresSafeArea())
+        .background(Palette.background(scheme).ignoresSafeArea())
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         // Swiping down is a valid dismissal; the caller already marks the

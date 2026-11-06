@@ -336,14 +336,36 @@ object AccountStore {
      * The legacy multi-PUT paths (safe-sync off) are the exception: a 401 on a
      * later PUT leaves the earlier ones applied, and the retry cannot tell that
      * apart from a cold call.
+     *
+     * When a failure proves the stored account session is dead, the app is
+     * told via [AppEvents.sessionExpired] so it can sign out and show the
+     * sign-in screen instead of a passive error line.
      */
-    suspend fun <T> withClient(context: Context, operation: suspend (SyncClient) -> T): T =
-        try {
-            operation(connect(context))
-        } catch (_: SyncError.Unauthorized) {
-            invalidateCreds()
-            operation(connect(context))
+    suspend fun <T> withClient(context: Context, operation: suspend (SyncClient) -> T): T {
+        val generation = currentGeneration
+        return try {
+            try {
+                operation(connect(context))
+            } catch (_: SyncError.Unauthorized) {
+                invalidateCreds()
+                operation(connect(context))
+            }
+        } catch (e: Throwable) {
+            reportIfSessionInvalid(e, generation)
+            throw e
         }
+    }
+
+    /**
+     * A rejection only counts for the sign-in that made the request. Signing
+     * out revokes the session itself, so a request still in flight can come
+     * back rejected after the user left or signed in again.
+     */
+    private fun reportIfSessionInvalid(error: Throwable, generation: Int) {
+        if ((error as? SyncError)?.isSessionInvalid != true || !isCurrent(generation)) return
+        android.util.Log.e("AccountStore", "Account session rejected; signing out")
+        AppEvents.emitSessionExpired()
+    }
 
     /** The current sign-in generation; pass it to [isCurrent] after async work. */
     val currentGeneration: Int

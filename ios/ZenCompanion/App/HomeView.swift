@@ -28,6 +28,9 @@ struct HomeView: View {
         .onReceive(NotificationCenter.default.publisher(for: .zenCompanionSignedOut)) { _ in
             model.signedOut()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .zenCompanionSessionInvalidated)) { _ in
+            model.sessionExpired()
+        }
     }
 }
 
@@ -58,6 +61,19 @@ private struct SignInLandingView: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 40)
+            if let notice = model.sessionNotice {
+                Text(notice)
+                    .zenFont(14, weight: .medium, design: .rounded)
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.75))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 11)
+                    .background(
+                        Palette.ink(scheme).opacity(0.06),
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    )
+                    .padding(.horizontal, 28)
+            }
             Spacer()
             Button { model.presentSignIn() } label: {
                 Text("home.sign_in")
@@ -89,7 +105,7 @@ private struct SignInLandingView: View {
 
     var body: some View {
         ZStack {
-            Palette.paper(scheme).ignoresSafeArea()
+            Palette.background(scheme).ignoresSafeArea()
             // The design's centred layout whenever it fits; a scrolling copy
             // once the system text size makes it taller than the screen.
             ViewThatFits(in: .vertical) {
@@ -142,7 +158,7 @@ private struct SignInHelpSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(24)
             }
-            .background(Palette.paper(scheme).ignoresSafeArea())
+            .background(Palette.background(scheme).ignoresSafeArea())
             .navigationTitle(Text("signin.help.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

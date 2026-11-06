@@ -1,7 +1,9 @@
 package de.kjell.zencompanion.ui.theme
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
@@ -23,6 +25,9 @@ val Coral = Color(0xFF264540)
 val CoralDark = Color(0xFFA3CCC6)
 val PaperLight = Color(0xFFF3ECE6)
 val PaperDark = Color(0xFF1F1F1F)
+/** The normal surface for chrome, sheets and pages; the warmer paper stays
+ *  the base of a space without its own colour. */
+val BackgroundLight = Color(0xFFFAF7F1)
 val InkLight = Color(0xFF2E2E2E)
 val InkDark = Color(0xFFF3ECE6)
 val ErrorLight = Color(0xFFBA1A1A)
@@ -34,6 +39,7 @@ val FaviconPlaceholderDark = Color(0xFF2C2C2E)
 
 class ZenColors(
     val paper: Color,
+    val background: Color,
     val ink: Color,
     val lift: Color,
     val coral: Color,
@@ -58,6 +64,7 @@ class ZenColors(
 fun zenColors(isDark: Boolean): ZenColors = if (isDark) {
     ZenColors(
         paper = PaperDark,
+        background = PaperDark,
         ink = InkDark,
         lift = Color.White.copy(alpha = 0.07f),
         coral = CoralDark,
@@ -66,6 +73,7 @@ fun zenColors(isDark: Boolean): ZenColors = if (isDark) {
 } else {
     ZenColors(
         paper = PaperLight,
+        background = BackgroundLight,
         ink = InkLight,
         lift = Color.Black.copy(alpha = 0.06f),
         coral = Coral,
@@ -76,22 +84,37 @@ fun zenColors(isDark: Boolean): ZenColors = if (isDark) {
 val LocalZenColors = compositionLocalOf { zenColors(false) }
 
 @Composable
-fun ZenTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+fun ZenTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    /** The colors change at once, on this very frame, instead of blending over. */
+    jumps: Boolean = false,
+    content: @Composable () -> Unit,
+) {
     val targetZen = zenColors(darkTheme)
-    val animSpec = tween<Color>(durationMillis = 280, easing = FastOutSlowInEasing)
+    val animSpec: AnimationSpec<Color> = if (jumps) {
+        snap()
+    } else {
+        tween(durationMillis = 280, easing = FastOutSlowInEasing)
+    }
 
     val animatedPaper by animateColorAsState(targetZen.paper, animSpec, label = "paperColor")
+    val animatedBackground by animateColorAsState(targetZen.background, animSpec, label = "background")
     val animatedInk by animateColorAsState(targetZen.ink, animSpec, label = "inkColor")
     val animatedLift by animateColorAsState(targetZen.lift, animSpec, label = "liftColor")
     val animatedCoral by animateColorAsState(targetZen.coral, animSpec, label = "coralColor")
 
-    val zen = ZenColors(
-        paper = animatedPaper,
-        ink = animatedInk,
-        lift = animatedLift,
-        coral = animatedCoral,
-        isDark = darkTheme,
-    )
+    val zen = if (jumps) {
+        targetZen
+    } else {
+        ZenColors(
+            paper = animatedPaper,
+            background = animatedBackground,
+            ink = animatedInk,
+            lift = animatedLift,
+            coral = animatedCoral,
+            isDark = darkTheme,
+        )
+    }
 
     val targetColorScheme = if (darkTheme) {
         darkColorScheme(
@@ -112,14 +135,14 @@ fun ZenTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable ()
         lightColorScheme(
             primary = Coral,
             onPrimary = Color.White,
-            background = PaperLight,
+            background = BackgroundLight,
             onBackground = InkLight,
-            surface = PaperLight,
+            surface = BackgroundLight,
             onSurface = InkLight,
-            surfaceVariant = Color(0xFFE4DED8),
+            surfaceVariant = Color(0xFFE8E8EA),
             onSurfaceVariant = InkLight.copy(alpha = 0.7f),
-            surfaceContainer = Color(0xFFECE5DF),
-            surfaceContainerHigh = Color(0xFFDDD7D1),
+            surfaceContainer = Color(0xFFF2F3F6),
+            surfaceContainerHigh = Color(0xFFE6E7EB),
             error = ErrorLight,
             onError = Color.White,
         )
@@ -127,7 +150,6 @@ fun ZenTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable ()
 
     val animatedPrimary by animateColorAsState(targetColorScheme.primary, animSpec, label = "primary")
     val animatedOnPrimary by animateColorAsState(targetColorScheme.onPrimary, animSpec, label = "onPrimary")
-    val animatedBackground by animateColorAsState(targetColorScheme.background, animSpec, label = "background")
     val animatedOnBackground by animateColorAsState(targetColorScheme.onBackground, animSpec, label = "onBackground")
     val animatedSurface by animateColorAsState(targetColorScheme.surface, animSpec, label = "surface")
     val animatedOnSurface by animateColorAsState(targetColorScheme.onSurface, animSpec, label = "onSurface")

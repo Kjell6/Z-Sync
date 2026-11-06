@@ -20,7 +20,10 @@ object FriendlyError {
         is SyncError.NotSignedIn -> R.string.error_not_signed_in
         is SyncError.TotpRequired -> R.string.error_totp
         is SyncError.StorageUnavailable -> R.string.error_storage_unavailable
-        is SyncError.Auth, is SyncError.Unauthorized -> R.string.error_auth
+        // The share sheet cannot sign the app out; waiting will not help, so
+        // say what will.
+        is SyncError.Auth -> if (error.sessionInvalid) R.string.error_session_expired else R.string.error_auth
+        is SyncError.Unauthorized -> R.string.error_auth
         is SyncError.Crypto -> R.string.error_crypto
         is SyncError.Conflict -> R.string.error_conflict
         is SyncError.TargetMissing -> R.string.error_target_missing

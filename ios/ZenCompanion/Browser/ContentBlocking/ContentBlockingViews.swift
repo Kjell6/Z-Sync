@@ -193,7 +193,7 @@ struct ContentBlockingSetupView: View {
         }
         .padding(.horizontal, 24)
         .padding(.bottom, 16)
-        .background(Palette.paper(scheme).ignoresSafeArea())
+        .background(Palette.background(scheme).ignoresSafeArea())
         .interactiveDismissDisabled()
     }
 }

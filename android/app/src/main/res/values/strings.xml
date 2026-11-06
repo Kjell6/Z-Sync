@@ -81,7 +81,8 @@
     <string name="activity_empty">No synced history yet.</string>
 
     <string name="error_offline">You appear to be offline. Check your connection and try again.</string>
-    <string name="error_auth">Couldn\'t sign in to your Mozilla account. Try signing out and back in.</string>
+    <string name="error_auth">Couldn\'t sign in to your Mozilla account. Try again in a moment.</string>
+    <string name="error_session_expired">Your Mozilla account sign-in ended. Open Z-Sync and sign in again.</string>
     <string name="error_crypto">Your sync data couldn\'t be decrypted. Sign out and back in to refresh your keys.</string>
     <string name="error_network">Network problem while contacting Mozilla sync.</string>
     <string name="home_refresh_failed">Couldn\'t refresh. Tap to try again.</string>
@@ -95,6 +96,7 @@
     <string name="error_storage_unavailable">Couldn\'t save your sign-in securely on this device. Please try again.</string>
     <string name="error_interrupted">Connection interrupted. Retrying…</string>
     <string name="error_generic">Something went wrong. Please try again.</string>
+    <string name="session_expired">Your Mozilla account sign-in ended, so Z-Sync signed out. Sign in again to keep syncing.</string>
 
     <string name="share_save">Pin Tab</string>
     <string name="share_save_normal">Save Tab</string>
@@ -140,6 +142,13 @@
     <string name="settings_search_engine_error_invalid_url">Enter a valid http:// or https:// URL.</string>
     <string name="settings_search_engine_error_missing_placeholder">Add {query} where the search term should go.</string>
     <string name="settings_open_into_search">Open into search</string>
+    <string name="settings_keep_only_chosen">Keep only chosen pages</string>
+    <string name="settings_keep_only_chosen_subtitle">Other pages close with the browser</string>
+    <string name="settings_kept_lifetime">Auto-close</string>
+    <string name="settings_kept_lifetime_never">Never</string>
+    <string name="settings_kept_lifetime_day">After a day</string>
+    <string name="settings_kept_lifetime_week">After a week</string>
+    <string name="settings_kept_lifetime_month">After a month</string>
     <string name="settings_open_into_search_subtitle">Opens a search tab when the app starts</string>
     <string name="settings_external_browser">Open tabs in default browser</string>
     <string name="settings_essentials_columns">Essentials per row</string>
@@ -191,7 +200,28 @@
 
     <string name="browser_more">More</string>
     <string name="browser_close_menu">Close menu</string>
-    <string name="browser_tabs">Tabs</string>
+    <plurals name="browser_page_count">
+        <item quantity="one">%d open page</item>
+        <item quantity="other">%d open pages</item>
+    </plurals>
+    <string name="browser_keep_page">Keep Page</string>
+    <string name="browser_kept">Kept</string>
+    <string name="browser_open_in_new_page">Open in New Page</string>
+    <string name="kept_new_page">New Page</string>
+    <string name="kept_close_all">Close All</string>
+    <string name="kept_close_all_title">Close all pages?</string>
+    <string name="kept_close_all_message">They are removed from this phone. Tabs in your spaces stay.</string>
+    <string name="kept_empty_title">No open pages</string>
+    <string name="kept_empty_message">Tap + to open a page.</string>
+    <string name="kept_hint_never">Auto-close off</string>
+    <string name="kept_hint_day">Auto-close after 1 day</string>
+    <string name="kept_hint_week">Auto-close after 7 days</string>
+    <string name="kept_hint_month">Auto-close after 30 days</string>
+    <string name="kept_pin_to_space">Pin to space</string>
+    <string name="kept_copy_link">Copy link</string>
+    <string name="kept_close_page">Close page</string>
+    <string name="kept_close_page_named">Close %1$s</string>
+    <string name="kept_current_page">Current page</string>
     <string name="browser_copy_link">Copy Link</string>
     <string name="browser_copied">Copied</string>
     <string name="browser_reader">Reader</string>

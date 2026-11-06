@@ -497,6 +497,18 @@ FxA endpoints that return HTTP >= 400 with a JSON error body map to error kinds:
   `message` (falling back to `error`, then to `HTTP <status>`).
 - Statuses below 400 MUST NOT map to an error.
 
+**Dead sessions.** HTTP `401` with `errno` `110` (invalid authentication token) on a
+request signed with the stored session token is the only proof that the session is
+dead. It stays an **auth** error, marked session-invalid, and that mark MUST survive
+the fallback from OAuth to BrowserID credentials. Clients MUST then sign out and
+explain why on the sign-in screen.
+
+Nothing else may sign the user out automatically. That includes `errno` `109` and
+`111`, token-server rejections, and storage `401`s: a storage `401` is retried once
+with fresh credentials obtained through the session, so one that persists proves the
+session is alive. A rejection MUST be ignored when the user signed out or switched
+accounts after the request started.
+
 ### 7.2 Conditional writes and conflict handling
 
 Writes MAY carry a condition on the target resource's server-side timestamp via the
@@ -713,6 +725,10 @@ fixtures, but fixtures do not pin them and future work SHOULD remove them:
 ---
 
 ## 11. Changelog
+
+- **2026-11-06 — Dead sessions.** §7.1 now defines when a client signs out by itself:
+  only on HTTP `401` with `errno` `110` for the current sign-in. Added the matching
+  cases to fixture `auth-errno-103`. Contract-Version stays 1: no wire change.
 
 - **2026-10-27 — Essentials grouping resolves automatically.** Zen 1.23
   registers `zen.workspaces.separate-essentials` for sync. §7.4 now resolves the

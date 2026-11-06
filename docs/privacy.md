@@ -42,6 +42,7 @@ While you use the app, the following information is kept **only on your device**
 - **Cached preview data** (space names, icons, themes; pinned-tab titles, URLs and icons) — local app storage (`spaces-cache.json`) — instant display while fresh data loads
 - **Cached website icons** (the image and the address it was loaded from) — the app's local cache — showing a synced tab again without downloading its page
 - **Preferences** (last selected space, cache timestamp) — local preferences — convenience
+- **Pages open in the mini-browser** (each page's address, title, a small picture of it and its back and forward history) — the app's local storage, excluded from device backups — reopening them like tabs in a browser. They never enter your Mozilla Sync data. Pages stay until you close them, until they have gone unused for the period chosen in Settings (30 days unless you change it), or until you sign out. With "Keep only chosen pages" on, only the pages you keep are stored; the others are held in memory and end when you close the browser
 - **Content blocking settings and lists** (the three blocking switches, the sites where you turned one off, and the downloaded ad and tracker lists) — local preferences and app storage — blocking in the mini-browser
 
 Notes:
@@ -149,7 +150,7 @@ The weekly list download goes to `easylist.to`, run by the EasyList project, whi
 ## 7. Retention and deletion
 
 - **Normal use:** local data listed in section 3 persists on your device; server-side, Mozilla retains your sync data per its own retention rules.
-- **Signing out:** the app deletes the stored credentials, all embedded-browser cookies/storage, and the cached preview file.
+- **Signing out:** the app deletes the stored credentials, all embedded-browser cookies/storage, the cached preview file, and the pages stored on this phone.
 - **Deleting the app:** everything above is removed automatically, including Keychain / Keystore items.
 - **Server-side data:** your actual Mozilla sync data lives in your Mozilla account, outside this app's control; manage or delete it through Firefox or your Mozilla account settings.
 

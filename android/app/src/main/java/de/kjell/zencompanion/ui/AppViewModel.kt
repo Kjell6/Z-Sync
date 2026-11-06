@@ -10,6 +10,7 @@ import de.kjell.zencompanion.data.AccountStore
 import de.kjell.zencompanion.data.AppEvents
 import de.kjell.zencompanion.data.AndroidWhatsNewRepository
 import de.kjell.zencompanion.data.BrowserSettings
+import de.kjell.zencompanion.data.KeptPageLifetime
 import de.kjell.zencompanion.data.DemoCatalog
 import de.kjell.zencompanion.data.EssentialsColumns
 import de.kjell.zencompanion.data.SaveKind
@@ -175,6 +176,10 @@ data class PreferencesState(
     val toolbarPlacement: ToolbarPlacement = ToolbarPlacement.BOTTOM,
     /** Open a new search tab whenever the app comes to the foreground. */
     val openIntoSearch: Boolean = false,
+    /** Only the pages the user keeps stay open. */
+    val keepOnlyChosenPages: Boolean = false,
+    /** How long an open page stays once it was last used. */
+    val keptPageLifetime: KeptPageLifetime = KeptPageLifetime.MONTH,
 )
 
 /**
@@ -190,6 +195,8 @@ interface PreferencesRepository {
     fun setSaveKind(kind: SaveKind)
     fun setToolbarPlacement(placement: ToolbarPlacement)
     fun setOpenIntoSearch(enabled: Boolean)
+    fun setKeepOnlyChosenPages(enabled: Boolean)
+    fun setKeptPageLifetime(lifetime: KeptPageLifetime)
     fun syncSetupHintDismissed(): Boolean
     fun setSyncSetupHintDismissed(dismissed: Boolean)
     fun didShowShareExtensionTip(): Boolean
@@ -209,6 +216,8 @@ internal class AndroidPreferencesRepository(private val context: Context) : Pref
         saveKind = BrowserSettings.getSaveKind(context),
         toolbarPlacement = BrowserSettings.getToolbarPlacement(context),
         openIntoSearch = BrowserSettings.getOpenIntoSearch(context),
+        keepOnlyChosenPages = BrowserSettings.getKeepOnlyChosenPages(context),
+        keptPageLifetime = BrowserSettings.getKeptPageLifetime(context),
     )
 
     override fun setSearchEngine(engine: SearchEngine) = SearchEngines.set(context, engine)
@@ -228,6 +237,12 @@ internal class AndroidPreferencesRepository(private val context: Context) : Pref
 
     override fun setOpenIntoSearch(enabled: Boolean) =
         BrowserSettings.setOpenIntoSearch(context, enabled)
+
+    override fun setKeepOnlyChosenPages(enabled: Boolean) =
+        BrowserSettings.setKeepOnlyChosenPages(context, enabled)
+
+    override fun setKeptPageLifetime(lifetime: KeptPageLifetime) =
+        BrowserSettings.setKeptPageLifetime(context, lifetime)
 
     override fun syncSetupHintDismissed(): Boolean =
         onboardingPrefs().getBoolean(KEY_DISMISSED_SYNC_SETUP, false)
@@ -305,6 +320,11 @@ class AppViewModel(
     private val _session = MutableStateFlow<AccountStore.AccountSnapshot?>(AccountStore.load(appContext))
     val session: StateFlow<AccountStore.AccountSnapshot?> = _session
 
+    /** Explains an automatic sign-out on the landing screen (e.g. the
+     * Mozilla account password changed on another device). */
+    private val _sessionNotice = MutableStateFlow<Int?>(null)
+    val sessionNotice: StateFlow<Int?> = _sessionNotice
+
     // Seeded synchronously from the disk cache so the first frame shows the
     // cached spaces instantly — the background refresh then updates in place.
     private val _browser = MutableStateFlow(BrowserState().withCachedSnapshot())
@@ -380,6 +400,9 @@ class AppViewModel(
             AppEvents.signedOut.collect { _session.value = null }
         }
         viewModelScope.launch {
+            AppEvents.sessionExpired.collect { sessionExpired() }
+        }
+        viewModelScope.launch {
             AppEvents.snapshotStale.collect { reload() }
         }
     }
@@ -393,6 +416,7 @@ class AppViewModel(
         AccountStore.save(appContext, snapshot)
         SnapshotCache.invalidateMemory()
         _session.value = snapshot
+        _sessionNotice.value = null
         initialLoad()
     }
 
@@ -417,6 +441,7 @@ class AppViewModel(
         // in memory when the secret cannot be persisted securely.
         runCatching { AccountStore.save(appContext, DemoCatalog.account) }
         _session.value = DemoCatalog.account
+        _sessionNotice.value = null
         _browser.value = BrowserState(
             snapshot = DemoCatalog.snapshot,
             selectedIndex = 0,
@@ -439,6 +464,7 @@ class AppViewModel(
         _browser.value = BrowserState()
         _activity.value = ActivityState()
         _whatsNewVisible.value = false
+        _sessionNotice.value = null
         if (account != null) {
             // Best effort, and not tied to this screen's lifetime.
             CoroutineScope(Dispatchers.IO).launch {
@@ -446,6 +472,17 @@ class AppViewModel(
             }
         }
         AppEvents.emitSignedOut()
+    }
+
+    /**
+     * The server rejected the stored session (e.g. the Mozilla account
+     * password changed elsewhere): sign out and say why on the landing
+     * screen. Temporary sync failures never reach this.
+     */
+    private fun sessionExpired() {
+        if (_session.value == null || browserRepository.isDemo()) return
+        signOut()
+        _sessionNotice.value = de.kjell.zencompanion.R.string.session_expired
     }
 
     fun dismissSyncSetupHint() {
@@ -802,6 +839,16 @@ class AppViewModel(
     fun setOpenIntoSearch(enabled: Boolean) {
         preferencesRepository.setOpenIntoSearch(enabled)
         _preferences.value = _preferences.value.copy(openIntoSearch = enabled)
+    }
+
+    fun setKeepOnlyChosenPages(enabled: Boolean) {
+        preferencesRepository.setKeepOnlyChosenPages(enabled)
+        _preferences.value = _preferences.value.copy(keepOnlyChosenPages = enabled)
+    }
+
+    fun setKeptPageLifetime(lifetime: KeptPageLifetime) {
+        preferencesRepository.setKeptPageLifetime(lifetime)
+        _preferences.value = _preferences.value.copy(keptPageLifetime = lifetime)
     }
 
     /**

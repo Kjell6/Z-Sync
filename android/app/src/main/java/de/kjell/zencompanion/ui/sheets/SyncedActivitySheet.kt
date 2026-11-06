@@ -78,7 +78,7 @@ fun SyncedActivitySheet(
         Column(
             Modifier
                 .fillMaxSize()
-                .background(colors.paper)
+                .background(colors.background)
                 .statusBarsPadding(),
         ) {
             // Title bar

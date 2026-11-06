@@ -179,7 +179,7 @@ struct SyncSetupSheet: View {
                 }
                 .padding(20)
             }
-            .background(Palette.paper(scheme).ignoresSafeArea())
+            .background(Palette.background(scheme).ignoresSafeArea())
             .navigationTitle(Text("sync.setup.title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -250,7 +250,7 @@ struct ShareExtensionTip: View {
         }
         .padding(14)
         .background(
-            Palette.paper(scheme),
+            Palette.background(scheme),
             in: RoundedRectangle(cornerRadius: 16, style: .continuous)
         )
         .overlay(

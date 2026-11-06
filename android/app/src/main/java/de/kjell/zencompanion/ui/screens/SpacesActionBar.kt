@@ -23,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -45,6 +46,9 @@ internal fun ActionBar(
     onOpenBrowser: (url: String?, title: String?) -> Unit,
     onOpenActivity: () -> Unit,
     onOpenAccount: () -> Unit,
+    /** Pages open on this phone; the count shows from one up. */
+    pageCount: Int = 0,
+    onOpenPages: () -> Unit = {},
     /** Gap below the bar: toward the essentials grid at the top placement,
      * toward the screen edge when the bar is the last row. */
     bottomPadding: Dp = 6.dp,
@@ -94,7 +98,7 @@ internal fun ActionBar(
             contentAlignment = Alignment.CenterStart,
         ) {
             Row(
-                modifier = Modifier.padding(start = 16.dp, end = 12.dp),
+                modifier = Modifier.padding(start = 16.dp, end = if (pageCount > 0) 52.dp else 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
@@ -112,6 +116,20 @@ internal fun ActionBar(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+            }
+            if (pageCount > 0) {
+                // Its own target: the rest of the field still starts a search.
+                val description = pluralStringResource(R.plurals.browser_page_count, pageCount, pageCount)
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .clickableNoIndication(onClick = onOpenPages)
+                        .size(width = 48.dp, height = 44.dp)
+                        .semantics { contentDescription = description },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    PageCountBadge(count = pageCount, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
+                }
             }
         }
 

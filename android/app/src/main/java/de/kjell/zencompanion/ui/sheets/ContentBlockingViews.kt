@@ -161,7 +161,7 @@ internal fun ContentBlockingSetupScreen() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(zen.paper)
+            .background(zen.background)
             .statusBarsPadding()
             .navigationBarsPadding()
             .padding(horizontal = 24.dp, vertical = 24.dp),

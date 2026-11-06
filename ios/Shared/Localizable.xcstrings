@@ -618,7 +618,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Couldn't sign in to your Mozilla account. Try signing out and back in."
+            "value": "Couldn't sign in to your Mozilla account. Try again in a moment."
           }
         }
       }
@@ -707,6 +707,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "You appear to be offline. Check your connection and try again."
+          }
+        }
+      }
+    },
+    "error.session_expired": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Mozilla account sign-in ended. Open Z-Sync and sign in again."
           }
         }
       }
@@ -926,6 +937,17 @@
       }
     },
     "PREFERENCES": {},
+    "session.expired": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Mozilla account sign-in ended, so Z-Sync signed out. Sign in again to keep syncing."
+          }
+        }
+      }
+    },
     "Settings": {},
     "settings.content_blocking.caption %@": {
       "localizations": {
@@ -2030,12 +2052,274 @@
         }
       }
     },
-    "browser.tabs": {
+    "browser.keep_page": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tabs"
+            "value": "Keep Page"
+          }
+        }
+      }
+    },
+    "browser.kept": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kept"
+          }
+        }
+      }
+    },
+    "browser.open_in_new_page": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open in New Page"
+          }
+        }
+      }
+    },
+    "kept.close_all": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close All"
+          }
+        }
+      }
+    },
+    "kept.close_all_message": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "They are removed from this phone. Tabs in your spaces stay."
+          }
+        }
+      }
+    },
+    "kept.close_all_title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close all pages?"
+          }
+        }
+      }
+    },
+    "kept.close_page": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close page"
+          }
+        }
+      }
+    },
+    "kept.close_page_named %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close %@"
+          }
+        }
+      }
+    },
+    "kept.copy_link": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy link"
+          }
+        }
+      }
+    },
+    "kept.current_page": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current page"
+          }
+        }
+      }
+    },
+    "kept.empty_message": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap + to open a page."
+          }
+        }
+      }
+    },
+    "kept.empty_title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No open pages"
+          }
+        }
+      }
+    },
+    "kept.new_page": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Page"
+          }
+        }
+      }
+    },
+    "kept.pin_to_space": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pin to space"
+          }
+        }
+      }
+    },
+    "settings.keep_only_chosen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep only chosen pages"
+          }
+        }
+      }
+    },
+    "settings.keep_only_chosen.subtitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other pages close with the browser"
+          }
+        }
+      }
+    },
+    "kept.hint.never": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-close off"
+          }
+        }
+      }
+    },
+    "kept.hint.day": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-close after 1 day"
+          }
+        }
+      }
+    },
+    "kept.hint.week": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-close after 7 days"
+          }
+        }
+      }
+    },
+    "kept.hint.month": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-close after 30 days"
+          }
+        }
+      }
+    },
+    "settings.kept_lifetime": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-close"
+          }
+        }
+      }
+    },
+    "settings.kept_lifetime.never": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Never"
+          }
+        }
+      }
+    },
+    "settings.kept_lifetime.day": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After a day"
+          }
+        }
+      }
+    },
+    "settings.kept_lifetime.week": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After a week"
+          }
+        }
+      }
+    },
+    "settings.kept_lifetime.month": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After a month"
+          }
+        }
+      }
+    },
+    "browser.page_count %lld": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld open page"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld open pages"
+                }
+              }
+            }
           }
         }
       }

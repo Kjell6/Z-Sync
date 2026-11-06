@@ -20,7 +20,7 @@ struct BrowserErrorPanel: View {
         VStack(spacing: 0) {
             Image(systemName: symbol)
                 .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(error == .insecure ? Color.red : Palette.coral(scheme))
+                .foregroundStyle(error == .insecure ? Color.red : Palette.ink(scheme))
                 .frame(width: 56, height: 56)
                 .liftCard(scheme, cornerRadius: 18)
                 .padding(.bottom, 16)
@@ -53,7 +53,7 @@ struct BrowserErrorPanel: View {
         .padding(.horizontal, 32)
         .padding(.top, 72)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Palette.paper(scheme))
+        .background(Palette.background(scheme))
         .task(id: error) {
             guard error == .offline else { return }
             if await Self.connectionReturned() {
@@ -120,14 +120,14 @@ struct BrowserErrorPanel: View {
                     .opacity(isLoading ? 0 : 1)
                 if isLoading {
                     ProgressView()
-                        .tint(Palette.onCoral(scheme))
+                        .tint(Palette.paper(scheme))
                 }
             }
             .zenFont(16, weight: .semibold, design: .rounded)
-            .foregroundStyle(Palette.onCoral(scheme))
+            .foregroundStyle(Palette.paper(scheme))
             .padding(.horizontal, 24)
             .frame(minHeight: 48)
-            .background(Palette.coral(scheme), in: Capsule())
+            .background(Palette.ink(scheme), in: Capsule())
         }
         .buttonStyle(PressedButtonStyle())
         .disabled(isLoading)
@@ -138,7 +138,7 @@ struct BrowserErrorPanel: View {
             Text(label)
                 .lineLimit(1)
                 .zenFont(16, weight: .semibold, design: .rounded)
-                .foregroundStyle(Palette.coral(scheme))
+                .foregroundStyle(Palette.ink(scheme))
                 .padding(.horizontal, 24)
                 .frame(minHeight: 48)
                 .contentShape(Capsule())

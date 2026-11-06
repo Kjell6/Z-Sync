@@ -62,6 +62,8 @@ fun SpacesBrowserScreen(
     onOpenAccount: () -> Unit,
     onOpenBrowser: (url: String?, title: String?) -> Unit = { _, _ -> },
     onOpenActivity: () -> Unit = {},
+    pageCount: Int = 0,
+    onOpenPages: () -> Unit = {},
     onDismissShareTip: () -> Unit = {},
     onDismissSyncSetupHint: () -> Unit = {},
 ) {
@@ -82,6 +84,8 @@ fun SpacesBrowserScreen(
             onOpenBrowser = onOpenBrowser,
             onOpenActivity = onOpenActivity,
             onOpenAccount = onOpenAccount,
+            pageCount = pageCount,
+            onOpenPages = onOpenPages,
             // Toward the screen edge when the bar is the last row: the
             // navigation-bar inset is the only gap, so no extra padding.
             bottomPadding = if (toolbarPlacement == ToolbarPlacement.BOTTOM) 0.dp else 6.dp,

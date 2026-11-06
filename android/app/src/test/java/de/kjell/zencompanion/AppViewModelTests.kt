@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import de.kjell.zencompanion.data.AccountStore
 import de.kjell.zencompanion.data.DemoCatalog
 import de.kjell.zencompanion.data.EssentialsColumns
+import de.kjell.zencompanion.data.KeptPageLifetime
 import de.kjell.zencompanion.data.SaveKind
 import de.kjell.zencompanion.data.SearchEngine
 import de.kjell.zencompanion.data.SnapshotCache
@@ -777,6 +778,14 @@ private class FakePreferencesRepository : PreferencesRepository {
 
     override fun setOpenIntoSearch(enabled: Boolean) {
         state = state.copy(openIntoSearch = enabled)
+    }
+
+    override fun setKeepEveryPage(enabled: Boolean) {
+        state = state.copy(keepEveryPage = enabled)
+    }
+
+    override fun setKeptPageLifetime(lifetime: KeptPageLifetime) {
+        state = state.copy(keptPageLifetime = lifetime)
     }
 
     override fun syncSetupHintDismissed(): Boolean = syncSetupDismissedFlag

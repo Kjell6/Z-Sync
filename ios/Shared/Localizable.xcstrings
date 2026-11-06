@@ -2030,12 +2030,244 @@
         }
       }
     },
-    "browser.tabs": {
+    "browser.keep_page": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tabs"
+            "value": "Keep Page"
+          }
+        }
+      }
+    },
+    "browser.kept": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kept"
+          }
+        }
+      }
+    },
+    "browser.open_in_new_page": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open in New Page"
+          }
+        }
+      }
+    },
+    "kept.close_all": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close All"
+          }
+        }
+      }
+    },
+    "kept.close_all_message": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "They are removed from this phone. Tabs in your spaces stay."
+          }
+        }
+      }
+    },
+    "kept.close_all_title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close all pages?"
+          }
+        }
+      }
+    },
+    "kept.close_page": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close page"
+          }
+        }
+      }
+    },
+    "kept.close_page_named %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close %@"
+          }
+        }
+      }
+    },
+    "kept.copy_link": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy link"
+          }
+        }
+      }
+    },
+    "kept.current_page": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current page"
+          }
+        }
+      }
+    },
+    "kept.empty_message": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pages close when you leave the browser. To keep one, open the menu and tap Keep Page."
+          }
+        }
+      }
+    },
+    "kept.empty_title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No open pages"
+          }
+        }
+      }
+    },
+    "kept.new_page": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Page"
+          }
+        }
+      }
+    },
+    "kept.pin_to_space": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pin to space"
+          }
+        }
+      }
+    },
+    "kept.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On this phone"
+          }
+        }
+      }
+    },
+    "settings.keep_every_page": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep every page"
+          }
+        }
+      }
+    },
+    "settings.keep_every_page.subtitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Closing the browser keeps its pages"
+          }
+        }
+      }
+    },
+    "settings.kept_lifetime": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close kept pages"
+          }
+        }
+      }
+    },
+    "settings.kept_lifetime.never": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Never"
+          }
+        }
+      }
+    },
+    "settings.kept_lifetime.day": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After a day"
+          }
+        }
+      }
+    },
+    "settings.kept_lifetime.week": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After a week"
+          }
+        }
+      }
+    },
+    "settings.kept_lifetime.month": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After a month"
+          }
+        }
+      }
+    },
+    "browser.page_count %lld": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld open page"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld open pages"
+                }
+              }
+            }
           }
         }
       }

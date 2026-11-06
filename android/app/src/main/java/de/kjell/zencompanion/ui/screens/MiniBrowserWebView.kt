@@ -8,6 +8,9 @@ import android.graphics.Bitmap
 import android.net.ConnectivityManager
 import android.net.Uri
 import android.net.http.SslError
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.Message
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
@@ -53,7 +56,19 @@ internal fun MiniBrowserWebView(
     desktopSite: Boolean,
     /** 1.0 = 100%. Page zoom for the page's document. */
     pageZoom: Float,
+    /** The back and forward list to come back to, if the page has one. */
+    savedHistory: () -> Bundle?,
+    /** The `window.open` this WebView answers, if it is a popup's page. */
+    takePopup: () -> Message?,
     onWebViewCreated: (WebView) -> Unit,
+    /** The WebView is about to be destroyed. */
+    onWebViewReleased: (WebView) -> Unit,
+    /** A tapped new-window link: its window becomes a new page. */
+    onOpenPopup: (Message) -> Unit,
+    /** `window.close()`. */
+    onCloseWindow: () -> Unit,
+    /** Long press on a web link. */
+    onLinkLongPress: (String) -> Unit,
     onLoadingChange: (Boolean) -> Unit,
     onSiteThemeColorChange: (Color?) -> Unit,
     onCurrentUrlChange: (String) -> Unit,
@@ -89,6 +104,10 @@ internal fun MiniBrowserWebView(
     val loadFailed by rememberUpdatedState(onLoadFailed)
     val rendererGone by rememberUpdatedState(onRendererGone)
     val linkUnavailable by rememberUpdatedState(onLinkUnavailable)
+    val openPopup by rememberUpdatedState(onOpenPopup)
+    val closeWindow by rememberUpdatedState(onCloseWindow)
+    val linkLongPress by rememberUpdatedState(onLinkLongPress)
+    val webViewReleased by rememberUpdatedState(onWebViewReleased)
     val consent = remember { ConsentScriptSlot(handledReload = blockingReload) }
     val pageZoomSlot = remember { PageZoomSlot() }
 
@@ -270,14 +289,9 @@ internal fun MiniBrowserWebView(
                         isUserGesture: Boolean,
                         resultMsg: Message,
                     ): Boolean {
-                        // Only a tap may replace the page. Windows a page opens on its own are dropped.
+                        // Windows a page opens on its own are dropped.
                         if (!isUserGesture) return false
                         val hit = view.hitTestResult
-                        val destination = tappedLinkUrl(hit.type, hit.extra)
-                        if (destination != null) {
-                            view.loadUrl(destination)
-                            return false
-                        }
                         // A popup aimed at another app's scheme goes to that app,
                         // never into a window we cannot render.
                         if (hit.type == WebView.HitTestResult.SRC_ANCHOR_TYPE) {
@@ -287,23 +301,36 @@ internal fun MiniBrowserWebView(
                                 return true
                             }
                         }
-                        val transport = resultMsg.obj as? WebView.WebViewTransport ?: return false
-                        val popup = WebView(view.context)
-                        popup.settings.javaScriptEnabled = true
-                        popup.webViewClient = object : WebViewClient() {
-                            override fun shouldOverrideUrlLoading(
-                                popupView: WebView,
-                                request: WebResourceRequest,
-                            ): Boolean {
-                                val next = sameTabUrl(request.url?.toString()) ?: return false
-                                view.loadUrl(next)
-                                popupView.post { popupView.destroy() }
-                                return true
-                            }
-                        }
-                        transport.webView = popup
-                        resultMsg.sendToTarget()
+                        // A real window: the page keeps its `window.opener`, and a
+                        // blank popup can still be given its address afterwards.
+                        // The message is answered by the new page's WebView.
+                        openPopup(resultMsg)
                         return true
+                    }
+
+                    override fun onCloseWindow(window: WebView?) {
+                        closeWindow()
+                    }
+                }
+
+                setOnLongClickListener {
+                    val hit = hitTestResult
+                    val link = tappedLinkUrl(hit.type, hit.extra)
+                    when {
+                        link != null -> {
+                            linkLongPress(link)
+                            true
+                        }
+                        hit.type == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE -> {
+                            // The hit test reports the image; the link has to be asked for.
+                            val answer = Handler(Looper.getMainLooper()) { message ->
+                                sameTabUrl(message.data.getString("url"))?.let(linkLongPress)
+                                true
+                            }
+                            requestFocusNodeHref(answer.obtainMessage())
+                            true
+                        }
+                        else -> false
                     }
                 }
 
@@ -319,7 +346,14 @@ internal fun MiniBrowserWebView(
                 // Before the first load, which happens ahead of `update`.
                 consent.sync(this, blocker, consentBundle, runNow = false)
                 val loadTarget = formatBrowserInput(initialUrl ?: "")
-                if (loadTarget.isNotEmpty()) {
+                val popup = takePopup()
+                val history = savedHistory()
+                if (popup != null) {
+                    (popup.obj as? WebView.WebViewTransport)?.webView = this
+                    popup.sendToTarget()
+                } else if (history != null && restoreState(history) != null) {
+                    // Back on its own page, with its Back and Forward.
+                } else if (loadTarget.isNotEmpty()) {
                     if (isWebScheme(Uri.parse(loadTarget).scheme)) {
                         loadUrl(loadTarget)
                     } else if (!openURLExternally(ctx, Uri.parse(loadTarget))) {
@@ -347,6 +381,7 @@ internal fun MiniBrowserWebView(
         modifier = Modifier.fillMaxSize(),
         // Stop audio, video and timers when the browser closes.
         onRelease = { web ->
+            webViewReleased(web)
             web.stopLoading()
             web.destroy()
         },

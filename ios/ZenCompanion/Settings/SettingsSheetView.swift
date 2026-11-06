@@ -212,6 +212,36 @@ struct SettingsSheet: View {
 
                 SettingsHairline(scheme: scheme)
 
+                SettingsToggleRow(
+                    title: "settings.keep_every_page",
+                    systemImage: "plus.square.on.square",
+                    scheme: scheme,
+                    subtitle: "settings.keep_every_page.subtitle",
+                    isOn: $model.keepEveryPage
+                )
+
+                SettingsHairline(scheme: scheme)
+
+                SettingsRow(title: "settings.kept_lifetime", systemImage: "clock", scheme: scheme) {
+                    Menu {
+                        ForEach(KeptPageLifetime.allCases) { lifetime in
+                            Button {
+                                model.keptPageLifetime = lifetime
+                            } label: {
+                                if model.keptPageLifetime == lifetime {
+                                    Label(lifetime.title, systemImage: "checkmark")
+                                } else {
+                                    Text(lifetime.title)
+                                }
+                            }
+                        }
+                    } label: {
+                        SettingsMenuValue(text: model.keptPageLifetime.title, scheme: scheme)
+                    }
+                }
+
+                SettingsHairline(scheme: scheme)
+
                 NavigationLink {
                     ContentBlockingSettingsPage(scheme: scheme)
                 } label: {

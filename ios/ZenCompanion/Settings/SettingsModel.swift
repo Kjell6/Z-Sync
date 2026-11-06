@@ -49,6 +49,18 @@ final class SettingsModel {
         didSet { preferences.setBool(openIntoSearch, PreferenceKeys.openIntoSearch, scope: .standard) }
     }
 
+    /// Closing the mini-browser keeps its pages in "On this phone". Off by
+    /// default; read by `OpenPagesStore` when a session ends.
+    var keepEveryPage: Bool {
+        didSet { preferences.setBool(keepEveryPage, PreferenceKeys.keepEveryPage, scope: .standard) }
+    }
+
+    /// How long a kept page stays once it was last used. Never by default;
+    /// read by `OpenPagesStore`.
+    var keptPageLifetime: KeptPageLifetime {
+        didSet { preferences.setString(keptPageLifetime.rawValue, PreferenceKeys.keptPageLifetime, scope: .standard) }
+    }
+
     /// How many essentials sit on one grid row: adaptive (default) or a fixed
     /// 1–5. Read by `BrowserModel` for the start-page grid.
     var essentialsColumns: EssentialsColumns {
@@ -80,6 +92,8 @@ final class SettingsModel {
         self.saveKind = Self.loadSaveKind(preferences)
         self.toolbarPlacement = Self.loadToolbarPlacement(preferences)
         self.openIntoSearch = preferences.bool(PreferenceKeys.openIntoSearch, scope: .standard)
+        self.keepEveryPage = preferences.bool(PreferenceKeys.keepEveryPage, scope: .standard)
+        self.keptPageLifetime = KeptPageLifetime.stored(in: preferences)
         self.essentialsColumns = Self.loadEssentialsColumns(preferences)
     }
 

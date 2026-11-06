@@ -2,8 +2,6 @@ package de.kjell.zencompanion.ui.screens
 
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -11,14 +9,18 @@ import android.view.inputmethod.InputMethodManager
 import android.webkit.WebView
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -36,6 +38,7 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -63,17 +66,32 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.lerp
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -81,20 +99,24 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
-import androidx.lifecycle.viewmodel.compose.viewModel
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.BrowserRepository
+import de.kjell.zencompanion.ui.browser.BrowserPages
 import de.kjell.zencompanion.ui.browser.MiniBrowserViewModel
+import de.kjell.zencompanion.ui.browser.PageSession
 import de.kjell.zencompanion.ui.browser.BlockingCard
-import de.kjell.zencompanion.ui.browser.PageBlocker
 import de.kjell.zencompanion.data.ContentBlocking
-import de.kjell.zencompanion.ui.browser.ReaderExtractor
+import de.kjell.zencompanion.data.ContentBlockingSettings
+import de.kjell.zencompanion.data.OpenPage
+import de.kjell.zencompanion.data.SaveKind
 import de.kjell.zencompanion.ui.components.PinDestinationPicker
 import de.kjell.zencompanion.ui.components.SaveKindMenuButton
 import de.kjell.zencompanion.ui.components.openURLExternally
@@ -104,10 +126,10 @@ import de.kjell.zencompanion.ui.theme.ZenType
 import de.kjell.zencompanion.ui.theme.liftBorder
 import de.kjell.zencompanion.util.Haptics
 import de.kjell.zencompanion.util.PageTitle
-import kotlin.coroutines.resume
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.suspendCancellableCoroutine
-import org.json.JSONTokener
+import kotlinx.coroutines.launch
 
 /** Mutable scroll bookkeeping: read on every packet, never rendered directly. */
 private class ScrollTracker {
@@ -115,16 +137,21 @@ private class ScrollTracker {
     var downRun = 0
 }
 
-/** One ViewModel per screen; a launch key re-arms it instead of accumulating. */
-private const val MINI_BROWSER_VIEW_MODEL_KEY = "mini-browser"
+/** Space between two pages while they slide past each other. */
+private val PageGap = 12.dp
 
-@SuppressLint("SetJavaScriptEnabled")
+/**
+ * The browser: the page on screen with its chrome, and "On this phone" over it.
+ * The pages themselves live in [pages]; closing this screen does not end them.
+ */
 @Composable
-@OptIn(ExperimentalLayoutApi::class)
 fun MiniBrowserScreen(
-    initialUrl: String?,
-    initialTitle: String? = null,
-    launchKey: Int,
+    pages: BrowserPages,
+    /** Opened from the count on home: the overview first, no page yet. */
+    startsInOverview: Boolean,
+    /** Set when the app came back without its pages, after the process died. */
+    launchUrl: String?,
+    launchTitle: String?,
     currentSpace: ZenSpaces.ZenSpace,
     allSpaces: List<ZenSpaces.ZenSpace>,
     browserRepository: BrowserRepository,
@@ -132,19 +159,236 @@ fun MiniBrowserScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    var showOverview by rememberSaveable { mutableStateOf(startsInOverview) }
+    remember {
+        pages.updateSpaces(allSpaces, currentSpace.id)
+        if (pages.active == null && !startsInOverview) pages.open(launchUrl, launchTitle)
+    }
+    val openPages by pages.store.pages.collectAsState()
+    val session = pages.active
+    val scope = rememberCoroutineScope()
+
+    val overviewAlpha = remember { Animatable(0f) }
+    /** The picture flying between the page (1) and its card (0). */
+    val heroProgress = remember { Animatable(1f) }
+    val heroAlpha = remember { Animatable(1f) }
+    var hero by remember { mutableStateOf<OverviewHero?>(null) }
+    /** The card the picture stands in for; it shows once the picture lands. */
+    var hiddenCardId by remember { mutableStateOf<String?>(null) }
+    /** A page that must not join the grid while it fades out. */
+    var excludedCardId by remember { mutableStateOf<String?>(null) }
+    val cardFrames = remember { HashMap<String, Rect>() }
+    var pageFrame by remember { mutableStateOf(Rect.Zero) }
+
+    suspend fun awaitLayout() {
+        repeat(3) { withFrameNanos { } }
+    }
+
+    /** The page shrinks into its card, once the grid has laid out and the card's place is known. */
+    fun openOverview(page: PageSession) {
+        scope.launch {
+            pages.capture(page)
+            val shot = page.shot
+            hiddenCardId = page.id
+            overviewAlpha.snapTo(0f)
+            showOverview = true
+            awaitLayout()
+            val card = cardFrames[page.id]
+            if (shot == null || card == null || pageFrame.isEmpty) {
+                hiddenCardId = null
+                overviewAlpha.animateTo(1f, tween(200))
+                return@launch
+            }
+            heroAlpha.snapTo(1f)
+            heroProgress.snapTo(1f)
+            hero = OverviewHero(shot, card)
+            launch { overviewAlpha.animateTo(1f, tween(HeroMillis)) }
+            heroProgress.animateTo(0f, tween(HeroMillis, easing = FastOutSlowInEasing))
+            hiddenCardId = null
+            hero = null
+        }
+    }
+
+    /** The chosen page grows out of its card and lands on the live page. */
+    fun closeOverview(page: OpenPage) {
+        val session = pages.session(page.id)
+        val shot = session?.shot
+        val card = cardFrames[page.id]
+        pages.activate(page.id)
+        scope.launch {
+            if (shot == null || card == null) {
+                overviewAlpha.animateTo(0f, tween(200))
+                showOverview = false
+                return@launch
+            }
+            hiddenCardId = page.id
+            heroAlpha.snapTo(1f)
+            heroProgress.snapTo(0f)
+            hero = OverviewHero(shot, card)
+            // From home the page has only just joined the screen.
+            awaitLayout()
+            launch { overviewAlpha.animateTo(0f, tween(HeroMillis)) }
+            heroProgress.animateTo(1f, tween(HeroMillis, easing = FastOutSlowInEasing))
+            showOverview = false
+            hiddenCardId = null
+            // A woken page may still be loading under the picture.
+            heroAlpha.animateTo(0f, tween(140))
+            hero = null
+        }
+    }
+
+    /** From home the overview fades in over the spaces; a recreated screen just comes back. */
+    LaunchedEffect(Unit) {
+        if (showOverview && hero == null) overviewAlpha.animateTo(1f, tween(220))
+    }
+
+    // The overview stays up empty, like Safari's; its Done goes.
+    LaunchedEffect(session == null, showOverview) {
+        if (session == null && !showOverview) onDismiss()
+    }
+
+    Box(modifier.fillMaxSize()) {
+        if (session != null) {
+            BrowserPageScreen(
+                modifier = if (showOverview) Modifier.clearAndSetSemantics { } else Modifier,
+                session = session,
+                pages = pages,
+                pageCount = openPages.size,
+                currentSpace = currentSpace,
+                allSpaces = allSpaces,
+                browserRepository = browserRepository,
+                onPageFrame = { pageFrame = it },
+                onOpenOverview = { openOverview(session) },
+                onDismiss = {
+                    pages.leaveBrowser()
+                    onDismiss()
+                },
+            )
+        }
+
+        if (showOverview) {
+            // Back leaves the overview, not the page underneath.
+            BackHandler {
+                pages.active?.let { active ->
+                    pages.store.page(active.id)?.let(::closeOverview)
+                } ?: scope.launch {
+                    overviewAlpha.animateTo(0f, tween(200))
+                    showOverview = false
+                }
+            }
+            Box(Modifier.graphicsLayer { alpha = overviewAlpha.value }) {
+                OpenPagesOverview(
+                    pages = pages,
+                    openPages = openPages.filter { it.id != excludedCardId },
+                    activeId = pages.active?.id.takeIf { excludedCardId == null },
+                    spaces = allSpaces,
+                    saveKind = if (browserRepository.cachedSnapshot?.normalTabsCapability == ZenSpaces.NormalTabsCapability.ENABLED) {
+                        browserRepository.saveKind()
+                    } else {
+                        SaveKind.PINNED
+                    },
+                    hiddenCardId = hiddenCardId,
+                    onCardFrame = { id, frame -> cardFrames[id] = frame },
+                    onOpen = ::closeOverview,
+                    onNewPage = {
+                        // The grid stays as it was while it fades: no card joins it on the way out.
+                        excludedCardId = pages.open(null).id
+                        scope.launch {
+                            overviewAlpha.animateTo(0f, tween(200))
+                            showOverview = false
+                            excludedCardId = null
+                        }
+                    },
+                    onDone = {
+                        val active = pages.active?.let { pages.store.page(it.id) }
+                        if (active != null) {
+                            closeOverview(active)
+                        } else {
+                            scope.launch {
+                                overviewAlpha.animateTo(0f, tween(200))
+                                showOverview = false
+                            }
+                        }
+                    },
+                    onPin = { page, destination ->
+                        scope.launch {
+                            val kind = if (browserRepository.cachedSnapshot?.normalTabsCapability == ZenSpaces.NormalTabsCapability.ENABLED) {
+                                browserRepository.saveKind()
+                            } else {
+                                SaveKind.PINNED
+                            }
+                            runCatching {
+                                browserRepository.addTab(
+                                    url = page.url,
+                                    title = PageTitle.headline(page.title, page.url),
+                                    spaceId = destination.spaceId,
+                                    folderId = if (kind == SaveKind.NORMAL) null else destination.folderId,
+                                    kind = kind,
+                                )
+                            }.onSuccess {
+                                Haptics.perform(context, Haptics.Kind.CONFIRM)
+                                pages.close(page.id)
+                            }
+                        }
+                    },
+                    onShare = { page -> shareUrl(context, page.url, page.title) },
+                )
+            }
+        }
+
+        hero?.let { flying ->
+            val density = LocalDensity.current
+            val progress = heroProgress.value
+            val frame = lerp(flying.card, pageFrame, progress)
+            Image(
+                bitmap = flying.image,
+                contentDescription = null,
+                contentScale = ContentScale.FillWidth,
+                alignment = Alignment.TopCenter,
+                modifier = Modifier
+                    .offset { IntOffset(frame.left.roundToInt(), frame.top.roundToInt()) }
+                    .size(with(density) { frame.width.toDp() }, with(density) { frame.height.toDp() })
+                    .clip(RoundedCornerShape(18.dp * (1f - progress)))
+                    .graphicsLayer { alpha = heroAlpha.value },
+            )
+        }
+    }
+}
+
+/** The picture standing in for a page between the page and its card. */
+private class OverviewHero(val image: ImageBitmap, val card: Rect)
+
+private const val HeroMillis = 340
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+@OptIn(ExperimentalLayoutApi::class)
+private fun BrowserPageScreen(
+    session: PageSession,
+    pages: BrowserPages,
+    pageCount: Int,
+    currentSpace: ZenSpaces.ZenSpace,
+    allSpaces: List<ZenSpaces.ZenSpace>,
+    browserRepository: BrowserRepository,
+    /** Where the page sits in the window, for the zoom into the overview. */
+    onPageFrame: (Rect) -> Unit,
+    onOpenOverview: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    val viewModel: MiniBrowserViewModel = viewModel(
-        key = MINI_BROWSER_VIEW_MODEL_KEY,
-        factory = MiniBrowserViewModel.Factory(
-            repository = browserRepository,
-            initialUrl = initialUrl,
-            initialTitle = initialTitle,
-            spaces = allSpaces,
-            currentSpaceId = currentSpace.id,
-        ),
-    )
+    val viewModel = session.viewModel
+    val webView = session.webView
+    val blocker = session.blocker
+    val scope = rememberCoroutineScope()
+    val pageSwipe = remember { Animatable(0f) }
+    var paneWidth by remember { mutableIntStateOf(0) }
+    val pageGapPx = with(LocalDensity.current) { PageGap.toPx() }
+    /** The link a long press is asking about. */
+    var linkMenu by remember { mutableStateOf<String?>(null) }
     val state by viewModel.state.collectAsState()
 
     // Scroll-driven bar: tucks away on the way down, returns on the way up.
@@ -171,35 +415,15 @@ fun MiniBrowserScreen(
         }
     }
 
-    LaunchedEffect(launchKey) {
+    // Another page came on screen: the chrome starts over for it.
+    LaunchedEffect(session.id) {
         barHidden = false
         scroll.downRun = 0
         scroll.lastY = 0
-        viewModel.startNewLaunch(
-            launchKey = launchKey,
-            initialUrl = initialUrl,
-            initialTitle = initialTitle,
-            spaces = allSpaces,
-            currentSpaceId = currentSpace.id,
-        )
     }
 
-    var webView by remember { mutableStateOf<WebView?>(null) }
     val blockingSettings by ContentBlocking.settings.collectAsState()
-    val blocker = remember {
-        val main = android.os.Handler(android.os.Looper.getMainLooper())
-        lateinit var created: PageBlocker
-        created = PageBlocker { generation, count ->
-            main.post { if (generation == created.generation) viewModel.onBlockedCountChange(count) }
-        }
-        created
-    }
-    var blockingReload by remember { mutableIntStateOf(0) }
     val consentBundle = remember { ContentBlocking.consentScript(context) }
-    /// Scroll offset to put back after a reload finishes.
-    var reloadScroll by remember { mutableStateOf<Int?>(null) }
-    // A crashed renderer takes its WebView with it; a new key builds a fresh one.
-    var webViewGeneration by remember { mutableIntStateOf(0) }
     val focusRequester = remember { FocusRequester() }
 
     // A new document, a failed load or a notice all mean the chrome must come
@@ -211,53 +435,14 @@ fun MiniBrowserScreen(
         }
     }
 
-    SideEffect {
-        viewModel.documentTitle = documentTitle@{
-            val view = webView ?: return@documentTitle null
-            suspendCancellableCoroutine { continuation ->
-                view.post {
-                    if (!continuation.isActive) return@post
-                    view.evaluateJavascript(PageTitle.DOCUMENT_TITLE_SCRIPT) { raw ->
-                        if (continuation.isActive) {
-                            continuation.resume(PageTitle.pickJsPayload(raw, view.url))
-                        }
-                    }
-                }
-            }
-        }
-
-        viewModel.readerPayload = reader@{
-            val view = webView ?: return@reader null
-            suspendCancellableCoroutine { continuation ->
-                view.post {
-                    if (!continuation.isActive) return@post
-                    view.evaluateJavascript(ReaderExtractor.jsonScript) { raw ->
-                        if (!continuation.isActive) return@evaluateJavascript
-                        val payload = runCatching { JSONTokener(raw).nextValue() as? String }.getOrNull()
-                        continuation.resume(payload)
-                    }
-                }
-            }
-        }
+    DisposableEffect(session.id) {
+        onDispose { viewModel.commitPendingPinSave() }
     }
 
-    DisposableEffect(Unit) {
-        onDispose {
-            // This WebView is destroyed with the composition, so a posted
-            // document.title lookup would never call back and the deferred
-            // save would never reach the repository. Withdraw the live lookup
-            // first; the save falls back to the title captured when the
-            // banner opened.
-            viewModel.documentTitle = { null }
-            viewModel.commitPendingPinSave()
-        }
-    }
-
-    // Auto-focus URL bar if opened without initial URL
-    LaunchedEffect(initialUrl) {
-        // After a configuration change the page is already open: don't
-        // jump into the address bar again.
-        if (initialUrl.isNullOrEmpty() && viewModel.restoredUrl(launchKey) == null) {
+    // A new page goes straight into the address field.
+    LaunchedEffect(session.id) {
+        if (session.opensWithSearch) {
+            session.opensWithSearch = false
             delay(200)
             viewModel.beginAddressEdit()
         }
@@ -272,6 +457,15 @@ fun MiniBrowserScreen(
         }
     }
 
+    /**
+     * A new page nothing was typed into ends, and the page before it comes
+     * back. The last one closes the browser.
+     */
+    fun closeIfStillEmpty() {
+        if (state.currentUrl.isNotEmpty() || session.startUrl.isNotEmpty()) return
+        if (pageCount > 1) pages.close(session.id) else onDismiss()
+    }
+
     // Back handling
     BackHandler {
         when {
@@ -283,16 +477,21 @@ fun MiniBrowserScreen(
             state.menuExpanded -> viewModel.collapseMenu()
             else -> when (viewModel.onBackPressed(webView?.canGoBack() == true)) {
                 MiniBrowserViewModel.BackAction.Handled -> Unit
-                MiniBrowserViewModel.BackAction.ClearAddressFocus -> focusManager.clearFocus()
+                MiniBrowserViewModel.BackAction.ClearAddressFocus -> {
+                    focusManager.clearFocus()
+                    closeIfStillEmpty()
+                }
                 MiniBrowserViewModel.BackAction.GoBack -> webView?.goBack()
-                MiniBrowserViewModel.BackAction.Dismiss -> onDismiss()
+                MiniBrowserViewModel.BackAction.Dismiss ->
+                    // A page a link opened ends, and its opener comes back.
+                    if (pages.canReturnToOpener(session.id)) pages.close(session.id) else onDismiss()
             }
         }
     }
 
     val effectiveUrl = state.failedUrl.takeIf { state.pageError != null && it.isNotEmpty() }
         ?: webView?.url
-        ?: state.currentUrl.ifEmpty { initialUrl ?: "" }
+        ?: state.currentUrl.ifEmpty { session.startUrl }
 
     /** One path for typed text, a tapped suggestion and a suggestion search. */
     fun openAddressTarget(target: String) {
@@ -316,9 +515,11 @@ fun MiniBrowserScreen(
     // The error panel sits on the surface color. The failed load leaves the
     // previous page's color behind, so the bar ignores it while it shows.
     val targetBg = state.siteThemeColor.takeIf { state.pageError == null } ?: defaultSurface
+    // At the end of a swipe the plate already shows the new page's color.
+    var colorJumps by remember { mutableStateOf(false) }
     val animatedBgColor by animateColorAsState(
         targetValue = targetBg,
-        animationSpec = tween(300),
+        animationSpec = if (colorJumps) snap() else tween(300),
         label = "browserThemeColor",
     )
 
@@ -367,9 +568,78 @@ fun MiniBrowserScreen(
         label = "barReserve",
     )
 
+    val openPages by pages.store.pages.collectAsState()
+    val pageInfo = openPages.firstOrNull { it.id == session.id }
+    val index = openPages.indexOfFirst { it.id == session.id }
+    val previousPage = openPages.getOrNull(index - 1)
+    val nextPage = openPages.getOrNull(index + 1)
+    // Past the last page there is a new one, as in Safari. Not from a page
+    // that is itself still empty.
+    val offersNewPage = nextPage == null && effectiveUrl.isNotEmpty()
+    // The bar and the status bar are one plate here, so it blends from this
+    // page's color into the one the swipe is heading for.
+    val previousBarColor = previousPage?.let { pages.session(it.id) }?.let { peekColor(it, defaultSurface) }
+    val nextBarColor = nextPage?.let { pages.session(it.id) }?.let { peekColor(it, defaultSurface) }
+        ?: defaultSurface.nudgedForBar()
+    val liveBarColor = {
+        val moved = pageSwipe.value
+        val span = paneWidth + pageGapPx
+        val heading = if (moved < 0) nextBarColor else previousBarColor
+        if (moved == 0f || span <= 0f || heading == null) {
+            barColor
+        } else {
+            lerp(barColor, heading, (abs(moved) / span).coerceIn(0f, 1f))
+        }
+    }
+
+    val swipe = PageSwipe(
+        offset = { pageSwipe.value },
+        span = { paneWidth + pageGapPx },
+        previous = previousPage?.let { peekBar(pages, it) },
+        next = nextPage?.let { peekBar(pages, it) } ?: if (offersNewPage) PeekBar(null, "") else null,
+        onStart = { pages.prepareNeighbours() },
+        onDrag = { amount ->
+            scope.launch {
+                val next = pageSwipe.value + amount
+                val hasTarget = if (next < 0) nextPage != null || offersNewPage else previousPage != null
+                // Page and finger move as one. With nothing that way the page
+                // gives a little and comes back.
+                pageSwipe.snapTo(if (hasTarget) next else pageSwipe.value + amount * 0.2f)
+            }
+        },
+        onEnd = { velocity ->
+            scope.launch {
+                val span = paneWidth + pageGapPx
+                val moved = pageSwipe.value
+                val thrown = abs(velocity) > 1200f && (velocity < 0) == (moved < 0)
+                val leaving = abs(moved) > span * 0.5f || thrown
+                val target = if (moved < 0) nextPage else previousPage
+                if (leaving && (target != null || (moved < 0 && offersNewPage))) {
+                    Haptics.perform(context, Haptics.Kind.SELECTION)
+                    pageSwipe.animateTo(
+                        if (moved < 0) -span else span,
+                        spring(stiffness = 500f),
+                        initialVelocity = velocity,
+                    )
+                    // No frame between these: the page is already where it belongs.
+                    colorJumps = true
+                    if (target != null) pages.activate(target.id) else pages.open(null)
+                    pageSwipe.snapTo(0f)
+                    withFrameNanos { }
+                    withFrameNanos { }
+                    colorJumps = false
+                } else {
+                    pageSwipe.animateTo(0f, spring(stiffness = 500f), initialVelocity = velocity)
+                }
+            }
+        },
+    )
+
     Surface(
-        modifier = modifier.fillMaxSize(),
-        color = barColor,
+        modifier = modifier
+            .fillMaxSize()
+            .drawBehind { drawRect(liveBarColor()) },
+        color = Color.Transparent,
     ) {
         Box(
             modifier = Modifier
@@ -388,67 +658,26 @@ fun MiniBrowserScreen(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .onSizeChanged { paneWidth = it.width }
+                    .onGloballyPositioned { onPageFrame(it.boundsInRoot()) }
+                    .clipToBounds(),
             ) {
-                key(webViewGeneration) {
-                    MiniBrowserWebView(
-                        // A recreated WebView (theme or font change) reopens the
-                        // page the user was on, not the one the browser opened with.
-                        // After a crash it waits for Reload instead.
-                        initialUrl = if (state.pageError == BrowserPageError.CRASHED) {
-                            null
-                        } else {
-                            viewModel.restoredUrl(launchKey) ?: initialUrl
-                        },
-                        isAddressFocused = state.isAddressFocused,
-                        desktopSite = state.requestsDesktopSite,
-                        pageZoom = state.pageZoom,
-                        onWebViewCreated = { webView = it },
-                        onLoadingChange = { loading ->
-                            viewModel.onLoadingChange(loading)
-                            if (!loading) {
-                                reloadScroll?.let { offset ->
-                                    reloadScroll = null
-                                    // The new document can be shorter or taller;
-                                    // clamp so the page still lands on content.
-                                    // `scrollTo` clamps to the new page height
-                                    // itself, so a shorter document is safe.
-                                    webView?.post { webView?.scrollTo(0, offset) }
-                                }
-                            }
-                        },
-                        onSiteThemeColorChange = viewModel::onSiteThemeColorChange,
-                        onCurrentUrlChange = viewModel::onCurrentUrlChange,
-                        onCanGoBackChange = viewModel::onCanGoBackChange,
-                        onCanGoForwardChange = viewModel::onCanGoForwardChange,
-                        onTextInputChange = viewModel::onAddressTextChange,
-                        onTitleChange = viewModel::onCurrentTitleChange,
-                        onProgressChange = viewModel::onProgressChange,
-                        onPageStarted = {
-                            viewModel.onShowingOriginalChange(blocker.showingOriginal)
-                            viewModel.clearPageError()
-                            barHidden = false
-                            scroll.downRun = 0
-                            scroll.lastY = 0
-                        },
-                        onLoadFailed = viewModel::onPageLoadFailed,
-                        onRendererGone = { url ->
-                            viewModel.onPageLoadFailed(BrowserPageError.CRASHED, url ?: state.currentUrl)
-                            viewModel.onLoadingChange(false)
-                            webView = null
-                            webViewGeneration++
-                        },
-                        onLinkUnavailable = viewModel::onLinkUnavailable,
-                        onScrollChange = onPageScroll,
-                        onFindResult = { active, total ->
-                            viewModel.setFindProgress(if (total > 0) "$active/$total" else null)
-                        },
-                        blocker = blocker,
-                        consentBundle = consentBundle,
-                        blockingSettings = blockingSettings,
-                        blockingReload = blockingReload,
-                    )
-                }
+                PageStack(
+                    pages = pages,
+                    active = session,
+                    offset = { pageSwipe.value },
+                    gap = pageGapPx,
+                    blockingSettings = blockingSettings,
+                    consentBundle = consentBundle,
+                    onActiveScroll = onPageScroll,
+                    onActivePageStarted = {
+                        barHidden = false
+                        scroll.downRun = 0
+                        scroll.lastY = 0
+                    },
+                    onLinkLongPress = { linkMenu = it },
+                )
 
                 if (state.readerArticle != null) {
                     MiniBrowserReader(
@@ -476,7 +705,7 @@ fun MiniBrowserScreen(
                                 BrowserErrorExit.GO_BACK -> web?.goBack()
                                 BrowserErrorExit.DISMISS -> {
                                     viewModel.commitPendingPinSave()
-                                    onDismiss()
+                                    if (pages.canReturnToOpener(session.id)) pages.close(session.id) else onDismiss()
                                 }
                             }
                         },
@@ -554,10 +783,15 @@ fun MiniBrowserScreen(
                     MiniBrowserBar(
                         state = state,
                         viewModel = viewModel,
-                        onClose = {
-                            viewModel.commitPendingPinSave()
-                            onDismiss()
-                        },
+                        onClose = onDismiss,
+                        pageCount = pageCount,
+                        onOpenPages = onOpenOverview,
+                        canReturnToOpener = pages.canReturnToOpener(session.id),
+                        onReturnToOpener = { pages.close(session.id) },
+                        isKept = pageInfo?.isKept == true,
+                        canKeep = pageInfo?.let { pages.store.canKeep(it, state.pageError != null) } == true,
+                        onToggleKeep = { pages.toggleKeep(session.id) },
+                        swipe = swipe,
                         effectiveUrl = effectiveUrl,
                         addressText = state.addressText,
                         onAddressTextChange = viewModel::onAddressTextChange,
@@ -568,6 +802,7 @@ fun MiniBrowserScreen(
                             viewModel.endAddressEdit()
                             focusManager.clearFocus()
                             keyboardController?.hide()
+                            closeIfStillEmpty()
                         },
                         onSubmitAddress = { input ->
                             openAddressTarget(viewModel.submitAddress(input))
@@ -585,16 +820,14 @@ fun MiniBrowserScreen(
                             webView?.let { view ->
                                 // Remember where the reader was: the reloaded
                                 // page may otherwise land somewhere else.
-                                reloadScroll = view.scrollY
+                                session.reloadScroll = view.scrollY
                                 view.reload()
                             }
                         },
                         onStop = { webView?.stopLoading() },
                         onCopyLink = {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                            if (clipboard != null && effectiveUrl.isNotEmpty()) {
-                                clipboard.setPrimaryClip(ClipData.newPlainText("URL", effectiveUrl))
-                                Haptics.perform(context, Haptics.Kind.SELECTION)
+                            if (effectiveUrl.isNotEmpty()) {
+                                copyLink(context, effectiveUrl)
                                 viewModel.confirmCopied()
                             }
                         },
@@ -618,13 +851,13 @@ fun MiniBrowserScreen(
                                 is BlockingCard.Blocked -> {
                                     blocker.restoreOriginal(effectiveUrl)
                                     viewModel.onShowingOriginalChange(true)
-                                    blockingReload++
+                                    session.blockingReload++
                                 }
                                 BlockingCard.ShowingOriginal -> {
                                     blocker.blockAgain()
                                     viewModel.onShowingOriginalChange(false)
                                     viewModel.collapseMenu()
-                                    blockingReload++
+                                    session.blockingReload++
                                 }
                                 is BlockingCard.OffForSite -> viewModel.openSiteSettings()
                                 BlockingCard.Hidden -> Unit
@@ -636,10 +869,11 @@ fun MiniBrowserScreen(
                             pageHost(effectiveUrl)?.let { host ->
                                 ContentBlocking.update(blockingSettings.withSite(category, host, on))
                                 // The page reloads so the new switches apply.
-                                blockingReload++
+                                session.blockingReload++
                             }
                         },
                         barColor = barColor,
+                        liveBarColor = liveBarColor,
                     )
                 }
             }
@@ -660,6 +894,26 @@ fun MiniBrowserScreen(
         }
     }
 
+    linkMenu?.let { url ->
+        LinkMenu(
+            url = url,
+            onOpenInNewPage = {
+                linkMenu = null
+                pages.capture(session)
+                pages.open(url, openerId = session.id)
+            },
+            onCopy = {
+                linkMenu = null
+                copyLink(context, url)
+            },
+            onShare = {
+                linkMenu = null
+                shareUrl(context, url, "")
+            },
+            onDismiss = { linkMenu = null },
+        )
+    }
+
     // Keep the find bar's matches in sync with the query.
     LaunchedEffect(state.findVisible, state.findQuery) {
         if (!state.findVisible) return@LaunchedEffect
@@ -668,6 +922,145 @@ fun MiniBrowserScreen(
             viewModel.setFindProgress(null)
         } else {
             webView?.findAllAsync(state.findQuery)
+        }
+    }
+}
+
+// MARK: - Pages
+
+/** The plate color a page brings with it. */
+private fun peekColor(session: PageSession, surface: Color): Color {
+    val state = session.viewModel.state.value
+    return (state.siteThemeColor.takeIf { state.pageError == null } ?: surface).nudgedForBar()
+}
+
+private fun peekBar(pages: BrowserPages, page: OpenPage): PeekBar {
+    val state = pages.session(page.id)?.viewModel?.state?.value
+    return PeekBar(
+        url = page.url,
+        title = page.title,
+        canGoBack = state?.canGoBack == true || page.openerId != null,
+        canGoForward = state?.canGoForward == true,
+    )
+}
+
+/**
+ * Every live page's WebView, one above the other. The page on screen sits in
+ * place and its neighbours right beside it, so a swipe moves real pages. They
+ * all stay in the same composition: finishing a swipe only changes who sits
+ * where, so a page never reloads and nothing flashes.
+ */
+@Composable
+private fun PageStack(
+    pages: BrowserPages,
+    active: PageSession,
+    offset: () -> Float,
+    gap: Float,
+    blockingSettings: ContentBlockingSettings,
+    consentBundle: String?,
+    onActiveScroll: (Int) -> Unit,
+    onActivePageStarted: () -> Unit,
+    onLinkLongPress: (String) -> Unit,
+) {
+    val openPages by pages.store.pages.collectAsState()
+    val index = openPages.indexOfFirst { it.id == active.id }
+    val previousId = openPages.getOrNull(index - 1)?.id
+    val nextId = openPages.getOrNull(index + 1)?.id
+    val currentActive by rememberUpdatedState(active)
+
+    for (session in pages.live) {
+        key(session.id) {
+            val viewModel = session.viewModel
+            val state by viewModel.state.collectAsState()
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        val step = size.width + gap
+                        translationX = when (session.id) {
+                            active.id -> offset()
+                            previousId -> offset() - step
+                            nextId -> offset() + step
+                            // Kept alive, out of sight.
+                            else -> size.width * 3
+                        }
+                    },
+            ) {
+                if (session !== active) {
+                    session.shot?.let { shot ->
+                        Image(
+                            bitmap = shot,
+                            contentDescription = null,
+                            contentScale = ContentScale.FillWidth,
+                            alignment = Alignment.TopCenter,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                }
+                key(session.webViewGeneration) {
+                    MiniBrowserWebView(
+                        // After a crash it waits for Reload instead.
+                        initialUrl = if (state.pageError == BrowserPageError.CRASHED) {
+                            null
+                        } else {
+                            state.currentUrl.ifEmpty { session.startUrl }.ifEmpty { null }
+                        },
+                        isAddressFocused = state.isAddressFocused,
+                        desktopSite = state.requestsDesktopSite,
+                        pageZoom = state.pageZoom,
+                        savedHistory = { session.history.also { session.history = null } },
+                        takePopup = { session.pendingPopup.also { session.pendingPopup = null } },
+                        onWebViewCreated = { session.webView = it },
+                        onWebViewReleased = { pages.webViewReleased(session, it) },
+                        onOpenPopup = { message ->
+                            pages.capture(session)
+                            pages.open(null, openerId = session.id, popup = message)
+                        },
+                        onCloseWindow = { pages.close(session.id) },
+                        onLinkLongPress = onLinkLongPress,
+                        onLoadingChange = { loading ->
+                            viewModel.onLoadingChange(loading)
+                            if (!loading) {
+                                session.reloadScroll?.let { position ->
+                                    session.reloadScroll = null
+                                    // `scrollTo` clamps to the new page height
+                                    // itself, so a shorter document is safe.
+                                    session.webView?.post { session.webView?.scrollTo(0, position) }
+                                }
+                                if (session === currentActive) pages.capture(session)
+                            }
+                        },
+                        onSiteThemeColorChange = viewModel::onSiteThemeColorChange,
+                        onCurrentUrlChange = viewModel::onCurrentUrlChange,
+                        onCanGoBackChange = viewModel::onCanGoBackChange,
+                        onCanGoForwardChange = viewModel::onCanGoForwardChange,
+                        onTextInputChange = viewModel::onAddressTextChange,
+                        onTitleChange = viewModel::onCurrentTitleChange,
+                        onProgressChange = viewModel::onProgressChange,
+                        onPageStarted = {
+                            viewModel.onShowingOriginalChange(session.blocker.showingOriginal)
+                            viewModel.clearPageError()
+                            if (session === currentActive) onActivePageStarted()
+                        },
+                        onLoadFailed = viewModel::onPageLoadFailed,
+                        onRendererGone = { url ->
+                            viewModel.onPageLoadFailed(BrowserPageError.CRASHED, url ?: state.currentUrl)
+                            viewModel.onLoadingChange(false)
+                            session.webView = null
+                            session.webViewGeneration++
+                        },
+                        onLinkUnavailable = viewModel::onLinkUnavailable,
+                        onScrollChange = { if (session === currentActive) onActiveScroll(it) },
+                        onFindResult = { current, total ->
+                            viewModel.setFindProgress(if (total > 0) "$current/$total" else null)
+                        },
+                        blocker = session.blocker,
+                        consentBundle = consentBundle,
+                        blockingSettings = blockingSettings,
+                        blockingReload = session.blockingReload,
+                    )
+                }
+            }
         }
     }
 }
@@ -851,7 +1244,7 @@ private fun MiniBrowserFindBar(
                 onValueChange = onQueryChange,
                 singleLine = true,
                 textStyle = ZenType.rounded(15, FontWeight.Medium).copy(color = zen.ink),
-                cursorBrush = SolidColor(zen.coral),
+                cursorBrush = SolidColor(zen.ink),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search, autoCorrectEnabled = false),
                 keyboardActions = KeyboardActions(onSearch = { onNext() }),
                 modifier = Modifier.weight(1f),
@@ -907,7 +1300,7 @@ private fun FindStep(
 
 // MARK: - Share
 
-private fun shareUrl(context: Context, url: String, title: String) {
+internal fun shareUrl(context: Context, url: String, title: String) {
     if (url.isEmpty()) return
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"

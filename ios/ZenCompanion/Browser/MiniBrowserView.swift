@@ -10,17 +10,22 @@ import WebKit
 /// does not lift that bar: the keys cover it, and a checkmark above them
 /// closes the keyboard.
 struct MiniBrowserView: View {
-    let initialURL: URL?
+    /// The open pages. The view shows the active one and owns none of them.
+    let pages: OpenPagesStore
     let space: ZenSpace
     let allSpaces: [ZenSpace]
     /// Whether a save here may write a normal tab. Comes from the synced
     /// browser's capability, like the share sheet.
     var allowsNormalTabs = false
     var onDismiss: () -> Void
+    /// Closes the browser without the cover sliding away: the overview has
+    /// already faded out over the spaces.
+    var onDismissInPlace: () -> Void
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var model: MiniBrowserModel
+    /// Stands in for the frame between the last page going and the cover closing.
+    @State private var placeholder = MiniBrowserModel(initialURL: nil)
     /// The native address field owns the real first responder; this mirrors it
     /// so the chrome can react (composer, keyboard, selection).
     @State private var isAddressFocused = false
@@ -37,26 +42,53 @@ struct MiniBrowserView: View {
     @State private var keyboardOverlap: CGFloat = 0
     /// Home-indicator inset. The plate fills it; the buttons sit above it.
     @State private var safeBottom: CGFloat = Self.windowSafeBottom()
+    /// The overview is up, over the page and the chrome.
+    @State private var showOverview: Bool
+    /// Fades the overview while a page zooms into or out of it.
+    @State private var overviewVisible: Bool
+    /// The picture flying between the full page and its card.
+    @State private var hero: OverviewHero?
+    @State private var heroAtFullSize = true
+    @State private var heroOpacity: Double = 1
+    /// The card the picture stands in for; it shows once the picture lands.
+    @State private var hiddenCardID: String?
+    /// The overview is on its way out for a new page and shows no changes.
+    @State private var overviewHoldsCards = false
+    /// The page at full size, from the moment the overview opened.
+    @State private var lastPicture: (pageID: String, image: UIImage)?
+    @State private var cardFrames: [String: CGRect] = [:]
+    @State private var pageFrame: CGRect = .zero
+    /// The neighbours sit beside the page while the address bar is swiped.
+    @State private var peeking = false
+    /// Set once the browser is closing, so a second tap cannot close it twice.
+    @State private var leaving = false
+    /// How far the address bar swipe has moved the page.
+    @State private var pageSwipe: CGFloat = 0
+    @State private var paneWidth: CGFloat = 0
 
     init(
-        initialURL: URL?,
-        initialTitle: String?,
+        pages: OpenPagesStore,
         space: ZenSpace,
         allSpaces: [ZenSpace],
         allowsNormalTabs: Bool = false,
-        onDismiss: @escaping () -> Void
+        startsInOverview: Bool = false,
+        onDismiss: @escaping () -> Void,
+        onDismissInPlace: @escaping () -> Void = {}
     ) {
-        self.initialURL = initialURL
+        self.pages = pages
+        self.onDismissInPlace = onDismissInPlace
         self.space = space
         self.allSpaces = allSpaces
         self.allowsNormalTabs = allowsNormalTabs
         self.onDismiss = onDismiss
-        _model = State(initialValue: MiniBrowserModel(
-            initialURL: initialURL,
-            allowsNormalTabs: allowsNormalTabs
-        ))
-        _startsInSearch = State(initialValue: initialURL == nil)
+        _startsInSearch = State(initialValue: pages.active?.model.opensWithSearch ?? false)
+        _showOverview = State(initialValue: startsInOverview)
+        // From home it fades in over the spaces, once it is on screen.
+        _overviewVisible = State(initialValue: false)
     }
+
+    /// The page on screen.
+    private var model: MiniBrowserModel { pages.active?.model ?? placeholder }
 
     /// Keyboard focus, the tap that opens the composer, or the search-open first paint.
     private var addressEditing: Bool { editingAddress || isAddressFocused || startsInSearch }
@@ -94,9 +126,11 @@ struct MiniBrowserView: View {
 
     /// The page's own color, or the error panel's while it covers the page:
     /// the failed load leaves the previous page's color behind.
-    private var sheetBackground: Color {
-        if model.pageError != nil { return Palette.paper(scheme) }
-        return model.themeColor ?? defaultBackground
+    private var sheetBackground: Color { pageColor(of: model) }
+
+    private func pageColor(of page: MiniBrowserModel) -> Color {
+        if page.pageError != nil { return Palette.paper(scheme) }
+        return page.themeColor ?? defaultBackground
     }
 
     /// The bar's surface: the page's own color, nudged a touch darker or
@@ -112,27 +146,67 @@ struct MiniBrowserView: View {
         barBackground.isDarkBackground ? .dark : .light
     }
 
+    /// The browser, the overview above it and the picture flying between them.
+    /// The overview sits outside the browser's own stack: the page runs to the
+    /// screen edge, the overview keeps the safe areas.
     var body: some View {
+        ZStack {
+            if pages.active != nil || !showOverview {
+                browser
+            }
+
+            if showOverview {
+                overview
+                    .opacity(overviewVisible ? 1 : 0)
+            }
+
+            heroLayer
+        }
+        .presentationBackground(pages.active == nil ? Color.clear : barBackground)
+        .onAppear {
+            guard showOverview else { return }
+            withAnimation(.easeOut(duration: 0.22)) { overviewVisible = true }
+        }
+        .onChange(of: pages.activeID) { _, id in
+            guard id != nil else {
+                // The overview stays up empty, like Safari's; its Done goes.
+                if !showOverview { onDismiss() }
+                return
+            }
+            activePageChanged()
+        }
+        .onDisappear {
+            // The cover can go without the close button, for one with the
+            // session. Whatever is still open ends the same way.
+            if pages.activeID != nil { pages.endBrowserSession() }
+        }
+    }
+
+    private var browser: some View {
         NavigationStack {
             ZStack {
                 ZStack {
-                    webPane
-                        .overlay {
-                            if let error = model.pageError {
-                                errorPanel(error)
+                    ZStack {
+                        webPane
+                            .overlay {
+                                if let error = model.pageError {
+                                    errorPanel(error)
+                                }
                             }
-                        }
 
-                    if let article = model.readerArticle {
-                        ReaderView(
-                            article: article,
-                            scheme: scheme,
-                            bottomClearance: pageBottomClearance
-                        ) {
-                            model.closeReader()
+                        if let article = model.readerArticle {
+                            ReaderView(
+                                article: article,
+                                scheme: scheme,
+                                bottomClearance: pageBottomClearance
+                            ) {
+                                model.closeReader()
+                            }
+                            .transition(.opacity)
                         }
-                        .transition(.opacity)
                     }
+                    .background(sheetBackground)
+                    .offset(x: pageSwipe)
 
                     if model.menuExpanded {
                         // UIKit scrim, not a SwiftUI tap gesture. A SwiftUI
@@ -149,6 +223,10 @@ struct MiniBrowserView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
+                    pageFrame = $0
+                    paneWidth = $0.width
+                }
 
                 // The page runs out into a soft blur at the bottom instead of
                 // stopping against the controls.
@@ -167,23 +245,29 @@ struct MiniBrowserView: View {
 
                 MiniBrowserChrome(
                     model: model,
+                    pages: pages,
                     space: space,
                     allSpaces: allSpaces,
                     onToggleMenu: { model.toggleMenu() },
-                    onClose: {
-                        model.commitPendingPinSave()
-                        onDismiss()
-                    },
+                    onClose: { leaveBrowser() },
                     addressEditing: addressEditing,
                     onPickSuggestion: pickSuggestion,
+                    onOpenPages: openOverview,
                     navBar: {
                         MiniBrowserTopBar(
                             model: model,
+                            page: pages.active,
+                            pages: pages,
                             addressEditing: addressEditing,
                             isAddressFocused: $isAddressFocused,
+                            swipeOffset: $pageSwipe,
+                            pageSpan: paneWidth + PageHostView.pageGap,
                             onBeginAddressEdit: beginAddressEditing,
                             onCancel: cancelAddressEditing,
-                            onSubmit: submitAddress
+                            onSubmit: submitAddress,
+                            onReturnToOpener: returnToOpener,
+                            onSwipeStart: beginSwipe,
+                            onSwipeEnd: finishSwipe
                         )
                     }
                 )
@@ -192,14 +276,12 @@ struct MiniBrowserView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 .offset(y: barCollapsed ? 220 : 0)
                 .opacity(barCollapsed ? 0 : 1)
-                .accessibilityHidden(barCollapsed)
-
+                .accessibilityHidden(barCollapsed || showOverview)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .background(sheetBackground.ignoresSafeArea())
             .ignoresSafeArea(edges: .bottom)
             .ignoresSafeArea(.keyboard)
-            .presentationBackground(barBackground)
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
                 let overlap = Self.keyboardOverlap(from: note)
                 withAnimation(Self.keyboardAnimation(from: note)) {
@@ -218,7 +300,6 @@ struct MiniBrowserView: View {
             .tint(Palette.ink(scheme))
             .onAppear {
                 safeBottom = Self.windowSafeBottom()
-                model.loadInitial()
                 if model.opensWithSearch {
                     isAddressFocused = true
                 }
@@ -259,17 +340,67 @@ struct MiniBrowserView: View {
                     }
                 }
             }
-            .onDisappear {
-                model.commitPendingPinSave()
+        }
+    }
+
+    private var overview: some View {
+        OpenPagesOverview(
+            pages: pages,
+            spaces: allSpaces,
+            saveKind: allowsNormalTabs ? model.saveKind : .pinned,
+            hiddenCardID: hiddenCardID,
+            excludedCardID: overviewHoldsCards ? pages.activeID : nil,
+            onCardFrames: { cardFrames = $0 },
+            onOpen: closeOverview(to:),
+            onNewPage: openNewPage,
+            onDone: {
+                if let page = pages.active {
+                    closeOverview(to: page)
+                } else {
+                    leaveEmptyOverview()
+                }
             }
+        )
+    }
+
+    /// The page shrinking into its card, or growing back out of it. Both frames
+    /// are in screen coordinates and the layer spans the whole screen, so the
+    /// picture starts exactly over the thing it stands in for.
+    @ViewBuilder
+    private var heroLayer: some View {
+        if let hero {
+            let frame = heroAtFullSize ? pageFrame : hero.card
+            ZStack(alignment: .topLeading) {
+                Color.clear
+                Color.clear
+                    .overlay(alignment: .top) {
+                        Image(uiImage: hero.image)
+                            .resizable()
+                            .scaledToFill()
+                    }
+                    .frame(width: frame.width, height: frame.height)
+                    .clipShape(RoundedRectangle(cornerRadius: heroAtFullSize ? 0 : 18, style: .continuous))
+                    .position(x: frame.midX, y: frame.midY)
+            }
+            .opacity(heroOpacity)
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
         }
     }
 
     /// The page stops at the bar: the plate is opaque, so there is nothing to
     /// paint under it and no viewport inset to reserve.
     private var webPane: some View {
-        MiniBrowserRepresentable(model: model, bottomClearance: pageBottomClearance)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        let neighbours = pages.neighbours
+        return MiniBrowserRepresentable(
+            model: model,
+            bottomClearance: pageBottomClearance,
+            previous: peeking ? neighbours.previous.map(peek) : nil,
+            next: peeking ? neighbours.next.map(peek) : nil,
+            slidingColor: peeking ? UIColor(sheetBackground) : nil,
+            topOverflow: pageFrame.minY
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     /// Height the page has to keep clear at the bottom. Exactly the floating
@@ -280,6 +411,10 @@ struct MiniBrowserView: View {
     private var pageBottomClearance: CGFloat {
         guard !barCollapsed else { return 0 }
         return MiniBrowserChromeMetrics.height(above: chromeBottomInset)
+    }
+
+    private func peek(_ page: OpenPage) -> PeekingPage {
+        PeekingPage(webView: page.model.webView, shot: page.shot, color: UIColor(pageColor(of: page.model)))
     }
 
     private static func windowSafeBottom() -> CGFloat {
@@ -324,6 +459,197 @@ struct MiniBrowserView: View {
 }
 
 private extension MiniBrowserView {
+    /// Closes the browser. What happens to each page is the store's call; the
+    /// picture for the list is taken before the page goes away.
+    private func leaveBrowser() {
+        guard !leaving else { return }
+        leaving = true
+        Task { @MainActor in
+            if let page = pages.active { await pages.capture(page) }
+            // The session ends once the cover is gone: while it slides away
+            // it keeps showing the page, not an empty browser.
+            onDismiss()
+        }
+    }
+
+    /// Another page came on screen: the chrome starts over for it, in one
+    /// step. A new page goes straight into the address field.
+    private func activePageChanged() {
+        holdChromeAnimation()
+        if isAddressFocused { isAddressFocused = false }
+        keyboardOverlap = 0
+        guard model.opensWithSearch else {
+            editingAddress = false
+            startsInSearch = false
+            model.restoreAddressDisplay()
+            return
+        }
+        startsInSearch = true
+        editingAddress = true
+        DispatchQueue.main.async { isAddressFocused = true }
+    }
+
+    /// The chrome's springs belong to the user editing the address, not to a
+    /// page change: they would run the bar through a morph mid-switch.
+    private func holdChromeAnimation() {
+        animateAddressChrome = false
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(450))
+            animateAddressChrome = true
+        }
+    }
+
+    private static var heroMotion: Animation { .spring(duration: 0.36, bounce: 0) }
+
+    /// The page shrinks into its card. Nothing moves until the overview has
+    /// laid out behind the scenes and the card's place is known for certain;
+    /// the target is then fixed, so nothing can change it mid-flight.
+    private func openOverview() {
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+            model.collapseMenu()
+        }
+        Task { @MainActor in
+            guard let page = pages.active, let picture = await pages.capture(page), !reduceMotion else {
+                fadeOverviewIn()
+                return
+            }
+            lastPicture = (page.id, picture)
+            hiddenCardID = page.id
+            showOverview = true
+            // Laid out at zero opacity; the grid has scrolled to the card by now.
+            try? await Task.sleep(for: .milliseconds(60))
+            guard let card = cardFrames[page.id], !pageFrame.isEmpty else {
+                hiddenCardID = nil
+                fadeOverviewIn()
+                return
+            }
+            heroAtFullSize = true
+            heroOpacity = 1
+            hero = OverviewHero(pageID: page.id, image: picture, card: card)
+            withAnimation(Self.heroMotion) {
+                heroAtFullSize = false
+                overviewVisible = true
+            } completion: {
+                hiddenCardID = nil
+                hero = nil
+            }
+        }
+    }
+
+    private func fadeOverviewIn() {
+        showOverview = true
+        withAnimation(.easeOut(duration: 0.2)) { overviewVisible = true }
+    }
+
+    private func fadeOverviewOut(then finish: @escaping () -> Void = {}) {
+        withAnimation(.easeOut(duration: 0.2)) { overviewVisible = false } completion: {
+            showOverview = false
+            finish()
+        }
+    }
+
+    /// The chosen page grows out of its card and lands on the live page.
+    private func closeOverview(to page: OpenPage) {
+        let picture = lastPicture?.pageID == page.id ? lastPicture?.image : page.shot
+        let card = cardFrames[page.id]
+        pages.activate(page.id)
+        guard !reduceMotion, let picture, let card else {
+            fadeOverviewOut()
+            return
+        }
+        hiddenCardID = page.id
+        heroAtFullSize = false
+        heroOpacity = 1
+        hero = OverviewHero(pageID: page.id, image: picture, card: card)
+        Task { @MainActor in
+            // From home the page has only just joined the screen.
+            try? await Task.sleep(for: .milliseconds(40))
+            withAnimation(Self.heroMotion) {
+                heroAtFullSize = true
+                overviewVisible = false
+            } completion: {
+                showOverview = false
+                hiddenCardID = nil
+                // A woken page may still be loading under the picture.
+                withAnimation(.easeOut(duration: 0.14)) { heroOpacity = 0 } completion: {
+                    hero = nil
+                    heroOpacity = 1
+                }
+            }
+        }
+    }
+
+    /// A blank page takes over under the overview, which then fades away.
+    private func openNewPage() {
+        holdChromeAnimation()
+        // The grid stays as it was while it fades: no card joins it on the way out.
+        overviewHoldsCards = true
+        pages.open(url: nil)
+        fadeOverviewOut { overviewHoldsCards = false }
+    }
+
+    /// Nothing open and nothing to go back to: the spaces come back into view.
+    private func leaveEmptyOverview() {
+        fadeOverviewOut(then: onDismissInPlace)
+    }
+
+    /// A swipe started: the neighbours wake and take their places beside the page.
+    private func beginSwipe() {
+        pages.prepareNeighbours()
+        peeking = true
+        Task { await pictureActivePage() }
+    }
+
+    private func pictureActivePage() async {
+        guard let page = pages.active else { return }
+        await pages.capture(page)
+    }
+
+    /// Back on a page a link opened, once it has no history left: it ends, and
+    /// the page that opened it comes back.
+    private func returnToOpener() {
+        guard let page = pages.active else { return }
+        pages.close(page.id)
+    }
+
+    /// The finger let go. The spring takes over at the finger's own speed, so
+    /// the page never changes pace. Pages already sit where they end up, so
+    /// the switch itself shows nothing.
+    private func finishSwipe(_ end: PageSwipeEnd) {
+        let span = paneWidth + PageHostView.pageGap
+        guard end.target != .stay else {
+            let speed = pageSwipe == 0 ? 0 : -end.velocity / pageSwipe
+            withAnimation(.interpolatingSpring(duration: 0.3, bounce: 0, initialVelocity: speed)) {
+                pageSwipe = 0
+            } completion: {
+                if pageSwipe == 0 { peeking = false }
+            }
+            return
+        }
+        let destination = end.direction * span
+        let distance = destination - pageSwipe
+        let speed = distance == 0 ? 0 : end.velocity / distance
+        withAnimation(
+            .interpolatingSpring(duration: 0.3, bounce: 0, initialVelocity: speed),
+            completionCriteria: .logicallyComplete
+        ) {
+            pageSwipe = destination
+        } completion: {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                switch end.target {
+                case .page(let id): pages.activate(id)
+                case .newPage: pages.open(url: nil)
+                case .stay: break
+                }
+                peeking = false
+                pageSwipe = 0
+            }
+        }
+        AppServices.haptics.selectionChanged()
+    }
+
     private func beginAddressEditing() {
         // The full URL is written while the collapsed bar is still a label.
         // The text field is created afterwards, already holding that string.
@@ -333,7 +659,7 @@ private extension MiniBrowserView {
     }
 
     private func cancelAddressEditing() {
-        if model.effectiveURL != nil {
+        if model.pageURL != nil {
             if isAddressFocused {
                 isAddressFocused = false
             } else {
@@ -341,9 +667,13 @@ private extension MiniBrowserView {
                 startsInSearch = false
                 model.restoreAddressDisplay()
             }
-        } else {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                onDismiss()
+        } else if let page = pages.active {
+            // A new page nothing was typed into: it ends, and the page before
+            // it comes back. The last one closes the browser.
+            if pages.pages.count > 1 {
+                pages.close(page.id)
+            } else {
+                leaveBrowser()
             }
         }
     }
@@ -357,8 +687,11 @@ private extension MiniBrowserView {
             onSearch: { model.searchFailedHost() },
             onOpenExternally: { model.openCurrentInExternalBrowser() },
             onLeave: {
-                if model.leaveErrorPage() {
-                    onDismiss()
+                guard model.leaveErrorPage(), let page = pages.active else { return }
+                if page.openerID != nil {
+                    pages.close(page.id)
+                } else {
+                    leaveBrowser()
                 }
             }
         )
@@ -407,6 +740,14 @@ private extension MiniBrowserView {
             removal: .move(edge: .bottom).combined(with: .opacity)
         ))
     }
+}
+
+/// The picture flying between the page and its card in the overview.
+private struct OverviewHero {
+    let pageID: String
+    let image: UIImage
+    /// Where the card sits on screen, fixed when the flight starts.
+    let card: CGRect
 }
 
 // MARK: - Reading view
@@ -510,7 +851,7 @@ private struct ReaderView: View {
                 .padding(.leading, 14)
                 .overlay(alignment: .leading) {
                     Rectangle()
-                        .fill(Palette.coral(scheme).opacity(0.5))
+                        .fill(Palette.ink(scheme).opacity(0.25))
                         .frame(width: 2)
                 }
                 .fixedSize(horizontal: false, vertical: true)
@@ -528,7 +869,7 @@ private struct ReaderView: View {
             HStack(alignment: .firstTextBaseline, spacing: 9) {
                 Text(verbatim: "•")
                     .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundStyle(Palette.coral(scheme).opacity(0.85))
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.6))
                 Text(block.text)
                     .font(.system(size: 17, design: .rounded))
                     .foregroundStyle(Palette.ink(scheme).opacity(0.9))

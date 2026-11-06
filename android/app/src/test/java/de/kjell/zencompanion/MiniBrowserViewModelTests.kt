@@ -240,42 +240,6 @@ class MiniBrowserViewModelTests {
     }
 
     @Test
-    fun newLaunchKeyResetsStateButRepeatedKeyKeepsIt() = runTest(mainDispatcherRule.testDispatcher) {
-        val repository = FakeMiniBrowserRepository()
-        val vm = newViewModel(repository)
-        vm.triggerPinBanner()
-        assertTrue(vm.state.value.showPinBanner)
-
-        vm.startNewLaunch(
-            launchKey = 2,
-            initialUrl = "https://two.example/",
-            initialTitle = "Two",
-            spaces = listOf(testSpace("s1"), testSpace("s2")),
-            currentSpaceId = "s2",
-        )
-        assertFalse(vm.state.value.showPinBanner)
-        assertEquals("https://two.example/", vm.state.value.currentUrl)
-        assertEquals(PinDestination(spaceId = "s2"), vm.state.value.pinnedDestination)
-
-        vm.onCurrentUrlChange("https://three.example/")
-        vm.startNewLaunch(
-            launchKey = 2,
-            initialUrl = "https://two.example/",
-            initialTitle = "Two",
-            spaces = listOf(testSpace("s1"), testSpace("s2")),
-            currentSpaceId = "s2",
-        )
-        assertEquals("https://three.example/", vm.state.value.currentUrl)
-        // Recreating the screen for the same launch reopens the current page;
-        // a new launch never sees it.
-        assertEquals("https://three.example/", vm.restoredUrl(2))
-        assertNull(vm.restoredUrl(3))
-
-        advanceTimeBy(5_000)
-        runCurrent()
-    }
-
-    @Test
     fun normalSaveTargetsSpaceRootAndShowsFallbackNotice() = runTest(mainDispatcherRule.testDispatcher) {
         val repository = FakeMiniBrowserRepository(
             saveKind = SaveKind.NORMAL,
@@ -384,15 +348,47 @@ class MiniBrowserViewModelTests {
 
         vm.triggerPinBanner()
         vm.selectPinSaveKind(SaveKind.NORMAL)
-        vm.startNewLaunch(
-            launchKey = 99,
-            initialUrl = "https://start.example/",
-            initialTitle = "Start",
-            spaces = listOf(testSpace("s1"), testSpace("s2")),
-            currentSpaceId = "s1",
-        )
+        vm.commitPendingPinSave()
 
+        // The next save starts from the setting again.
+        vm.triggerPinBanner()
         assertEquals(SaveKind.PINNED, vm.state.value.saveKind)
+
+        advanceTimeBy(5_000)
+        runCurrent()
+    }
+
+    @Test
+    fun aSavedPinReportsItsAddress() = runTest(mainDispatcherRule.testDispatcher) {
+        val repository = FakeMiniBrowserRepository()
+        val vm = newViewModel(repository)
+        val started = mutableListOf<String>()
+        val pinned = mutableListOf<String>()
+        vm.onPinStarted = { started += it }
+        vm.onPinned = { pinned += it }
+
+        vm.triggerPinBanner()
+        vm.commitPendingPinSave()
+        advanceTimeBy(5_000)
+        runCurrent()
+
+        assertEquals(1, started.size)
+        assertEquals(started, pinned)
+    }
+
+    @Test
+    fun aNewAddressAndTitleReachTheOpenPages() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = newViewModel(FakeMiniBrowserRepository())
+        val changes = mutableListOf<Pair<String, String>>()
+        vm.onPageChange = { url, title -> changes += url to title }
+
+        vm.onCurrentUrlChange("https://next.example/")
+        vm.onCurrentTitleChange("Next page")
+
+        assertEquals(
+            listOf("https://next.example/" to "", "https://next.example/" to "Next page"),
+            changes,
+        )
     }
 
     @Test

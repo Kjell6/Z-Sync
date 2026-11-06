@@ -344,7 +344,13 @@ final class MiniBrowserModel {
     @ObservationIgnored private weak var zoomedWebView: WKWebView?
     @ObservationIgnored private var appliedPageZoom: Double?
 
-    @ObservationIgnored weak var webView: WKWebView?
+    /// The page's live web view; nil while the page sleeps. Owned here, not by
+    /// the view, so the page survives being off screen.
+    var webView: WKWebView?
+    /// Keeps the delegates alive with the web view.
+    @ObservationIgnored private var driver: MiniBrowserWebDriver?
+    /// The open pages this page belongs to; nil outside the browser.
+    @ObservationIgnored weak var host: MiniBrowserPageHost?
 
     // MARK: Address field
     var addressText: String = ""
@@ -370,6 +376,8 @@ final class MiniBrowserModel {
     /// The page the user pinned, captured when the banner opened, so a later
     /// navigation can't swap in another page before the save commits.
     private var pendingPin: (url: URL, title: String)?
+    /// The address saved from this page, so "Keep every page" leaves it alone.
+    private(set) var pinnedURL: URL?
     /// How the pending save will be written (pinned vs normal). Captured when
     /// the banner is triggered and kept honest against the capability.
     private(set) var pinSaveKind: SaveKind = .pinned
@@ -399,7 +407,7 @@ final class MiniBrowserModel {
     @ObservationIgnored private var pinNoticeDismissTask: Task<Void, Never>?
     @ObservationIgnored private(set) var pinSaveTask: Task<Void, Never>?
 
-    private let initialURL: URL?
+    private(set) var initialURL: URL?
     private let pinWriter: PinWriting
     private let urlOpener: URLOpening
     private let searchEngine: SearchEngineProviding
@@ -407,7 +415,7 @@ final class MiniBrowserModel {
     private let preferences: PreferencesStoring
     /// Whether this account can write normal tabs at all. Without it the save
     /// row offers pinned only, like the share sheet.
-    let allowsNormalTabs: Bool
+    var allowsNormalTabs: Bool
     private let suggestionClient: SearchSuggestionFetching
     private let suggestionDebounce: Duration
 
@@ -437,7 +445,10 @@ final class MiniBrowserModel {
 
     /// The persisted "save shared tabs as" choice. AppGroup first, standard
     /// fallback; unknown values mean `.pinned`.
-    var saveKind: SaveKind {
+    var saveKind: SaveKind { Self.storedSaveKind(preferences) }
+
+    /// Same read for callers without a browser, such as the home list.
+    static func storedSaveKind(_ preferences: PreferencesStoring) -> SaveKind {
         let key = PreferenceKeys.saveKind
         if let raw = preferences.string(key, scope: .appGroup), let value = SaveKind(rawValue: raw) {
             return value
@@ -449,7 +460,11 @@ final class MiniBrowserModel {
     }
 
     /// A new tab opens with the search field focused instead of loading a page.
-    var opensWithSearch: Bool { initialURL == nil }
+    var opensWithSearch: Bool { initialURL == nil && currentURL == nil && failedURL == nil }
+
+    /// The page's own address, leaving out what the address field holds. Nil
+    /// for a new page nothing has loaded in yet.
+    var pageURL: URL? { currentURL ?? initialURL }
 
     // MARK: - URL resolution
 
@@ -490,6 +505,63 @@ final class MiniBrowserModel {
             load(url: initialURL)
             addressText = BrowserInput.displayText(for: initialURL)
         }
+    }
+
+    // MARK: - Web view lifecycle
+
+    /// Takes on a new web view. The page's own settings go on it first.
+    func adopt(_ webView: WKWebView, driver: MiniBrowserWebDriver) {
+        self.webView = webView
+        self.driver = driver
+        applyWebpagePreferences()
+    }
+
+    /// Gives the page a web view again: from [history] when there is one, at
+    /// its last address otherwise. Nothing happens to a page that is awake.
+    func wake(history: Any? = nil) {
+        guard webView == nil else { return }
+        let view = MiniBrowserWebDriver.attach(to: self)
+        if let history {
+            view.interactionState = history
+        } else if let url = pageURL {
+            load(url: url)
+        }
+        if let url = pageURL { addressText = BrowserInput.displayText(for: url) }
+    }
+
+    /// Lets the web view go and returns its history, so `wake` can bring it
+    /// back. The title, address and page settings stay on the model.
+    @discardableResult
+    func sleep() -> Any? {
+        guard let webView else { return nil }
+        let history = webView.interactionState
+        webView.stopLoading()
+        webView.configuration.userContentController.removeAllScriptMessageHandlers()
+        webView.removeFromSuperview()
+        self.webView = nil
+        driver = nil
+        // The next web view starts without the lists and without the zoom.
+        appliedBlocking = nil
+        zoomedWebView = nil
+        appliedPageZoom = nil
+        reloadScrollY = nil
+        isLoading = false
+        estimatedProgress = 0
+        canGoBack = false
+        canGoForward = false
+        return history
+    }
+
+    /// The page left the screen: its sound stops with it.
+    func didLeaveScreen() {
+        webView?.pauseAllMediaPlayback(completionHandler: nil)
+        collapseMenu()
+        setScrollHidesBar(false)
+    }
+
+    /// Brings a page back from the list with what was saved about it.
+    func restore(title: String) {
+        pageTitle = title
     }
 
     func load(url: URL) {
@@ -764,6 +836,7 @@ final class MiniBrowserModel {
             readerLoading = false
         }
         currentURL = url
+        if url != nil { host?.pageDidChange(self) }
     }
 
     /// Keeps a real document title. URL-shaped WebKit titles are ignored so
@@ -771,6 +844,7 @@ final class MiniBrowserModel {
     func adoptPageTitle(_ raw: String) {
         guard let title = PageTitle.usable(raw, url: currentURL ?? webView?.url) else { return }
         pageTitle = title
+        host?.pageDidChange(self)
     }
 
     func currentURLDidChange(_ url: URL?, isAddressFocused: Bool) {
@@ -1100,6 +1174,7 @@ final class MiniBrowserModel {
         let fallbackTitle = stillOnPage && !pageTitle.isEmpty ? pageTitle : pin.title
         let target = pinnedDestination
         let kind = pinSaveKind
+        pinnedURL = pin.url
 
         pinSaveTask = Task(priority: .userInitiated) {
             // document.title is the browser tab name. WebKit's `title` is often
@@ -1118,6 +1193,8 @@ final class MiniBrowserModel {
                 if outcome.fellBackToPinned {
                     showPinNotice(String(localized: "share.saved.fallback_pinned"), duration: 6.0)
                 }
+                // Pinned, the page belongs to the space.
+                host?.pageWasPinned(self, url: pin.url)
             } catch {
                 showPinNotice("\(String(localized: "browser.pin_failed")) \(error.zenUserMessage)", duration: 6.0)
             }

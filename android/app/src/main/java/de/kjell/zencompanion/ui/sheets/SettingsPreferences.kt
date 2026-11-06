@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.ArrowDropDown
@@ -42,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.EssentialsColumns
+import de.kjell.zencompanion.data.KeptPageLifetime
 import de.kjell.zencompanion.data.SearchEngine
 import de.kjell.zencompanion.data.SearchEngines
 import de.kjell.zencompanion.data.ToolbarPlacement
@@ -70,6 +73,8 @@ internal fun SettingsBrowsingSection(
     onSetSearchEngine: (SearchEngine) -> Unit,
     onOpenAddSearchEngine: () -> Unit,
     onSetOpenIntoSearch: (Boolean) -> Unit,
+    onSetKeepEveryPage: (Boolean) -> Unit,
+    onSetKeptPageLifetime: (KeptPageLifetime) -> Unit,
     onOpenContentBlocking: () -> Unit,
     onSetAlwaysOpenExternally: (Boolean) -> Unit,
 ) {
@@ -94,6 +99,44 @@ internal fun SettingsBrowsingSection(
                     checked = preferences.openIntoSearch,
                     onCheckedChange = onSetOpenIntoSearch,
                 )
+
+                SettingsDivider()
+
+                ToggleRow(
+                    title = stringResource(R.string.settings_keep_every_page),
+                    subtitle = stringResource(R.string.settings_keep_every_page_subtitle),
+                    icon = Icons.Outlined.BookmarkBorder,
+                    checked = preferences.keepEveryPage,
+                    onCheckedChange = onSetKeepEveryPage,
+                )
+
+                SettingsDivider()
+
+                var lifetimeExpanded by remember { mutableStateOf(false) }
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    MenuRow(
+                        title = stringResource(R.string.settings_kept_lifetime),
+                        value = preferences.keptPageLifetime.label(),
+                        icon = Icons.Outlined.Schedule,
+                        onClick = { lifetimeExpanded = true },
+                    )
+                    DropdownMenu(
+                        expanded = lifetimeExpanded,
+                        onDismissRequest = { lifetimeExpanded = false },
+                    ) {
+                        KeptPageLifetime.entries.forEach { option ->
+                            val selected = option == preferences.keptPageLifetime
+                            DropdownMenuItem(
+                                text = { MenuItemText(option.label(), selected) },
+                                trailingIcon = if (selected) ({ MenuItemCheck() }) else null,
+                                onClick = {
+                                    onSetKeptPageLifetime(option)
+                                    lifetimeExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
 
                 SettingsDivider()
 
@@ -474,6 +517,16 @@ private fun MenuItemCheck() {
 }
 
 /** "Automatic", or the bare number of essentials per row. */
+@Composable
+private fun KeptPageLifetime.label(): String = stringResource(
+    when (this) {
+        KeptPageLifetime.NEVER -> R.string.settings_kept_lifetime_never
+        KeptPageLifetime.DAY -> R.string.settings_kept_lifetime_day
+        KeptPageLifetime.WEEK -> R.string.settings_kept_lifetime_week
+        KeptPageLifetime.MONTH -> R.string.settings_kept_lifetime_month
+    },
+)
+
 @Composable
 private fun EssentialsColumns.label(): String = when (this) {
     EssentialsColumns.AUTOMATIC -> stringResource(R.string.settings_essentials_columns_automatic)

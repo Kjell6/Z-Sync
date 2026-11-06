@@ -8,6 +8,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -41,7 +43,8 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Description
-import androidx.compose.material.icons.outlined.FilterNone
+import androidx.compose.material.icons.outlined.Bookmark
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.FormatSize
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
@@ -61,15 +64,25 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -90,6 +103,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
+import de.kjell.zencompanion.ui.components.Favicon
 import de.kjell.zencompanion.data.BlockCategory
 import de.kjell.zencompanion.data.ContentBlockingSettings
 import de.kjell.zencompanion.data.SaveKind
@@ -171,7 +185,7 @@ private val DockInset = 7.dp
 /**
  * Bottom browser chrome (port of iOS `MiniBrowserChrome`), bottom to top:
  *
- *   [tab] [＋] [⋯]    three separate buttons; tab and plus are placeholders
+ *   [pages] [x] [⋯]   the open pages, the way out, the menu
  *   [navigation bar]  back, forward, favicon, title, reload
  *   [menu panel]      only while the menu is open: it grows above the bar
  *
@@ -186,6 +200,16 @@ internal fun MiniBrowserBar(
     state: MiniBrowserViewModel.State,
     viewModel: MiniBrowserViewModel,
     onClose: () -> Unit,
+    /** Open pages on this phone; the dock's button shows the count. */
+    pageCount: Int,
+    onOpenPages: () -> Unit,
+    /** The page has no history left, but a link opened it: Back returns there. */
+    canReturnToOpener: Boolean,
+    onReturnToOpener: () -> Unit,
+    isKept: Boolean,
+    canKeep: Boolean,
+    onToggleKeep: () -> Unit,
+    swipe: PageSwipe,
     effectiveUrl: String,
     addressText: TextFieldValue,
     onAddressTextChange: (TextFieldValue) -> Unit,
@@ -214,6 +238,8 @@ internal fun MiniBrowserBar(
     blockingHost: String?,
     onSiteBlockingChange: (BlockCategory, Boolean) -> Unit,
     barColor: Color,
+    /** The plate's color this frame: it follows a swipe between pages. */
+    liveBarColor: () -> Color = { barColor },
     modifier: Modifier = Modifier,
 ) {
     val zen = LocalZenColors.current
@@ -224,7 +250,7 @@ internal fun MiniBrowserBar(
             // The bar area has its own background already (the page ends above
             // it). Painting it here keeps the translucent tiles compositing
             // against that background instead of the page.
-            .background(barColor)
+            .drawBehind { drawRect(liveBarColor()) }
             // The background starts above the address row: it should not end
             // hard against it.
             .padding(start = 16.dp, end = 16.dp, top = TopGap),
@@ -260,6 +286,9 @@ internal fun MiniBrowserBar(
                         ExpandedMenu(
                             state = state,
                             viewModel = viewModel,
+                            isKept = isKept,
+                            canKeep = canKeep,
+                            onToggleKeep = onToggleKeep,
                             canPin = canPin,
                             barColor = barColor,
                             onCopyLink = onCopyLink,
@@ -296,24 +325,28 @@ internal fun MiniBrowserBar(
                 barColor = barColor,
             )
         } else {
+            SwipeableNavBar(swipe = swipe) {
             NavBar(
-                canGoBack = state.canGoBack,
+                canGoBack = state.canGoBack || canReturnToOpener,
                 canGoForward = state.canGoForward,
                 effectiveUrl = effectiveUrl,
                 title = state.currentTitle,
                 isLoading = state.isLoading,
                 progress = state.progress,
-                onBack = onBack,
+                onBack = if (state.canGoBack) onBack else onReturnToOpener,
                 onForward = onForward,
                 onReload = onReload,
                 onStop = onStop,
                 onBeginAddressEdit = onBeginAddressEdit,
                 barColor = barColor,
             )
+            }
 
             Dock(
                 menuOpen = state.menuExpanded,
                 ink = zen.ink,
+                pageCount = pageCount,
+                onOpenPages = onOpenPages,
                 onClose = onClose,
                 onToggleMenu = {
                     if (state.menuExpanded) viewModel.collapseMenu() else viewModel.toggleMenu()
@@ -344,6 +377,130 @@ private fun Modifier.pane(shape: Shape, color: Color): Modifier = this
 /** Height of the chrome's rows, without the air below the dock. */
 internal val CollapsedBarHeightBase: Dp =
     TopGap + BarHeight + RowGap + DockSide
+
+// MARK: - Swipe between pages
+
+/** What the address bar needs for the swipe between pages. */
+internal class PageSwipe(
+    /** How far the page has moved, in pixels. */
+    val offset: () -> Float,
+    /** One page plus the gap: the distance a full swipe travels. */
+    val span: () -> Float,
+    val previous: PeekBar?,
+    val next: PeekBar?,
+    val onStart: () -> Unit,
+    val onDrag: (Float) -> Unit,
+    /** The finger let go, at this speed in pixels per second. */
+    val onEnd: (Float) -> Unit,
+)
+
+/** A neighbour's bar: what it shows when it is the real one. No address means the new page past the last one. */
+internal data class PeekBar(
+    val url: String?,
+    val title: String,
+    val canGoBack: Boolean = false,
+    val canGoForward: Boolean = false,
+)
+
+/** The bars beside this one wait off the edges and follow the finger. */
+@Composable
+private fun SwipeableNavBar(swipe: PageSwipe, bar: @Composable () -> Unit) {
+    val current by rememberUpdatedState(swipe)
+    var barWidth by remember { mutableIntStateOf(0) }
+    val gap = with(LocalDensity.current) { BarPeekGap.toPx() }
+    fun barOffset(): Float {
+        val span = current.span()
+        return if (span > 0f) current.offset() * (barWidth + gap) / span else current.offset()
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .onSizeChanged { barWidth = it.width }
+            .pointerInput(Unit) {
+                var velocity = VelocityTracker()
+                detectHorizontalDragGestures(
+                    onDragStart = {
+                        velocity = VelocityTracker()
+                        current.onStart()
+                    },
+                    onDragEnd = { current.onEnd(velocity.calculateVelocity().x) },
+                    onDragCancel = { current.onEnd(0f) },
+                ) { change, amount ->
+                    change.consume()
+                    velocity.addPosition(change.uptimeMillis, change.position)
+                    current.onDrag(amount * current.span() / (barWidth + gap).coerceAtLeast(1f))
+                }
+            },
+    ) {
+        swipe.previous?.let { peek ->
+            PeekNavBar(
+                peek,
+                Modifier.graphicsLayer {
+                    translationX = barOffset() - (barWidth + gap)
+                    alpha = if (current.offset() == 0f) 0f else 1f
+                },
+            )
+        }
+        swipe.next?.let { peek ->
+            PeekNavBar(
+                peek,
+                Modifier.graphicsLayer {
+                    translationX = barOffset() + barWidth + gap
+                    alpha = if (current.offset() == 0f) 0f else 1f
+                },
+            )
+        }
+        Box(Modifier.graphicsLayer { translationX = barOffset() }) { bar() }
+    }
+}
+
+/**
+ * The whole bar of the page coming in, drawn by the same code as the real one:
+ * when the swipe ends, the real bar takes over without a visible change.
+ */
+@Composable
+private fun PeekNavBar(peek: PeekBar, modifier: Modifier) {
+    val zen = LocalZenColors.current
+    Box(modifier) {
+        NavBar(
+            canGoBack = peek.canGoBack,
+            canGoForward = peek.canGoForward,
+            effectiveUrl = peek.url.orEmpty(),
+            title = peek.title,
+            isLoading = false,
+            progress = 0f,
+            onBack = {},
+            onForward = {},
+            onReload = {},
+            onStop = {},
+            onBeginAddressEdit = {},
+            barColor = zen.lift,
+        )
+    }
+}
+
+/** Space between two bars while they slide past each other. */
+private val BarPeekGap = 12.dp
+
+/** The page count in a rounded square, the way Safari shows open tabs. */
+@Composable
+internal fun PageCountBadge(count: Int, color: Color) {
+    val shape = RoundedCornerShape(7.dp)
+    Box(
+        modifier = Modifier
+            .defaultMinSize(minWidth = 23.dp, minHeight = 23.dp)
+            .border(2.dp, color, shape)
+            .padding(horizontal = 4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = if (count > 99) "99+" else count.toString(),
+            style = ZenType.rounded(13, FontWeight.Bold),
+            color = color,
+            maxLines = 1,
+        )
+    }
+}
 
 // MARK: - Navigation bar
 
@@ -426,7 +583,7 @@ private fun NavBar(
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth(progress.coerceAtLeast(0.05f))
                     .height(2.dp)
-                    .background(zen.coral),
+                    .background(zen.ink),
             )
         }
     }
@@ -462,6 +619,8 @@ private fun NavGlyph(
 private fun Dock(
     menuOpen: Boolean,
     ink: Color,
+    pageCount: Int,
+    onOpenPages: () -> Unit,
     onClose: () -> Unit,
     onToggleMenu: () -> Unit,
 ) {
@@ -471,12 +630,19 @@ private fun Dock(
             .padding(horizontal = DockInset),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Placeholder: the page stack arrives with real tabs.
-        DockButton(
-            icon = Icons.Outlined.FilterNone,
-            description = stringResource(R.string.browser_tabs),
-            tint = ink,
-        ) {}
+        val zen = LocalZenColors.current
+        val pagesDescription = pluralStringResource(R.plurals.browser_page_count, pageCount, pageCount)
+        Box(
+            modifier = Modifier
+                .size(DockSide)
+                .background(zen.lift, DockShape)
+                .border(liftBorder(), DockShape)
+                .barClickable(onClick = onOpenPages)
+                .semantics { contentDescription = pagesDescription },
+            contentAlignment = Alignment.Center,
+        ) {
+            PageCountBadge(count = pageCount, color = ink.copy(alpha = 0.8f))
+        }
 
         Spacer(Modifier.weight(1f))
 
@@ -615,7 +781,7 @@ private fun ComposerBar(
             onValueChange = onAddressTextChange,
             singleLine = true,
             textStyle = ZenType.rounded(16, FontWeight.Medium).copy(color = zen.ink),
-            cursorBrush = SolidColor(zen.coral),
+            cursorBrush = SolidColor(zen.ink),
             keyboardOptions = KeyboardOptions(
                 imeAction = ImeAction.Go,
                 keyboardType = KeyboardType.Uri,
@@ -664,6 +830,9 @@ private fun ComposerBar(
 private fun ExpandedMenu(
     state: MiniBrowserViewModel.State,
     viewModel: MiniBrowserViewModel,
+    isKept: Boolean,
+    canKeep: Boolean,
+    onToggleKeep: () -> Unit,
     canPin: Boolean,
     barColor: Color,
     onCopyLink: () -> Unit,
@@ -690,11 +859,18 @@ private fun ExpandedMenu(
         // do the grouping, no second card under them.
         Column(Modifier.fillMaxWidth()) {
             MenuRow(
+                icon = if (isKept) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
+                title = stringResource(if (isKept) R.string.browser_kept else R.string.browser_keep_page),
+                tint = if (isKept) zen.ink else zen.ink,
+                onClick = onToggleKeep.takeIf { canKeep },
+            )
+            RowDivider()
+            MenuRow(
                 icon = Icons.Outlined.ContentCopy,
                 title = stringResource(
                     if (state.copyConfirmed) R.string.browser_copied else R.string.browser_copy_link,
                 ),
-                tint = if (state.copyConfirmed) zen.coral else zen.ink,
+                tint = if (state.copyConfirmed) zen.ink else zen.ink,
                 onClick = onCopyLink,
             )
             RowDivider()
@@ -707,13 +883,13 @@ private fun ExpandedMenu(
                         state.readerLoading -> CircularProgressIndicator(
                             modifier = Modifier.size(16.dp),
                             strokeWidth = 2.dp,
-                            color = zen.coral,
+                            color = zen.ink,
                         )
 
                         state.readerArticle != null -> Icon(
                             imageVector = Icons.Outlined.Check,
                             contentDescription = null,
-                            tint = zen.coral,
+                            tint = zen.ink,
                             modifier = Modifier.size(18.dp),
                         )
                     }
@@ -1161,7 +1337,7 @@ private fun SiteIcon(effectiveUrl: String) {
     Icon(
         imageVector = icon,
         contentDescription = null,
-        tint = if (effectiveUrl.startsWith("http://")) zen.coral else zen.ink.copy(alpha = 0.7f),
+        tint = if (effectiveUrl.startsWith("http://")) zen.ink else zen.ink.copy(alpha = 0.7f),
         modifier = Modifier.size(18.dp),
     )
 }

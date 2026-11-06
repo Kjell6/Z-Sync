@@ -6,7 +6,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.SaveKind
@@ -66,7 +65,6 @@ class MiniBrowserViewModel(
     private var initialUrl: String? = initialUrl
     private var spaces: List<ZenSpaces.ZenSpace> = spaces
     private var currentSpaceId: String = currentSpaceId
-    private var launchKey: Int? = null
 
     data class State(
         val currentUrl: String = "",
@@ -152,6 +150,15 @@ class MiniBrowserViewModel(
     /** Reader extraction payload from the page. Installed by the screen. */
     var readerPayload: suspend () -> String? = { null }
 
+    /** Address and title for the open pages. Blank means no change. */
+    var onPageChange: (url: String, title: String) -> Unit = { _, _ -> }
+
+    /** A save started: this address goes into a space. */
+    var onPinStarted: (url: String) -> Unit = {}
+
+    /** The save went through. */
+    var onPinned: (url: String) -> Unit = {}
+
     /**
      * The page the user pinned (url to title), captured when the banner
      * opened, so a later navigation can't swap in another page.
@@ -163,46 +170,11 @@ class MiniBrowserViewModel(
     val allowsNormalTabs: Boolean
         get() = repository.cachedSnapshot?.normalTabsCapability == ZenSpaces.NormalTabsCapability.ENABLED
 
-    /**
-     * Re-arms the single per-screen instance for a new browser launch. The
-     * screen keeps one ViewModel key (so launches no longer accumulate
-     * ViewModels); a repeated launch key is a no-op so configuration changes
-     * preserve live state.
-     */
-    fun startNewLaunch(
-        launchKey: Int,
-        initialUrl: String?,
-        initialTitle: String?,
-        spaces: List<ZenSpaces.ZenSpace>,
-        currentSpaceId: String,
-    ) {
-        if (this.launchKey == launchKey) return
-        this.launchKey = launchKey
-        this.initialUrl = initialUrl
+    /** The spaces a pin can go to changed while the page was asleep. */
+    fun updateSpaces(spaces: List<ZenSpaces.ZenSpace>, currentSpaceId: String) {
         this.spaces = spaces
         this.currentSpaceId = currentSpaceId
-        pinBannerJob?.cancel()
-        noticeJob?.cancel()
-        suggestionJob?.cancel()
-        suggestionsSuspended = false
-        hasPendingPinSave = false
-        pendingPin = null
-        _state.value = State(
-            currentUrl = initialUrl.orEmpty(),
-            currentTitle = initialTitle.orEmpty(),
-            addressText = TextFieldValue(displayHost(initialUrl)),
-            pinnedDestination = PinDestination(spaceId = currentSpaceId),
-            saveKind = repository.saveKind(),
-        )
     }
-
-    /**
-     * The page to reopen when the screen is recreated for the same launch
-     * (theme or font change), or null for a new launch. A new launch must not
-     * see the previous launch's page before [startNewLaunch] runs.
-     */
-    fun restoredUrl(launchKey: Int): String? =
-        if (this.launchKey == launchKey) _state.value.currentUrl.ifEmpty { null } else null
 
     // MARK: - Chrome state
 
@@ -295,6 +267,7 @@ class MiniBrowserViewModel(
                 )
             }
         }
+        onPageChange(url, "")
         // Leaving the pinned page saves it now instead of letting the banner
         // timer save whatever page is showing later.
         val pinned = pendingPin?.first
@@ -310,6 +283,7 @@ class MiniBrowserViewModel(
         if (_state.value.pageError != null) return
         val usable = PageTitle.usable(title, effectiveUrl()) ?: return
         _state.update { it.copy(currentTitle = usable) }
+        onPageChange(_state.value.currentUrl, usable)
     }
 
     fun onSiteThemeColorChange(color: Color?) {
@@ -548,6 +522,7 @@ class MiniBrowserViewModel(
         val (urlToPin, capturedTitle) = pendingPin ?: (effectiveUrl() to _state.value.currentTitle)
         pendingPin = null
         if (urlToPin.isEmpty()) return
+        onPinStarted(urlToPin)
         // Still on the pinned page: the live title, or one that loaded after
         // the tap, wins over the one captured when the banner opened.
         val stillOnPage = PageTitle.sameDocument(urlToPin, effectiveUrl())
@@ -572,6 +547,7 @@ class MiniBrowserViewModel(
                     kind = kind,
                 )
                 if (outcome.fellBackToPinned) showNotice(Notice(R.string.save_fallback_normal_off))
+                onPinned(urlToPin)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -717,18 +693,6 @@ class MiniBrowserViewModel(
     }
 
     private fun effectiveUrl(): String = _state.value.currentUrl.ifEmpty { initialUrl ?: "" }
-
-    class Factory(
-        private val repository: BrowserRepository,
-        private val initialUrl: String?,
-        private val initialTitle: String?,
-        private val spaces: List<ZenSpaces.ZenSpace>,
-        private val currentSpaceId: String,
-    ) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            MiniBrowserViewModel(repository, initialUrl, initialTitle, spaces, currentSpaceId) as T
-    }
 
     companion object {
         private fun displayHost(url: String?): String {

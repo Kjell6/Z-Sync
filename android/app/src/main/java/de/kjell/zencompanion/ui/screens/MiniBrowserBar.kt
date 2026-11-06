@@ -214,6 +214,8 @@ internal fun MiniBrowserBar(
     blockingHost: String?,
     onSiteBlockingChange: (BlockCategory, Boolean) -> Unit,
     barColor: Color,
+    /** The page's own color behind the chrome; the bar band uses it as-is. */
+    backgroundColor: Color = barColor,
     modifier: Modifier = Modifier,
 ) {
     val zen = LocalZenColors.current
@@ -224,7 +226,7 @@ internal fun MiniBrowserBar(
             // The bar area has its own background already (the page ends above
             // it). Painting it here keeps the translucent tiles compositing
             // against that background instead of the page.
-            .background(barColor)
+            .background(backgroundColor)
             // The background starts above the address row: it should not end
             // hard against it.
             .padding(start = 16.dp, end = 16.dp, top = TopGap),

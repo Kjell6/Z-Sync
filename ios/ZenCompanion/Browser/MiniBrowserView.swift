@@ -88,8 +88,11 @@ struct MiniBrowserView: View {
         reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.35, dampingFraction: 0.86)
     }
 
+    /// A page without a theme color takes the app's paper, so the browser
+    /// starts in the same background the Settings sheet uses. The web view
+    /// paints its own page over it.
     private var defaultBackground: Color {
-        scheme == .dark ? Color(uiColor: .systemBackground) : Color.white
+        Palette.paper(scheme)
     }
 
     /// The page's own color, or the error panel's while it covers the page:

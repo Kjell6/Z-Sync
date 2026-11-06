@@ -332,7 +332,8 @@ fun MiniBrowserScreen(
         state.readerArticle != null ||
         state.pageError != null
 
-    // The page's color for the backdrop, nudged for the bar's plate.
+    // The page's color as-is, so the browser starts on the app's paper; the
+    // plates that sit on it are nudged a touch for contrast.
     val barColor = animatedBgColor.nudgedForBar()
     val barIsDark = barColor.luminance() < 0.5f
 
@@ -369,7 +370,7 @@ fun MiniBrowserScreen(
 
     Surface(
         modifier = modifier.fillMaxSize(),
-        color = barColor,
+        color = animatedBgColor,
     ) {
         Box(
             modifier = Modifier
@@ -640,6 +641,7 @@ fun MiniBrowserScreen(
                             }
                         },
                         barColor = barColor,
+                        backgroundColor = animatedBgColor,
                     )
                 }
             }

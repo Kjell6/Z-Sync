@@ -1,6 +1,8 @@
 package de.kjell.zencompanion.ui.screens
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -565,7 +567,24 @@ private fun NavBar(
     barColor: Color,
 ) {
     val zen = LocalZenColors.current
+    val loading = isLoading && progress < 1f
+    val fillAlpha by animateFloatAsState(if (loading) 1f else 0f, tween(200), label = "loadingFade")
+    val fillWidth by animateFloatAsState(
+        targetValue = progress,
+        // A new load starts from nothing instead of shrinking back.
+        animationSpec = if (loading) tween(250) else snap(),
+        label = "loadingWidth",
+    )
     Box(modifier = Modifier.fillMaxWidth().pane(DockShape, zen.lift)) {
+        // Loading fills the whole bar from the left, behind its controls.
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .graphicsLayer { alpha = fillAlpha }
+                .drawBehind {
+                    drawRect(zen.ink.copy(alpha = 0.1f), size = size.copy(width = size.width * fillWidth))
+                },
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -619,16 +638,6 @@ private fun NavBar(
                 ),
                 enabled = true,
                 onClick = if (isLoading) onStop else onReload,
-            )
-        }
-
-        if (isLoading && progress < 1f) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth(progress.coerceAtLeast(0.05f))
-                    .height(2.dp)
-                    .background(zen.ink),
             )
         }
     }

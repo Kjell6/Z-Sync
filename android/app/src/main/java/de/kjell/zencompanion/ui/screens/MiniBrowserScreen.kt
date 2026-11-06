@@ -386,6 +386,8 @@ private fun BrowserPageScreen(
     val blocker = session.blocker
     val scope = rememberCoroutineScope()
     val pageSwipe = remember { Animatable(0f) }
+    // At the end of a swipe the plate already shows the new page's color.
+    var colorJumps by remember { mutableStateOf(false) }
     var paneWidth by remember { mutableIntStateOf(0) }
     val pageGapPx = with(LocalDensity.current) { PageGap.toPx() }
     /** The link a long press is asking about. */
@@ -464,7 +466,21 @@ private fun BrowserPageScreen(
      */
     fun closeIfStillEmpty() {
         if (state.currentUrl.isNotEmpty() || session.startUrl.isNotEmpty()) return
-        if (pageCount > 1) pages.close(session.id) else onDismiss()
+        when {
+            // The way back runs the way it came: the page before slides in, live.
+            pages.store.neighbours().first != null -> scope.launch {
+                pages.prepareNeighbours()
+                pageSwipe.animateTo(paneWidth + pageGapPx, tween(300, easing = FastOutSlowInEasing))
+                colorJumps = true
+                pages.close(session.id)
+                pageSwipe.snapTo(0f)
+                withFrameNanos { }
+                withFrameNanos { }
+                colorJumps = false
+            }
+            pageCount > 1 -> pages.close(session.id)
+            else -> onDismiss()
+        }
     }
 
     // Back handling
@@ -516,8 +532,6 @@ private fun BrowserPageScreen(
     // The error panel sits on the surface color. The failed load leaves the
     // previous page's color behind, so the bar ignores it while it shows.
     val targetBg = state.siteThemeColor.takeIf { state.pageError == null } ?: defaultSurface
-    // At the end of a swipe the plate already shows the new page's color.
-    var colorJumps by remember { mutableStateOf(false) }
     val animatedBgColor by animateColorAsState(
         targetValue = targetBg,
         animationSpec = if (colorJumps) snap() else tween(300),

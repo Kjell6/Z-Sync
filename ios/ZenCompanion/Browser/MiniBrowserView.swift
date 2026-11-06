@@ -696,10 +696,41 @@ private extension MiniBrowserView {
         } else if let page = pages.active {
             // A new page nothing was typed into: it ends, and the page before
             // it comes back. The last one closes the browser.
-            if pages.pages.count > 1 {
+            if let previous = pages.neighbours.previous {
+                slideBack(from: page, to: previous)
+            } else if pages.pages.count > 1 {
                 pages.close(page.id)
             } else {
                 leaveBrowser()
+            }
+        }
+    }
+
+    /// The way back from a new page runs the way it came: the keyboard goes
+    /// down while the page before slides in from the side, live.
+    private func slideBack(from page: OpenPage, to previous: OpenPage) {
+        pages.prepareNeighbours()
+        peeking = true
+        // Resign first: the field goes once it has let go, so the keyboard
+        // leaves with the page instead of waiting for it.
+        if isAddressFocused {
+            isAddressFocused = false
+        } else {
+            editingAddress = false
+            startsInSearch = false
+        }
+        withAnimation(
+            .spring(duration: 0.34, bounce: 0),
+            completionCriteria: .logicallyComplete
+        ) {
+            pageSwipe = paneWidth + PageHostView.pageGap
+        } completion: {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                pages.close(page.id)
+                peeking = false
+                pageSwipe = 0
             }
         }
     }

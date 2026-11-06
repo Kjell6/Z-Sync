@@ -849,29 +849,33 @@ struct MiniBrowserTopBar: View {
             navigationRow
                 .padding(.horizontal, 8)
                 .frame(height: barHeight)
-                // Same thin progress line Android draws under its row.
-                .overlay(alignment: .bottom) {
-                    if model.isLoading, model.estimatedProgress > 0, model.estimatedProgress < 1 {
-                        GeometryReader { proxy in
-                            Capsule()
-                                .fill(Palette.ink(scheme))
-                                .frame(
-                                    width: max(2, proxy.size.width * model.estimatedProgress),
-                                    height: 2
-                                )
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .frame(height: 2)
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 1)
-                    }
-                }
+                .background { loadingFill }
                 .floatingGlassCapsule()
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0 }
                 .offset(x: barOffset)
                 .background { peekBars }
                 .simultaneousGesture(swipeGesture)
         }
+    }
+
+    /// Loading fills the whole bar from the left. A line on its edge would
+    /// never sit right against the capsule's curve.
+    @ViewBuilder
+    private var loadingFill: some View {
+        let loading = model.isLoading && model.estimatedProgress > 0 && model.estimatedProgress < 1
+        ZStack(alignment: .leading) {
+            if loading {
+                GeometryReader { proxy in
+                    Rectangle()
+                        .fill(Palette.ink(scheme).opacity(0.1))
+                        .frame(width: proxy.size.width * model.estimatedProgress)
+                        .animation(.easeOut(duration: 0.25), value: model.estimatedProgress)
+                }
+                .transition(.opacity)
+            }
+        }
+        .clipShape(Capsule())
+        .animation(.easeOut(duration: 0.2), value: loading)
     }
 
     // MARK: - Swipe between pages

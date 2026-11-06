@@ -1,5 +1,6 @@
 # CodeRabbit configuration for Z-Sync.
 # Reference: https://docs.coderabbit.ai/reference/configuration
+# The app is English-only, so reviews and chat stay in English too.
 language: "en-US"
 early_access: false
 enable_free_tier: true

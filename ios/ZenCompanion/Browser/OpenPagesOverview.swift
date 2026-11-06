@@ -39,7 +39,7 @@ struct OpenPagesOverview: View {
 
     var body: some View {
         ZStack {
-            Color(uiColor: .systemGroupedBackground)
+            Palette.paper(scheme)
                 .ignoresSafeArea()
                 // Nothing reaches the browser underneath.
                 .contentShape(Rectangle())
@@ -372,9 +372,13 @@ struct OpenPageShot: View {
     let page: OpenPage
     let store: OpenPagesStore
 
+    @Environment(\.colorScheme) private var scheme
+
     var body: some View {
         ZStack {
-            Color(uiColor: .secondarySystemGroupedBackground)
+            // A page still without a picture sits on the app's own lift, so an
+            // empty card reads as part of the overview rather than a white hole.
+            Palette.lift(scheme)
             if let image = page.shot {
                 Color.clear.overlay(alignment: .top) {
                     Image(uiImage: image)

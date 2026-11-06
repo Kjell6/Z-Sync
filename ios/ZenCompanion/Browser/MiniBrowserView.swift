@@ -125,8 +125,11 @@ struct MiniBrowserView: View {
         reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.35, dampingFraction: 0.86)
     }
 
+    /// A page without a theme color takes the app's paper, so the browser
+    /// starts in the same background the Settings sheet uses. The web view
+    /// paints its own page over it.
     private var defaultBackground: Color {
-        scheme == .dark ? Color(uiColor: .systemBackground) : Color.white
+        Palette.paper(scheme)
     }
 
     /// The page's own color, or the error panel's while it covers the page:
@@ -276,7 +279,7 @@ struct MiniBrowserView: View {
             .background(sheetBackground.ignoresSafeArea())
             .ignoresSafeArea(edges: .bottom)
             .ignoresSafeArea(.keyboard)
-            .presentationBackground(pages.active == nil ? Color(uiColor: .systemGroupedBackground) : barBackground)
+            .presentationBackground(pages.active == nil ? Palette.paper(scheme) : barBackground)
             .confirmationDialog(
                 Text("kept.close_all_title"),
                 isPresented: $confirmCloseAll,
@@ -441,7 +444,7 @@ struct MiniBrowserView: View {
         let span = paneWidth + PageHostView.pageGap
         let progress = span > 0 ? min(1, max(0, -pageSwipe / span)) : 0
         return ZStack {
-            Color(uiColor: .systemGroupedBackground)
+            Palette.paper(scheme)
                 .ignoresSafeArea()
             RoundedRectangle(cornerRadius: Self.screenCornerRadius, style: .continuous)
                 .fill(defaultBackground)

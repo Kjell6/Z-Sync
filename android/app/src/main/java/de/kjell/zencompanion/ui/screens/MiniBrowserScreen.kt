@@ -562,7 +562,8 @@ private fun BrowserPageScreen(
         state.readerArticle != null ||
         state.pageError != null
 
-    // The page's color for the backdrop, nudged for the bar's plate.
+    // The page's color as-is, so the browser starts on the app's paper; the
+    // plates that sit on it are nudged a touch for contrast.
     val barColor = animatedBgColor.nudgedForBar()
     val barIsDark = barColor.luminance() < 0.5f
 
@@ -605,19 +606,20 @@ private fun BrowserPageScreen(
     // Past the last page there is a new one, as in Safari. Not from a page
     // that is itself still empty.
     val offersNewPage = nextPage == null && effectiveUrl.isNotEmpty()
-    // The bar and the status bar are one plate here, so it blends from this
-    // page's color into the one the swipe is heading for.
-    val previousBarColor = previousPage?.let { pages.session(it.id) }?.let { peekColor(it, defaultSurface) }
-    val nextBarColor = nextPage?.let { pages.session(it.id) }?.let { peekColor(it, defaultSurface) }
-        ?: defaultSurface.nudgedForBar()
-    val liveBarColor = {
+    // The page and the status bar are one plate here, so it blends from this
+    // page's own color into the one the swipe is heading for. No nudge: the
+    // background is the app's paper, as in Settings, not a beige version of it.
+    val previousPageColor = previousPage?.let { pages.session(it.id) }?.let { peekPageColor(it, defaultSurface) }
+    val nextPageColor = nextPage?.let { pages.session(it.id) }?.let { peekPageColor(it, defaultSurface) }
+        ?: defaultSurface
+    val livePageColor = {
         val moved = pageSwipe.value
         val span = paneWidth + pageGapPx
-        val heading = if (moved < 0) nextBarColor else previousBarColor
+        val heading = if (moved < 0) nextPageColor else previousPageColor
         if (moved == 0f || span <= 0f || heading == null) {
-            barColor
+            animatedBgColor
         } else {
-            lerp(barColor, heading, (abs(moved) / span).coerceIn(0f, 1f))
+            lerp(animatedBgColor, heading, (abs(moved) / span).coerceIn(0f, 1f))
         }
     }
 
@@ -676,7 +678,7 @@ private fun BrowserPageScreen(
     Surface(
         modifier = modifier
             .fillMaxSize()
-            .drawBehind { drawRect(liveBarColor()) },
+            .drawBehind { drawRect(livePageColor()) },
         color = Color.Transparent,
     ) {
         Box(
@@ -927,7 +929,7 @@ private fun BrowserPageScreen(
                             }
                         },
                         barColor = barColor,
-                        liveBarColor = liveBarColor,
+                        liveBarColor = livePageColor,
                     )
                 }
             }
@@ -995,6 +997,12 @@ private fun peekColor(session: PageSession, surface: Color): Color {
     return (state.siteThemeColor.takeIf { state.pageError == null } ?: surface).nudgedForBar()
 }
 
+/** The same color with no nudge, for the background the page sits on. */
+private fun peekPageColor(session: PageSession, surface: Color): Color {
+    val state = session.viewModel.state.value
+    return state.siteThemeColor.takeIf { state.pageError == null } ?: surface
+}
+
 private fun peekBar(pages: BrowserPages, page: OpenPage): PeekBar {
     val state = pages.session(page.id)?.viewModel?.state?.value
     return PeekBar(
@@ -1029,8 +1037,9 @@ private fun PageStack(
     val previousId = openPages.getOrNull(index - 1)?.id
     val nextId = openPages.getOrNull(index + 1)?.id
     val currentActive by rememberUpdatedState(active)
-    // A blank page is the bare plate, so the sheet arrives in its color.
-    val surface = MaterialTheme.colorScheme.surface.nudgedForBar()
+    // A blank page is the bare plate, in the app's paper: the same background
+    // the Settings sheet uses, not a darker version of it.
+    val surface = MaterialTheme.colorScheme.surface
     val pageCorners = RoundedCornerShape(28.dp)
 
     // What waits past the last page: not a page yet, so it does not pretend to

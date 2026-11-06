@@ -257,7 +257,7 @@ internal fun MiniBrowserBar(
     blockingHost: String?,
     onSiteBlockingChange: (BlockCategory, Boolean) -> Unit,
     barColor: Color,
-    /** The plate's color this frame: it follows a swipe between pages. */
+    /** The page's own color this frame: it follows a swipe between pages. */
     liveBarColor: () -> Color = { barColor },
     modifier: Modifier = Modifier,
 ) {

@@ -806,6 +806,69 @@ struct PageSwipeEnd {
     let velocity: CGFloat
 }
 
+/// Loading fills the whole bar from the left. A line on its edge would never
+/// sit right against the capsule's curve. However the load ends, the fill first
+/// reaches the end of the bar and only then fades away.
+private struct LoadingFill: View {
+    let isLoading: Bool
+    let progress: Double
+    let tint: Color
+
+    @State private var shown: Double = 0
+    @State private var opacity: Double = 0
+    /// Tells a finish apart from a load that started while it was running.
+    @State private var run = 0
+
+    var body: some View {
+        GeometryReader { proxy in
+            Rectangle()
+                .fill(tint)
+                .frame(width: proxy.size.width * shown)
+        }
+        .opacity(opacity)
+        .clipShape(Capsule())
+        .allowsHitTesting(false)
+        .onChange(of: isLoading, initial: true) { _, loading in
+            if loading {
+                start()
+            } else if opacity > 0 {
+                finish()
+            }
+        }
+        .onChange(of: progress) { _, next in
+            guard isLoading, next > shown else { return }
+            withAnimation(.easeOut(duration: 0.25)) { shown = next }
+        }
+    }
+
+    private func start() {
+        run += 1
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            shown = 0
+            opacity = 1
+        }
+        withAnimation(.easeOut(duration: 0.25)) { shown = progress < 1 ? progress : 0 }
+    }
+
+    private func finish() {
+        run += 1
+        let current = run
+        withAnimation(.easeOut(duration: 0.28)) {
+            shown = 1
+        } completion: {
+            guard current == run else { return }
+            withAnimation(.easeOut(duration: 0.3)) {
+                opacity = 0
+            } completion: {
+                guard current == run else { return }
+                shown = 0
+            }
+        }
+    }
+}
+
 // MARK: - Top bar
 
 /// Full-width navigation bar over the page: back, forward, the address and the
@@ -849,33 +912,21 @@ struct MiniBrowserTopBar: View {
             navigationRow
                 .padding(.horizontal, 8)
                 .frame(height: barHeight)
-                .background { loadingFill }
+                .background {
+                    LoadingFill(
+                        isLoading: model.isLoading,
+                        progress: model.estimatedProgress,
+                        tint: Palette.ink(scheme).opacity(0.1)
+                    )
+                    // A page brings its own load: nothing carries over a switch.
+                    .id(page?.id)
+                }
                 .floatingGlassCapsule()
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0 }
                 .offset(x: barOffset)
                 .background { peekBars }
                 .simultaneousGesture(swipeGesture)
         }
-    }
-
-    /// Loading fills the whole bar from the left. A line on its edge would
-    /// never sit right against the capsule's curve.
-    @ViewBuilder
-    private var loadingFill: some View {
-        let loading = model.isLoading && model.estimatedProgress > 0 && model.estimatedProgress < 1
-        ZStack(alignment: .leading) {
-            if loading {
-                GeometryReader { proxy in
-                    Rectangle()
-                        .fill(Palette.ink(scheme).opacity(0.1))
-                        .frame(width: proxy.size.width * model.estimatedProgress)
-                        .animation(.easeOut(duration: 0.25), value: model.estimatedProgress)
-                }
-                .transition(.opacity)
-            }
-        }
-        .clipShape(Capsule())
-        .animation(.easeOut(duration: 0.2), value: loading)
     }
 
     // MARK: - Swipe between pages
@@ -1075,7 +1126,6 @@ struct MiniBrowserTopBar: View {
                 .foregroundStyle(Palette.ink(scheme).opacity(enabled ? 0.85 : 0.3))
                 .frame(width: 32, height: barHeight - 8)
                 .contentShape(Rectangle())
-                .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(GlyphPressStyle())
         .disabled(!enabled)

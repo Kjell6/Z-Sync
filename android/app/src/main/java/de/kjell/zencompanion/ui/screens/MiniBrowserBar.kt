@@ -1,8 +1,7 @@
 package de.kjell.zencompanion.ui.screens
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -67,11 +66,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -121,6 +122,7 @@ import de.kjell.zencompanion.ui.theme.LocalZenColors
 import de.kjell.zencompanion.ui.theme.ZenType
 import de.kjell.zencompanion.ui.theme.liftBorder
 import de.kjell.zencompanion.ui.theme.pressFeedback
+import kotlinx.coroutines.flow.collectLatest
 
 /**
  * The bar sits on the page's own color, nudged away from it so the plate is
@@ -567,22 +569,32 @@ private fun NavBar(
     barColor: Color,
 ) {
     val zen = LocalZenColors.current
-    val loading = isLoading && progress < 1f
-    val fillAlpha by animateFloatAsState(if (loading) 1f else 0f, tween(200), label = "loadingFade")
-    val fillWidth by animateFloatAsState(
-        targetValue = progress,
-        // A new load starts from nothing instead of shrinking back.
-        animationSpec = if (loading) tween(250) else snap(),
-        label = "loadingWidth",
-    )
+    // However the load ends, the fill first reaches the end of the bar and
+    // only then fades away.
+    val fillWidth = remember { Animatable(0f) }
+    val fillAlpha = remember { Animatable(0f) }
+    val currentProgress by rememberUpdatedState(progress)
+    LaunchedEffect(isLoading) {
+        if (isLoading) {
+            fillWidth.snapTo(0f)
+            fillAlpha.snapTo(1f)
+            snapshotFlow { currentProgress }.collectLatest { next ->
+                if (next > fillWidth.value) fillWidth.animateTo(next, tween(250))
+            }
+        } else if (fillAlpha.value > 0f) {
+            fillWidth.animateTo(1f, tween(280))
+            fillAlpha.animateTo(0f, tween(300))
+            fillWidth.snapTo(0f)
+        }
+    }
     Box(modifier = Modifier.fillMaxWidth().pane(DockShape, zen.lift)) {
         // Loading fills the whole bar from the left, behind its controls.
         Box(
             modifier = Modifier
                 .matchParentSize()
-                .graphicsLayer { alpha = fillAlpha }
+                .graphicsLayer { alpha = fillAlpha.value }
                 .drawBehind {
-                    drawRect(zen.ink.copy(alpha = 0.1f), size = size.copy(width = size.width * fillWidth))
+                    drawRect(zen.ink.copy(alpha = 0.1f), size = size.copy(width = size.width * fillWidth.value))
                 },
         )
         Row(

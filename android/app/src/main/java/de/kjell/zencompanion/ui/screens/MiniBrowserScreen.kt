@@ -87,6 +87,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.graphicsLayer
@@ -141,7 +142,7 @@ private class ScrollTracker {
 private val PageGap = 12.dp
 
 /**
- * The browser: the page on screen with its chrome, and "On this phone" over it.
+ * The browser: the page on screen with its chrome, and the overview of the open pages over it.
  * The pages themselves live in [pages]; closing this screen does not end them.
  */
 @Composable
@@ -668,6 +669,7 @@ private fun BrowserPageScreen(
                     active = session,
                     offset = { pageSwipe.value },
                     gap = pageGapPx,
+                    offersNewPage = offersNewPage,
                     blockingSettings = blockingSettings,
                     consentBundle = consentBundle,
                     onActiveScroll = onPageScroll,
@@ -788,6 +790,7 @@ private fun BrowserPageScreen(
                         onOpenPages = onOpenOverview,
                         canReturnToOpener = pages.canReturnToOpener(session.id),
                         onReturnToOpener = { pages.close(session.id) },
+                        showsKeep = pages.keepsOnlyChosenPages(),
                         isKept = pageInfo?.isKept == true,
                         canKeep = pageInfo?.let { pages.store.canKeep(it, state.pageError != null) } == true,
                         onToggleKeep = { pages.toggleKeep(session.id) },
@@ -956,6 +959,7 @@ private fun PageStack(
     active: PageSession,
     offset: () -> Float,
     gap: Float,
+    offersNewPage: Boolean,
     blockingSettings: ContentBlockingSettings,
     consentBundle: String?,
     onActiveScroll: (Int) -> Unit,
@@ -967,6 +971,28 @@ private fun PageStack(
     val previousId = openPages.getOrNull(index - 1)?.id
     val nextId = openPages.getOrNull(index + 1)?.id
     val currentActive by rememberUpdatedState(active)
+    val surface = MaterialTheme.colorScheme.surface
+    val pageCorners = RoundedCornerShape(28.dp)
+
+    // What waits past the last page: not a page yet, so it does not pretend to
+    // be one. A blank sheet grows up as the finger pulls it in.
+    if (offersNewPage) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    val step = size.width + gap
+                    val progress = (-offset() / step).coerceIn(0f, 1f)
+                    scaleX = 0.9f + 0.1f * progress
+                    scaleY = scaleX
+                    translationX = (1f - progress) * size.width * 0.3f
+                    alpha = if (offset() < 0f) 0.45f + 0.55f * progress else 0f
+                    shape = pageCorners
+                    clip = true
+                }
+                .background(surface),
+        )
+    }
 
     for (session in pages.live) {
         key(session.id) {
@@ -984,6 +1010,10 @@ private fun PageStack(
                             // Kept alive, out of sight.
                             else -> size.width * 3
                         }
+                        // Rounded like the screen while it slides off towards a new page.
+                        val leaving = offersNewPage && session.id == active.id && offset() < 0f
+                        shape = if (leaving) pageCorners else RectangleShape
+                        clip = leaving
                     },
             ) {
                 if (session !== active) {

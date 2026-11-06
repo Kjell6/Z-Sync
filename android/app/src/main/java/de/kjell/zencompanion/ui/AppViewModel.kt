@@ -176,10 +176,10 @@ data class PreferencesState(
     val toolbarPlacement: ToolbarPlacement = ToolbarPlacement.BOTTOM,
     /** Open a new search tab whenever the app comes to the foreground. */
     val openIntoSearch: Boolean = false,
-    /** Closing the browser keeps its pages in "On this phone". */
-    val keepEveryPage: Boolean = false,
-    /** How long a kept page stays once it was last used. */
-    val keptPageLifetime: KeptPageLifetime = KeptPageLifetime.NEVER,
+    /** Only the pages the user keeps stay open. */
+    val keepOnlyChosenPages: Boolean = false,
+    /** How long an open page stays once it was last used. */
+    val keptPageLifetime: KeptPageLifetime = KeptPageLifetime.MONTH,
 )
 
 /**
@@ -195,7 +195,7 @@ interface PreferencesRepository {
     fun setSaveKind(kind: SaveKind)
     fun setToolbarPlacement(placement: ToolbarPlacement)
     fun setOpenIntoSearch(enabled: Boolean)
-    fun setKeepEveryPage(enabled: Boolean)
+    fun setKeepOnlyChosenPages(enabled: Boolean)
     fun setKeptPageLifetime(lifetime: KeptPageLifetime)
     fun syncSetupHintDismissed(): Boolean
     fun setSyncSetupHintDismissed(dismissed: Boolean)
@@ -216,7 +216,7 @@ internal class AndroidPreferencesRepository(private val context: Context) : Pref
         saveKind = BrowserSettings.getSaveKind(context),
         toolbarPlacement = BrowserSettings.getToolbarPlacement(context),
         openIntoSearch = BrowserSettings.getOpenIntoSearch(context),
-        keepEveryPage = BrowserSettings.getKeepEveryPage(context),
+        keepOnlyChosenPages = BrowserSettings.getKeepOnlyChosenPages(context),
         keptPageLifetime = BrowserSettings.getKeptPageLifetime(context),
     )
 
@@ -238,8 +238,8 @@ internal class AndroidPreferencesRepository(private val context: Context) : Pref
     override fun setOpenIntoSearch(enabled: Boolean) =
         BrowserSettings.setOpenIntoSearch(context, enabled)
 
-    override fun setKeepEveryPage(enabled: Boolean) =
-        BrowserSettings.setKeepEveryPage(context, enabled)
+    override fun setKeepOnlyChosenPages(enabled: Boolean) =
+        BrowserSettings.setKeepOnlyChosenPages(context, enabled)
 
     override fun setKeptPageLifetime(lifetime: KeptPageLifetime) =
         BrowserSettings.setKeptPageLifetime(context, lifetime)
@@ -819,9 +819,9 @@ class AppViewModel(
         _preferences.value = _preferences.value.copy(openIntoSearch = enabled)
     }
 
-    fun setKeepEveryPage(enabled: Boolean) {
-        preferencesRepository.setKeepEveryPage(enabled)
-        _preferences.value = _preferences.value.copy(keepEveryPage = enabled)
+    fun setKeepOnlyChosenPages(enabled: Boolean) {
+        preferencesRepository.setKeepOnlyChosenPages(enabled)
+        _preferences.value = _preferences.value.copy(keepOnlyChosenPages = enabled)
     }
 
     fun setKeptPageLifetime(lifetime: KeptPageLifetime) {

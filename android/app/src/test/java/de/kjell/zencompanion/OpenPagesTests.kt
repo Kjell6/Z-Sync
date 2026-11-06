@@ -225,6 +225,23 @@ class OpenPagesTests {
     }
 
     @Test
+    fun closingTheBrowserOnlyRefreshesThePageOnScreen() {
+        val pages = store()
+        val idle = pages.open(a)
+        val used = pages.open(b)
+        val start = clock
+
+        clock += 20 * KeptPageLifetime.DAY.millis!!
+        pages.endSession(keepEveryPage = true) { exit }
+        assertEquals(start, pages.page(idle.id)!!.lastUsedAt)
+        assertEquals(clock, pages.page(used.id)!!.lastUsedAt)
+
+        clock += 10 * KeptPageLifetime.DAY.millis!!
+        pages.closeExpired(KeptPageLifetime.MONTH)
+        assertEquals(listOf(used.id), pages.pages.value.map { it.id })
+    }
+
+    @Test
     fun keptPagesCloseAfterTheChosenPeriod() {
         val pages = store()
         val page = pages.open(a)
@@ -263,6 +280,37 @@ class OpenPagesTests {
         clock += 365 * KeptPageLifetime.DAY.millis!!
         pages.closeExpired(KeptPageLifetime.NEVER)
 
+        assertEquals(listOf(page.id), pages.pages.value.map { it.id })
+    }
+
+    @Test
+    fun pagesCloseAfterAMonthUnlessToldOtherwise() {
+        assertEquals(KeptPageLifetime.MONTH, KeptPageLifetime.fromStorage(null))
+        assertEquals(KeptPageLifetime.MONTH, KeptPageLifetime.fromStorage("nonsense"))
+        assertEquals(KeptPageLifetime.NEVER, KeptPageLifetime.fromStorage("never"))
+    }
+
+    @Test
+    fun pagesStayWhenTheBrowserClosesLikeInAnyBrowser() {
+        val pages = store()
+        val page = pages.open(a)
+        pages.endSession(keepEveryPage = true) { exit }
+
+        assertEquals(listOf(page.id), pages.pages.value.map { it.id })
+        assertEquals(listOf(a), store().pages.value.map { it.url })
+    }
+
+    @Test
+    fun aPageThatWasPinnedStaysOnceTheUserBrowsesOn() {
+        val pages = store()
+        val page = pages.open(a)
+        pages.toggleKeep(page.id, failed = false)
+
+        pages.pinned(page.id, a, ::sameDocument)
+        assertFalse(pages.page(page.id)!!.isKept)
+
+        pages.update(page.id, b, "")
+        pages.endSession(keepEveryPage = true) { exit }
         assertEquals(listOf(page.id), pages.pages.value.map { it.id })
     }
 

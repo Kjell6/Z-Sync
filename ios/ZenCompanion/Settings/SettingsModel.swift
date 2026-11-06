@@ -49,13 +49,13 @@ final class SettingsModel {
         didSet { preferences.setBool(openIntoSearch, PreferenceKeys.openIntoSearch, scope: .standard) }
     }
 
-    /// Closing the mini-browser keeps its pages in "On this phone". Off by
-    /// default; read by `OpenPagesStore` when a session ends.
-    var keepEveryPage: Bool {
-        didSet { preferences.setBool(keepEveryPage, PreferenceKeys.keepEveryPage, scope: .standard) }
+    /// Pages stay open like in any browser, unless this is on: then only the
+    /// ones the user keeps do. Off by default; read by `OpenPagesStore`.
+    var keepOnlyChosenPages: Bool {
+        didSet { preferences.setBool(keepOnlyChosenPages, PreferenceKeys.keepOnlyChosenPages, scope: .standard) }
     }
 
-    /// How long a kept page stays once it was last used. Never by default;
+    /// How long an open page stays once it was last used. A month by default;
     /// read by `OpenPagesStore`.
     var keptPageLifetime: KeptPageLifetime {
         didSet { preferences.setString(keptPageLifetime.rawValue, PreferenceKeys.keptPageLifetime, scope: .standard) }
@@ -92,7 +92,7 @@ final class SettingsModel {
         self.saveKind = Self.loadSaveKind(preferences)
         self.toolbarPlacement = Self.loadToolbarPlacement(preferences)
         self.openIntoSearch = preferences.bool(PreferenceKeys.openIntoSearch, scope: .standard)
-        self.keepEveryPage = preferences.bool(PreferenceKeys.keepEveryPage, scope: .standard)
+        self.keepOnlyChosenPages = preferences.bool(PreferenceKeys.keepOnlyChosenPages, scope: .standard)
         self.keptPageLifetime = KeptPageLifetime.stored(in: preferences)
         self.essentialsColumns = Self.loadEssentialsColumns(preferences)
     }

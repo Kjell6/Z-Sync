@@ -42,7 +42,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
     var addressEditing = false
     /// A tapped suggestion goes through the same submit path as typed text.
     var onPickSuggestion: (String) -> Void
-    /// Opens "On this phone".
+    /// Opens the overview of the open pages.
     var onOpenPages: () -> Void
     /// The navigation bar. It stays in place while the menu grows above it.
     @ViewBuilder var navBar: () -> NavBar
@@ -180,7 +180,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
         .accessibilityElement(children: .contain)
     }
 
-    /// "On this phone", with the number of open pages.
+    /// The overview, with the number of open pages.
     private var pagesButton: some View {
         let count = pages.pages.count
         return Button(action: onOpenPages) {
@@ -312,8 +312,10 @@ struct MiniBrowserChrome<NavBar: View>: View {
             // dividers inside it, so the card reads as a list rather than
             // four chips.
             VStack(spacing: 0) {
-                keepRow
-                rowDivider
+                if pages.keepsOnlyChosenPages {
+                    keepRow
+                    rowDivider
+                }
                 copyRow
                 rowDivider
                 readerRow
@@ -475,7 +477,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
         .glassRim(cornerRadius: tileRadius)
     }
 
-    /// Keeps the page in "On this phone"; tap Kept again to make it throwaway.
+    /// With "Keep only chosen pages" on: keeps this page. Tap Kept to let it go.
     private var keepRow: some View {
         let page = pages.active
         let kept = page?.isKept ?? false
@@ -896,23 +898,37 @@ struct MiniBrowserTopBar: View {
                 }
                 if let next = neighbours.next {
                     peekBar(next).offset(x: barOffset + barSpan)
-                } else if offersNewPage {
-                    peekBar(nil).offset(x: barOffset + barSpan)
+                } else if offersNewPage, barOffset < 0 {
+                    newPagePill
                 }
             }
         }
     }
 
+    /// Past the last page there is nothing to show an address for: a pill opens
+    /// in the space the bar leaves behind, as wide as the finger has pulled it.
+    private var newPagePill: some View {
+        let width = max(0, -barOffset - peekGap)
+        return Image(systemName: "plus")
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundStyle(Palette.ink(scheme).opacity(0.85))
+            .opacity(min(1, width / 90))
+            .frame(width: width, height: barHeight)
+            .floatingGlassCapsule()
+            .offset(x: barWidth / 2 + peekGap + barOffset + width / 2)
+            .allowsHitTesting(false)
+    }
+
     /// The whole bar of the page coming in, drawn exactly like the real one:
     /// when the swipe ends, the real bar takes over without a visible change.
-    private func peekBar(_ page: OpenPage?) -> some View {
-        let peek = page?.model
+    private func peekBar(_ page: OpenPage) -> some View {
+        let peek = page.model
         return HStack(spacing: 6) {
-            peekGlyph("chevron.backward", enabled: (peek?.canGoBack ?? false) || page?.openerID != nil)
-            peekGlyph("chevron.forward", enabled: peek?.canGoForward ?? false)
+            peekGlyph("chevron.backward", enabled: peek.canGoBack || page.openerID != nil)
+            peekGlyph("chevron.forward", enabled: peek.canGoForward)
             HStack(spacing: 8) {
                 Group {
-                    if let url = page?.url, url.scheme == "http" || url.scheme == "https" {
+                    if let url = page.url, url.scheme == "http" || url.scheme == "https" {
                         Favicon(urlString: url.absoluteString, size: 16)
                     } else {
                         Image(systemName: "magnifyingglass")
@@ -921,7 +937,7 @@ struct MiniBrowserTopBar: View {
                     }
                 }
                 .frame(width: 22, height: 22)
-                Text(page?.url == nil ? String(localized: "browser.search_placeholder") : page?.title ?? "")
+                Text(page.url == nil ? String(localized: "browser.search_placeholder") : page.title)
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundStyle(Palette.ink(scheme))
                     .lineLimit(1)

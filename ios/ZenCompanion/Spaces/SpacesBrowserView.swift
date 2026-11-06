@@ -442,12 +442,7 @@ struct SpacesBrowserView: View {
                 // Its own target: the rest of the field still starts a search.
                 Button {
                     openPages.allowsNormalTabs = model.snapshot.normalTabsCapability.allowsNormalTabs
-                    // No cover sliding up: the overview fades in right here.
-                    var transaction = Transaction()
-                    transaction.disablesAnimations = true
-                    withTransaction(transaction) {
-                        browserSession = BrowserTabSession(space: model.activeSpace, startsInOverview: true)
-                    }
+                    show(BrowserTabSession(space: model.activeSpace, startsInOverview: true))
                 } label: {
                     PageCountBadge(count: pageCount, side: 26)
                         .foregroundStyle(Palette.ink(scheme).opacity(0.8))
@@ -504,12 +499,7 @@ struct SpacesBrowserView: View {
             allSpaces: spaces,
             allowsNormalTabs: model.snapshot.normalTabsCapability.allowsNormalTabs,
             startsInOverview: session.startsInOverview,
-            onDismiss: { browserSession = nil },
-            onDismissInPlace: {
-                var transaction = Transaction()
-                transaction.disablesAnimations = true
-                withTransaction(transaction) { browserSession = nil }
-            }
+            onDismiss: { browserSession = nil }
         )
     }
 

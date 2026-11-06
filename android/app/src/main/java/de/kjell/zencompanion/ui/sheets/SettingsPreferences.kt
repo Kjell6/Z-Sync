@@ -73,7 +73,7 @@ internal fun SettingsBrowsingSection(
     onSetSearchEngine: (SearchEngine) -> Unit,
     onOpenAddSearchEngine: () -> Unit,
     onSetOpenIntoSearch: (Boolean) -> Unit,
-    onSetKeepEveryPage: (Boolean) -> Unit,
+    onSetKeepOnlyChosenPages: (Boolean) -> Unit,
     onSetKeptPageLifetime: (KeptPageLifetime) -> Unit,
     onOpenContentBlocking: () -> Unit,
     onSetAlwaysOpenExternally: (Boolean) -> Unit,
@@ -103,11 +103,11 @@ internal fun SettingsBrowsingSection(
                 SettingsDivider()
 
                 ToggleRow(
-                    title = stringResource(R.string.settings_keep_every_page),
-                    subtitle = stringResource(R.string.settings_keep_every_page_subtitle),
+                    title = stringResource(R.string.settings_keep_only_chosen),
+                    subtitle = stringResource(R.string.settings_keep_only_chosen_subtitle),
                     icon = Icons.Outlined.BookmarkBorder,
-                    checked = preferences.keepEveryPage,
-                    onCheckedChange = onSetKeepEveryPage,
+                    checked = preferences.keepOnlyChosenPages,
+                    onCheckedChange = onSetKeepOnlyChosenPages,
                 )
 
                 SettingsDivider()

@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import de.kjell.zencompanion.data.BrowserSettings
+import de.kjell.zencompanion.data.KeptPageLifetime
 import de.kjell.zencompanion.data.OpenPage
 import de.kjell.zencompanion.data.OpenPagesStore
 import de.kjell.zencompanion.sync.ZenSpaces
@@ -104,8 +105,8 @@ class PageSession(
 /**
  * The open pages' WebViews and chrome state, on top of [store].
  *
- * The pages live here and not in the browser screen, so they outlast it:
- * closing the browser drops the throwaway pages and leaves the kept ones. Only
+ * The pages live here and not in the browser screen, so they outlast it, the
+ * way tabs outlast a browser window. Only
  * the most recently used pages hold a WebView, listed in [live]; the others
  * sleep with their history and wake when they are shown.
  */
@@ -289,7 +290,12 @@ class BrowserPages(
         store.closeExpired(BrowserSettings.getKeptPageLifetime(context))
     }
 
-    private fun keepEveryPage(): Boolean = BrowserSettings.getKeepEveryPage(context)
+    private fun keepEveryPage(): Boolean = !keepsOnlyChosenPages()
+
+    /** Keeping a page is a choice only in this mode; the Keep controls exist for it alone. */
+    fun keepsOnlyChosenPages(): Boolean = BrowserSettings.getKeepOnlyChosenPages(context)
+
+    fun lifetime(): KeptPageLifetime = BrowserSettings.getKeptPageLifetime(context)
 
     private fun exit(page: OpenPage): OpenPagesStore.PageExit {
         val session = sessions[page.id]

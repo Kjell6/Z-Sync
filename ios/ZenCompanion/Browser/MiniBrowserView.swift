@@ -18,9 +18,6 @@ struct MiniBrowserView: View {
     /// browser's capability, like the share sheet.
     var allowsNormalTabs = false
     var onDismiss: () -> Void
-    /// Closes the browser without the cover sliding away: the overview has
-    /// already faded out over the spaces.
-    var onDismissInPlace: () -> Void
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -60,6 +57,9 @@ struct MiniBrowserView: View {
     @State private var pageFrame: CGRect = .zero
     /// The neighbours sit beside the page while the address bar is swiped.
     @State private var peeking = false
+    /// The swipe heads past the last page, towards a new one. Stays set until
+    /// the page has settled, so the way back animates too.
+    @State private var revealingNewPage = false
     /// Set once the browser is closing, so a second tap cannot close it twice.
     @State private var leaving = false
     /// How far the address bar swipe has moved the page.
@@ -72,19 +72,17 @@ struct MiniBrowserView: View {
         allSpaces: [ZenSpace],
         allowsNormalTabs: Bool = false,
         startsInOverview: Bool = false,
-        onDismiss: @escaping () -> Void,
-        onDismissInPlace: @escaping () -> Void = {}
+        onDismiss: @escaping () -> Void
     ) {
         self.pages = pages
-        self.onDismissInPlace = onDismissInPlace
         self.space = space
         self.allSpaces = allSpaces
         self.allowsNormalTabs = allowsNormalTabs
         self.onDismiss = onDismiss
         _startsInSearch = State(initialValue: pages.active?.model.opensWithSearch ?? false)
         _showOverview = State(initialValue: startsInOverview)
-        // From home it fades in over the spaces, once it is on screen.
-        _overviewVisible = State(initialValue: false)
+        // From home it comes up with the cover, like the browser does.
+        _overviewVisible = State(initialValue: startsInOverview)
     }
 
     /// The page on screen.
@@ -151,7 +149,10 @@ struct MiniBrowserView: View {
     /// screen edge, the overview keeps the safe areas.
     var body: some View {
         ZStack {
-            if pages.active != nil || !showOverview {
+            // Only with a page to show. The browser must not stand in for one,
+            // not even for the frame between the overview going and the cover
+            // closing: from home there is no page behind it at all.
+            if pages.active != nil {
                 browser
             }
 
@@ -162,10 +163,9 @@ struct MiniBrowserView: View {
 
             heroLayer
         }
-        .presentationBackground(pages.active == nil ? Color.clear : barBackground)
-        .onAppear {
-            guard showOverview else { return }
-            withAnimation(.easeOut(duration: 0.22)) { overviewVisible = true }
+        .presentationBackground(pages.active == nil ? Color(uiColor: .systemGroupedBackground) : barBackground)
+        .onChange(of: pageSwipe) { _, offset in
+            if offset < 0, pages.neighbours.next == nil, !revealingNewPage { revealingNewPage = true }
         }
         .onChange(of: pages.activeID) { _, id in
             guard id != nil else {
@@ -186,6 +186,10 @@ struct MiniBrowserView: View {
         NavigationStack {
             ZStack {
                 ZStack {
+                    if revealingNewPage {
+                        newPagePeek
+                    }
+
                     ZStack {
                         webPane
                             .overlay {
@@ -205,7 +209,7 @@ struct MiniBrowserView: View {
                             .transition(.opacity)
                         }
                     }
-                    .background(sheetBackground)
+                    .background(revealingNewPage ? Color.clear : sheetBackground)
                     .offset(x: pageSwipe)
 
                     if model.menuExpanded {
@@ -357,7 +361,7 @@ struct MiniBrowserView: View {
                 if let page = pages.active {
                     closeOverview(to: page)
                 } else {
-                    leaveEmptyOverview()
+                    onDismiss()
                 }
             }
         )
@@ -398,7 +402,8 @@ struct MiniBrowserView: View {
             previous: peeking ? neighbours.previous.map(peek) : nil,
             next: peeking ? neighbours.next.map(peek) : nil,
             slidingColor: peeking ? UIColor(sheetBackground) : nil,
-            topOverflow: pageFrame.minY
+            topOverflow: pageFrame.minY,
+            cornerRadius: revealingNewPage ? Self.screenCornerRadius : 0
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -411,6 +416,27 @@ struct MiniBrowserView: View {
     private var pageBottomClearance: CGFloat {
         guard !barCollapsed else { return 0 }
         return MiniBrowserChromeMetrics.height(above: chromeBottomInset)
+    }
+
+    private static let screenCornerRadius: CGFloat = 48
+
+    /// What waits past the last page: not a page yet, so it does not pretend to
+    /// be one. A blank sheet grows up out of the background as the finger
+    /// pulls it in, the way Safari's does.
+    private var newPagePeek: some View {
+        let span = paneWidth + PageHostView.pageGap
+        let progress = span > 0 ? min(1, max(0, -pageSwipe / span)) : 0
+        return ZStack {
+            Color(uiColor: .systemGroupedBackground)
+                .ignoresSafeArea()
+            RoundedRectangle(cornerRadius: Self.screenCornerRadius, style: .continuous)
+                .fill(defaultBackground)
+                .ignoresSafeArea()
+                .scaleEffect(0.9 + 0.1 * progress)
+                .offset(x: (1 - progress) * paneWidth * 0.3)
+                .opacity(0.45 + 0.55 * progress)
+        }
+        .allowsHitTesting(false)
     }
 
     private func peek(_ page: OpenPage) -> PeekingPage {
@@ -541,10 +567,9 @@ private extension MiniBrowserView {
         withAnimation(.easeOut(duration: 0.2)) { overviewVisible = true }
     }
 
-    private func fadeOverviewOut(then finish: @escaping () -> Void = {}) {
+    private func fadeOverviewOut() {
         withAnimation(.easeOut(duration: 0.2)) { overviewVisible = false } completion: {
             showOverview = false
-            finish()
         }
     }
 
@@ -585,12 +610,10 @@ private extension MiniBrowserView {
         // The grid stays as it was while it fades: no card joins it on the way out.
         overviewHoldsCards = true
         pages.open(url: nil)
-        fadeOverviewOut { overviewHoldsCards = false }
-    }
-
-    /// Nothing open and nothing to go back to: the spaces come back into view.
-    private func leaveEmptyOverview() {
-        fadeOverviewOut(then: onDismissInPlace)
+        withAnimation(.easeOut(duration: 0.2)) { overviewVisible = false } completion: {
+            showOverview = false
+            overviewHoldsCards = false
+        }
     }
 
     /// A swipe started: the neighbours wake and take their places beside the page.
@@ -622,7 +645,9 @@ private extension MiniBrowserView {
             withAnimation(.interpolatingSpring(duration: 0.3, bounce: 0, initialVelocity: speed)) {
                 pageSwipe = 0
             } completion: {
-                if pageSwipe == 0 { peeking = false }
+                guard pageSwipe == 0 else { return }
+                peeking = false
+                revealingNewPage = false
             }
             return
         }
@@ -644,6 +669,7 @@ private extension MiniBrowserView {
                 case .stay: break
                 }
                 peeking = false
+                revealingNewPage = false
                 pageSwipe = 0
             }
         }

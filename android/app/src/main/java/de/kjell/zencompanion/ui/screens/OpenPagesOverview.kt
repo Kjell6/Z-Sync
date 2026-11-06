@@ -3,6 +3,7 @@ package de.kjell.zencompanion.ui.screens
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.annotation.StringRes
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -43,6 +44,7 @@ import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Share
@@ -69,7 +71,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -88,6 +89,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import de.kjell.zencompanion.R
+import de.kjell.zencompanion.data.KeptPageLifetime
 import de.kjell.zencompanion.data.OpenPage
 import de.kjell.zencompanion.data.SaveKind
 import de.kjell.zencompanion.sync.ZenSpaces
@@ -97,6 +99,7 @@ import de.kjell.zencompanion.ui.components.PinDestination
 import de.kjell.zencompanion.ui.components.PinDestinationModel
 import de.kjell.zencompanion.ui.theme.LocalZenColors
 import de.kjell.zencompanion.ui.theme.ZenType
+import de.kjell.zencompanion.ui.theme.liftBorder
 import de.kjell.zencompanion.util.Haptics
 import de.kjell.zencompanion.util.PageTitle
 import kotlin.math.abs
@@ -105,7 +108,7 @@ import kotlinx.coroutines.launch
 private val CardShape = RoundedCornerShape(18.dp)
 
 /**
- * "On this phone": every open page as a card, full screen over the browser,
+ * Every open page as a card, full screen over the browser,
  * the way Safari lays out its tabs (port of iOS `OpenPagesOverview`). A card
  * opens with a tap and closes with its X or a swipe; long press has the rest.
  */
@@ -179,7 +182,8 @@ internal fun OpenPagesOverview(
                 }
             } else {
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
+                    // Two on a phone, as many as fit on a tablet.
+                    columns = GridCells.Adaptive(150.dp),
                     state = grid,
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -251,6 +255,26 @@ internal fun OpenPagesOverview(
         ) {
             IconButton(onClick = onNewPage) {
                 Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.kept_new_page), tint = zen.ink)
+            }
+            // Says what happens to the pages, so nothing closes by surprise.
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
+            ) {
+                Icon(
+                    Icons.Outlined.Inventory2,
+                    contentDescription = null,
+                    tint = zen.ink.copy(alpha = 0.6f),
+                    modifier = Modifier.size(15.dp),
+                )
+                Text(
+                    text = stringResource(lifetimeHint(pages.lifetime())),
+                    style = ZenType.rounded(13, FontWeight.Normal),
+                    color = zen.ink.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             // Long press closes everything, as a long press on Safari's Done does.
             Box {
@@ -397,7 +421,8 @@ private fun OpenPageCard(
                     .alpha(if (hidesPicture) 0f else 1f)
                     .clip(CardShape)
                     .background(zen.lift)
-                    .then(if (isCurrent) Modifier.border(2.5.dp, zen.ink.copy(alpha = 0.75f), CardShape) else Modifier)
+                    // The rim the buttons have: a pale page still ends somewhere.
+                    .border(liftBorder(), CardShape)
                     .clickable {
                         // The finger that held the card also lifts here.
                         if (heldDown) heldDown = false else onOpen()
@@ -437,7 +462,8 @@ private fun OpenPageCard(
             PageCardMenu(
                 expanded = menuOpen,
                 page = page,
-                canKeep = pages.store.canKeep(page, session?.viewModel?.state?.value?.pageError != null),
+                canKeep = pages.keepsOnlyChosenPages() &&
+                    pages.store.canKeep(page, session?.viewModel?.state?.value?.pageError != null),
                 spaces = spaces,
                 pinsIntoFolders = pinsIntoFolders,
                 onDismiss = { menuOpen = false },
@@ -469,7 +495,7 @@ private fun OpenPageCard(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             if (page.url.isNotEmpty()) Favicon(urlString = page.url, size = 14.dp)
-            if (page.isKept) {
+            if (page.isKept && pages.keepsOnlyChosenPages()) {
                 Icon(
                     Icons.Outlined.Bookmark,
                     contentDescription = null,
@@ -558,6 +584,14 @@ private fun PageCardMenu(
             onClick = onClose,
         )
     }
+}
+
+@StringRes
+private fun lifetimeHint(lifetime: KeptPageLifetime): Int = when (lifetime) {
+    KeptPageLifetime.NEVER -> R.string.kept_hint_never
+    KeptPageLifetime.DAY -> R.string.kept_hint_day
+    KeptPageLifetime.WEEK -> R.string.kept_hint_week
+    KeptPageLifetime.MONTH -> R.string.kept_hint_month
 }
 
 /** Long press on a link in a page. */

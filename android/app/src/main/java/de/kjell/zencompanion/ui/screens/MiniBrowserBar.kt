@@ -43,6 +43,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.FormatSize
@@ -76,6 +77,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
@@ -103,7 +106,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
-import de.kjell.zencompanion.ui.components.Favicon
 import de.kjell.zencompanion.data.BlockCategory
 import de.kjell.zencompanion.data.ContentBlockingSettings
 import de.kjell.zencompanion.data.SaveKind
@@ -206,6 +208,8 @@ internal fun MiniBrowserBar(
     /** The page has no history left, but a link opened it: Back returns there. */
     canReturnToOpener: Boolean,
     onReturnToOpener: () -> Unit,
+    /** With "Keep only chosen pages" on, the menu offers Keep. */
+    showsKeep: Boolean,
     isKept: Boolean,
     canKeep: Boolean,
     onToggleKeep: () -> Unit,
@@ -286,6 +290,7 @@ internal fun MiniBrowserBar(
                         ExpandedMenu(
                             state = state,
                             viewModel = viewModel,
+                            showsKeep = showsKeep,
                             isKept = isKept,
                             canKeep = canKeep,
                             onToggleKeep = onToggleKeep,
@@ -442,15 +447,55 @@ private fun SwipeableNavBar(swipe: PageSwipe, bar: @Composable () -> Unit) {
             )
         }
         swipe.next?.let { peek ->
-            PeekNavBar(
-                peek,
-                Modifier.graphicsLayer {
-                    translationX = barOffset() + barWidth + gap
-                    alpha = if (current.offset() == 0f) 0f else 1f
-                },
-            )
+            if (peek.url == null) {
+                NewPagePill(
+                    width = { (-barOffset() - gap).coerceAtLeast(0f) },
+                    start = { barOffset() + barWidth + gap },
+                )
+            } else {
+                PeekNavBar(
+                    peek,
+                    Modifier.graphicsLayer {
+                        translationX = barOffset() + barWidth + gap
+                        alpha = if (current.offset() == 0f) 0f else 1f
+                    },
+                )
+            }
         }
         Box(Modifier.graphicsLayer { translationX = barOffset() }) { bar() }
+    }
+}
+
+/**
+ * Past the last page there is nothing to show an address for: a pill opens in
+ * the space the bar leaves behind, as wide as the finger has pulled it.
+ */
+@Composable
+private fun NewPagePill(width: () -> Float, start: () -> Float) {
+    val zen = LocalZenColors.current
+    val icon = with(LocalDensity.current) { 20.dp.toPx() }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(BarHeight)
+            .graphicsLayer { translationX = start() }
+            .drawBehind {
+                val radius = CornerRadius(20.dp.toPx())
+                drawRoundRect(zen.lift, size = Size(width(), size.height), cornerRadius = radius)
+            },
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Add,
+            contentDescription = null,
+            tint = zen.ink.copy(alpha = 0.8f),
+            modifier = Modifier
+                .size(20.dp)
+                .graphicsLayer {
+                    translationX = (width() - icon) / 2
+                    alpha = (width() / (90.dp.toPx())).coerceIn(0f, 1f)
+                },
+        )
     }
 }
 
@@ -830,6 +875,7 @@ private fun ComposerBar(
 private fun ExpandedMenu(
     state: MiniBrowserViewModel.State,
     viewModel: MiniBrowserViewModel,
+    showsKeep: Boolean,
     isKept: Boolean,
     canKeep: Boolean,
     onToggleKeep: () -> Unit,
@@ -858,13 +904,15 @@ private fun ExpandedMenu(
         // straight on the panel: the dividers and the gap between the blocks
         // do the grouping, no second card under them.
         Column(Modifier.fillMaxWidth()) {
-            MenuRow(
-                icon = if (isKept) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
-                title = stringResource(if (isKept) R.string.browser_kept else R.string.browser_keep_page),
-                tint = if (isKept) zen.ink else zen.ink,
-                onClick = onToggleKeep.takeIf { canKeep },
-            )
-            RowDivider()
+            if (showsKeep) {
+                MenuRow(
+                    icon = if (isKept) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
+                    title = stringResource(if (isKept) R.string.browser_kept else R.string.browser_keep_page),
+                    tint = zen.ink,
+                    onClick = onToggleKeep.takeIf { canKeep },
+                )
+                RowDivider()
+            }
             MenuRow(
                 icon = Icons.Outlined.ContentCopy,
                 title = stringResource(

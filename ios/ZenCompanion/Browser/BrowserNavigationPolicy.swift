@@ -8,9 +8,9 @@ enum BrowserNavigationPolicy {
         return webSchemes.contains(scheme)
     }
 
-    /// URL a `target=_blank` / `window.open` request should load in the only tab.
-    /// `about:blank` is skipped: Google opens a blank window and then assigns the
-    /// real address, and loading the blank request would wipe the current page.
+    /// The web address of a link or window, or nil for anything else. Decides
+    /// what "Open in New Page" is offered on, and what a window can load when
+    /// no open pages are around to give it a page of its own.
     static func sameTabURL(_ url: URL?) -> URL? {
         guard let url, loadsInWebView(url) else { return nil }
         switch url.scheme?.lowercased() {

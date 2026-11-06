@@ -29,6 +29,8 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
     /// How far above the host the screen goes on: each sliding page brings its
     /// color for the status bar along.
     var topOverflow: CGFloat = 0
+    /// Rounded like the screen while the page slides off towards a new one.
+    var cornerRadius: CGFloat = 0
 
     func makeUIView(context: Context) -> PageHostView {
         PageHostView()
@@ -40,7 +42,8 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
             previous: previous,
             next: next,
             slidingColor: slidingColor,
-            topOverflow: topOverflow
+            topOverflow: topOverflow,
+            cornerRadius: cornerRadius
         )
         for peek in [previous, next] {
             (peek?.webView as? MiniBrowserWebView)?.setBottomClearance(bottomClearance)
@@ -55,7 +58,7 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
     }
 
     static func dismantleUIView(_ host: PageHostView, coordinator: ()) {
-        host.show(current: nil, previous: nil, next: nil, slidingColor: nil, topOverflow: 0)
+        host.show(current: nil, previous: nil, next: nil, slidingColor: nil, topOverflow: 0, cornerRadius: 0)
     }
 }
 
@@ -101,7 +104,8 @@ final class PageHostView: UIView {
         previous: PeekingPage?,
         next: PeekingPage?,
         slidingColor: UIColor?,
-        topOverflow: CGFloat
+        topOverflow: CGFloat,
+        cornerRadius: CGFloat
     ) {
         let wanted = [current, previous?.webView, next?.webView].compactMap { $0 }
         for view in subviews where view is WKWebView && !wanted.contains(where: { $0 === view }) {
@@ -115,6 +119,14 @@ final class PageHostView: UIView {
         previousPeek = previous
         nextPeek = next
         self.topOverflow = topOverflow
+        // The backing carries the top corners, which sit above the web view;
+        // the web view rounds only the bottom ones.
+        currentBacking.layer.cornerRadius = cornerRadius
+        currentBacking.layer.cornerCurve = .continuous
+        current?.layer.cornerRadius = cornerRadius
+        current?.layer.cornerCurve = .continuous
+        current?.layer.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+        current?.layer.masksToBounds = cornerRadius > 0
         currentBacking.backgroundColor = slidingColor
         currentBacking.isHidden = slidingColor == nil
         previousBacking.backgroundColor = previous?.color

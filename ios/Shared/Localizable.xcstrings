@@ -2135,7 +2135,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pages close when you leave the browser. To keep one, open the menu and tap Keep Page."
+            "value": "Tap + to open a page."
           }
         }
       }
@@ -2170,32 +2170,62 @@
         }
       }
     },
-    "kept.title": {
+    "settings.keep_only_chosen": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "On this phone"
+            "value": "Keep only chosen pages"
           }
         }
       }
     },
-    "settings.keep_every_page": {
+    "settings.keep_only_chosen.subtitle": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Keep every page"
+            "value": "Other pages close with the browser"
           }
         }
       }
     },
-    "settings.keep_every_page.subtitle": {
+    "kept.hint.never": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Closing the browser keeps its pages"
+            "value": "Auto-archive off"
+          }
+        }
+      }
+    },
+    "kept.hint.day": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-archive after 1 day"
+          }
+        }
+      }
+    },
+    "kept.hint.week": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-archive after 7 days"
+          }
+        }
+      }
+    },
+    "kept.hint.month": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-archive after 30 days"
           }
         }
       }
@@ -2205,7 +2235,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Close kept pages"
+            "value": "Auto-archive"
           }
         }
       }

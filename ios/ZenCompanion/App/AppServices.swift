@@ -16,7 +16,7 @@ enum PreferenceKeys {
     static let saveKind = "save_kind"
     static let toolbarPlacement = "toolbar_placement"
     static let openIntoSearch = "open_into_search"
-    static let keepEveryPage = "keep_every_page"
+    static let keepOnlyChosenPages = "keep_only_chosen_pages"
     static let keptPageLifetime = "kept_page_lifetime"
     static let essentialsColumns = "essentials_columns"
     /// Marketing version whose What's New sheet was already presented.

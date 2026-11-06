@@ -9,22 +9,23 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * One page open on this phone. A throwaway page ends with the browser; a kept
- * one stays in "On this phone" and on disk. Neither ever enters Zen's data.
+ * One page open on this phone. Pages stay open like in any browser, and on
+ * disk, until they are closed; with "Keep only chosen pages" on, only those the
+ * user keeps do. Neither kind ever enters Zen's data.
  */
 data class OpenPage(
     val id: String,
     /** Empty for a new page nothing has loaded in yet. */
     val url: String,
     val title: String,
-    /** When the page was kept; null for a throwaway page. */
+    /** When the page was saved to stay; null until then. */
     val keptAt: Long? = null,
     val lastUsedAt: Long,
-    /** A space's own tab: "Keep every page" skips it until the user browses away. */
+    /** A space's own tab: it stays only once the user browses away. */
     val openedFromSpace: Boolean = false,
     /** The page a link opened this one from. Back returns there. */
     val openerId: String? = null,
-    /** The user stopped keeping this page; "Keep every page" leaves it alone. */
+    /** The user stopped keeping this page, so it goes with the browser. */
     val released: Boolean = false,
     /** The address saved from this page into a space. */
     val pinnedUrl: String? = null,
@@ -32,7 +33,7 @@ data class OpenPage(
     val isKept: Boolean get() = keptAt != null
 }
 
-/** How long a kept page stays once the user has left it. Off by default. */
+/** How long a page stays once the user has left it. A month by default. */
 enum class KeptPageLifetime(val storageValue: String, val millis: Long?) {
     NEVER("never", null),
     DAY("day", 86_400_000L),
@@ -42,7 +43,7 @@ enum class KeptPageLifetime(val storageValue: String, val millis: Long?) {
 
     companion object {
         fun fromStorage(value: String?): KeptPageLifetime =
-            entries.firstOrNull { it.storageValue == value } ?: NEVER
+            entries.firstOrNull { it.storageValue == value } ?: MONTH
     }
 }
 
@@ -51,8 +52,8 @@ enum class LeaveAction { UPDATE, KEEP, DISCARD }
 
 object KeptPagesPolicy {
     /**
-     * A kept page stays and takes its latest address. A throwaway page is
-     * dropped unless "Keep every page" is on. Even then a page is not kept
+     * A kept page stays and takes its latest address. Any other page stays too,
+     * unless "Keep only chosen pages" is on. Even then a page is not kept
      * when there is nothing worth reopening (no web address, a failed load),
      * when it was just pinned into a space, when the user stopped keeping it
      * during this visit, or when it is a space's tab that was opened and left
@@ -118,7 +119,7 @@ class OpenPagesStore(
     fun canKeep(page: OpenPage, failed: Boolean): Boolean =
         page.isKept || (!failed && KeptPagesPolicy.isWebAddress(page.url))
 
-    /** Opens a new page and puts it on screen. It is throwaway until kept. */
+    /** Opens a new page and puts it on screen. */
     fun open(url: String, title: String = "", openedFromSpace: Boolean = false, openerId: String? = null): OpenPage {
         val page = OpenPage(
             id = UUID.randomUUID().toString(),
@@ -173,7 +174,7 @@ class OpenPagesStore(
         }
     }
 
-    /** Keep Page / Kept. Tapping again makes the page throwaway. */
+    /** Keep Page / Kept. Tapping again lets the page go with the browser. */
     fun toggleKeep(id: String, failed: Boolean) {
         val page = page(id) ?: return
         when {
@@ -187,12 +188,14 @@ class OpenPagesStore(
         change { pages -> pages.map { if (it.id == id) it.copy(keptAt = at, released = false) else it } }
     }
 
-    private fun release(id: String) {
-        change { pages -> pages.map { if (it.id == id) it.copy(keptAt = null, released = true) else it } }
+    private fun release(id: String, byUser: Boolean = true) {
+        change { pages ->
+            pages.map { if (it.id == id) it.copy(keptAt = null, released = it.released || byUser) else it }
+        }
         removeFiles(id)
     }
 
-    /** A save from this page started: "Keep every page" leaves it alone. */
+    /** A save from this page started: it does not stay as an open page too. */
     fun markPinned(id: String, url: String) {
         _pages.value = _pages.value.map { if (it.id == id) it.copy(pinnedUrl = url) else it }
     }
@@ -201,7 +204,8 @@ class OpenPagesStore(
     fun pinned(id: String, url: String, sameDocument: (String, String) -> Boolean) {
         val page = page(id) ?: return
         if (!page.isKept || !sameDocument(url, page.url)) return
-        if (id == _activeId.value) release(id) else close(id)
+        // Still on screen, it stays if the user browses on from here.
+        if (id == _activeId.value) release(id, byUser = false) else close(id)
     }
 
     /**
@@ -236,7 +240,7 @@ class OpenPagesStore(
     }
 
     /**
-     * Keeps what "Keep every page" would keep. [leaving] answers what the
+     * Saves the pages that stay. [leaving] answers what the
      * store cannot know about a page: whether it failed and has history.
      */
     fun promote(keepEveryPage: Boolean, leaving: (OpenPage) -> PageExit) {
@@ -256,14 +260,16 @@ class OpenPagesStore(
         }
     }
 
-    /** The browser is closing: throwaway pages go, kept pages stay. */
+    /** The browser is closing: pages that were not saved to stay go. */
     fun endSession(keepEveryPage: Boolean, leaving: (OpenPage) -> PageExit) {
         promote(keepEveryPage, leaving)
         val at = now()
+        val onScreen = _activeId.value
         val gone = _pages.value.filterNot { it.isKept }
         _activeId.value = null
         change { pages ->
-            pages.filter { it.isKept }.map { it.copy(lastUsedAt = at) }
+            // Only what was in use: the others keep counting down.
+            pages.filter { it.isKept }.map { if (it.id == onScreen) it.copy(lastUsedAt = at) else it }
         }
         gone.forEach {
             removeFiles(it.id)
@@ -272,7 +278,7 @@ class OpenPagesStore(
     }
 
     /**
-     * Kept pages past the chosen lifetime close by themselves. The page on
+     * Pages past the chosen lifetime close by themselves. The page on
      * screen is in use, so it is never one of them.
      */
     fun closeExpired(lifetime: KeptPageLifetime) {

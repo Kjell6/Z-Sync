@@ -780,8 +780,8 @@ private class FakePreferencesRepository : PreferencesRepository {
         state = state.copy(openIntoSearch = enabled)
     }
 
-    override fun setKeepEveryPage(enabled: Boolean) {
-        state = state.copy(keepEveryPage = enabled)
+    override fun setKeepOnlyChosenPages(enabled: Boolean) {
+        state = state.copy(keepOnlyChosenPages = enabled)
     }
 
     override fun setKeptPageLifetime(lifetime: KeptPageLifetime) {

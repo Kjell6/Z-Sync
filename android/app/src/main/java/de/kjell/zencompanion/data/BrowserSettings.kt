@@ -85,7 +85,7 @@ object BrowserSettings {
     const val KEY_SAVE_KIND = "save_tab_kind"
     const val KEY_TOOLBAR_PLACEMENT = "toolbar_placement"
     const val KEY_OPEN_INTO_SEARCH = "open_into_search"
-    const val KEY_KEEP_EVERY_PAGE = "keep_every_page"
+    const val KEY_KEEP_ONLY_CHOSEN_PAGES = "keep_only_chosen_pages"
     const val KEY_KEPT_PAGE_LIFETIME = "kept_page_lifetime"
 
     fun get(context: Context): Boolean =
@@ -153,19 +153,19 @@ object BrowserSettings {
             .apply()
     }
 
-    /** Whether closing the browser keeps its pages; off when never chosen. */
-    fun getKeepEveryPage(context: Context): Boolean =
+    /** Whether only the pages the user keeps stay open; off when never chosen. */
+    fun getKeepOnlyChosenPages(context: Context): Boolean =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getBoolean(KEY_KEEP_EVERY_PAGE, false)
+            .getBoolean(KEY_KEEP_ONLY_CHOSEN_PAGES, false)
 
-    fun setKeepEveryPage(context: Context, enabled: Boolean) {
+    fun setKeepOnlyChosenPages(context: Context, enabled: Boolean) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
-            .putBoolean(KEY_KEEP_EVERY_PAGE, enabled)
+            .putBoolean(KEY_KEEP_ONLY_CHOSEN_PAGES, enabled)
             .apply()
     }
 
-    /** How long a kept page stays; never closes when never chosen. */
+    /** How long an unused page stays; a month when never chosen. */
     fun getKeptPageLifetime(context: Context): KeptPageLifetime =
         KeptPageLifetime.fromStorage(
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

@@ -10,7 +10,7 @@ struct OverviewCardFrames: PreferenceKey {
     }
 }
 
-/// "On this phone": every open page as a card, full screen over the browser,
+/// Every open page as a card, full screen over the browser,
 /// the way Safari lays out its tabs. A card opens with a tap and closes with
 /// its X or a swipe; long press has the rest.
 struct OpenPagesOverview: View {
@@ -34,10 +34,8 @@ struct OpenPagesOverview: View {
     /// The card being dragged to a new place.
     @State private var draggedID: String?
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 16),
-        GridItem(.flexible(), spacing: 16),
-    ]
+    /// Two on a phone, as many as fit on an iPad.
+    private let columns = [GridItem(.adaptive(minimum: 150, maximum: 260), spacing: 16)]
 
     var body: some View {
         NavigationStack {
@@ -122,14 +120,22 @@ struct OpenPagesOverview: View {
     /// as a long press on Safari's Done does.
     @ToolbarContentBuilder
     private var bottomBar: some ToolbarContent {
-        ToolbarItemGroup(placement: .bottomBar) {
+        ToolbarItem(placement: .bottomBar) {
             Button(action: onNewPage) {
                 Image(systemName: "plus")
             }
             .accessibilityLabel(Text("kept.new_page"))
+        }
 
-            Spacer()
+        // Says what happens to the pages, so nothing closes by surprise. Plain
+        // text: on glass it would read as a button.
+        if #available(iOS 26.0, *) {
+            lifetimeHint.sharedBackgroundVisibility(.hidden)
+        } else {
+            lifetimeHint
+        }
 
+        ToolbarItem(placement: .bottomBar) {
             Menu {
                 Button(role: .destructive) {
                     confirmCloseAll = true
@@ -147,6 +153,18 @@ struct OpenPagesOverview: View {
                 onDone()
             }
             .accessibilityLabel(Text("common.done"))
+        }
+    }
+
+    private var lifetimeHint: some ToolbarContent {
+        ToolbarItem(placement: .status) {
+            HStack(spacing: 5) {
+                Image(systemName: "archivebox")
+                Text(verbatim: pages.lifetimeHint)
+            }
+            .font(.footnote)
+            .foregroundStyle(Color.secondary)
+            .lineLimit(1)
         }
     }
 
@@ -171,7 +189,7 @@ struct OpenPagesOverview: View {
     /// the choice the browser's Pin offers.
     @ViewBuilder
     private func menu(for page: OpenPage) -> some View {
-        if pages.canKeep(page) {
+        if pages.keepsOnlyChosenPages, pages.canKeep(page) {
             Button {
                 pages.toggleKeep(page.id)
             } label: {
@@ -321,6 +339,8 @@ private struct OpenPageCard<Menu: View>: View {
                 .aspectRatio(0.72, contentMode: .fit)
                 .frame(maxWidth: .infinity)
                 .clipShape(shape)
+                // The rim the buttons have: a pale page still ends somewhere.
+                .glassRim(cornerRadius: radius)
                 .opacity(hidesPicture ? 0 : 1)
                 .background {
                     GeometryReader { proxy in
@@ -328,11 +348,6 @@ private struct OpenPageCard<Menu: View>: View {
                             key: OverviewCardFrames.self,
                             value: [page.id: proxy.frame(in: .global)]
                         )
-                    }
-                }
-                .overlay {
-                    if isCurrent, !hidesPicture {
-                        shape.strokeBorder(Color.primary.opacity(0.75), lineWidth: 2.5)
                     }
                 }
                 .overlay(alignment: .topTrailing) {
@@ -357,7 +372,7 @@ private struct OpenPageCard<Menu: View>: View {
                 if let url = page.url {
                     Favicon(urlString: url.absoluteString, size: 14)
                 }
-                if page.isKept {
+                if page.isKept, store.keepsOnlyChosenPages {
                     Image(systemName: "bookmark.fill")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(Color.secondary)
@@ -376,6 +391,7 @@ private struct OpenPageCard<Menu: View>: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel(isCurrent ? Text(verbatim: "\(page.title), \(String(localized: "kept.current_page"))") : Text(verbatim: page.title))
         .accessibilityAddTraits(.isButton)
+        .accessibilityAction(.default, onOpen)
     }
 
     private var swipeToClose: some Gesture {

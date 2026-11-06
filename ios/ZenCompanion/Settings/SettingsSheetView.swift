@@ -213,11 +213,11 @@ struct SettingsSheet: View {
                 SettingsHairline(scheme: scheme)
 
                 SettingsToggleRow(
-                    title: "settings.keep_every_page",
-                    systemImage: "plus.square.on.square",
+                    title: "settings.keep_only_chosen",
+                    systemImage: "bookmark",
                     scheme: scheme,
-                    subtitle: "settings.keep_every_page.subtitle",
-                    isOn: $model.keepEveryPage
+                    subtitle: "settings.keep_only_chosen.subtitle",
+                    isOn: $model.keepOnlyChosenPages
                 )
 
                 SettingsHairline(scheme: scheme)

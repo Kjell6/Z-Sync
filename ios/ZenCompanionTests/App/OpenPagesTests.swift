@@ -27,16 +27,98 @@ final class OpenPagesTests: XCTestCase {
         )
     }
 
-    private func keepingEverything() -> FakePreferences {
+    private func choosing() -> FakePreferences {
         let preferences = FakePreferences()
-        preferences.setBool(true, PreferenceKeys.keepEveryPage, scope: .standard)
+        preferences.setBool(true, PreferenceKeys.keepOnlyChosenPages, scope: .standard)
         return preferences
     }
 
-    // MARK: - Throwaway by default
+    // MARK: - Like any browser
 
-    func testClosingTheBrowserDropsThrowawayPagesAndLeavesKeptOnes() {
+    func testPagesStayWhenTheBrowserCloses() {
+        let directory = tempDirectory()
+        let pages = store(directory: directory)
+        let page = pages.open(url: a, title: "A")
+
+        pages.endBrowserSession()
+
+        XCTAssertEqual(pages.pages.map(\.id), [page.id])
+        XCTAssertNil(pages.activeID)
+        XCTAssertNil(page.model.webView, "A closed browser holds no web views")
+        XCTAssertEqual(store(directory: directory).pages.map(\.url), [a])
+    }
+
+    func testAnUntouchedTabFromASpaceDoesNotStay() {
         let pages = store()
+        pages.open(url: a, openedFromSpace: true)
+        pages.endBrowserSession()
+        XCTAssertTrue(pages.pages.isEmpty)
+    }
+
+    func testAnEmptyNewPageDoesNotStay() {
+        let pages = store()
+        pages.open(url: nil)
+        pages.endBrowserSession()
+        XCTAssertTrue(pages.pages.isEmpty)
+    }
+
+    func testPagesCloseAfterAMonthByDefault() {
+        var clock = Date(timeIntervalSince1970: 1_000_000)
+        let pages = store(now: { clock })
+        pages.open(url: a)
+        pages.endBrowserSession()
+
+        clock += 29 * 86_400
+        pages.closeExpired()
+        XCTAssertEqual(pages.pages.count, 1)
+
+        clock += 86_400
+        pages.closeExpired()
+        XCTAssertTrue(pages.pages.isEmpty)
+    }
+
+    func testClosingTheBrowserOnlyRefreshesThePageOnScreen() {
+        var clock = Date(timeIntervalSince1970: 1_000_000)
+        let pages = store(now: { clock })
+        let idle = pages.open(url: a)
+        let used = pages.open(url: b)
+
+        clock += 20 * 86_400
+        pages.endBrowserSession()
+        XCTAssertEqual(idle.lastUsedAt, Date(timeIntervalSince1970: 1_000_000))
+        XCTAssertEqual(used.lastUsedAt, clock)
+
+        clock += 10 * 86_400
+        pages.closeExpired()
+        XCTAssertEqual(pages.pages.map(\.id), [used.id], "An idle page runs out even if the browser is in use")
+    }
+
+    func testAPageThatWasPinnedStaysOnceTheUserBrowsesOn() {
+        let pages = store()
+        let page = pages.open(url: a)
+        pages.endBrowserSession()
+        pages.activate(page.id)
+
+        pages.pageWasPinned(page.model, url: a)
+        XCTAssertFalse(page.isKept, "Pinned, it belongs to the space")
+
+        page.model.updateCurrentURL(b)
+        pages.endBrowserSession()
+        XCTAssertEqual(pages.pages.map(\.id), [page.id])
+    }
+
+    func testTheOverviewNamesTheChosenPeriod() {
+        XCTAssertEqual(store().lifetimeHint, String(localized: "kept.hint.month"))
+
+        let never = FakePreferences()
+        never.setString(KeptPageLifetime.never.rawValue, PreferenceKeys.keptPageLifetime, scope: .standard)
+        XCTAssertEqual(store(preferences: never).lifetimeHint, String(localized: "kept.hint.never"))
+    }
+
+    // MARK: - Keep only chosen pages
+
+    func testOnlyChosenPagesStay() {
+        let pages = store(preferences: choosing())
         let kept = pages.open(url: a)
         pages.open(url: b)
         pages.toggleKeep(kept.id)
@@ -44,18 +126,17 @@ final class OpenPagesTests: XCTestCase {
         pages.endBrowserSession()
 
         XCTAssertEqual(pages.pages.map(\.id), [kept.id])
-        XCTAssertNil(pages.activeID)
-        XCTAssertNil(kept.model.webView, "A closed browser holds no web views")
     }
 
-    func testKeptPagesSurviveARestartAndThrowawayOnesDoNot() {
+    func testChosenPagesSurviveARestartAndOthersDoNot() {
         let directory = tempDirectory()
-        let pages = store(directory: directory)
+        let preferences = choosing()
+        let pages = store(directory: directory, preferences: preferences)
         let kept = pages.open(url: a, title: "A")
         pages.open(url: b, title: "B")
         pages.toggleKeep(kept.id)
 
-        let reopened = store(directory: directory)
+        let reopened = store(directory: directory, preferences: preferences)
 
         XCTAssertEqual(reopened.pages.map(\.id), [kept.id])
         XCTAssertEqual(reopened.pages.first?.url, a)
@@ -63,49 +144,24 @@ final class OpenPagesTests: XCTestCase {
         XCTAssertNil(reopened.activeID)
     }
 
-    func testTappingKeptAgainMakesThePageThrowaway() {
+    func testTappingKeptAgainLetsThePageGo() {
         let directory = tempDirectory()
-        let pages = store(directory: directory)
+        let preferences = choosing()
+        let pages = store(directory: directory, preferences: preferences)
         let page = pages.open(url: a)
         pages.toggleKeep(page.id)
         pages.toggleKeep(page.id)
 
         XCTAssertFalse(page.isKept)
-        XCTAssertTrue(store(directory: directory).pages.isEmpty)
+        XCTAssertTrue(store(directory: directory, preferences: preferences).pages.isEmpty)
     }
 
     func testANewPageCannotBeKept() {
-        let pages = store()
+        let pages = store(preferences: choosing())
         let page = pages.open(url: nil)
         XCTAssertFalse(pages.canKeep(page))
         pages.toggleKeep(page.id)
         XCTAssertFalse(page.isKept)
-    }
-
-    // MARK: - Keep every page
-
-    func testKeepEveryPageKeepsOnClose() {
-        let pages = store(preferences: keepingEverything())
-        let page = pages.open(url: a)
-        pages.endBrowserSession()
-        XCTAssertEqual(pages.pages.map(\.id), [page.id])
-        XCTAssertTrue(page.isKept)
-    }
-
-    func testKeepEveryPageSkipsAnUntouchedTabFromASpace() {
-        let pages = store(preferences: keepingEverything())
-        pages.open(url: a, openedFromSpace: true)
-        pages.endBrowserSession()
-        XCTAssertTrue(pages.pages.isEmpty)
-    }
-
-    func testKeepEveryPageSkipsAPageTheUserReleased() {
-        let pages = store(preferences: keepingEverything())
-        let page = pages.open(url: a)
-        pages.toggleKeep(page.id)
-        pages.toggleKeep(page.id)
-        pages.endBrowserSession()
-        XCTAssertTrue(pages.pages.isEmpty)
     }
 
     func testLeavePolicy() {
@@ -275,11 +331,12 @@ final class OpenPagesTests: XCTestCase {
         XCTAssertEqual(pages.activeID, page.id)
     }
 
-    func testKeptPagesStayByDefault() {
+    func testPagesStayForeverWhenAskedTo() {
+        let preferences = FakePreferences()
+        preferences.setString(KeptPageLifetime.never.rawValue, PreferenceKeys.keptPageLifetime, scope: .standard)
         var clock = Date(timeIntervalSince1970: 1_000_000)
-        let pages = store(now: { clock })
+        let pages = store(preferences: preferences, now: { clock })
         let page = pages.open(url: a)
-        pages.toggleKeep(page.id)
         pages.endBrowserSession()
 
         clock += 365 * 86_400

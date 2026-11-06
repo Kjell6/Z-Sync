@@ -376,7 +376,7 @@ final class MiniBrowserModel {
     /// The page the user pinned, captured when the banner opened, so a later
     /// navigation can't swap in another page before the save commits.
     private var pendingPin: (url: URL, title: String)?
-    /// The address saved from this page, so "Keep every page" leaves it alone.
+    /// The address saved from this page, which does not stay as an open page too.
     private(set) var pinnedURL: URL?
     /// How the pending save will be written (pinned vs normal). Captured when
     /// the banner is triggered and kept honest against the capability.

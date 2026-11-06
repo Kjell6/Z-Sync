@@ -276,7 +276,7 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
             onSetSaveKind = { viewModel.setSaveKind(it) },
             onSetToolbarPlacement = { viewModel.setToolbarPlacement(it) },
             onSetOpenIntoSearch = { viewModel.setOpenIntoSearch(it) },
-            onSetKeepEveryPage = { viewModel.setKeepEveryPage(it) },
+            onSetKeepOnlyChosenPages = { viewModel.setKeepOnlyChosenPages(it) },
             onSetKeptPageLifetime = { viewModel.setKeptPageLifetime(it) },
             onSignOut = {
                 showSettings = false

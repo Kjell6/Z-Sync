@@ -18,25 +18,26 @@ protocol MiniBrowserPageHost: AnyObject {
     func pageProcessDidTerminate(_ model: MiniBrowserModel) -> Bool
 }
 
-/// One page open on this phone. A throwaway page ends with the browser; a kept
-/// one stays in "On this phone" and on disk. Neither ever enters Zen's data.
+/// One page open on this phone. Pages stay open like in any browser, and on
+/// disk, until they are closed; with "Keep only chosen pages" on, only those the
+/// user keeps do. Neither kind ever enters Zen's data.
 @MainActor
 @Observable
 final class OpenPage: Identifiable {
     let id: String
     let model: MiniBrowserModel
-    /// Opened from one of a space's own tabs: "Keep every page" skips it until
-    /// the user browses away.
+    /// Opened from one of a space's own tabs: it stays only once the user
+    /// browses away, so the list does not fill with copies of pinned tabs.
     let openedFromSpace: Bool
     /// The page a link opened this one from. Back returns there once this
     /// page's own history runs out.
     var openerID: String?
-    /// When the page was kept; nil for a throwaway page.
+    /// When the page was saved to stay; nil until then.
     var keptAt: Date?
     var lastUsedAt: Date
     /// The page as it last looked, for the list and the address bar swipe.
     var shot: UIImage?
-    /// The user stopped keeping this page; "Keep every page" leaves it alone.
+    /// The user stopped keeping this page, so it goes with the browser.
     @ObservationIgnored var released = false
     /// WebKit's history blob while the page has no web view.
     @ObservationIgnored var history: Any?
@@ -65,7 +66,7 @@ final class OpenPage: Identifiable {
     }
 }
 
-/// How long a kept page stays once the user has left it. Off by default.
+/// How long a page stays once the user has left it. A month by default.
 enum KeptPageLifetime: String, CaseIterable, Identifiable {
     case never
     case day
@@ -83,6 +84,16 @@ enum KeptPageLifetime: String, CaseIterable, Identifiable {
         }
     }
 
+    /// The short note in the overview.
+    var hint: String {
+        switch self {
+        case .never: return String(localized: "kept.hint.never")
+        case .day: return String(localized: "kept.hint.day")
+        case .week: return String(localized: "kept.hint.week")
+        case .month: return String(localized: "kept.hint.month")
+        }
+    }
+
     var interval: TimeInterval? {
         switch self {
         case .never: return nil
@@ -95,7 +106,7 @@ enum KeptPageLifetime: String, CaseIterable, Identifiable {
     @MainActor
     static func stored(in preferences: PreferencesStoring) -> KeptPageLifetime {
         preferences.string(PreferenceKeys.keptPageLifetime, scope: .standard)
-            .flatMap(KeptPageLifetime.init(rawValue:)) ?? .never
+            .flatMap(KeptPageLifetime.init(rawValue:)) ?? .month
     }
 }
 
@@ -107,8 +118,8 @@ enum LeaveAction: Equatable {
 }
 
 enum KeptPagesPolicy {
-    /// A kept page stays and takes its latest address. A throwaway page is
-    /// dropped unless "Keep every page" is on. Even then a page is not kept
+    /// A kept page stays and takes its latest address. Any other page stays too,
+    /// unless "Keep only chosen pages" is on. Even then a page is not kept
     /// when there is nothing worth reopening (no web address, a failed load),
     /// when it was just pinned into a space, when the user stopped keeping it
     /// during this visit, or when it is a space's tab that was opened and left
@@ -134,8 +145,9 @@ enum KeptPagesPolicy {
 
 /// Every page open on this phone, the one on screen and what stays on disk.
 ///
-/// The pages live here and not in the browser view, so they outlast it: closing
-/// the browser drops the throwaway pages and leaves the kept ones. Only the most
+/// The pages live here and not in the browser view, so they outlast it, the way
+/// tabs outlast a browser window. Pages that were never saved to stay go when
+/// the browser closes, and the setting decides which ones those are. Only the most
 /// recently used pages hold a web view; the others sleep with their history and
 /// wake when they are shown. Kept pages live in Application Support as one JSON
 /// file plus a picture and a history file per page, and go on sign-out.
@@ -212,6 +224,17 @@ final class OpenPagesStore: MiniBrowserPageHost {
         )
     }
 
+    /// Keeping a page is a choice only with "Keep only chosen pages" on; the
+    /// Keep controls exist for that mode alone.
+    var keepsOnlyChosenPages: Bool {
+        preferences.bool(PreferenceKeys.keepOnlyChosenPages, scope: .standard)
+    }
+
+    /// What the overview says will happen to the pages.
+    var lifetimeHint: String {
+        KeptPageLifetime.stored(in: preferences).hint
+    }
+
     func canKeep(_ page: OpenPage) -> Bool {
         if page.isKept { return true }
         guard page.model.pageError == nil else { return false }
@@ -220,7 +243,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
 
     // MARK: - Opening and switching
 
-    /// Opens a new page and puts it on screen. It is throwaway until kept.
+    /// Opens a new page and puts it on screen.
     @discardableResult
     func open(url: URL?, title: String? = nil, openedFromSpace: Bool = false) -> OpenPage {
         let model = makeModel(url)
@@ -339,14 +362,16 @@ final class OpenPagesStore: MiniBrowserPageHost {
         try? FileManager.default.removeItem(at: directory)
     }
 
-    /// Throwaway pages go, kept pages stay and let go of their web views.
+    /// Pages that stay let go of their web views; the others go.
     func endBrowserSession() {
+        let onScreen = activeID
         activeID = nil
         for page in pages {
             page.model.commitPendingPinSave()
             page.model.didLeaveScreen()
-            page.lastUsedAt = now()
-            promoteIfKeepingEverything(page)
+            // Only what was in use: the others keep counting down.
+            if page.id == onScreen { page.lastUsedAt = now() }
+            saveIfItStays(page)
             guard page.isKept else {
                 page.model.sleep()
                 removeFiles(of: page)
@@ -358,7 +383,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
         persist()
     }
 
-    /// Kept pages past the chosen lifetime close by themselves. The page on
+    /// Pages past the chosen lifetime close by themselves. The page on
     /// screen is in use, so it is never one of them.
     func closeExpired() {
         guard let interval = KeptPageLifetime.stored(in: preferences).interval else { return }
@@ -370,7 +395,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
 
     // MARK: - Keeping
 
-    /// Keep Page / Kept. Tapping again makes the page throwaway.
+    /// Keep Page / Kept. Tapping again lets the page go with the browser.
     func toggleKeep(_ id: String) {
         guard let page = page(id) else { return }
         if page.isKept {
@@ -391,18 +416,18 @@ final class OpenPagesStore: MiniBrowserPageHost {
         persist()
     }
 
-    private func release(_ page: OpenPage) {
+    private func release(_ page: OpenPage, byUser: Bool = true) {
         page.keptAt = nil
-        page.released = true
+        if byUser { page.released = true }
         removeFiles(of: page)
         persist()
     }
 
-    private func promoteIfKeepingEverything(_ page: OpenPage) {
+    private func saveIfItStays(_ page: OpenPage) {
         let model = page.model
         let action = KeptPagesPolicy.onLeave(
             isKept: page.isKept,
-            keepEveryPage: preferences.bool(PreferenceKeys.keepEveryPage, scope: .standard),
+            keepEveryPage: !keepsOnlyChosenPages,
             url: page.url,
             failed: model.pageError != nil,
             pinnedHere: PageTitle.sameDocument(model.pinnedURL, page.url),
@@ -450,7 +475,8 @@ final class OpenPagesStore: MiniBrowserPageHost {
         // Still pinned? A page that moved on stays what it was.
         guard PageTitle.sameDocument(url, page.url) else { return }
         if page.id == activeID {
-            release(page)
+            // Still on screen; it stays if the user browses on from here.
+            release(page, byUser: false)
         } else {
             close(page.id)
         }
@@ -545,7 +571,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
     /// The app may not come back, so what would stay on close is saved now.
     private func didEnterBackground() {
         for page in pages {
-            promoteIfKeepingEverything(page)
+            saveIfItStays(page)
             if page.id == activeID { page.lastUsedAt = now() }
             saveHistory(of: page)
         }

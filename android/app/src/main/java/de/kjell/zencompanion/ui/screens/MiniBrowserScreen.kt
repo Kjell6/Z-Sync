@@ -441,7 +441,9 @@ private fun BrowserPageScreen(
     val pageGapPx = with(LocalDensity.current) { PageGap.toPx() }
     /** The link a long press is asking about. */
     var linkMenu by remember { mutableStateOf<String?>(null) }
-    val state by viewModel.state.collectAsState()
+    // Keyed: a collector carried over to another page reads the old page's
+    // state for its first frames, and the bar would show that page's colors.
+    val state by key(session.id) { viewModel.state.collectAsState() }
 
     // Scroll-driven bar: tucks away on the way down, returns on the way up.
     var barHidden by remember { mutableStateOf(false) }
@@ -585,6 +587,9 @@ private fun BrowserPageScreen(
         animationSpec = if (colorJumps) snap() else tween(300),
         label = "browserThemeColor",
     )
+    // The animation answers a frame late, and a page switch has no frame to
+    // spare: the plate would go back to the old page's color for a moment.
+    val shownBgColor = if (colorJumps) targetBg else animatedBgColor
 
     // The bar stays put while a sheet, a reader, the find bar or a banner is up.
     val barVisible = !barHidden ||
@@ -598,7 +603,7 @@ private fun BrowserPageScreen(
 
     // The page's color as-is, so the browser starts on the app's paper; the
     // plates that sit on it are nudged a touch for contrast.
-    val barColor = animatedBgColor.nudgedForBar()
+    val barColor = shownBgColor.nudgedForBar()
     val barIsDark = barColor.luminance() < 0.5f
 
     // The status and navigation bars sit on the same color. Restored on close,
@@ -651,9 +656,9 @@ private fun BrowserPageScreen(
         val span = paneWidth + pageGapPx
         val heading = if (moved < 0) nextPageColor else previousPageColor
         if (moved == 0f || span <= 0f || heading == null) {
-            animatedBgColor
+            shownBgColor
         } else {
-            lerp(animatedBgColor, heading, (abs(moved) / span).coerceIn(0f, 1f))
+            lerp(shownBgColor, heading, (abs(moved) / span).coerceIn(0f, 1f))
         }
     }
 
@@ -687,17 +692,19 @@ private fun BrowserPageScreen(
                         initialVelocity = velocity,
                     )
                     colorJumps = true
-                    val arriving = if (target != null) {
+                    if (target != null) {
+                        // No frame between these: the page is already where it
+                        // belongs, and with the swipe still applied both pages
+                        // would sit off screen.
                         pages.activate(target.id)
-                        target.id
                     } else {
-                        pages.open(null).id
+                        // A new page has yet to be composed. The old one only
+                        // comes off the swipe once it has taken over, its color
+                        // included, or it is back on screen for a moment.
+                        val arriving = pages.open(null).id
+                        while (shownSession.id != arriving) withFrameNanos { }
+                        withFrameNanos { }
                     }
-                    // The old page only comes off the swipe once the new one
-                    // has taken over, its color included. Any earlier and the
-                    // old page is back on screen for a moment.
-                    while (shownSession.id != arriving) withFrameNanos { }
-                    withFrameNanos { }
                     pageSwipe.snapTo(0f)
                     withFrameNanos { }
                     withFrameNanos { }
@@ -801,7 +808,7 @@ private fun BrowserPageScreen(
                 }
 
                 if (state.findVisible) {
-                    ZenTheme(darkTheme = barIsDark) {
+                    ZenTheme(darkTheme = barIsDark, jumps = colorJumps) {
                     MiniBrowserFindBar(
                         query = state.findQuery,
                         progress = state.findProgress,
@@ -867,7 +874,7 @@ private fun BrowserPageScreen(
                     // field must not push the whole bar up into the page.
                     .then(if (ridesKeyboard) Modifier.imePadding() else Modifier),
             ) {
-                ZenTheme(darkTheme = barIsDark) {
+                ZenTheme(darkTheme = barIsDark, jumps = colorJumps) {
                     MiniBrowserBar(
                         state = state,
                         viewModel = viewModel,

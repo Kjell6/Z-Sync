@@ -1,7 +1,9 @@
 package de.kjell.zencompanion.ui.theme
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
@@ -82,9 +84,18 @@ fun zenColors(isDark: Boolean): ZenColors = if (isDark) {
 val LocalZenColors = compositionLocalOf { zenColors(false) }
 
 @Composable
-fun ZenTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+fun ZenTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    /** The colors change at once, on this very frame, instead of blending over. */
+    jumps: Boolean = false,
+    content: @Composable () -> Unit,
+) {
     val targetZen = zenColors(darkTheme)
-    val animSpec = tween<Color>(durationMillis = 280, easing = FastOutSlowInEasing)
+    val animSpec: AnimationSpec<Color> = if (jumps) {
+        snap()
+    } else {
+        tween(durationMillis = 280, easing = FastOutSlowInEasing)
+    }
 
     val animatedPaper by animateColorAsState(targetZen.paper, animSpec, label = "paperColor")
     val animatedBackground by animateColorAsState(targetZen.background, animSpec, label = "background")
@@ -92,14 +103,18 @@ fun ZenTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable ()
     val animatedLift by animateColorAsState(targetZen.lift, animSpec, label = "liftColor")
     val animatedCoral by animateColorAsState(targetZen.coral, animSpec, label = "coralColor")
 
-    val zen = ZenColors(
-        paper = animatedPaper,
-        background = animatedBackground,
-        ink = animatedInk,
-        lift = animatedLift,
-        coral = animatedCoral,
-        isDark = darkTheme,
-    )
+    val zen = if (jumps) {
+        targetZen
+    } else {
+        ZenColors(
+            paper = animatedPaper,
+            background = animatedBackground,
+            ink = animatedInk,
+            lift = animatedLift,
+            coral = animatedCoral,
+            isDark = darkTheme,
+        )
+    }
 
     val targetColorScheme = if (darkTheme) {
         darkColorScheme(

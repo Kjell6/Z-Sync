@@ -467,6 +467,7 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
             self.model?.updateCurrentURL(webView.url)
             if let model = self.model { model.host?.pageDidFinishLoading(model) }
             self.model?.adoptPageTitle(webView.title ?? "")
+            self.model?.recordVisit(title: webView.title ?? "")
             // A page whose own scripts rewrote the root style gets the
             // zoom back once it has settled.
             self.model?.applyPageZoom(force: true)

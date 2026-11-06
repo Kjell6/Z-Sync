@@ -238,6 +238,7 @@ struct MiniBrowserView: View {
                     onClose: { leaveBrowser() },
                     addressEditing: addressEditing,
                     onPickSuggestion: pickSuggestion,
+                    onPickVisit: pickVisit,
                     onOpenPages: openOverview,
                     overviewShown: overviewVisible,
                     onNewPage: openNewPage,
@@ -281,6 +282,13 @@ struct MiniBrowserView: View {
             .ignoresSafeArea(.keyboard)
             .presentationBackground(pages.active == nil ? Palette.background(scheme) : barBackground)
             .modifier(BrowserDialogPresenter(model: model))
+            .sheet(isPresented: Binding(
+                get: { model.historyShown },
+                set: { model.historyShown = $0 }
+            )) {
+                BrowserHistoryView { visit in model.openVisit(visit) }
+                    .presentationDragIndicator(.visible)
+            }
             .confirmationDialog(
                 Text("kept.close_all_title"),
                 isPresented: $confirmCloseAll,
@@ -781,6 +789,11 @@ private extension MiniBrowserView {
 
     private func pickSuggestion(_ suggestion: String) {
         model.selectSuggestion(suggestion)
+        endAddressEditing()
+    }
+
+    private func pickVisit(_ visit: BrowserVisit) {
+        model.openVisit(visit)
         endAddressEditing()
     }
 

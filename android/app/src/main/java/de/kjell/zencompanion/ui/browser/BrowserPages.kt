@@ -16,6 +16,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import de.kjell.zencompanion.data.BrowserHistory
 import de.kjell.zencompanion.data.BrowserSettings
 import de.kjell.zencompanion.data.KeptPageLifetime
 import de.kjell.zencompanion.data.OpenPage
@@ -306,6 +307,7 @@ class BrowserPages(
     fun pageLoaded(session: PageSession) {
         store.promote(session.id, keepEveryPage(), ::exit)
         saveHistory(session)
+        BrowserHistory.record(session.webView?.url, session.viewModel.state.value.currentTitle)
     }
 
     /** The app went to the background and may not come back. */

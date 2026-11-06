@@ -711,6 +711,17 @@
         }
       }
     },
+    "error.session_expired": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Mozilla account sign-in ended. Open Z-Sync and sign in again."
+          }
+        }
+      }
+    },
     "error.storage_unavailable": {
       "extractionState": "manual",
       "localizations": {

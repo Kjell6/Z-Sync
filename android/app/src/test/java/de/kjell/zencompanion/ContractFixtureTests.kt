@@ -8,6 +8,7 @@ import de.kjell.zencompanion.sync.SyncClient
 import de.kjell.zencompanion.sync.SyncCrypto
 import de.kjell.zencompanion.sync.SyncError
 import de.kjell.zencompanion.sync.ZenSpaces
+import de.kjell.zencompanion.util.FriendlyError
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -461,6 +462,16 @@ class ContractFixtureTests {
                 )
             }
         }
+    }
+
+    @Test
+    fun sessionInvalidAuthErrorTellsTheUserToSignInAgain() {
+        assertEquals(
+            R.string.error_session_expired,
+            FriendlyError.messageRes(SyncError.Auth("rejected", sessionInvalid = true)),
+        )
+        assertEquals(R.string.error_auth, FriendlyError.messageRes(SyncError.Auth("rejected")))
+        assertEquals(R.string.error_auth, FriendlyError.messageRes(SyncError.Unauthorized()))
     }
 
     // MARK: Crypto vectors

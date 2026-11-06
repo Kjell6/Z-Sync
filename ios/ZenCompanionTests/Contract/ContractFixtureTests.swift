@@ -369,6 +369,15 @@ final class ContractFixtureTests: XCTestCase {
         }
     }
 
+    func testSessionInvalidAuthErrorTellsTheUserToSignInAgain() {
+        XCTAssertEqual(
+            SyncError.auth("rejected", sessionInvalid: true).zenUserMessage,
+            String(localized: "error.session_expired")
+        )
+        XCTAssertEqual(SyncError.auth("rejected").zenUserMessage, String(localized: "error.auth"))
+        XCTAssertEqual(SyncError.unauthorized.zenUserMessage, String(localized: "error.auth"))
+    }
+
     func testNon103AuthErrorsMapToAuthMessage() {
         guard case .auth(let message, _) = FxAClient.authError(
             status: 400, body: ["errno": 107, "error": "Bad request", "message": "Invalid parameter"]

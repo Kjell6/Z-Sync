@@ -63,7 +63,7 @@ internal fun browserLinkAction(
     return BrowserLinkAction.OPEN_EXTERNALLY
 }
 
-/** http(s) address a new window should load in the only tab. Blank windows stay put. */
+/** The http(s) address of a link, or null for anything else. */
 internal fun sameTabUrl(raw: String?): String? {
     val trimmed = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
     val scheme = trimmed.substringBefore(':', missingDelimiterValue = "").lowercase()
@@ -72,7 +72,7 @@ internal fun sameTabUrl(raw: String?): String? {
 }
 
 /**
- * Address a tapped new-window link should load in the only tab. Only plain links count:
+ * The web address of a link under the finger. Only plain links count:
  * for an image link the hit test reports the image, not the link, so the popup finds it.
  */
 internal fun tappedLinkUrl(hitType: Int, extra: String?): String? {

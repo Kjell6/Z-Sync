@@ -12,7 +12,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.listSaver
@@ -28,6 +27,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import de.kjell.zencompanion.review.PlayInAppReview
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.AppViewModel
+import de.kjell.zencompanion.ui.browser.BrowserPages
 import de.kjell.zencompanion.ui.components.openURLExternally
 import de.kjell.zencompanion.ui.screens.MiniBrowserScreen
 import de.kjell.zencompanion.ui.screens.MozillaSignInScreen
@@ -45,14 +45,14 @@ import de.kjell.zencompanion.ui.sheets.ZenSheet
 import de.kjell.zencompanion.ui.theme.ZenTheme
 import kotlinx.coroutines.delay
 
-/** One mini-browser launch; [id] keys the ViewModel so a new open starts clean. */
-private data class BrowserLaunch(val url: String?, val title: String?, val id: Int)
+/** The browser being open. The pages live in [BrowserPages]; [url] reopens one after the process died. */
+private data class BrowserLaunch(val url: String?, val title: String?, val overview: Boolean)
 
 /** Keeps an open browser across configuration changes (theme, font size, locale). */
 private val BrowserLaunchSaver = listSaver<BrowserLaunch?, Any?>(
-    save = { launch -> if (launch == null) emptyList() else listOf(launch.url, launch.title, launch.id) },
+    save = { launch -> if (launch == null) emptyList() else listOf(launch.url, launch.title, launch.overview) },
     restore = { values ->
-        if (values.isEmpty()) null else BrowserLaunch(values[0] as String?, values[1] as String?, values[2] as Int)
+        if (values.isEmpty()) null else BrowserLaunch(values[0] as String?, values[1] as String?, values[2] as Boolean)
     },
 )
 
@@ -139,9 +139,10 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
 
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var activeBrowserLaunch by rememberSaveable(stateSaver = BrowserLaunchSaver) { mutableStateOf<BrowserLaunch?>(null) }
-    var browserLaunchCounter by rememberSaveable { mutableIntStateOf(0) }
     var showActivity by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
+    val pages = remember { BrowserPages.shared(context, viewModel.browserRepository) }
+    val openPages by pages.store.pages.collectAsState()
 
     LaunchedEffect(Unit) {
         viewModel.reviewRequests.collect {
@@ -170,12 +171,13 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
         pinned = emptyList(),
     )
 
-    fun openBrowser(url: String?, title: String?) {
+    fun openBrowser(url: String?, title: String?, openedFromSpace: Boolean = false) {
         if (url != null && preferences.alwaysOpenExternally) {
             openURLExternally(context, url)
         } else {
-            browserLaunchCounter += 1
-            activeBrowserLaunch = BrowserLaunch(url, title, browserLaunchCounter)
+            pages.updateSpaces(spaces, currentSpace.id)
+            pages.open(url, title, openedFromSpace)
+            activeBrowserLaunch = BrowserLaunch(url, title, overview = false)
         }
     }
 
@@ -190,10 +192,12 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
                 Lifecycle.Event.ON_START -> {
                     viewModel.reload()
                     viewModel.appCameToForeground()
+                    pages.closeExpired()
                 }
                 Lifecycle.Event.ON_STOP ->
                     if ((context as? Activity)?.isChangingConfigurations != true) {
                         viewModel.appWentToBackground()
+                        pages.appWentToBackground()
                     }
                 else -> Unit
             }
@@ -224,7 +228,9 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
             onPinTab = { id, spaceId -> viewModel.pinTab(id, spaceId) },
             onOpenAccount = { showSettings = true },
             onOpenActivity = { showActivity = true },
-            onOpenBrowser = { url, title -> openBrowser(url, title) },
+            onOpenBrowser = { url, title -> openBrowser(url, title, openedFromSpace = url != null) },
+            pageCount = openPages.size,
+            onOpenPages = { activeBrowserLaunch = BrowserLaunch(null, null, overview = true) },
             onDismissShareTip = { viewModel.dismissShareTip() },
             onDismissSyncSetupHint = { viewModel.dismissSyncSetupHint() },
         )
@@ -232,9 +238,10 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
         val launch = activeBrowserLaunch
         if (launch != null) {
             MiniBrowserScreen(
-                initialUrl = launch.url,
-                initialTitle = launch.title,
-                launchKey = launch.id,
+                pages = pages,
+                startsInOverview = launch.overview,
+                launchUrl = launch.url,
+                launchTitle = launch.title,
                 currentSpace = currentSpace,
                 allSpaces = spaces,
                 browserRepository = viewModel.browserRepository,
@@ -269,10 +276,13 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
             onSetSaveKind = { viewModel.setSaveKind(it) },
             onSetToolbarPlacement = { viewModel.setToolbarPlacement(it) },
             onSetOpenIntoSearch = { viewModel.setOpenIntoSearch(it) },
+            onSetKeepOnlyChosenPages = { viewModel.setKeepOnlyChosenPages(it) },
+            onSetKeptPageLifetime = { viewModel.setKeptPageLifetime(it) },
             onSignOut = {
                 showSettings = false
                 // Clears encrypted store + sync cache + wipes WebView data.
                 de.kjell.zencompanion.ui.screens.FxAWeb.wipeWebSession()
+                pages.closeAll()
                 viewModel.signOut()
             },
             onOpenWhatsNew = {

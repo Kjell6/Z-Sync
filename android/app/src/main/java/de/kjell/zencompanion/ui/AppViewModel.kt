@@ -10,6 +10,7 @@ import de.kjell.zencompanion.data.AccountStore
 import de.kjell.zencompanion.data.AppEvents
 import de.kjell.zencompanion.data.AndroidWhatsNewRepository
 import de.kjell.zencompanion.data.BrowserSettings
+import de.kjell.zencompanion.data.KeptPageLifetime
 import de.kjell.zencompanion.data.DemoCatalog
 import de.kjell.zencompanion.data.EssentialsColumns
 import de.kjell.zencompanion.data.SaveKind
@@ -175,6 +176,10 @@ data class PreferencesState(
     val toolbarPlacement: ToolbarPlacement = ToolbarPlacement.BOTTOM,
     /** Open a new search tab whenever the app comes to the foreground. */
     val openIntoSearch: Boolean = false,
+    /** Only the pages the user keeps stay open. */
+    val keepOnlyChosenPages: Boolean = false,
+    /** How long an open page stays once it was last used. */
+    val keptPageLifetime: KeptPageLifetime = KeptPageLifetime.MONTH,
 )
 
 /**
@@ -190,6 +195,8 @@ interface PreferencesRepository {
     fun setSaveKind(kind: SaveKind)
     fun setToolbarPlacement(placement: ToolbarPlacement)
     fun setOpenIntoSearch(enabled: Boolean)
+    fun setKeepOnlyChosenPages(enabled: Boolean)
+    fun setKeptPageLifetime(lifetime: KeptPageLifetime)
     fun syncSetupHintDismissed(): Boolean
     fun setSyncSetupHintDismissed(dismissed: Boolean)
     fun didShowShareExtensionTip(): Boolean
@@ -209,6 +216,8 @@ internal class AndroidPreferencesRepository(private val context: Context) : Pref
         saveKind = BrowserSettings.getSaveKind(context),
         toolbarPlacement = BrowserSettings.getToolbarPlacement(context),
         openIntoSearch = BrowserSettings.getOpenIntoSearch(context),
+        keepOnlyChosenPages = BrowserSettings.getKeepOnlyChosenPages(context),
+        keptPageLifetime = BrowserSettings.getKeptPageLifetime(context),
     )
 
     override fun setSearchEngine(engine: SearchEngine) = SearchEngines.set(context, engine)
@@ -228,6 +237,12 @@ internal class AndroidPreferencesRepository(private val context: Context) : Pref
 
     override fun setOpenIntoSearch(enabled: Boolean) =
         BrowserSettings.setOpenIntoSearch(context, enabled)
+
+    override fun setKeepOnlyChosenPages(enabled: Boolean) =
+        BrowserSettings.setKeepOnlyChosenPages(context, enabled)
+
+    override fun setKeptPageLifetime(lifetime: KeptPageLifetime) =
+        BrowserSettings.setKeptPageLifetime(context, lifetime)
 
     override fun syncSetupHintDismissed(): Boolean =
         onboardingPrefs().getBoolean(KEY_DISMISSED_SYNC_SETUP, false)
@@ -802,6 +817,16 @@ class AppViewModel(
     fun setOpenIntoSearch(enabled: Boolean) {
         preferencesRepository.setOpenIntoSearch(enabled)
         _preferences.value = _preferences.value.copy(openIntoSearch = enabled)
+    }
+
+    fun setKeepOnlyChosenPages(enabled: Boolean) {
+        preferencesRepository.setKeepOnlyChosenPages(enabled)
+        _preferences.value = _preferences.value.copy(keepOnlyChosenPages = enabled)
+    }
+
+    fun setKeptPageLifetime(lifetime: KeptPageLifetime) {
+        preferencesRepository.setKeptPageLifetime(lifetime)
+        _preferences.value = _preferences.value.copy(keptPageLifetime = lifetime)
     }
 
     /**

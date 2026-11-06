@@ -138,7 +138,7 @@ private fun ReaderBlockView(block: ReaderBlock) {
                     .align(Alignment.CenterStart)
                     .width(2.dp)
                     .height(24.dp)
-                    .background(colors.coral.copy(alpha = 0.5f)),
+                    .background(colors.ink.copy(alpha = 0.25f)),
             )
             Text(
                 text = block.text,
@@ -162,7 +162,7 @@ private fun ReaderBlockView(block: ReaderBlock) {
             Text(
                 text = "•",
                 style = ZenType.rounded(15, FontWeight.Bold),
-                color = colors.coral.copy(alpha = 0.85f),
+                color = colors.ink.copy(alpha = 0.6f),
             )
             Spacer(Modifier.width(9.dp))
             Text(

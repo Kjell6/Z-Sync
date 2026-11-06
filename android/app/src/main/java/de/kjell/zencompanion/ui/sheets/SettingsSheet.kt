@@ -50,6 +50,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.ui.theme.liftBorder
 import de.kjell.zencompanion.R
+import de.kjell.zencompanion.data.KeptPageLifetime
 import de.kjell.zencompanion.data.EssentialsColumns
 import de.kjell.zencompanion.data.SaveKind
 import de.kjell.zencompanion.data.SearchEngine
@@ -84,6 +85,8 @@ fun SettingsSheet(
     onSetSaveKind: (SaveKind) -> Unit,
     onSetToolbarPlacement: (ToolbarPlacement) -> Unit,
     onSetOpenIntoSearch: (Boolean) -> Unit,
+    onSetKeepOnlyChosenPages: (Boolean) -> Unit,
+    onSetKeptPageLifetime: (KeptPageLifetime) -> Unit,
     onSignOut: () -> Unit,
     onOpenWhatsNew: () -> Unit,
     onDone: () -> Unit,
@@ -204,6 +207,8 @@ fun SettingsSheet(
                 onSetSearchEngine = onSetSearchEngine,
                 onOpenAddSearchEngine = { showAddEngine = true },
                 onSetOpenIntoSearch = onSetOpenIntoSearch,
+                onSetKeepOnlyChosenPages = onSetKeepOnlyChosenPages,
+                onSetKeptPageLifetime = onSetKeptPageLifetime,
                 onOpenContentBlocking = { showContentBlocking = true },
                 onSetAlwaysOpenExternally = onSetAlwaysOpenExternally,
             )

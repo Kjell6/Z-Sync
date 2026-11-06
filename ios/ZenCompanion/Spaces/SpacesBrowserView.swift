@@ -1,12 +1,13 @@
 import StoreKit
 import SwiftUI
 
-/// Identifies an active browser session with an optional start URL, title, and target space.
+/// The browser being open. The pages themselves live in `OpenPagesStore`; this
+/// is the space a pin falls back to.
 struct BrowserTabSession: Identifiable {
     let id = UUID()
-    var url: URL?
-    var initialTitle: String?
     var space: ZenSpace
+    /// Opened from the count on home: the overview first, no page yet.
+    var startsInOverview = false
 }
 
 /// The whole app: swipe between spaces (pinned tabs + folders per space),
@@ -338,6 +339,7 @@ struct SpacesBrowserView: View {
             // Returning to the foreground (e.g. after sharing via the share
             // extension) refreshes what's on screen against the server.
             guard phase == .active else { return }
+            openPages.closeExpired()
             Task { await model.sceneBecameActive() }
         }
         .onChange(of: model.searchOnOpenPending) { _, pending in
@@ -424,7 +426,7 @@ struct SpacesBrowserView: View {
                 Spacer(minLength: 0)
             }
             .padding(.leading, 16)
-            .padding(.trailing, 12)
+            .padding(.trailing, pageCount > 0 ? 52 : 12)
             .frame(height: 44)
             .background(
                 Palette.lift(scheme),
@@ -435,7 +437,26 @@ struct SpacesBrowserView: View {
         }
         .buttonStyle(SquircleButtonStyle())
         .accessibilityLabel(Text("browser.web_placeholder"))
+        .overlay(alignment: .trailing) {
+            if pageCount > 0 {
+                // Its own target: the rest of the field still starts a search.
+                Button {
+                    openPages.allowsNormalTabs = model.snapshot.normalTabsCapability.allowsNormalTabs
+                    show(BrowserTabSession(space: model.activeSpace, startsInOverview: true))
+                } label: {
+                    PageCountBadge(count: pageCount, side: 26)
+                        .foregroundStyle(Palette.ink(scheme).opacity(0.8))
+                        .frame(width: 48, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(SquircleButtonStyle())
+                .accessibilityLabel(Text("browser.page_count \(pageCount)"))
+            }
+        }
     }
+
+    private var openPages: OpenPagesStore { .shared }
+    private var pageCount: Int { openPages.pages.count }
 
     private func openTab(_ tab: ZenTab, in space: ZenSpace) {
         guard let url = URL(string: tab.url) else { return }
@@ -443,7 +464,7 @@ struct SpacesBrowserView: View {
             ExternalBrowser.open(url)
             return
         }
-        presentBrowser(url: url, title: tab.displayTitle, space: space)
+        presentBrowser(url: url, title: tab.displayTitle, space: space, openedFromSpace: true)
     }
 
     private func openNewTab(in space: ZenSpace) {
@@ -452,8 +473,13 @@ struct SpacesBrowserView: View {
 
     /// Opens the browser as a page. A sheet that is already up has to go
     /// first: SwiftUI will not present a full-screen cover over one.
-    private func presentBrowser(url: URL?, title: String?, space: ZenSpace) {
-        let session = BrowserTabSession(url: url, initialTitle: title, space: space)
+    private func presentBrowser(url: URL?, title: String?, space: ZenSpace, openedFromSpace: Bool = false) {
+        openPages.allowsNormalTabs = model.snapshot.normalTabsCapability.allowsNormalTabs
+        openPages.open(url: url, title: title, openedFromSpace: openedFromSpace)
+        show(BrowserTabSession(space: space))
+    }
+
+    private func show(_ session: BrowserTabSession) {
         guard activeSheet != nil else {
             browserSession = session
             return
@@ -468,11 +494,11 @@ struct SpacesBrowserView: View {
 
     private func miniBrowser(_ session: BrowserTabSession, spaces: [ZenSpace]) -> some View {
         MiniBrowserView(
-            initialURL: session.url,
-            initialTitle: session.initialTitle,
+            pages: openPages,
             space: session.space,
             allSpaces: spaces,
             allowsNormalTabs: model.snapshot.normalTabsCapability.allowsNormalTabs,
+            startsInOverview: session.startsInOverview,
             onDismiss: { browserSession = nil }
         )
     }

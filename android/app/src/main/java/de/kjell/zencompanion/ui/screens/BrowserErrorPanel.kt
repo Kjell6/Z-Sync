@@ -88,7 +88,7 @@ internal fun BrowserErrorPanel(
                 Icon(
                     imageVector = error.icon(),
                     contentDescription = null,
-                    tint = if (error == BrowserPageError.INSECURE) MaterialTheme.colorScheme.error else zen.coral,
+                    tint = if (error == BrowserPageError.INSECURE) MaterialTheme.colorScheme.error else zen.ink,
                     modifier = Modifier.size(26.dp),
                 )
             }
@@ -155,7 +155,7 @@ private fun PrimaryButton(label: String, isLoading: Boolean, onClick: () -> Unit
         shape = CircleShape,
         modifier = Modifier
             .heightIn(min = 48.dp)
-            .background(zen.coral, CircleShape),
+            .background(zen.ink, CircleShape),
     ) {
         Box(contentAlignment = Alignment.Center) {
             Text(
@@ -182,7 +182,7 @@ private fun SecondaryButton(label: String, onClick: () -> Unit) {
     TextButton(onClick = onClick, modifier = Modifier.heightIn(min = 48.dp)) {
         Text(
             text = label,
-            color = zen.coral,
+            color = zen.ink,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             modifier = Modifier.padding(horizontal = 12.dp),

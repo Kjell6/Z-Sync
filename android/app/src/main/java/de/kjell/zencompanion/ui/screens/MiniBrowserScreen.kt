@@ -1079,6 +1079,8 @@ private fun PageStack(
     val previousId = openPages.getOrNull(index - 1)?.id
     val nextId = openPages.getOrNull(index + 1)?.id
     val currentActive by rememberUpdatedState(active)
+    val requests = rememberBrowserPageRequests(pages)
+    BrowserPromptDialogs(active, requests)
     // A blank page is the bare plate, in the app's paper: the same background
     // the Settings sheet uses, not a darker version of it.
     val surface = MaterialTheme.colorScheme.surface
@@ -1191,6 +1193,7 @@ private fun PageStack(
                             session.webViewGeneration++
                         },
                         onLinkUnavailable = viewModel::onLinkUnavailable,
+                        requests = remember(session.id) { requests.forSession(session) },
                         onScrollChange = { if (session === currentActive) onActiveScroll(it) },
                         onFindResult = { current, total ->
                             viewModel.setFindProgress(if (total > 0) "$current/$total" else null)

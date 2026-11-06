@@ -235,6 +235,12 @@ class MiniBrowserViewModel(
         showNotice(Notice(R.string.browser_scheme_unavailable))
     }
 
+    fun onDownloadStarted() = showNotice(Notice(R.string.browser_download_started))
+
+    fun onDownloadFinished(saved: Boolean) = showNotice(
+        Notice(if (saved) R.string.browser_download_finished else R.string.browser_download_failed),
+    )
+
     /**
      * A load that never finishes must not leave the bar in its "stop" state:
      * a failed navigation gets no `onPageFinished` on some WebView versions.

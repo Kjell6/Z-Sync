@@ -38,6 +38,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -77,7 +80,27 @@ internal fun SettingsBrowsingSection(
     onSetKeptPageLifetime: (KeptPageLifetime) -> Unit,
     onOpenContentBlocking: () -> Unit,
     onSetAlwaysOpenExternally: (Boolean) -> Unit,
+    onClearWebsiteData: () -> Unit,
 ) {
+    var confirmClearData by remember { mutableStateOf(false) }
+    if (confirmClearData) {
+        AlertDialog(
+            onDismissRequest = { confirmClearData = false },
+            title = { Text(stringResource(R.string.settings_clear_website_data)) },
+            text = { Text(stringResource(R.string.settings_clear_website_data_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmClearData = false
+                    onClearWebsiteData()
+                }) { Text(stringResource(R.string.settings_clear_website_data)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClearData = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
+        )
+    }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SettingsSectionLabel(stringResource(R.string.settings_browsing_section))
 
@@ -176,6 +199,15 @@ internal fun SettingsBrowsingSection(
                     icon = Icons.AutoMirrored.Outlined.OpenInNew,
                     checked = preferences.alwaysOpenExternally,
                     onCheckedChange = onSetAlwaysOpenExternally,
+                )
+
+                SettingsDivider()
+
+                MenuRow(
+                    title = stringResource(R.string.settings_clear_website_data),
+                    value = "",
+                    icon = Icons.Outlined.DeleteOutline,
+                    onClick = { confirmClearData = true },
                 )
             }
         }

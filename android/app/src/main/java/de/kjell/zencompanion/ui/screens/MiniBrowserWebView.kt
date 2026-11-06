@@ -12,10 +12,16 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.Message
+import android.view.View
 import android.view.ViewGroup
+import android.webkit.CookieManager
+import android.webkit.GeolocationPermissions
+import android.webkit.HttpAuthHandler
 import android.webkit.JavascriptInterface
+import android.webkit.PermissionRequest
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.SslErrorHandler
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -37,8 +43,13 @@ import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import de.kjell.zencompanion.data.ContentBlocking
 import de.kjell.zencompanion.data.ContentBlockingSettings
+import de.kjell.zencompanion.data.SitePermission
+import de.kjell.zencompanion.ui.browser.BrowserDownload
+import de.kjell.zencompanion.ui.browser.BrowserPrompt
 import de.kjell.zencompanion.ui.browser.MiniBrowserZoom
 import de.kjell.zencompanion.ui.browser.PageBlocker
+import de.kjell.zencompanion.ui.browser.grantableResources
+import de.kjell.zencompanion.ui.browser.sitePermissionsFor
 import de.kjell.zencompanion.ui.components.openURLExternally
 import java.io.ByteArrayInputStream
 import java.util.Locale
@@ -85,6 +96,8 @@ internal fun MiniBrowserWebView(
     onRendererGone: (String?) -> Unit,
     /** A link nobody can take: no app handles it, or the page never loaded. */
     onLinkUnavailable: () -> Unit,
+    /** What the page asks of the reader or the system. */
+    requests: PageRequests,
     onScrollChange: (scrollY: Int) -> Unit,
     onFindResult: (active: Int, total: Int) -> Unit,
     /** Decides which requests get an empty answer, and counts them. */
@@ -125,6 +138,11 @@ internal fun MiniBrowserWebView(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                 )
                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                // Logins set up on one site often read their cookie from another.
+                CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                // Password managers fill the page through the system's autofill.
+                importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_YES
+                requests.installPageFileBridge(this)
                 settings.apply {
                     javaScriptEnabled = true
                     domStorageEnabled = true
@@ -164,6 +182,9 @@ internal fun MiniBrowserWebView(
                         // Whatever the document-start script did, the finished
                         // document gets the zoom the reader picked.
                         view?.let(pageZoomSlot::applyNow)
+                        // The jar otherwise reaches disk on its own schedule, and
+                        // a sign-in must outlast the app being killed right after.
+                        CookieManager.getInstance().flush()
                         onLoadingChange(false)
                         url?.let {
                             onCurrentUrlChange(it)
@@ -231,6 +252,22 @@ internal fun MiniBrowserWebView(
                         }
                     }
 
+                    override fun onReceivedHttpAuthRequest(
+                        view: WebView?,
+                        handler: HttpAuthHandler?,
+                        host: String?,
+                        realm: String?,
+                    ) {
+                        handler ?: return
+                        requests.httpLogin(
+                            BrowserPrompt.HttpLogin(
+                                host = host.orEmpty(),
+                                proceed = { user, password -> handler.proceed(user, password) },
+                                cancel = { handler.cancel() },
+                            ),
+                        )
+                    }
+
                     // Without this the whole app dies with the page's renderer.
                     override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
                         rendererGone(view?.url)
@@ -270,11 +307,13 @@ internal fun MiniBrowserWebView(
                         }
                     }
                 }
-                // The WebView has no download UI; hand web files to the system,
-                // which opens them in the default browser's downloader. The page
-                // controls this URL, so only http(s) leaves the app.
-                setDownloadListener { url, _, _, _, _ ->
-                    webUrlOrNull(url)?.let { openURLExternally(ctx, it) }
+                // The WebView has no download UI of its own.
+                setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
+                    if (url.isNullOrEmpty()) return@setDownloadListener
+                    requests.download(
+                        this,
+                        BrowserDownload(url, userAgent, contentDisposition, mimeType, referer = this.url),
+                    )
                 }
                 webChromeClient = object : WebChromeClient() {
                     override fun onProgressChanged(view: WebView?, newProgress: Int) {
@@ -313,6 +352,49 @@ internal fun MiniBrowserWebView(
                     override fun onCloseWindow(window: WebView?) {
                         closeWindow()
                     }
+
+                    override fun onPermissionRequest(request: PermissionRequest) {
+                        val kinds = sitePermissionsFor(request.resources)
+                        if (kinds.isEmpty()) {
+                            request.deny()
+                            return
+                        }
+                        val resources = grantableResources(request.resources)
+                        requests.askPermission(kinds, request.origin.host.orEmpty()) { granted ->
+                            if (granted) request.grant(resources) else request.deny()
+                        }
+                    }
+
+                    override fun onGeolocationPermissionsShowPrompt(
+                        origin: String?,
+                        callback: GeolocationPermissions.Callback?,
+                    ) {
+                        origin ?: return
+                        callback ?: return
+                        val host = Uri.parse(origin).host.orEmpty()
+                        // Not retained: the browser's own answers are the only record.
+                        requests.askPermission(listOf(SitePermission.LOCATION), host) { granted ->
+                            callback.invoke(origin, granted, false)
+                        }
+                    }
+
+                    override fun onShowFileChooser(
+                        webView: WebView?,
+                        filePathCallback: ValueCallback<Array<Uri>>?,
+                        fileChooserParams: FileChooserParams?,
+                    ): Boolean {
+                        filePathCallback ?: return false
+                        fileChooserParams ?: return false
+                        return requests.chooseFiles(filePathCallback, fileChooserParams)
+                    }
+
+                    override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+                        view ?: return
+                        callback ?: return
+                        requests.showFullscreen(view, callback)
+                    }
+
+                    override fun onHideCustomView() = requests.hideFullscreen()
                 }
 
                 setOnLongClickListener {
@@ -412,19 +494,6 @@ private const val SCROLL_BINDING_SCRIPT = """
 internal fun addressDisplay(url: String): String {
     val host = runCatching { Uri.parse(url).host?.removePrefix("www.") }.getOrNull()
     return if (!host.isNullOrEmpty()) host else url
-}
-
-/**
- * A download address from the page, or null when it is not http(s).
- * Only web addresses leave the app, so a page cannot push `intent://`,
- * `javascript:` or any other scheme into an implicit `ACTION_VIEW`.
- */
-private fun webUrlOrNull(raw: String?): String? {
-    if (raw.isNullOrEmpty()) return null
-    return when (Uri.parse(raw).scheme?.lowercase()) {
-        "http", "https" -> raw
-        else -> null
-    }
 }
 
 @Suppress("DEPRECATION")

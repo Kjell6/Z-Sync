@@ -9,6 +9,16 @@ enum Palette {
             : Color(red: 38 / 255, green: 69 / 255, blue: 64 / 255)
     }
 
+    /// The normal surface for chrome, sheets and pages: a very light cool
+    /// white. The warmer `paper` below stays the base of an empty space.
+    static func background(_ scheme: ColorScheme) -> Color {
+        scheme == .dark
+            ? Color(red: 31 / 255, green: 31 / 255, blue: 31 / 255)
+            : Color(red: 250 / 255, green: 247 / 255, blue: 241 / 255)
+    }
+
+    /// The paper base under a space. A space without its own colour shows
+    /// this warm tone; everything else uses `background` above.
     static func paper(_ scheme: ColorScheme) -> Color {
         scheme == .dark
             ? Color(red: 31 / 255, green: 31 / 255, blue: 31 / 255)

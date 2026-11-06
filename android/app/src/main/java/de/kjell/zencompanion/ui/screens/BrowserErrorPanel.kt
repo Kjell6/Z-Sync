@@ -70,7 +70,7 @@ internal fun BrowserErrorPanel(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(zen.paper),
+            .background(zen.background),
         contentAlignment = Alignment.TopCenter,
     ) {
         Column(

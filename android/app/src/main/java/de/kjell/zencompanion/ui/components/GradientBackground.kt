@@ -62,7 +62,7 @@ fun ZenSpaceGradientBackground(
 
     Box(modifier.fillMaxSize()) {
         // 1. Base paper canvas (for spaces without a theme or when fading to paper)
-        Box(Modifier.fillMaxSize().background(colors.paper))
+        Box(Modifier.fillMaxSize().background(colors.background))
 
         // 2. Outgoing snapshot (paper + its theme), fading out...
         if (prev != null && prevDotColors.isNotEmpty()) {

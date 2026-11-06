@@ -280,6 +280,7 @@ struct MiniBrowserView: View {
             .ignoresSafeArea(edges: .bottom)
             .ignoresSafeArea(.keyboard)
             .presentationBackground(pages.active == nil ? Palette.background(scheme) : barBackground)
+            .modifier(BrowserDialogPresenter(model: model))
             .confirmationDialog(
                 Text("kept.close_all_title"),
                 isPresented: $confirmCloseAll,

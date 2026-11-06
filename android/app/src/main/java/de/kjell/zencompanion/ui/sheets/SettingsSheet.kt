@@ -82,6 +82,7 @@ fun SettingsSheet(
     onAddSearchEngine: (String, String) -> SearchEngineValidation?,
     onDeleteSearchEngine: (String) -> Unit,
     onSetAlwaysOpenExternally: (Boolean) -> Unit,
+    onClearWebsiteData: () -> Unit,
     onSetEssentialsColumns: (EssentialsColumns) -> Unit,
     onSetSaveKind: (SaveKind) -> Unit,
     onSetToolbarPlacement: (ToolbarPlacement) -> Unit,
@@ -212,6 +213,7 @@ fun SettingsSheet(
                 onSetKeptPageLifetime = onSetKeptPageLifetime,
                 onOpenContentBlocking = { showContentBlocking = true },
                 onSetAlwaysOpenExternally = onSetAlwaysOpenExternally,
+                onClearWebsiteData = onClearWebsiteData,
             )
 
             if (preferences.customSearchEngines.isNotEmpty()) {

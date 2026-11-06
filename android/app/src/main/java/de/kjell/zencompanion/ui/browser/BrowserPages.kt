@@ -75,6 +75,15 @@ class PageSession(
     var pendingPopup: Message? = null
     /** A new page goes straight into the address field, once. */
     var opensWithSearch = false
+    /** The page's open questions, oldest first. Shown while it is on screen. */
+    val prompts = mutableStateListOf<BrowserPrompt>()
+
+    /** The WebView is gone: its questions end with it. */
+    fun dismissPrompts() {
+        val open = prompts.toList()
+        prompts.clear()
+        open.forEach(BrowserPrompt::dismiss)
+    }
 
     init {
         viewModel.documentTitle = documentTitle@{
@@ -271,6 +280,7 @@ class BrowserPages(
     /** Called as a WebView goes: a kept page's history stays with the page. */
     fun webViewReleased(session: PageSession, view: WebView) {
         if (session.webView === view) {
+            session.dismissPrompts()
             saveHistory(session)
             session.webView = null
         }

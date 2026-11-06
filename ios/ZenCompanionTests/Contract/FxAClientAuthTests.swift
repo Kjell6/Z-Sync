@@ -84,4 +84,103 @@ final class FxAClientAuthTests: XCTestCase {
             transport.requests[3].headers["Authorization"] ?? "missing"
         )
     }
+
+    /// A 401 from the auth server means the stored session token is dead
+    /// (e.g. the Mozilla account password changed elsewhere). The wrapped
+    /// message must keep that verdict so the app signs out instead of showing
+    /// a passive "try again" line.
+    func testRejectedSessionTokenFlagsSessionInvalid() async throws {
+        let transport = FakeSyncTransport()
+        let body = try json(["errno": 110, "message": "Invalid authentication token"])
+        transport.stubs = [
+            .init(status: 401, body: body),
+            .init(status: 401, body: body),
+            .init(status: 401, body: body),
+        ]
+        let client = FxAClient(transport: transport)
+
+        do {
+            _ = try await client.syncCredentials(sessionToken: sessionToken, kB: kB)
+            return XCTFail("expected .auth")
+        } catch {
+            guard let sync = error as? SyncError, case .auth(_, let sessionInvalid) = sync else {
+                return XCTFail("expected .auth, got \(error)")
+            }
+            XCTAssertTrue(sessionInvalid)
+        }
+    }
+
+    /// A device clock that is far off makes FxA reject the Hawk timestamp
+    /// (401 errno 111). Signing in again would not fix that, so the user must
+    /// not be signed out.
+    func testClockSkewDoesNotFlagSessionInvalid() async throws {
+        let transport = FakeSyncTransport()
+        let body = try json(["errno": 111, "message": "Invalid timestamp in request signature"])
+        transport.stubs = [
+            .init(status: 401, body: body),
+            .init(status: 401, body: body),
+            .init(status: 401, body: body),
+        ]
+        let client = FxAClient(transport: transport)
+
+        do {
+            _ = try await client.syncCredentials(sessionToken: sessionToken, kB: kB)
+            return XCTFail("expected .auth")
+        } catch {
+            guard let sync = error as? SyncError, case .auth(_, let sessionInvalid) = sync else {
+                return XCTFail("expected .auth, got \(error)")
+            }
+            XCTAssertFalse(sessionInvalid)
+        }
+    }
+
+    /// A token-server rejection after the auth server minted credentials is
+    /// not proof that the account session was revoked (it can be an expired
+    /// assertion or an outage). It must not sign the user out; the auth-server
+    /// errno 110 is the authoritative signal.
+    func testTokenServerRejectionDoesNotFlagSessionInvalid() async throws {
+        let transport = FakeSyncTransport()
+        transport.stubs = [
+            .init(status: 200, body: try json(["access_token": "access-token"])),
+            .init(status: 200, body: try json([
+                "https://identity.mozilla.com/apps/oldsync": ["keyRotationTimestamp": 0],
+            ])),
+            .init(status: 401, body: try json(["status": "invalid-credentials"])),
+            .init(status: 200, body: try json(["cert": "cert"])),
+            .init(status: 401, body: try json(["status": "invalid-credentials"])),
+        ]
+        let client = FxAClient(transport: transport)
+
+        do {
+            _ = try await client.syncCredentials(sessionToken: sessionToken, kB: kB)
+            return XCTFail("expected .auth")
+        } catch {
+            guard let sync = error as? SyncError, case .auth(_, let sessionInvalid) = sync else {
+                return XCTFail("expected .auth, got \(error)")
+            }
+            XCTAssertFalse(sessionInvalid)
+        }
+    }
+
+    /// A server outage (HTTP 5xx) is temporary: the user must not be signed
+    /// out for it.
+    func testAuthServerOutageDoesNotFlagSessionInvalid() async throws {
+        let transport = FakeSyncTransport()
+        transport.stubs = [
+            .init(status: 503, body: try json(["error": "Service unavailable"])),
+            .init(status: 503, body: try json(["error": "Service unavailable"])),
+            .init(status: 503, body: try json(["error": "Service unavailable"])),
+        ]
+        let client = FxAClient(transport: transport)
+
+        do {
+            _ = try await client.syncCredentials(sessionToken: sessionToken, kB: kB)
+            return XCTFail("expected .auth")
+        } catch {
+            guard let sync = error as? SyncError, case .auth(_, let sessionInvalid) = sync else {
+                return XCTFail("expected .auth, got \(error)")
+            }
+            XCTAssertFalse(sessionInvalid)
+        }
+    }
 }

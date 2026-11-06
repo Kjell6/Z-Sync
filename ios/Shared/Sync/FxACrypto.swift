@@ -94,7 +94,11 @@ enum FxACrypto {
 
 enum SyncError: LocalizedError {
     case crypto(String)
-    case auth(String)
+    /// A Mozilla account failure. `sessionInvalid` is set only when the
+    /// server definitively rejected the stored session (the token itself was
+    /// refused), so signing in again is the only fix. Network failures,
+    /// HTTP 5xx and rate limits stay `false`.
+    case auth(String, sessionInvalid: Bool = false)
     case network(String)
     case notSignedIn
     case totpRequired
@@ -116,7 +120,7 @@ enum SyncError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .crypto(let m), .auth(let m), .network(let m): m
+        case .crypto(let m), .auth(let m, _), .network(let m): m
         case .notSignedIn: String(localized: "error.not_signed_in")
         case .totpRequired: String(localized: "error.totp")
         case .storageUnavailable: String(localized: "error.storage_unavailable")
@@ -126,5 +130,17 @@ enum SyncError: LocalizedError {
         case .unsupportedSyncVersion: String(localized: "error.unsupported_sync_version")
         case .unauthorized: String(localized: "error.auth")
         }
+    }
+
+    /// True only when the server definitively rejected the stored Mozilla
+    /// account session, so the app must sign out and ask for a new sign-in.
+    /// Temporary conditions (offline, timeouts, HTTP 5xx, rate limits) and
+    /// recoverable states (TOTP, unverified account) stay `false`, and so does
+    /// `unauthorized`: `withClient` retries a storage 401 with credentials
+    /// fetched through this session, so one that still escapes proves the
+    /// session is alive and the problem is elsewhere.
+    var isSessionInvalid: Bool {
+        if case .auth(_, let sessionInvalid) = self { return sessionInvalid }
+        return false
     }
 }

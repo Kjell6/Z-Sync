@@ -522,20 +522,82 @@ final class SyncTransportTests: XCTestCase {
         }
     }
 
-    /// A 401 that persists after the refresh surfaces instead of looping.
+    /// A 401 that persists after the refresh surfaces instead of looping. It
+    /// must not sign the user out: the retry fetched new credentials through
+    /// the session, which proves the session is alive.
     func testPersistentStorage401SurfacesAfterOneRetry() async throws {
         let server = FxAAndSyncServer(kB: accountKB, storageKeys: defaultKeys)
         server.storage401Remaining = 10
         try installAccount(transport: server)
         defer { restoreAccountStore() }
+        let invalidated = expectation(forNotification: .zenCompanionSessionInvalidated, object: nil)
+        invalidated.isInverted = true
 
         do {
             _ = try await SpacesSyncService.loadSnapshot()
             XCTFail("expected SyncError.unauthorized")
         } catch let error as SyncError {
             guard case .unauthorized = error else { return XCTFail("expected .unauthorized, got \(error)") }
+            XCTAssertFalse(error.isSessionInvalid)
         }
+        await fulfillment(of: [invalidated], timeout: 0.2)
         XCTAssertEqual(server.tokenServerCalls, 2)
+    }
+
+    /// App launch after a password change: no cached credentials, so the auth
+    /// server's errno 110 comes straight out of `connect()`.
+    func testRejectedSessionOnConnectTellsTheAppToSignOut() async throws {
+        let server = FxAAndSyncServer(kB: accountKB, storageKeys: defaultKeys)
+        server.sessionRejected = true
+        try installAccount(transport: server)
+        defer { restoreAccountStore() }
+        let invalidated = expectation(forNotification: .zenCompanionSessionInvalidated, object: nil)
+
+        await assertSessionInvalidError { _ = try await SpacesSyncService.loadSnapshot() }
+
+        await fulfillment(of: [invalidated], timeout: 1)
+    }
+
+    /// Password changed while the app runs: the cached credentials hit a
+    /// storage 401 and the refresh finds the session dead.
+    func testRejectedSessionDuringStorage401RetryTellsTheAppToSignOut() async throws {
+        let server = FxAAndSyncServer(kB: accountKB, storageKeys: defaultKeys)
+        try installAccount(transport: server)
+        defer { restoreAccountStore() }
+        _ = try await AccountStore.connect()
+        server.sessionRejected = true
+        server.storage401Remaining = 1
+        let invalidated = expectation(forNotification: .zenCompanionSessionInvalidated, object: nil)
+
+        await assertSessionInvalidError { _ = try await SpacesSyncService.loadSnapshot() }
+
+        await fulfillment(of: [invalidated], timeout: 1)
+    }
+
+    /// Signing out revokes the session, so a request still in flight comes
+    /// back rejected. That verdict is about the old sign-in and must not
+    /// reach whatever the user is doing now.
+    func testRejectionFromAnEarlierSignInIsIgnored() async throws {
+        let server = FxAAndSyncServer(kB: accountKB, storageKeys: defaultKeys)
+        server.sessionRejected = true
+        server.onSessionRejected = { AccountStore.clear() }
+        try installAccount(transport: server)
+        defer { restoreAccountStore() }
+        let invalidated = expectation(forNotification: .zenCompanionSessionInvalidated, object: nil)
+        invalidated.isInverted = true
+
+        await assertSessionInvalidError { _ = try await AccountStore.withClient { $0 } }
+
+        await fulfillment(of: [invalidated], timeout: 0.2)
+    }
+
+    private func assertSessionInvalidError(_ operation: () async throws -> Void) async {
+        do {
+            try await operation()
+            XCTFail("expected a session-invalid error")
+        } catch {
+            XCTAssertTrue((error as? SyncError)?.isSessionInvalid == true, "got \(error)")
+        }
     }
 
     /// Signing out while credentials are being fetched must not leave them
@@ -693,6 +755,9 @@ final class FxAAndSyncServer: SyncHTTPTransport {
     private let storageKeys: SyncCrypto.KeyBundle
     private var _tokenServerCalls = 0
     private var _storage401Remaining = 0
+    /// True once the session token is dead: every FxA call answers 401 errno 110.
+    var sessionRejected = false
+    var onSessionRejected: (() -> Void)?
     var onTokenServer: (() -> Void)?
 
     init(kB: Data, storageKeys: SyncCrypto.KeyBundle) {
@@ -715,6 +780,10 @@ final class FxAAndSyncServer: SyncHTTPTransport {
                 headers: ["x-last-modified": "1.00"],
                 body: (try? JSONSerialization.data(withJSONObject: object)) ?? Data()
             )
+        }
+        if sessionRejected, host.hasSuffix("accounts.firefox.com") {
+            onSessionRejected?()
+            return json(["errno": 110, "message": "Invalid authentication token"], status: 401)
         }
         if host == "oauth.accounts.firefox.com" || path.hasSuffix("/oauth/token") {
             return json(["access_token": "access"])

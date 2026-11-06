@@ -3,22 +3,28 @@ package de.kjell.zencompanion
 import android.content.Context
 import android.content.ContextWrapper
 import de.kjell.zencompanion.data.AccountStore
+import de.kjell.zencompanion.data.AppEvents
 import de.kjell.zencompanion.sync.SpacesSyncService
 import de.kjell.zencompanion.sync.SyncCrypto
 import de.kjell.zencompanion.sync.SyncError
 import de.kjell.zencompanion.sync.SyncHttpRequest
 import de.kjell.zencompanion.sync.SyncHttpResponse
 import de.kjell.zencompanion.sync.SyncHttpTransport
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 import java.util.Base64
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Expired credentials and sign-out races, driven through the same transport
@@ -104,6 +110,78 @@ class AccountSessionTests {
         assertEquals(2, server.tokenServerCalls)
     }
 
+    /**
+     * A persistent storage 401 must not sign the user out: the retry fetched
+     * new credentials through the session, which proves the session is alive.
+     */
+    @Test
+    fun persistentStorage401DoesNotReportSessionExpiry() {
+        server.storage401Remaining = 10
+
+        val (error, events) = runAndCountExpiryEvents { SpacesSyncService.loadSnapshot(context) }
+
+        assertTrue("got $error", error is SyncError.Unauthorized)
+        assertFalse((error as SyncError).isSessionInvalid)
+        assertEquals(0, events)
+    }
+
+    /**
+     * App launch after a password change: no cached credentials, so the auth
+     * server's errno 110 comes straight out of `connect()`.
+     */
+    @Test
+    fun rejectedSessionOnConnectReportsSessionExpiry() {
+        server.sessionRejected = true
+
+        val (error, events) = runAndCountExpiryEvents { SpacesSyncService.loadSnapshot(context) }
+
+        assertTrue("got $error", (error as? SyncError)?.isSessionInvalid == true)
+        assertEquals(1, events)
+    }
+
+    /**
+     * Password changed while the app runs: the cached credentials hit a
+     * storage 401 and the refresh finds the session dead.
+     */
+    @Test
+    fun rejectedSessionDuringStorage401RetryReportsSessionExpiry() {
+        runBlocking { AccountStore.connect(context) }
+        server.sessionRejected = true
+        server.storage401Remaining = 1
+
+        val (error, events) = runAndCountExpiryEvents { SpacesSyncService.loadSnapshot(context) }
+
+        assertTrue("got $error", (error as? SyncError)?.isSessionInvalid == true)
+        assertEquals(1, events)
+    }
+
+    /**
+     * Signing out revokes the session, so a request still in flight comes back
+     * rejected. That verdict is about the old sign-in and must not reach
+     * whatever the user is doing now.
+     */
+    @Test
+    fun rejectionFromAnEarlierSignInIsIgnored() {
+        server.sessionRejected = true
+        server.onSessionRejected = { AccountStore.clear(context) }
+
+        val (error, events) = runAndCountExpiryEvents { AccountStore.withClient(context) { it } }
+
+        assertTrue("got $error", (error as? SyncError)?.isSessionInvalid == true)
+        assertEquals(0, events)
+    }
+
+    private fun runAndCountExpiryEvents(operation: suspend () -> Any?): Pair<Throwable?, Int> = runBlocking {
+        val events = AtomicInteger()
+        val collector = launch(Dispatchers.Unconfined) {
+            AppEvents.sessionExpired.collect { events.incrementAndGet() }
+        }
+        val error = runCatching { operation() }.exceptionOrNull()
+        delay(50)
+        collector.cancel()
+        error to events.get()
+    }
+
     @Test
     fun signOutDuringCredentialFetchDropsTheResult() {
         server.onTokenServer = { AccountStore.clear(context) }
@@ -153,6 +231,11 @@ private class FxAAndSyncServer(
 
     @Volatile var storage401Remaining = 0
 
+    /** True once the session token is dead: every FxA call answers 401 errno 110. */
+    @Volatile var sessionRejected = false
+
+    var onSessionRejected: (() -> Unit)? = null
+
     var onTokenServer: (() -> Unit)? = null
 
     @Synchronized
@@ -162,6 +245,10 @@ private class FxAAndSyncServer(
         fun json(body: Any, status: Int = 200) =
             SyncHttpResponse(status, mapOf("x-last-modified" to "1.00"), body.toString().toByteArray(Charsets.UTF_8))
         return when {
+            sessionRejected && host.endsWith("accounts.firefox.com") -> {
+                onSessionRejected?.invoke()
+                json(JSONObject().put("errno", 110).put("message", "Invalid authentication token"), status = 401)
+            }
             host == "oauth.accounts.firefox.com" || path.endsWith("/oauth/token") ->
                 json(JSONObject().put("access_token", "access"))
             path.endsWith("/account/scoped-key-data") ->

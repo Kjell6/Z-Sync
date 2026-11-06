@@ -33,19 +33,29 @@ class FxAClient(
     @Throws(Exception::class)
     suspend fun syncCredentials(sessionToken: String, kB: ByteArray): TokenServerCreds {
         var last = "no token"
+        var primaryError: Exception? = null
         try {
             val oauth = oauthAccessToken(sessionToken)
             val rotation = scopedKeyData(sessionToken)
             return tokenServerCreds("Bearer $oauth", kB, rotation)
         } catch (e: Exception) {
             if (e is SyncError.TotpRequired) throw e
+            primaryError = e
             last = e.message ?: e.toString()
         }
         try {
             val assertion = browserIDAssertion(sessionToken, audience = TOKEN_SERVER_AUDIENCE)
             return tokenServerCreds("BrowserID $assertion", kB, 0)
         } catch (e: Exception) {
-            throw SyncError.Auth("Sync sign-in failed. $last / ${e.message ?: e.toString()}")
+            // Keep the "session is dead" verdict from either path: if the auth
+            // server rejected the session token, signing in again is the only
+            // fix even though the message is wrapped below.
+            val invalid = (e as? SyncError)?.isSessionInvalid == true ||
+                (primaryError as? SyncError)?.isSessionInvalid == true
+            throw SyncError.Auth(
+                "Sync sign-in failed. $last / ${e.message ?: e.toString()}",
+                sessionInvalid = invalid,
+            )
         }
     }
 
@@ -85,16 +95,18 @@ class FxAClient(
             URL("$authBase/oauth/token"),
         )
         var last = "OAuth failed"
+        var sessionInvalid = false
         for (url in urls) {
             try {
                 val obj = hawkJSON(url = url, method = "POST", token = token, tokenType = "sessionToken", json = body)
                 obj.optString("access_token").takeIf { it.isNotEmpty() }?.let { return it }
                 last = "OAuth response without access_token"
             } catch (e: Exception) {
+                if ((e as? SyncError)?.isSessionInvalid == true) sessionInvalid = true
                 last = e.message ?: e.toString()
             }
         }
-        throw SyncError.Auth(last)
+        throw SyncError.Auth(last, sessionInvalid = sessionInvalid)
     }
 
     /**
@@ -140,7 +152,7 @@ class FxAClient(
             payloadHash = hash,
         )
         val response = sendRequest(url, method, body, mapOf("Authorization" to authorization))
-        return parseBodyOrThrow(response) ?: JSONObject()
+        return parseBodyOrThrow(response, sessionContext = true) ?: JSONObject()
     }
 
     private suspend fun tokenServerCreds(
@@ -156,7 +168,12 @@ class FxAClient(
             mapOf("Authorization" to authorization, "X-KeyID" to kid),
         )
         val text = String(response.body, Charsets.UTF_8)
-        if (response.code !in 200..299) throw SyncError.Auth("Token server: ${text.take(300)}")
+        if (response.code !in 200..299) {
+            // Do not treat this as a dead session: a token-server rejection is
+            // not proof that the Mozilla account session itself was revoked.
+            // The auth-server path (errno 110) is the authoritative signal.
+            throw SyncError.Auth("Token server: ${text.take(300)}")
+        }
         val obj = runCatching { JSONObject(text) }.getOrElse { throw SyncError.Auth("Incomplete token server response.") }
         val uid = when (val u = obj.opt("uid")) {
             is String -> u
@@ -259,7 +276,7 @@ class FxAClient(
             RawResponse(response.statusCode, response.body)
         }
 
-    internal fun parseBodyOrThrow(response: RawResponse): Any? {  // nullable: callers coerce
+    internal fun parseBodyOrThrow(response: RawResponse, sessionContext: Boolean = false): Any? {  // nullable: callers coerce
 
         val text = String(response.body, Charsets.UTF_8)
         val parsed: Any? = runCatching { org.json.JSONTokener(text).nextValue() }.getOrNull()
@@ -272,7 +289,15 @@ class FxAClient(
             val message = obj?.optString("message")?.takeIf { it.isNotEmpty() }
                 ?: obj?.optString("error")?.takeIf { it.isNotEmpty() }
                 ?: text.ifEmpty { "HTTP ${response.code}" }
-            throw SyncError.Auth(message)
+            // Signed-in credential refreshes (Hawk paths) treat a 401 with
+            // errno 110 (invalid authentication token) as a dead session.
+            // Every other failure (109 bad signature, 111 clock skew, 5xx,
+            // rate limits) stays a plain auth error, so an unrelated problem
+            // never signs the user out.
+            val sessionInvalid = sessionContext &&
+                response.code == 401 &&
+                obj?.optInt("errno", -1) == 110
+            throw SyncError.Auth(message, sessionInvalid = sessionInvalid)
         }
         return parsed ?: JSONObject()
     }

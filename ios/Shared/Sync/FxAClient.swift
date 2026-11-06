@@ -21,6 +21,7 @@ actor FxAClient {
 
     func syncCredentials(sessionToken: String, kB: Data) async throws -> TokenServerCreds {
         var last = "no token"
+        var primaryError: Error?
         do {
             let oauth = try await oauthAccessToken(sessionToken: sessionToken)
             let rotation = try await scopedKeyData(sessionToken: sessionToken)
@@ -36,6 +37,7 @@ actor FxAClient {
             if let syncError = error as? SyncError, case .totpRequired = syncError {
                 throw error
             }
+            primaryError = error
             last = error.localizedDescription
         }
         do {
@@ -45,7 +47,14 @@ actor FxAClient {
             )
             return try await tokenServerCreds(authorization: "BrowserID \(assertion)", kB: kB, keysChangedAt: 0)
         } catch {
-            throw SyncError.auth("Sync sign-in failed. \(last) / \(error.localizedDescription)")
+            // Keep the "session is dead" verdict from either path: if the
+            // auth server rejected the session token, retrying the login is
+            // the only fix even though we wrap the message below.
+            let invalid = Self.isSessionInvalid(error) || Self.isSessionInvalid(primaryError)
+            throw SyncError.auth(
+                "Sync sign-in failed. \(last) / \(error.localizedDescription)",
+                sessionInvalid: invalid
+            )
         }
     }
 
@@ -86,16 +95,20 @@ actor FxAClient {
             URL(string: "https://api.accounts.firefox.com/v1/oauth/token")!
         ]
         var last = "OAuth failed"
+        var sessionInvalid = false
         for url in urls {
             do {
                 let obj = try await hawkJSON(url: url, method: "POST", token: token, tokenType: "sessionToken", json: body)
                 if let access = obj["access_token"] as? String { return access }
                 last = "OAuth response without access_token"
             } catch {
+                if let syncError = error as? SyncError, syncError.isSessionInvalid {
+                    sessionInvalid = true
+                }
                 last = error.localizedDescription
             }
         }
-        throw SyncError.auth(last)
+        throw SyncError.auth(last, sessionInvalid: sessionInvalid)
     }
 
     /// Ends this app's own FxA session on the server, so a signed-out device
@@ -157,7 +170,7 @@ actor FxAClient {
             // mapping as every other path, so an errno 103 body surfaces as
             // `.totpRequired` here too instead of a plain auth error.
             if let error = Self.authError(status: response.statusCode, body: obj) {
-                throw error
+                throw Self.sessionAuthError(error, status: response.statusCode, body: obj)
             }
             let text = (obj["message"] as? String) ?? (obj["error"] as? String) ?? String(data: response.body, encoding: .utf8) ?? "HTTP"
             throw SyncError.auth(text)
@@ -177,6 +190,9 @@ actor FxAClient {
         )
         guard (200..<300).contains(response.statusCode) else {
             let text = String(data: response.body, encoding: .utf8) ?? ""
+            // Do not treat this as a dead session: a token-server rejection is
+            // not proof that the Mozilla account session itself was revoked.
+            // The auth-server path (errno 110) is the authoritative signal.
             throw SyncError.auth("Token server: \(text)")
         }
         let data = response.body
@@ -214,7 +230,7 @@ actor FxAClient {
                 return try FxACrypto.xor(Data(raw.dropFirst(32).prefix(32)), unwrapBKey)
             } catch let e as SyncError {
                 lastError = e
-                guard case .auth(let message) = e, message.contains("Unconfirmed account") || message.contains("errno\":104") || message.contains("\"errno\":104") else { throw e }
+                guard case .auth(let message, _) = e, message.contains("Unconfirmed account") || message.contains("errno\":104") || message.contains("\"errno\":104") else { throw e }
                 if attempt < 39 { try await Task.sleep(nanoseconds: 3_000_000_000) }
             }
         }
@@ -264,6 +280,22 @@ actor FxAClient {
         if body["errno"] as? Int == 103 { return .totpRequired }
         let fallback = body["error"] as? String ?? "HTTP \(status)"
         return .auth((body["message"] as? String) ?? fallback)
+    }
+
+    /// Marks a signed-in credential request's auth-server 401 as a dead
+    /// session. FxA answers errno 110 (invalid authentication token) when the
+    /// session was revoked (e.g. password changed elsewhere). Every other
+    /// failure (including 109 bad signature, 111 clock skew, 5xx, rate limits)
+    /// stays a plain auth error so an unrelated problem never signs the user
+    /// out.
+    static func sessionAuthError(_ error: SyncError, status: Int, body: [String: Any]) -> SyncError {
+        guard case .auth(let message, _) = error else { return error }
+        guard status == 401, body["errno"] as? Int == 110 else { return error }
+        return .auth(message, sessionInvalid: true)
+    }
+
+    private static func isSessionInvalid(_ error: Error?) -> Bool {
+        (error as? SyncError)?.isSessionInvalid ?? false
     }
 
     private func send(_ request: SyncHTTPRequest) async throws -> [String: Any] {

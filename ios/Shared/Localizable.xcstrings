@@ -618,7 +618,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Couldn't sign in to your Mozilla account. Try signing out and back in."
+            "value": "Couldn't sign in to your Mozilla account. Try again in a moment."
           }
         }
       }
@@ -707,6 +707,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "You appear to be offline. Check your connection and try again."
+          }
+        }
+      }
+    },
+    "error.session_expired": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Mozilla account sign-in ended. Open Z-Sync and sign in again."
           }
         }
       }
@@ -926,6 +937,17 @@
       }
     },
     "PREFERENCES": {},
+    "session.expired": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Mozilla account sign-in ended, so Z-Sync signed out. Sign in again to keep syncing."
+          }
+        }
+      }
+    },
     "Settings": {},
     "settings.content_blocking.caption %@": {
       "localizations": {

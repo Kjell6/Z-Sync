@@ -8,6 +8,7 @@ import de.kjell.zencompanion.sync.SyncClient
 import de.kjell.zencompanion.sync.SyncCrypto
 import de.kjell.zencompanion.sync.SyncError
 import de.kjell.zencompanion.sync.ZenSpaces
+import de.kjell.zencompanion.util.FriendlyError
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -445,7 +446,7 @@ class ContractFixtureTests {
             val expect = fixtureCase.getJSONObject("expect")
             val body = input.getJSONObject("body").toString().toByteArray(Charsets.UTF_8)
             try {
-                client.parseBodyOrThrow(FxAClient.RawResponse(input.getInt("httpStatus"), body))
+                client.parseBodyOrThrow(FxAClient.RawResponse(input.getInt("httpStatus"), body), sessionContext = true)
                 fail("case ${fixtureCase.optString("id")}: expected an error")
             } catch (e: SyncError.TotpRequired) {
                 assertEquals(fixtureCase.optString("id"), "totpRequired", expect.getString("errorKind"))
@@ -454,8 +455,23 @@ class ContractFixtureTests {
                 if (!expect.isNull("message")) {
                     assertEquals(fixtureCase.optString("id"), expect.getString("message"), e.message)
                 }
+                assertEquals(
+                    fixtureCase.optString("id"),
+                    expect.optBoolean("sessionInvalid", false),
+                    e.isSessionInvalid,
+                )
             }
         }
+    }
+
+    @Test
+    fun sessionInvalidAuthErrorTellsTheUserToSignInAgain() {
+        assertEquals(
+            R.string.error_session_expired,
+            FriendlyError.messageRes(SyncError.Auth("rejected", sessionInvalid = true)),
+        )
+        assertEquals(R.string.error_auth, FriendlyError.messageRes(SyncError.Auth("rejected")))
+        assertEquals(R.string.error_auth, FriendlyError.messageRes(SyncError.Unauthorized()))
     }
 
     // MARK: Crypto vectors

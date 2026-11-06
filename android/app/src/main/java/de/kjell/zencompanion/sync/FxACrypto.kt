@@ -7,7 +7,15 @@ import javax.crypto.spec.SecretKeySpec
 /** Ports of `Shared/SyncError` cases; UI maps these to friendly strings. */
 sealed class SyncError(message: String?) : Exception(message) {
     class Crypto(detail: String? = null) : SyncError(detail)
-    class Auth(detail: String? = null) : SyncError(detail)
+
+    /**
+     * A Mozilla account failure. [sessionInvalid] is set only when the server
+     * definitively rejected the stored session (the token itself was refused),
+     * so signing in again is the only fix. Network failures, HTTP 5xx and rate
+     * limits stay `false`.
+     */
+    class Auth(detail: String? = null, val sessionInvalid: Boolean = false) : SyncError(detail)
+
     class Network(detail: String? = null) : SyncError(detail)
 
     /** Conditional write lost its race twice (SPEC §7.2); caller re-reads. */
@@ -30,6 +38,18 @@ sealed class SyncError(message: String?) : Exception(message) {
     object NotSignedIn : SyncError(null)
     object TotpRequired : SyncError(null)
     object StorageUnavailable : SyncError(null)
+
+    /**
+     * True only when the server definitively rejected the stored Mozilla
+     * account session, so the app must sign out and ask for a new sign-in.
+     * Temporary conditions (offline, timeouts, HTTP 5xx, rate limits) and
+     * recoverable states (TOTP, unverified account) stay `false`, and so does
+     * [Unauthorized]: `withClient` retries a storage 401 with credentials
+     * fetched through this session, so one that still escapes proves the
+     * session is alive and the problem is elsewhere.
+     */
+    val isSessionInvalid: Boolean
+        get() = this is Auth && sessionInvalid
 
     companion object {
         const val CRYPTO_INVALID_HEX = "invalid hex"

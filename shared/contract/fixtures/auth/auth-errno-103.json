@@ -1,7 +1,7 @@
 {
   "contract": 1,
   "id": "auth-errno-103",
-  "purpose": "FxA auth error-body mapping: HTTP >= 400 with errno 103 (two-step authentication enabled) maps to the totpRequired error kind; any other errno stays a plain auth error carrying the body message.",
+  "purpose": "FxA auth error-body mapping: HTTP >= 400 with errno 103 (two-step authentication enabled) maps to the totpRequired error kind; any other errno stays a plain auth error carrying the body message. HTTP 401 with errno 110 on a request signed with the session token also marks the session invalid.",
   "cases": [
     {
       "id": "errno-103-totp",
@@ -31,6 +31,54 @@
       "expect": {
         "errorKind": "auth",
         "message": "Unconfirmed account"
+      }
+    },
+    {
+      "id": "errno-110-session-invalid",
+      "input": {
+        "httpStatus": 401,
+        "body": {
+          "errno": 110,
+          "message": "Invalid authentication token in request signature",
+          "code": 401
+        }
+      },
+      "expect": {
+        "errorKind": "auth",
+        "message": "Invalid authentication token in request signature",
+        "sessionInvalid": true
+      }
+    },
+    {
+      "id": "errno-111-clock-skew",
+      "input": {
+        "httpStatus": 401,
+        "body": {
+          "errno": 111,
+          "message": "Invalid timestamp in request signature",
+          "code": 401
+        }
+      },
+      "expect": {
+        "errorKind": "auth",
+        "message": "Invalid timestamp in request signature",
+        "sessionInvalid": false
+      }
+    },
+    {
+      "id": "errno-110-wrong-status",
+      "input": {
+        "httpStatus": 400,
+        "body": {
+          "errno": 110,
+          "message": "Invalid authentication token in request signature",
+          "code": 400
+        }
+      },
+      "expect": {
+        "errorKind": "auth",
+        "message": "Invalid authentication token in request signature",
+        "sessionInvalid": false
       }
     }
   ]

@@ -320,6 +320,11 @@ class AppViewModel(
     private val _session = MutableStateFlow<AccountStore.AccountSnapshot?>(AccountStore.load(appContext))
     val session: StateFlow<AccountStore.AccountSnapshot?> = _session
 
+    /** Explains an automatic sign-out on the landing screen (e.g. the
+     * Mozilla account password changed on another device). */
+    private val _sessionNotice = MutableStateFlow<Int?>(null)
+    val sessionNotice: StateFlow<Int?> = _sessionNotice
+
     // Seeded synchronously from the disk cache so the first frame shows the
     // cached spaces instantly — the background refresh then updates in place.
     private val _browser = MutableStateFlow(BrowserState().withCachedSnapshot())
@@ -395,6 +400,9 @@ class AppViewModel(
             AppEvents.signedOut.collect { _session.value = null }
         }
         viewModelScope.launch {
+            AppEvents.sessionExpired.collect { sessionExpired() }
+        }
+        viewModelScope.launch {
             AppEvents.snapshotStale.collect { reload() }
         }
     }
@@ -408,6 +416,7 @@ class AppViewModel(
         AccountStore.save(appContext, snapshot)
         SnapshotCache.invalidateMemory()
         _session.value = snapshot
+        _sessionNotice.value = null
         initialLoad()
     }
 
@@ -432,6 +441,7 @@ class AppViewModel(
         // in memory when the secret cannot be persisted securely.
         runCatching { AccountStore.save(appContext, DemoCatalog.account) }
         _session.value = DemoCatalog.account
+        _sessionNotice.value = null
         _browser.value = BrowserState(
             snapshot = DemoCatalog.snapshot,
             selectedIndex = 0,
@@ -454,6 +464,7 @@ class AppViewModel(
         _browser.value = BrowserState()
         _activity.value = ActivityState()
         _whatsNewVisible.value = false
+        _sessionNotice.value = null
         if (account != null) {
             // Best effort, and not tied to this screen's lifetime.
             CoroutineScope(Dispatchers.IO).launch {
@@ -461,6 +472,17 @@ class AppViewModel(
             }
         }
         AppEvents.emitSignedOut()
+    }
+
+    /**
+     * The server rejected the stored session (e.g. the Mozilla account
+     * password changed elsewhere): sign out and say why on the landing
+     * screen. Temporary sync failures never reach this.
+     */
+    private fun sessionExpired() {
+        if (_session.value == null || browserRepository.isDemo()) return
+        signOut()
+        _sessionNotice.value = de.kjell.zencompanion.R.string.session_expired
     }
 
     fun dismissSyncSetupHint() {

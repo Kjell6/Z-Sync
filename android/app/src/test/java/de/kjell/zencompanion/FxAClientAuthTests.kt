@@ -6,6 +6,7 @@ import de.kjell.zencompanion.sync.SyncHttpResponse
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -102,5 +103,99 @@ class FxAClientAuthTests {
         assertEquals("/v1/certificate/sign", fake.requests[2].url.path)
         assertEquals("token.services.mozilla.com", fake.requests[3].url.host)
         assertTrue(fake.requests[3].headers.getValue("Authorization").startsWith("BrowserID "))
+    }
+
+    /**
+     * A 401 from the auth server means the stored session token is dead
+     * (e.g. the Mozilla account password changed elsewhere). The wrapped
+     * message must keep that verdict so the app signs out instead of showing
+     * a passive "try again" line.
+     */
+    @Test
+    fun rejectedSessionTokenFlagsSessionInvalid() {
+        val fake = FakeHttpTransport()
+        val body = json("errno" to 110, "message" to "Invalid authentication token")
+        fake.enqueue(
+            SyncHttpResponse(401, emptyMap(), body),
+            SyncHttpResponse(401, emptyMap(), body),
+            SyncHttpResponse(401, emptyMap(), body),
+        )
+
+        try {
+            runBlocking { FxAClient(fake).syncCredentials(sessionToken, kB) }
+            fail("expected SyncError.Auth")
+        } catch (expected: SyncError.Auth) {
+            assertTrue(expected.sessionInvalid)
+        }
+    }
+
+    /**
+     * A device clock that is far off makes FxA reject the Hawk timestamp
+     * (401 errno 111). Signing in again would not fix that, so the user must
+     * not be signed out.
+     */
+    @Test
+    fun clockSkewDoesNotFlagSessionInvalid() {
+        val fake = FakeHttpTransport()
+        val body = json("errno" to 111, "message" to "Invalid timestamp in request signature")
+        fake.enqueue(
+            SyncHttpResponse(401, emptyMap(), body),
+            SyncHttpResponse(401, emptyMap(), body),
+            SyncHttpResponse(401, emptyMap(), body),
+        )
+
+        try {
+            runBlocking { FxAClient(fake).syncCredentials(sessionToken, kB) }
+            fail("expected SyncError.Auth")
+        } catch (expected: SyncError.Auth) {
+            assertFalse(expected.sessionInvalid)
+        }
+    }
+
+    /**
+     * A token-server rejection after the auth server minted credentials is
+     * not proof that the account session was revoked. It must not sign the
+     * user out; the auth-server errno 110 is the authoritative signal.
+     */
+    @Test
+    fun tokenServerRejectionDoesNotFlagSessionInvalid() {
+        val fake = FakeHttpTransport()
+        fake.enqueue(
+            SyncHttpResponse(200, emptyMap(), json("access_token" to "access-token")),
+            SyncHttpResponse(
+                200,
+                emptyMap(),
+                json("https://identity.mozilla.com/apps/oldsync" to JSONObject().put("keyRotationTimestamp", 0)),
+            ),
+            SyncHttpResponse(401, emptyMap(), json("status" to "invalid-credentials")),
+            SyncHttpResponse(200, emptyMap(), json("cert" to "cert")),
+            SyncHttpResponse(401, emptyMap(), json("status" to "invalid-credentials")),
+        )
+
+        try {
+            runBlocking { FxAClient(fake).syncCredentials(sessionToken, kB) }
+            fail("expected SyncError.Auth")
+        } catch (expected: SyncError.Auth) {
+            assertFalse(expected.sessionInvalid)
+        }
+    }
+
+    /** A server outage (HTTP 5xx) is temporary: no sign-out. */
+    @Test
+    fun authServerOutageDoesNotFlagSessionInvalid() {
+        val fake = FakeHttpTransport()
+        val body = json("error" to "Service unavailable")
+        fake.enqueue(
+            SyncHttpResponse(503, emptyMap(), body),
+            SyncHttpResponse(503, emptyMap(), body),
+            SyncHttpResponse(503, emptyMap(), body),
+        )
+
+        try {
+            runBlocking { FxAClient(fake).syncCredentials(sessionToken, kB) }
+            fail("expected SyncError.Auth")
+        } catch (expected: SyncError.Auth) {
+            assertFalse(expected.sessionInvalid)
+        }
     }
 }

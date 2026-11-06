@@ -15,12 +15,24 @@ object AppEvents {
     private val _snapshotStale = MutableSharedFlow<Unit>(extraBufferCapacity = 4)
     val snapshotStale: SharedFlow<Unit> = _snapshotStale
 
+    /**
+     * The server definitively rejected the stored Mozilla account session.
+     * [de.kjell.zencompanion.ui.AppViewModel] signs out and lands on the
+     * sign-in screen with an explanation.
+     */
+    private val _sessionExpired = MutableSharedFlow<Unit>(extraBufferCapacity = 4)
+    val sessionExpired: SharedFlow<Unit> = _sessionExpired
+
     fun emitSignedOut() {
         _signedOut.tryEmit(Unit)
     }
 
     fun emitSnapshotStale() {
         _snapshotStale.tryEmit(Unit)
+    }
+
+    fun emitSessionExpired() {
+        _sessionExpired.tryEmit(Unit)
     }
 }
 

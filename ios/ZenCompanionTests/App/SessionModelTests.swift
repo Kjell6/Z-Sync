@@ -80,6 +80,76 @@ final class SessionModelTests: XCTestCase {
         XCTAssertFalse(prefs.bool(PreferenceKeys.didDismissSyncSetupHint, scope: .standard))
     }
 
+    func testSessionExpiredSignsOutAndExplainsWhy() {
+        let signer = FakeSessionSignerOut()
+        let model = SessionModel(
+            accounts: FakeAccountSession(),
+            spaces: FakeSessionSpaces(),
+            preferences: FakePreferences(),
+            haptics: FakeSessionHaptics(),
+            signerOut: signer
+        )
+        model.account = snapshot()
+
+        model.sessionExpired()
+
+        XCTAssertNil(model.account)
+        XCTAssertEqual(signer.signOutCount, 1)
+        XCTAssertNotNil(model.sessionNotice)
+    }
+
+    func testCompleteSignInClearsAnExpiryNotice() {
+        let model = SessionModel(
+            accounts: FakeAccountSession(),
+            spaces: FakeSessionSpaces(),
+            preferences: FakePreferences(),
+            haptics: FakeSessionHaptics(),
+            signerOut: FakeSessionSignerOut()
+        )
+        model.account = snapshot()
+        model.sessionExpired()
+        XCTAssertNotNil(model.sessionNotice)
+
+        model.completeSignIn(snapshot())
+
+        XCTAssertNil(model.sessionNotice)
+        XCTAssertEqual(model.account?.uid, "u1")
+    }
+
+    func testSessionExpiredIsIgnoredWhenAlreadySignedOut() {
+        let signer = FakeSessionSignerOut()
+        let model = SessionModel(
+            accounts: FakeAccountSession(),
+            spaces: FakeSessionSpaces(),
+            preferences: FakePreferences(),
+            haptics: FakeSessionHaptics(),
+            signerOut: signer
+        )
+
+        model.sessionExpired()
+
+        XCTAssertEqual(signer.signOutCount, 0)
+        XCTAssertNil(model.sessionNotice)
+    }
+
+    func testSessionExpiredIsIgnoredInDemo() {
+        let signer = FakeSessionSignerOut()
+        let model = SessionModel(
+            accounts: FakeAccountSession(),
+            spaces: FakeSessionSpaces(),
+            preferences: FakePreferences(),
+            haptics: FakeSessionHaptics(),
+            signerOut: signer
+        )
+        model.account = snapshot(isDemo: true)
+
+        model.sessionExpired()
+
+        XCTAssertEqual(signer.signOutCount, 0)
+        XCTAssertNil(model.sessionNotice)
+        XCTAssertEqual(model.account?.isDemo, true)
+    }
+
     func testFiveDemoTapsWithinWindowEnterDemo() {
         let accounts = FakeAccountSession()
         let spaces = FakeSessionSpaces()
@@ -190,4 +260,10 @@ private final class FakeSessionHaptics: HapticsPlaying {
     func pinSucceeded() {}
     func selectionChanged() {}
     func mediumImpact() { mediumImpacts += 1 }
+}
+
+@MainActor
+private final class FakeSessionSignerOut: SessionSigningOut {
+    private(set) var signOutCount = 0
+    func signOut() { signOutCount += 1 }
 }

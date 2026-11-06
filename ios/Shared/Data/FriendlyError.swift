@@ -19,6 +19,10 @@ extension Error {
                 return String(localized: "error.storage_unavailable")
             case .conflict:
                 return String(localized: "error.conflict")
+            case .auth(_, sessionInvalid: true):
+                // The share extension cannot sign the app out; waiting will
+                // not help, so say what will.
+                return String(localized: "error.session_expired")
             case .auth, .unauthorized:
                 return String(localized: "error.auth")
             case .crypto:

@@ -154,7 +154,6 @@ internal fun MiniBrowserWebView(
                         // new page always starts without the old panel.
                         onPageStart()
                         onLoadingChange(true)
-                        onSiteThemeColorChange(null)
                         url?.let { onCurrentUrlChange(it) }
                         onCanGoBackChange(view?.canGoBack() == true)
                         onCanGoForwardChange(view?.canGoForward() == true)
@@ -187,11 +186,11 @@ internal fun MiniBrowserWebView(
                                 return null;
                             })()
                         """.trimIndent()
+                        // The previous page's color stays until this one has its
+                        // own: resetting at the start would flash the default
+                        // on every reload. A page without a color drops it here.
                         view?.evaluateJavascript(js) { result ->
-                            val parsed = parseCssColor(result)
-                            if (parsed != null) {
-                                onSiteThemeColorChange(parsed)
-                            }
+                            onSiteThemeColorChange(parseCssColor(result))
                         }
                         view?.evaluateJavascript(SCROLL_BINDING_SCRIPT, null)
                     }

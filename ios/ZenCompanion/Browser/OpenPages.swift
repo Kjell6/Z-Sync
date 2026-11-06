@@ -380,6 +380,10 @@ final class OpenPagesStore: MiniBrowserPageHost {
             putToSleep(page)
         }
         pages.removeAll { !$0.isKept }
+        // A page's way back ends with the page it led to.
+        for page in pages where page.openerID.flatMap(self.page) == nil {
+            page.openerID = nil
+        }
         persist()
     }
 
@@ -433,7 +437,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
             pinnedHere: PageTitle.sameDocument(model.pinnedURL, page.url),
             releasedHere: page.released,
             openedFromSpace: page.openedFromSpace,
-            browsedAway: model.webView?.canGoBack ?? model.canGoBack
+            browsedAway: model.webView?.canGoBack ?? model.sleptWithBackHistory
         )
         if action == .keep { keep(page) }
     }
@@ -501,7 +505,8 @@ final class OpenPagesStore: MiniBrowserPageHost {
         guard let image = try? await webView.takeSnapshot(configuration: WKSnapshotConfiguration()) else { return nil }
         let small = Self.shrunk(image)
         page.shot = small
-        if page.isKept { writeShot(small, of: page) }
+        // The page may have been closed while the snapshot was on its way.
+        if page.isKept, self.page(page.id) != nil { writeShot(small, of: page) }
         return image
     }
 
@@ -532,7 +537,8 @@ final class OpenPagesStore: MiniBrowserPageHost {
     // MARK: - History
 
     private func saveHistory(of page: OpenPage) {
-        guard let history = page.model.webView?.interactionState else { return }
+        // A sleeping page holds what its web view gave up.
+        guard let history = page.model.webView?.interactionState ?? page.history else { return }
         page.history = history
         writeHistory(history, of: page)
     }

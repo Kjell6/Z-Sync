@@ -955,6 +955,10 @@ struct MiniBrowserTopBar: View {
     @Environment(\.colorScheme) private var scheme
     /// A swipe is under way; the address under the finger must not open.
     @State private var swiping = false
+    /// Resets when the drag ends in any way. A system gesture or a call ends
+    /// it without `onEnded`, and the page must not stay where it was left.
+    @GestureState private var fingerDown = false
+    @State private var swipeLetGo = false
     @State private var barWidth: CGFloat = 0
 
     private let barHeight: CGFloat = MiniBrowserChromeMetrics.navBarHeight
@@ -987,6 +991,15 @@ struct MiniBrowserTopBar: View {
                 .offset(x: barOffset)
                 .background { peekBars }
                 .simultaneousGesture(swipeGesture)
+                .onChange(of: fingerDown) { _, down in
+                    guard !down else {
+                        swipeLetGo = false
+                        return
+                    }
+                    guard swiping, !swipeLetGo else { return }
+                    swiping = false
+                    onSwipeEnd(PageSwipeEnd(target: .stay, direction: swipeOffset < 0 ? -1 : 1, velocity: 0))
+                }
         }
     }
 
@@ -1077,6 +1090,7 @@ struct MiniBrowserTopBar: View {
 
     private var swipeGesture: some Gesture {
         DragGesture(minimumDistance: 10)
+            .updating($fingerDown) { _, down, _ in down = true }
             .onChanged { value in
                 let width = value.translation.width
                 if !swiping {
@@ -1095,6 +1109,7 @@ struct MiniBrowserTopBar: View {
             }
             .onEnded { value in
                 guard swiping else { return }
+                swipeLetGo = true
                 let neighbours = pages.neighbours
                 let width = value.translation.width
                 let flung = value.predictedEndTranslation.width

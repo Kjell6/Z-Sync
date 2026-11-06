@@ -31,10 +31,14 @@ import java.io.File
 import kotlin.coroutines.resume
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONTokener
+
+private const val TITLE_LOOKUP_MS = 1_000L
 
 /**
  * The live side of one open page: its chrome state, its blocking and, while it
@@ -75,12 +79,16 @@ class PageSession(
     init {
         viewModel.documentTitle = documentTitle@{
             val view = webView ?: return@documentTitle null
-            suspendCancellableCoroutine { continuation ->
-                view.post {
-                    if (!continuation.isActive) return@post
-                    view.evaluateJavascript(PageTitle.DOCUMENT_TITLE_SCRIPT) { raw ->
-                        if (continuation.isActive) {
-                            continuation.resume(PageTitle.pickJsPayload(raw, view.url))
+            // A WebView destroyed in the meantime never answers, and the pin
+            // waiting on it must still save with the title it already has.
+            withTimeoutOrNull(TITLE_LOOKUP_MS) {
+                suspendCancellableCoroutine { continuation ->
+                    view.post {
+                        if (!continuation.isActive) return@post
+                        view.evaluateJavascript(PageTitle.DOCUMENT_TITLE_SCRIPT) { raw ->
+                            if (continuation.isActive) {
+                                continuation.resume(PageTitle.pickJsPayload(raw, view.url))
+                            }
                         }
                     }
                 }
@@ -117,6 +125,10 @@ class BrowserPages(
 ) {
     private val sessions = HashMap<String, PageSession>()
     private val io = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** One write at a time, so two can't share a temp file or outrun a delete. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val writes = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
 
     /** The sessions that hold a WebView, the one on screen included. */
     val live = mutableStateListOf<PageSession>()
@@ -164,6 +176,7 @@ class BrowserPages(
         val id = page.id
         viewModel.onPageChange = { url, title -> store.update(id, url, title) }
         viewModel.onPinStarted = { url -> store.markPinned(id, url) }
+        viewModel.onPinFailed = { store.unmarkPinned(id) }
         viewModel.onPinned = { url -> store.pinned(id, url, PageTitle::sameDocument) }
         val session = PageSession(id, viewModel, page.url)
         if (page.isKept) session.history = readHistory(store.historyFile(id))
@@ -282,6 +295,7 @@ class BrowserPages(
     /** The app went to the background and may not come back. */
     fun appWentToBackground() {
         store.promote(keepEveryPage(), ::exit)
+        store.markActiveUsed()
         sessions.values.forEach(::saveHistory)
         keptShotsToDisk()
     }
@@ -311,13 +325,18 @@ class BrowserPages(
 
     /** Takes the WebView's back and forward list while it still has one. */
     fun saveHistory(session: PageSession) {
-        val view = session.webView ?: return
-        val bundle = Bundle()
-        if (runCatching { view.saveState(bundle) }.getOrNull() == null) return
+        val view = session.webView
+        // A sleeping page holds what its WebView gave up.
+        val bundle = if (view != null) {
+            Bundle().takeIf { runCatching { view.saveState(it) }.getOrNull() != null }
+        } else {
+            session.history
+        } ?: return
         session.history = bundle
         if (store.page(session.id)?.isKept == true) {
-            val file = store.historyFile(session.id)
-            io.launch { writeHistory(file, bundle) }
+            val id = session.id
+            val file = store.historyFile(id)
+            writes.launch { if (store.page(id) != null) writeHistory(file, bundle) }
         }
     }
 
@@ -358,7 +377,8 @@ class BrowserPages(
 
     private fun writeShot(id: String, bitmap: Bitmap) {
         val target = store.snapshotFile(id)
-        io.launch {
+        writes.launch {
+            if (store.page(id) == null) return@launch
             runCatching {
                 target.parentFile?.mkdirs()
                 val temp = File(target.path + ".tmp")

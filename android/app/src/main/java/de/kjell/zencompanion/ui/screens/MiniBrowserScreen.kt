@@ -56,10 +56,12 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
@@ -109,6 +111,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import de.kjell.zencompanion.R
+import de.kjell.zencompanion.util.FriendlyError
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.BrowserRepository
 import de.kjell.zencompanion.ui.browser.BrowserPages
@@ -130,8 +133,11 @@ import de.kjell.zencompanion.util.Haptics
 import de.kjell.zencompanion.util.PageTitle
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Mutable scroll bookkeeping: read on every packet, never rendered directly. */
 private class ScrollTracker {
@@ -162,9 +168,18 @@ fun MiniBrowserScreen(
 ) {
     val context = LocalContext.current
     var showOverview by rememberSaveable { mutableStateOf(startsInOverview) }
+    // Still set after the process died: the page to come back to is then the
+    // last one in use, not the one this browser was first opened with.
+    var launched by rememberSaveable { mutableStateOf(false) }
+    // Runs once, inside the first composition: everything below reads the page it opens.
+    @Suppress("RememberReturnType")
     remember {
         pages.updateSpaces(allSpaces, currentSpace.id)
-        if (pages.active == null && !startsInOverview) pages.open(launchUrl, launchTitle)
+        if (pages.active == null && !startsInOverview) {
+            val lastUsed = if (launched) pages.store.pages.value.maxByOrNull { it.lastUsedAt } else null
+            if (lastUsed != null) pages.activate(lastUsed.id) else pages.open(launchUrl, launchTitle)
+        }
+        launched = true
     }
     val openPages by pages.store.pages.collectAsState()
     val session = pages.active
@@ -175,6 +190,8 @@ fun MiniBrowserScreen(
     val heroProgress = remember { Animatable(1f) }
     val heroAlpha = remember { Animatable(1f) }
     var hero by remember { mutableStateOf<OverviewHero?>(null) }
+    /** Why pinning a page from the overview failed. */
+    var pinErrorRes by remember { mutableStateOf<Int?>(null) }
     /** The card the picture stands in for; it shows once the picture lands. */
     var hiddenCardId by remember { mutableStateOf<String?>(null) }
     /** A page that must not join the grid while it fades out. */
@@ -332,23 +349,40 @@ fun MiniBrowserScreen(
                             } else {
                                 SaveKind.PINNED
                             }
-                            runCatching {
-                                browserRepository.addTab(
-                                    url = page.url,
-                                    title = PageTitle.headline(page.title, page.url),
-                                    spaceId = destination.spaceId,
-                                    folderId = if (kind == SaveKind.NORMAL) null else destination.folderId,
-                                    kind = kind,
-                                )
-                            }.onSuccess {
+                            try {
+                                // Leaving the browser must not cut the write off.
+                                withContext(NonCancellable) {
+                                    browserRepository.addTab(
+                                        url = page.url,
+                                        title = PageTitle.headline(page.title, page.url),
+                                        spaceId = destination.spaceId,
+                                        folderId = if (kind == SaveKind.NORMAL) null else destination.folderId,
+                                        kind = kind,
+                                    )
+                                }
                                 Haptics.perform(context, Haptics.Kind.CONFIRM)
                                 pages.close(page.id)
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                pinErrorRes = FriendlyError.messageRes(e)
                             }
                         }
                     },
                     onShare = { page -> shareUrl(context, page.url, page.title) },
                 )
             }
+        }
+
+        pinErrorRes?.let { message ->
+            AlertDialog(
+                onDismissRequest = { pinErrorRes = null },
+                title = { Text(stringResource(R.string.browser_pin_failed)) },
+                text = { Text(stringResource(message)) },
+                confirmButton = {
+                    TextButton(onClick = { pinErrorRes = null }) { Text(stringResource(R.string.common_done)) }
+                },
+            )
         }
 
         hero?.let { flying ->
@@ -934,7 +968,7 @@ private fun BrowserPageScreen(
                 }
             }
 
-            if (imeVisible && !state.isAddressFocused) {
+            if (imeVisible && !ridesKeyboard) {
                 PageKeyboardDone(
                     bottomInset = imeHeight + 12.dp,
                     onClick = {

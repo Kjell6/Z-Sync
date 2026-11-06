@@ -225,6 +225,44 @@ class OpenPagesTests {
     }
 
     @Test
+    fun aKeptPageLosesItsWayBackWhenItsOpenerGoesWithTheBrowser() {
+        val pages = store()
+        val opener = pages.open(a)
+        val linked = pages.open(b, openerId = opener.id)
+        pages.toggleKeep(linked.id, failed = false)
+
+        pages.endSession(keepEveryPage = false) { exit }
+
+        assertEquals(listOf(linked.id), pages.pages.value.map { it.id })
+        assertEquals(null, pages.page(linked.id)!!.openerId)
+    }
+
+    @Test
+    fun leavingTheAppCountsAsUseOfThePageOnScreenOnly() {
+        val pages = store()
+        val idle = pages.open(a)
+        val used = pages.open(b)
+        val start = clock
+
+        clock += KeptPageLifetime.DAY.millis!!
+        pages.markActiveUsed()
+
+        assertEquals(start, pages.page(idle.id)!!.lastUsedAt)
+        assertEquals(clock, pages.page(used.id)!!.lastUsedAt)
+    }
+
+    @Test
+    fun aFailedPinLeavesThePageItsOwn() {
+        val pages = store()
+        val page = pages.open(a)
+        pages.markPinned(page.id, a)
+
+        pages.unmarkPinned(page.id)
+
+        assertEquals(null, pages.page(page.id)!!.pinnedUrl)
+    }
+
+    @Test
     fun closingTheBrowserOnlyRefreshesThePageOnScreen() {
         val pages = store()
         val idle = pages.open(a)

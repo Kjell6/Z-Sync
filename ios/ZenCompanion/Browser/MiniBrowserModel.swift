@@ -378,6 +378,9 @@ final class MiniBrowserModel {
     private var pendingPin: (url: URL, title: String)?
     /// The address saved from this page, which does not stay as an open page too.
     private(set) var pinnedURL: URL?
+    /// `canGoBack` starts over with the next web view; a sleeping page still
+    /// remembers having been browsed.
+    private(set) var sleptWithBackHistory = false
     /// How the pending save will be written (pinned vs normal). Captured when
     /// the banner is triggered and kept honest against the capability.
     private(set) var pinSaveKind: SaveKind = .pinned
@@ -547,6 +550,7 @@ final class MiniBrowserModel {
         reloadScrollY = nil
         isLoading = false
         estimatedProgress = 0
+        sleptWithBackHistory = canGoBack
         canGoBack = false
         canGoForward = false
         return history
@@ -1196,6 +1200,8 @@ final class MiniBrowserModel {
                 // Pinned, the page belongs to the space.
                 host?.pageWasPinned(self, url: pin.url)
             } catch {
+                // It never reached the space, so the page is not its to give up.
+                pinnedURL = nil
                 showPinNotice("\(String(localized: "browser.pin_failed")) \(error.zenUserMessage)", duration: 6.0)
             }
         }

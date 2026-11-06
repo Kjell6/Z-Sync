@@ -35,6 +35,19 @@ final class OpenPagesTests: XCTestCase {
 
     // MARK: - Like any browser
 
+    func testKeptPageLosesItsWayBackWhenItsOpenerGoesWithTheBrowser() {
+        let pages = store(preferences: choosing())
+        let opener = pages.open(url: a, title: "A")
+        let linked = pages.open(url: b, title: "B")
+        linked.openerID = opener.id
+        pages.toggleKeep(linked.id)
+
+        pages.endBrowserSession()
+
+        XCTAssertEqual(pages.pages.map(\.id), [linked.id])
+        XCTAssertNil(linked.openerID)
+    }
+
     func testPagesStayWhenTheBrowserCloses() {
         let directory = tempDirectory()
         let pages = store(directory: directory)

@@ -53,6 +53,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -437,11 +438,11 @@ private fun OpenPageCard(
                     modifier = Modifier.size(15.dp),
                 )
             }
+            val pageFailed = session?.viewModel?.state?.collectAsState()?.value?.pageError != null
             PageCardMenu(
                 expanded = menuOpen,
                 page = page,
-                canKeep = pages.keepsOnlyChosenPages() &&
-                    pages.store.canKeep(page, session?.viewModel?.state?.value?.pageError != null),
+                canKeep = pages.keepsOnlyChosenPages() && pages.store.canKeep(page, pageFailed),
                 spaces = spaces,
                 pinsIntoFolders = pinsIntoFolders,
                 onDismiss = { menuOpen = false },

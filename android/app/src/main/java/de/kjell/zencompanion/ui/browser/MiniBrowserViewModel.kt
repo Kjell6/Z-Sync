@@ -155,6 +155,7 @@ class MiniBrowserViewModel(
 
     /** A save started: this address goes into a space. */
     var onPinStarted: (url: String) -> Unit = {}
+    var onPinFailed: () -> Unit = {}
 
     /** The save went through. */
     var onPinned: (url: String) -> Unit = {}
@@ -551,6 +552,7 @@ class MiniBrowserViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                onPinFailed()
                 showNotice(Notice(R.string.browser_pin_failed, FriendlyError.messageRes(e)))
             }
         }

@@ -196,6 +196,18 @@ class OpenPagesStore(
     }
 
     /** A save from this page started: it does not stay as an open page too. */
+    /** The write failed: the page never reached the space and stays its own. */
+    fun unmarkPinned(id: String) {
+        _pages.value = _pages.value.map { if (it.id == id) it.copy(pinnedUrl = null) else it }
+    }
+
+    /** The app is leaving with this page on screen: it counts as used now. */
+    fun markActiveUsed() {
+        val id = _activeId.value ?: return
+        val at = now()
+        change { pages -> pages.map { if (it.id == id) it.copy(lastUsedAt = at) else it } }
+    }
+
     fun markPinned(id: String, url: String) {
         _pages.value = _pages.value.map { if (it.id == id) it.copy(pinnedUrl = url) else it }
     }
@@ -269,7 +281,15 @@ class OpenPagesStore(
         _activeId.value = null
         change { pages ->
             // Only what was in use: the others keep counting down.
-            pages.filter { it.isKept }.map { if (it.id == onScreen) it.copy(lastUsedAt = at) else it }
+            val staying = pages.filter { it.isKept }
+            val ids = staying.map { it.id }.toSet()
+            staying.map {
+                it.copy(
+                    lastUsedAt = if (it.id == onScreen) at else it.lastUsedAt,
+                    // A page's way back ends with the page it led to.
+                    openerId = it.openerId?.takeIf { opener -> opener in ids },
+                )
+            }
         }
         gone.forEach {
             removeFiles(it.id)

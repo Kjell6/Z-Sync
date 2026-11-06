@@ -15,11 +15,11 @@ struct ZeroSpacesHelp: View {
                 .foregroundStyle(Palette.ink(scheme).opacity(0.35))
 
             Text("sync.zero.title")
-                .font(.system(size: 19, weight: .semibold, design: .rounded))
+                .zenFont(19, weight: .semibold, design: .rounded)
                 .foregroundStyle(Palette.ink(scheme))
 
             Text("sync.zero.body")
-                .font(.system(size: 15, design: .rounded))
+                .zenFont(15, design: .rounded)
                 .foregroundStyle(Palette.ink(scheme).opacity(0.7))
                 .multilineTextAlignment(.center)
                 .lineSpacing(3)
@@ -28,7 +28,7 @@ struct ZeroSpacesHelp: View {
             VStack(spacing: 10) {
                 Button(action: onSetup) {
                     Label(String(localized: "sync.setup.open"), systemImage: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .zenFont(16, weight: .semibold, design: .rounded)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 12)
                         .foregroundStyle(Palette.paper(scheme))
@@ -43,7 +43,7 @@ struct ZeroSpacesHelp: View {
                 } else {
                     Button(action: onRetry) {
                         Label(String(localized: "spaces.retry"), systemImage: "arrow.clockwise")
-                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .zenFont(16, weight: .semibold, design: .rounded)
                             .padding(.horizontal, 20)
                             .padding(.vertical, 12)
                             .background(Palette.lift(scheme), in: Capsule())
@@ -79,10 +79,10 @@ struct SyncSetupHint: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("sync.setup.hint.title")
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .zenFont(14, weight: .semibold, design: .rounded)
                             .foregroundStyle(Palette.ink(scheme))
                         Text("sync.setup.hint.body")
-                            .font(.system(size: 13, design: .rounded))
+                            .zenFont(13, design: .rounded)
                             .foregroundStyle(Palette.ink(scheme).opacity(0.65))
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
@@ -129,7 +129,7 @@ struct SyncSetupSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("sync.setup.intro")
-                        .font(.system(size: 15, design: .rounded))
+                        .zenFont(15, design: .rounded)
                         .foregroundStyle(Palette.ink(scheme).opacity(0.7))
                         .lineSpacing(3)
                         .fixedSize(horizontal: false, vertical: true)
@@ -158,7 +158,7 @@ struct SyncSetupSheet: View {
                             .foregroundStyle(Palette.ink(scheme).opacity(0.4))
                             .padding(.top, 1)
                         Text("sync.setup.note")
-                            .font(.system(size: 13, design: .rounded))
+                            .zenFont(13, design: .rounded)
                             .foregroundStyle(Palette.ink(scheme).opacity(0.55))
                             .lineSpacing(2)
                             .fixedSize(horizontal: false, vertical: true)
@@ -169,7 +169,7 @@ struct SyncSetupSheet: View {
                         onRefresh()
                     } label: {
                         Label(String(localized: "sync.setup.refresh"), systemImage: "arrow.clockwise")
-                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .zenFont(16, weight: .semibold, design: .rounded)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
                             .foregroundStyle(Palette.paper(scheme))
@@ -185,7 +185,7 @@ struct SyncSetupSheet: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("common.done") { dismiss() }
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .zenFont(16, weight: .semibold, design: .rounded)
                         .foregroundStyle(Palette.coral(scheme))
                 }
             }
@@ -195,17 +195,17 @@ struct SyncSetupSheet: View {
     private func step(number: Int, title: LocalizedStringKey, body: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Text(verbatim: "\(number)")
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .zenFont(14, weight: .semibold, design: .rounded)
                 .foregroundStyle(Palette.paper(scheme))
                 .frame(width: 26, height: 26)
                 .background(Palette.coral(scheme), in: Circle())
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .zenFont(15, weight: .semibold, design: .rounded)
                     .foregroundStyle(Palette.ink(scheme))
                 Text(body)
-                    .font(.system(size: 14, design: .rounded))
+                    .zenFont(14, design: .rounded)
                     .foregroundStyle(Palette.ink(scheme).opacity(0.7))
                     .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -228,10 +228,10 @@ struct ShareExtensionTip: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("sync.tip.share.title")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .zenFont(14, weight: .semibold, design: .rounded)
                     .foregroundStyle(Palette.ink(scheme))
                 Text("sync.tip.share.body")
-                    .font(.system(size: 13, design: .rounded))
+                    .zenFont(13, design: .rounded)
                     .foregroundStyle(Palette.ink(scheme).opacity(0.65))
                     .fixedSize(horizontal: false, vertical: true)
             }

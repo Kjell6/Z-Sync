@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
@@ -1374,7 +1375,7 @@ private fun MiniBrowserFindBar(
         Row(
             modifier = Modifier
                 .weight(1f)
-                .height(40.dp)
+                .heightIn(min = 40.dp)
                 .background(zen.lift, CircleShape)
                 .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,

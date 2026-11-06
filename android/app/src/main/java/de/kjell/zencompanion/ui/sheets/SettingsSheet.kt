@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -277,12 +278,13 @@ private fun SettingsAccountCard(
         LiftCard(
             modifier = Modifier
                 .weight(1f)
-                .height(if (isDemo) 64.dp else 56.dp),
+                .heightIn(min = if (isDemo) 64.dp else 56.dp),
         ) {
             Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
+                    .fillMaxWidth()
+                    .heightIn(min = if (isDemo) 64.dp else 56.dp)
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
@@ -369,8 +371,8 @@ private fun SettingsSaveKindCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { menuExpanded = true }
-                        .height(56.dp)
-                        .padding(horizontal = 16.dp),
+                        .heightIn(min = 56.dp)
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(

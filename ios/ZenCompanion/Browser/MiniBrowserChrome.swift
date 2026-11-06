@@ -143,6 +143,9 @@ struct MiniBrowserChrome<NavBar: View>: View {
         .animation(motion, value: model.menuExpanded)
         .animation(motion, value: model.menuSiteSettings)
         .animation(motion, value: model.suggestions)
+        // Chrome, not content: the rows have fixed 44pt metrics, so type stops
+        // at the first accessibility size instead of overflowing the bar.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
     }
 
     // MARK: - Suggestions
@@ -162,7 +165,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
                             .foregroundStyle(Palette.ink(scheme).opacity(0.45))
                             .frame(width: 22, height: 22)
                         Text(suggestion)
-                            .font(.system(size: 16, weight: .medium, design: .rounded))
+                            .zenFont(16, weight: .medium, design: .rounded)
                             .foregroundStyle(Palette.ink(scheme))
                             .lineLimit(1)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -323,10 +326,10 @@ struct MiniBrowserChrome<NavBar: View>: View {
         ZStack {
             VStack(spacing: 0) {
                 Text("browser.site_settings")
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .zenFont(16, weight: .semibold, design: .rounded)
                     .foregroundStyle(Color.primary)
                 Text(blockingSiteKey(host))
-                    .font(.system(size: 12, design: .rounded))
+                    .zenFont(12, design: .rounded)
                     .foregroundStyle(Color.primary.opacity(0.55))
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -354,7 +357,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
                 Spacer(minLength: 0)
             }
         }
-        .frame(height: 44)
+        .frame(minHeight: 44)
     }
 
     /// The menu's first page: the blocking status, the page tools, the quick
@@ -463,7 +466,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
                     .foregroundStyle(Color.primary)
             }
             Text(model.pinSaveKind == .pinned ? "browser.pinned" : "browser.saved_as_normal")
-                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .zenFont(16, weight: .medium, design: .rounded)
                 .foregroundStyle(Color.primary)
                 .lineLimit(1)
             Spacer(minLength: 8)
@@ -524,7 +527,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
                 .font(.system(size: 20, weight: .semibold))
                 .frame(height: 24)
             Text(title)
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .zenFont(11, weight: .semibold, design: .rounded)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
         }
@@ -552,7 +555,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
                     .font(.system(size: 16, weight: .semibold))
                     .frame(width: 24)
                 Text(kept ? "browser.kept" : "browser.keep_page")
-                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                    .zenFont(16, weight: .medium, design: .rounded)
                 Spacer(minLength: 0)
                 if kept {
                     Image(systemName: "checkmark")
@@ -585,7 +588,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
                     .frame(width: 24)
                     .foregroundStyle(copied ? Palette.ink(scheme) : Color.primary)
                 Text(copied ? "browser.copied" : "browser.copy_link")
-                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                    .zenFont(16, weight: .medium, design: .rounded)
                     .foregroundStyle(copied ? Palette.ink(scheme) : Color.primary)
                 Spacer(minLength: 0)
             }
@@ -610,7 +613,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
                     .frame(width: 24)
                     .foregroundStyle(Color.primary)
                 Text("browser.reader")
-                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                    .zenFont(16, weight: .medium, design: .rounded)
                     .foregroundStyle(Color.primary)
                 Spacer(minLength: 8)
                 if model.readerLoading {
@@ -635,7 +638,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
                 .font(.system(size: 16, weight: .semibold))
                 .frame(width: 24)
             Text("browser.desktop_site")
-                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .zenFont(16, weight: .medium, design: .rounded)
                 .lineLimit(2)
             Spacer(minLength: 8)
             Toggle(
@@ -658,8 +661,9 @@ struct MiniBrowserChrome<NavBar: View>: View {
                 .font(.system(size: 16, weight: .semibold))
                 .frame(width: 24)
             Text("browser.page_zoom")
-                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .zenFont(16, weight: .medium, design: .rounded)
                 .lineLimit(1)
+                .minimumScaleFactor(0.7)
             Spacer(minLength: 8)
             HStack(spacing: 0) {
                 zoomStepButton(systemName: "minus", label: "browser.zoom_out", enabled: model.canZoomOut) {
@@ -669,8 +673,9 @@ struct MiniBrowserChrome<NavBar: View>: View {
                     model.resetPageZoom()
                 } label: {
                     Text(MiniBrowserTools.zoomPercentLabel(model.pageZoom))
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .zenFont(15, weight: .semibold, design: .rounded)
                         .monospacedDigit()
+                        .fixedSize()
                         .frame(minWidth: 52)
                         .frame(height: 32)
                         .contentShape(Rectangle())
@@ -729,10 +734,10 @@ struct MiniBrowserChrome<NavBar: View>: View {
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: 1) {
                     card.title
-                        .font(.system(size: 16, weight: .medium, design: .rounded))
+                        .zenFont(16, weight: .medium, design: .rounded)
                         .foregroundStyle(Color.primary)
                     Text(card.detail)
-                        .font(.system(size: 13, design: .rounded))
+                        .zenFont(13, design: .rounded)
                         .foregroundStyle(Color.primary.opacity(0.6))
                 }
                 .multilineTextAlignment(.leading)
@@ -756,7 +761,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
                     .frame(width: 24)
                     .foregroundStyle(Color.primary)
                 Text("browser.site_settings")
-                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                    .zenFont(16, weight: .medium, design: .rounded)
                     .foregroundStyle(Color.primary)
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right")
@@ -1067,7 +1072,7 @@ struct MiniBrowserTopBar: View {
                 }
                 .frame(width: 22, height: 22)
                 Text(page.url == nil ? String(localized: "browser.search_placeholder") : page.title)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .zenFont(16, weight: .semibold, design: .rounded)
                     .foregroundStyle(Palette.ink(scheme))
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -1149,7 +1154,7 @@ struct MiniBrowserTopBar: View {
                 HStack(spacing: 8) {
                     siteIcon
                     Text(displayTitle)
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .zenFont(16, weight: .semibold, design: .rounded)
                         .foregroundStyle(Palette.ink(scheme))
                         .lineLimit(1)
                         .truncationMode(.tail)

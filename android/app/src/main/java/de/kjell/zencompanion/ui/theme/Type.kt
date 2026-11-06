@@ -1,6 +1,9 @@
 package de.kjell.zencompanion.ui.theme
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -12,6 +15,15 @@ import androidx.compose.ui.unit.sp
  * (semibold titles, bold folder names, medium tab rows).
  */
 val SystemFont: FontFamily = FontFamily.Default
+
+/**
+ * Title lines for tab, folder and space rows: one by design, two once the
+ * system font scale would otherwise truncate nearly every title (iOS parity
+ * with accessibility text sizes).
+ */
+@Composable
+@ReadOnlyComposable
+fun rowTitleMaxLines(): Int = if (LocalDensity.current.fontScale >= 1.5f) 2 else 1
 
 @Immutable
 object ZenType {

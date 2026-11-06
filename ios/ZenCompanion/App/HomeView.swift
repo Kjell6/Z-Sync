@@ -40,65 +40,78 @@ private struct SignInLandingView: View {
 
     @Environment(\.colorScheme) private var scheme
 
+    private var landingContent: some View {
+        VStack(spacing: 18) {
+            Spacer()
+            ZenMark(scheme: scheme, size: 64)
+                .contentShape(Rectangle())
+                .onTapGesture(count: 1) { model.registerDemoTap() }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text("demo.logo_hint"))
+                .accessibilityAddTraits(.isButton)
+            Text("app.name")
+                .zenFont(32, weight: .semibold, design: .rounded)
+                .tracking(-0.5)
+                .foregroundStyle(Palette.ink(scheme))
+                .contentShape(Rectangle())
+                .onTapGesture { model.registerDemoTap() }
+            Text("home.tagline")
+                .zenFont(16, weight: .regular, design: .rounded)
+                .foregroundStyle(Palette.ink(scheme).opacity(0.6))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 40)
+            if let notice = model.sessionNotice {
+                Text(notice)
+                    .zenFont(14, weight: .medium, design: .rounded)
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.75))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 11)
+                    .background(
+                        Palette.ink(scheme).opacity(0.06),
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    )
+                    .padding(.horizontal, 28)
+            }
+            Spacer()
+            Button { model.presentSignIn() } label: {
+                Text("home.sign_in")
+                    .zenFont(17, weight: .semibold, design: .rounded)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .foregroundStyle(Palette.paper(scheme))
+                    .background(Palette.ink(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            .buttonStyle(PressedButtonStyle())
+            Button { model.presentSignInHelp() } label: {
+                Text("signin.help.link")
+                    .zenFont(13, weight: .medium, design: .rounded)
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.55))
+                    .multilineTextAlignment(.center)
+            }
+            .buttonStyle(PressedButtonStyle())
+            Link("legal.privacy", destination: Legal.publicPolicyURL)
+                .zenFont(13, weight: .medium, design: .rounded)
+                .foregroundStyle(Palette.ink(scheme).opacity(0.45))
+                .padding(.top, 4)
+        }
+        .frame(maxWidth: 440)
+        .frame(maxWidth: .infinity)
+        .padding(24)
+    }
+
     var body: some View {
         ZStack {
             Palette.background(scheme).ignoresSafeArea()
-            VStack(spacing: 18) {
-                Spacer()
-                ZenMark(scheme: scheme, size: 64)
-                    .contentShape(Rectangle())
-                    .onTapGesture(count: 1) { model.registerDemoTap() }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(Text("demo.logo_hint"))
-                    .accessibilityAddTraits(.isButton)
-                Text("app.name")
-                    .font(.system(size: 32, weight: .semibold, design: .rounded))
-                    .tracking(-0.5)
-                    .foregroundStyle(Palette.ink(scheme))
-                    .contentShape(Rectangle())
-                    .onTapGesture { model.registerDemoTap() }
-                Text("home.tagline")
-                    .font(.system(size: 16, weight: .regular, design: .rounded))
-                    .foregroundStyle(Palette.ink(scheme).opacity(0.6))
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
-                if let notice = model.sessionNotice {
-                    Text(notice)
-                        .font(.system(size: 14, weight: .medium, design: .rounded))
-                        .foregroundStyle(Palette.ink(scheme).opacity(0.75))
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 11)
-                        .background(
-                            Palette.ink(scheme).opacity(0.06),
-                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        )
-                        .padding(.horizontal, 28)
-                }
-                Spacer()
-                Button { model.presentSignIn() } label: {
-                    Text("home.sign_in")
-                        .font(.system(size: 17, weight: .semibold, design: .rounded))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .foregroundStyle(Palette.paper(scheme))
-                        .background(Palette.ink(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                }
-                .buttonStyle(PressedButtonStyle())
-                Button { model.presentSignInHelp() } label: {
-                    Text("signin.help.link")
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundStyle(Palette.ink(scheme).opacity(0.55))
-                        .multilineTextAlignment(.center)
-                }
-                .buttonStyle(PressedButtonStyle())
-                Link("legal.privacy", destination: Legal.publicPolicyURL)
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(Palette.ink(scheme).opacity(0.45))
-                    .padding(.top, 4)
+            // The design's centred layout whenever it fits; a scrolling copy
+            // once the system text size makes it taller than the screen.
+            ViewThatFits(in: .vertical) {
+                landingContent
+                ScrollView { landingContent }
             }
-            .frame(maxWidth: 440)
-            .padding(24)
         }
         .tint(Palette.coral(scheme))
         .sheet(isPresented: $model.showMozilla) {
@@ -137,7 +150,7 @@ private struct SignInHelpSheet: View {
                         }
                     } label: {
                         Text("signin.help.open_mozilla")
-                            .font(.system(size: 16, weight: .medium, design: .rounded))
+                            .zenFont(16, weight: .medium, design: .rounded)
                     }
                     .buttonStyle(PressedButtonStyle())
                     .padding(.top, 4)
@@ -164,11 +177,11 @@ private struct SignInHelpSheet: View {
         VStack(alignment: .leading, spacing: 6) {
             if let titleKey {
                 Text(titleKey)
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .zenFont(15, weight: .semibold, design: .rounded)
                     .foregroundStyle(Palette.ink(scheme))
             }
             Text(bodyKey)
-                .font(.system(size: 15, design: .rounded))
+                .zenFont(15, design: .rounded)
                 .foregroundStyle(Palette.ink(scheme).opacity(0.8))
                 .lineSpacing(3)
         }

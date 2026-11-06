@@ -26,12 +26,12 @@ struct BrowserErrorPanel: View {
                 .padding(.bottom, 16)
 
             title
-                .font(.system(size: 20, weight: .semibold, design: .rounded))
+                .zenFont(20, weight: .semibold, design: .rounded)
                 .foregroundStyle(Palette.ink(scheme))
                 .padding(.bottom, 6)
 
             message
-                .font(.system(size: 15))
+                .zenFont(15)
                 .foregroundStyle(Palette.ink(scheme).opacity(0.6))
                 .padding(.bottom, 22)
 
@@ -43,7 +43,7 @@ struct BrowserErrorPanel: View {
                         .controlSize(.small)
                     Text("browser.error.offline.waiting")
                 }
-                .font(.system(size: 13))
+                .zenFont(13)
                 .foregroundStyle(Palette.ink(scheme).opacity(0.6))
                 .padding(.top, 14)
             }
@@ -123,7 +123,7 @@ struct BrowserErrorPanel: View {
                         .tint(Palette.paper(scheme))
                 }
             }
-            .font(.system(size: 16, weight: .semibold, design: .rounded))
+            .zenFont(16, weight: .semibold, design: .rounded)
             .foregroundStyle(Palette.paper(scheme))
             .padding(.horizontal, 24)
             .frame(minHeight: 48)
@@ -137,7 +137,7 @@ struct BrowserErrorPanel: View {
         Button(action: action) {
             Text(label)
                 .lineLimit(1)
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .zenFont(16, weight: .semibold, design: .rounded)
                 .foregroundStyle(Palette.ink(scheme))
                 .padding(.horizontal, 24)
                 .frame(minHeight: 48)

@@ -17,6 +17,7 @@ struct SettingsSheet: View {
     var onEssentialsColumnsChange: (EssentialsColumns) -> Void = { _ in }
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var model = SettingsModel()
     @State private var isShowingSignOutConfirm: Bool = false
     @State private var isShowingWhatsNew: Bool = false
@@ -87,52 +88,70 @@ struct SettingsSheet: View {
 
     // MARK: Account
 
+    /// Email and demo caption on a lift card.
+    private var accountBadge: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "person.crop.circle")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Palette.ink(scheme).opacity(0.6))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(account.isDemo ? String(localized: "demo.account_name") : account.email)
+                    .zenFont(16, weight: .medium, design: .rounded)
+                    .foregroundStyle(Palette.ink(scheme))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                if account.isDemo {
+                    Text("demo.account_caption")
+                        .zenFont(12, design: .rounded)
+                        .foregroundStyle(Palette.ink(scheme).opacity(0.5))
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .frame(minHeight: 54)
+        .liftCard(scheme)
+    }
+
+    /// The destructive action, square on its own card.
+    private var signOutButton: some View {
+        Button(role: .destructive) {
+            isShowingSignOutConfirm = true
+        } label: {
+            Image(systemName: "rectangle.portrait.and.arrow.right")
+                .font(.system(size: 16.5, weight: .semibold))
+                .foregroundStyle(Color.red)
+                .offset(x: 2.5) // balances the asymmetric glyph
+                .frame(width: 44)
+                .frame(minHeight: 54)
+                .background(
+                    Color.red.opacity(scheme == .dark ? 0.15 : 0.08),
+                    in: RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous)
+                )
+                .glassRim(cornerRadius: Palette.liftCornerRadius)
+        }
+        .buttonStyle(PressedButtonStyle())
+        .accessibilityLabel(Text(account.isDemo ? "demo.exit" : "home.sign_out"))
+    }
+
     /// Email on the left, the destructive action as a compact card beside it.
     private var accountCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                HStack(spacing: 12) {
-                    Image(systemName: "person.crop.circle")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Palette.ink(scheme).opacity(0.6))
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(account.isDemo ? String(localized: "demo.account_name") : account.email)
-                            .font(.system(size: 16, weight: .medium, design: .rounded))
-                            .foregroundStyle(Palette.ink(scheme))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                        if account.isDemo {
-                            Text("demo.account_caption")
-                                .font(.system(size: 12, design: .rounded))
-                                .foregroundStyle(Palette.ink(scheme).opacity(0.5))
-                        }
-                    }
-
-                    Spacer(minLength: 0)
+            // Accessibility sizes give the badge the full width and move
+            // sign-out below it; every other size keeps them side by side.
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 10) {
+                    accountBadge
+                    signOutButton
                 }
-                .padding(.horizontal, 16)
-                .frame(height: 54)
-                .liftCard(scheme)
-
-                Button(role: .destructive) {
-                    isShowingSignOutConfirm = true
-                } label: {
-                    Image(systemName: "rectangle.portrait.and.arrow.right")
-                        .font(.system(size: 16.5, weight: .semibold))
-                        .foregroundStyle(Color.red)
-                        .offset(x: 2.5) // balances the asymmetric glyph
-                        .frame(width: 44, height: 54)
-                        .background(
-                            Color.red.opacity(scheme == .dark ? 0.15 : 0.08),
-                            in: RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous)
-                        )
-                        .glassRim(cornerRadius: Palette.liftCornerRadius)
+            } else {
+                HStack(spacing: 10) {
+                    accountBadge
+                    signOutButton
                 }
-                .buttonStyle(PressedButtonStyle())
-                .accessibilityLabel(Text(account.isDemo ? "demo.exit" : "home.sign_out"))
             }
-
             if let loadError {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "exclamationmark.circle.fill")
@@ -141,7 +160,7 @@ struct SettingsSheet: View {
                         .padding(.top, 1)
 
                     Text(loadError)
-                        .font(.system(size: 13, design: .rounded))
+                        .zenFont(13, design: .rounded)
                         .foregroundStyle(Palette.ink(scheme).opacity(0.75))
                         .lineSpacing(2)
                 }
@@ -185,7 +204,7 @@ struct SettingsSheet: View {
 
                 if normalTabsCapability == .disabled {
                     Text("settings.save_kind.normal_disabled_caption")
-                        .font(.system(size: 12, design: .rounded))
+                        .zenFont(12, design: .rounded)
                         .foregroundStyle(Palette.ink(scheme).opacity(0.45))
                         .padding(.horizontal, 4)
                 }
@@ -304,7 +323,7 @@ struct SettingsSheet: View {
                     ForEach(Array(engines.enumerated()), id: \.element.id) { index, engine in
                         HStack(spacing: 12) {
                             Text(engine.displayName)
-                                .font(.system(size: 16, weight: .medium, design: .rounded))
+                                .zenFont(16, weight: .medium, design: .rounded)
                                 .foregroundStyle(Palette.ink(scheme))
                             Spacer(minLength: 8)
                             Button(role: .destructive) {
@@ -429,7 +448,7 @@ struct SettingsSheet: View {
 
                 SettingsRow(title: "app.name", systemImage: "info.circle", scheme: scheme) {
                     Text(appVersionString)
-                        .font(.system(size: 14, design: .rounded))
+                        .zenFont(14, design: .rounded)
                         .foregroundStyle(Palette.ink(scheme).opacity(0.4))
                 }
             }
@@ -444,11 +463,11 @@ struct SettingsSheet: View {
     private var footer: some View {
         VStack(spacing: 6) {
             Text("home.disclaimer")
-                .font(.system(size: 13, weight: .regular, design: .rounded))
+                .zenFont(13, weight: .regular, design: .rounded)
                 .foregroundStyle(Palette.ink(scheme).opacity(0.4))
 
             Text("home.license_attribution")
-                .font(.system(size: 11, weight: .regular, design: .rounded))
+                .zenFont(11, weight: .regular, design: .rounded)
                 .foregroundStyle(Palette.ink(scheme).opacity(0.35))
         }
         .multilineTextAlignment(.center)
@@ -491,7 +510,7 @@ private struct SettingsSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.system(size: 13.5, weight: .semibold, design: .rounded))
+                .zenFont(13.5, weight: .semibold, design: .rounded)
                 .tracking(0)
                 .foregroundStyle(Palette.ink(scheme).opacity(0.4))
                 .padding(.horizontal, 4)
@@ -522,8 +541,33 @@ private struct SettingsRow<Trailing: View>: View {
     var color: Color? = nil
     @ViewBuilder var trailing: () -> Trailing
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
         let tint = color ?? Palette.ink(scheme)
+        // Accessibility sizes stack the label over its control; every other
+        // size keeps the design's single row, wrapping the label if needed.
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 10) {
+                    label(tint: tint)
+                    trailing()
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            } else {
+                HStack(spacing: 12) {
+                    label(tint: tint)
+                    Spacer(minLength: 8)
+                    trailing()
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .frame(minHeight: subtitle == nil ? 54 : 62)
+        .contentShape(Rectangle())
+    }
+
+    private func label(tint: Color) -> some View {
         HStack(spacing: 12) {
             Image(systemName: systemImage)
                 .font(.system(size: 15, weight: .semibold))
@@ -532,22 +576,15 @@ private struct SettingsRow<Trailing: View>: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
-                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                    .zenFont(16, weight: .medium, design: .rounded)
                     .foregroundStyle(tint)
                 if let subtitle {
                     Text(subtitle)
-                        .font(.system(size: 12, design: .rounded))
+                        .zenFont(12, design: .rounded)
                         .foregroundStyle(Palette.ink(scheme).opacity(0.5))
                 }
             }
-
-            Spacer(minLength: 8)
-
-            trailing()
         }
-        .padding(.horizontal, 16)
-        .frame(minHeight: subtitle == nil ? 54 : 62)
-        .contentShape(Rectangle())
     }
 }
 
@@ -569,11 +606,11 @@ private struct SettingsToggleRow: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title)
-                        .font(.system(size: 16, weight: .medium, design: .rounded))
+                        .zenFont(16, weight: .medium, design: .rounded)
                         .foregroundStyle(Palette.ink(scheme))
                     if let subtitle {
                         Text(subtitle)
-                            .font(.system(size: 12, design: .rounded))
+                            .zenFont(12, design: .rounded)
                             .foregroundStyle(Palette.ink(scheme).opacity(0.5))
                     }
                 }
@@ -612,7 +649,7 @@ private struct SettingsMenuValue: View {
     var body: some View {
         HStack(spacing: 4) {
             Text(text)
-                .font(.system(size: 15.5, design: .rounded))
+                .zenFont(15.5, design: .rounded)
             Image(systemName: "chevron.up.chevron.down")
                 .font(.system(size: 10, weight: .semibold))
         }
@@ -646,7 +683,7 @@ private struct AddSearchEngineView: View {
 
                 if didAttemptAdd, let validationError {
                     Text(message(for: validationError))
-                        .font(.system(size: 13, design: .rounded))
+                        .zenFont(13, design: .rounded)
                         .foregroundStyle(.orange)
                         .padding(.horizontal, 4)
                 }
@@ -709,10 +746,10 @@ private struct AddSearchEngineView: View {
             }
         } label: {
             Text("Add Search Engine")
-                .font(.system(size: 15.5, weight: .semibold, design: .rounded))
+                .zenFont(15.5, weight: .semibold, design: .rounded)
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
-                .frame(height: 48)
+                .frame(minHeight: 48)
                 .background(Palette.coral(scheme), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(PressedButtonStyle())
@@ -731,9 +768,9 @@ private struct AddSearchEngineView: View {
         HStack(spacing: 10) {
             dividerLine
             Text("or enter it manually")
-                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .zenFont(12, weight: .medium, design: .rounded)
                 .foregroundStyle(Palette.ink(scheme).opacity(0.4))
-                .fixedSize()
+                .fixedSize(horizontal: false, vertical: true)
             dividerLine
         }
         .padding(.horizontal, 4)
@@ -755,17 +792,17 @@ private struct AddSearchEngineView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .zenFont(12, weight: .medium, design: .rounded)
                 .foregroundStyle(Palette.ink(scheme).opacity(0.5))
             TextField(placeholder, text: text)
-                .font(.system(size: 15, design: .rounded))
+                .zenFont(15, design: .rounded)
                 .foregroundStyle(Palette.ink(scheme))
                 .textInputAutocapitalization(isURL ? .never : .words)
                 .autocorrectionDisabled()
                 .keyboardType(isURL ? .URL : .default)
             if let hint {
                 Text(hint)
-                    .font(.system(size: 11, design: .rounded))
+                    .zenFont(11, design: .rounded)
                     .foregroundStyle(Palette.ink(scheme).opacity(0.4))
                     .fixedSize(horizontal: false, vertical: true)
             }

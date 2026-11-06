@@ -221,47 +221,57 @@ struct MiniBrowserChrome<NavBar: View>: View {
 
     /// The page menu, or Done once the overview is up. A long press on Done
     /// closes everything, as a long press on Safari's Done does.
+    ///
+    /// Opened from home there is no page behind the overview: Done would only
+    /// do what Close already does, so the slot stays empty. It still holds its
+    /// width, so the close control stays in the middle of the row.
+    @ViewBuilder
     private var trailingControl: some View {
-        ZStack {
-            Button {
-                withAnimation(motion) { onToggleMenu() }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Palette.ink(scheme))
-                    .frame(width: controlSide, height: controlSide)
-                    .contentShape(Capsule())
-            }
-            .buttonStyle(GlassPressStyle())
-            .opacity(overviewShown ? 0 : 1)
-            .allowsHitTesting(!overviewShown)
-            .accessibilityHidden(overviewShown)
-            .accessibilityLabel(Text(menuOpen ? "browser.close_menu" : "browser.more"))
-
-            Menu {
-                Button(role: .destructive, action: onCloseAll) {
-                    Label {
-                        Text("kept.close_all")
-                    } icon: {
-                        Image(systemName: "xmark")
-                    }
+        if overviewShown && pages.active == nil {
+            Color.clear
+                .frame(width: controlSide, height: controlSide)
+        } else {
+            ZStack {
+                Button {
+                    withAnimation(motion) { onToggleMenu() }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(Palette.ink(scheme))
+                        .frame(width: controlSide, height: controlSide)
+                        .contentShape(Capsule())
                 }
-                .disabled(pages.pages.isEmpty)
-            } label: {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Palette.ink(scheme))
-                    .frame(width: controlSide, height: controlSide)
-                    .contentShape(Capsule())
-            } primaryAction: {
-                onDone()
+                .buttonStyle(GlassPressStyle())
+                .opacity(overviewShown ? 0 : 1)
+                .allowsHitTesting(!overviewShown)
+                .accessibilityHidden(overviewShown)
+                .accessibilityLabel(Text(menuOpen ? "browser.close_menu" : "browser.more"))
+
+                Menu {
+                    Button(role: .destructive, action: onCloseAll) {
+                        Label {
+                            Text("kept.close_all")
+                        } icon: {
+                            Image(systemName: "xmark")
+                        }
+                    }
+                    .disabled(pages.pages.isEmpty)
+                } label: {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(Palette.ink(scheme))
+                        .frame(width: controlSide, height: controlSide)
+                        .contentShape(Capsule())
+                } primaryAction: {
+                    onDone()
+                }
+                .opacity(overviewShown ? 1 : 0)
+                .allowsHitTesting(overviewShown)
+                .accessibilityHidden(!overviewShown)
+                .accessibilityLabel(Text("common.done"))
             }
-            .opacity(overviewShown ? 1 : 0)
-            .allowsHitTesting(overviewShown)
-            .accessibilityHidden(!overviewShown)
-            .accessibilityLabel(Text("common.done"))
+            .floatingGlassCapsule()
         }
-        .floatingGlassCapsule()
     }
 
     /// Smaller than the side buttons, as the middle control of the row.

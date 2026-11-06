@@ -122,6 +122,8 @@ internal fun OpenPagesOverview(
     onOpen: (OpenPage) -> Unit,
     onNewPage: () -> Unit,
     onDone: () -> Unit,
+    /** Done only makes sense with a page behind the overview to go back to. */
+    showsDone: Boolean,
     /** Back to the spaces, the same way out as the browser's own close control. */
     onLeave: () -> Unit,
     onPin: (OpenPage, PinDestination) -> Unit,
@@ -263,6 +265,7 @@ internal fun OpenPagesOverview(
         OverviewDock(
             onNewPage = onNewPage,
             onDone = onDone,
+            showsDone = showsDone,
             onDoneLongPress = { if (openPages.isNotEmpty()) menuOpen = true },
             onLeave = onLeave,
             doneMenu = {

@@ -778,11 +778,16 @@ private fun LeaveBrowserButton(ink: Color, onClick: () -> Unit) {
  * The overview's controls, drawn exactly where the browser's dock has its own.
  * The two fade into each other as the overview opens, so nothing may move:
  * only the outer glyphs change, and the close control looks like it stayed.
+ *
+ * Opened from home there is no page behind the overview, so Done is left out:
+ * it would only do what the close control already does. Its slot still keeps
+ * its width, so the close control stays in the middle.
  */
 @Composable
 internal fun OverviewDock(
     onNewPage: () -> Unit,
     onDone: () -> Unit,
+    showsDone: Boolean,
     onDoneLongPress: () -> Unit,
     onLeave: () -> Unit,
     doneMenu: @Composable () -> Unit,
@@ -807,15 +812,20 @@ internal fun OverviewDock(
         Spacer(Modifier.weight(1f))
         LeaveBrowserButton(ink = zen.ink, onClick = onLeave)
         Spacer(Modifier.weight(1f))
-        Box {
-            DockButton(
-                icon = Icons.Outlined.Check,
-                description = stringResource(R.string.common_done),
-                tint = zen.ink,
-                onLongClick = onDoneLongPress,
-                onClick = onDone,
-            )
-            doneMenu()
+        if (showsDone) {
+            Box {
+                DockButton(
+                    icon = Icons.Outlined.Check,
+                    description = stringResource(R.string.common_done),
+                    tint = zen.ink,
+                    onLongClick = onDoneLongPress,
+                    onClick = onDone,
+                )
+                doneMenu()
+            }
+        } else {
+            // Keeps the close control in the middle of the row.
+            Spacer(Modifier.size(DockSide))
         }
     }
 }

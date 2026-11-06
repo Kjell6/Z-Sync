@@ -312,6 +312,7 @@ fun MiniBrowserScreen(
                             }
                         }
                     },
+                    showsDone = session != null && excludedCardId == null,
                     onLeave = {
                         if (pages.active != null) {
                             pages.leaveBrowser()

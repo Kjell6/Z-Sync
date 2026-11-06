@@ -310,7 +310,14 @@ struct PinDestinationMenuButton: UIViewRepresentable {
         }
 
         var titleAttr = AttributedString(title)
-        titleAttr.font = .systemFont(ofSize: titleSize, weight: .semibold)
+        // Follows the text size SwiftUI resolved for this view, so the pill
+        // stops at the same cap as the chrome around it.
+        titleAttr.font = UIFontMetrics(forTextStyle: titleSize < 17 ? .subheadline : .body).scaledFont(
+            for: .systemFont(ofSize: titleSize, weight: .semibold),
+            compatibleWith: UITraitCollection(
+                preferredContentSizeCategory: UIContentSizeCategory(context.environment.dynamicTypeSize)
+            )
+        )
         titleAttr.foregroundColor = ink
         config.attributedTitle = titleAttr
 

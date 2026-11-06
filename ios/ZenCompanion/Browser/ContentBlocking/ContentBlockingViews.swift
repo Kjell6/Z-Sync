@@ -53,14 +53,14 @@ private struct BlockingSwitches: View {
             Label {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(category.title)
-                        .font(.system(size: 16, weight: .medium, design: .rounded))
+                        .zenFont(16, weight: .medium, design: .rounded)
                     if !enabled {
                         Text("blocking.off_in_settings")
-                            .font(.system(size: 13, design: .rounded))
+                            .zenFont(13, design: .rounded)
                             .foregroundStyle(rowInk.opacity(0.6))
                     } else if showsDetail, category == .cookieBanners {
                         Text("blocking.cookie_banners_detail")
-                            .font(.system(size: 13, design: .rounded))
+                            .zenFont(13, design: .rounded)
                             .foregroundStyle(rowInk.opacity(0.6))
                     }
                 }
@@ -93,7 +93,7 @@ struct ContentBlockingSettingsView: View {
             )
 
             caption
-                .font(.system(size: 13, design: .rounded))
+                .zenFont(13, design: .rounded)
                 .foregroundStyle(Palette.ink(scheme).opacity(0.6))
                 .padding(.horizontal, 4)
         }
@@ -134,7 +134,7 @@ struct SiteSettingsControls: View {
             )
 
             Text("site_settings.footer \(site)")
-                .font(.system(size: 13, design: .rounded))
+                .zenFont(13, design: .rounded)
                 .foregroundStyle(Color.primary.opacity(0.6))
                 .padding(.horizontal, 4)
         }
@@ -154,11 +154,11 @@ struct ContentBlockingSetupView: View {
                     // No badge at the top: the title carries the screen, the
                     // same way the What's New sheet opens on its title.
                     Text("blocking.setup.title")
-                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        .zenFont(30, weight: .bold, design: .rounded)
                         .foregroundStyle(Palette.ink(scheme))
                         .padding(.bottom, 10)
                     Text("blocking.setup.body")
-                        .font(.system(size: 17, design: .rounded))
+                        .zenFont(17, design: .rounded)
                         .foregroundStyle(Palette.ink(scheme).opacity(0.6))
                         .padding(.bottom, 24)
                     BlockingSwitches(
@@ -176,16 +176,16 @@ struct ContentBlockingSetupView: View {
                 ContentBlocker.shared.answerSetup(choice)
             } label: {
                 Text("blocking.setup.continue")
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .zenFont(17, weight: .semibold, design: .rounded)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 56)
+                    .frame(minHeight: 56)
                     .foregroundStyle(Palette.onCoral(scheme))
                     .background(Palette.coral(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
             .buttonStyle(.plain)
 
             Text("blocking.setup.note")
-                .font(.system(size: 13, design: .rounded))
+                .zenFont(13, design: .rounded)
                 .foregroundStyle(Palette.ink(scheme).opacity(0.6))
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)

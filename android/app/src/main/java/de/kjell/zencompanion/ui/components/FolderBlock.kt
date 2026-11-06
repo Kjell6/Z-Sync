@@ -40,6 +40,7 @@ import de.kjell.zencompanion.R
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.motion.DampingFolderBody
 import de.kjell.zencompanion.ui.motion.StiffnessFolderBody
+import de.kjell.zencompanion.ui.theme.rowTitleMaxLines
 
 /**
  * Native Material 3 Folder Block.
@@ -93,7 +94,7 @@ fun FolderBlock(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
+                        maxLines = rowTitleMaxLines(),
                         overflow = TextOverflow.Ellipsis,
                     )
                 }

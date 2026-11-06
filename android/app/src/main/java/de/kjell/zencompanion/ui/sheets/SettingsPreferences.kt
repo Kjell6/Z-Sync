@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -101,8 +101,8 @@ internal fun SettingsBrowsingSection(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable(onClick = onOpenContentBlocking)
-                        .height(56.dp)
-                        .padding(horizontal = 16.dp),
+                        .heightIn(min = 56.dp)
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
@@ -158,8 +158,8 @@ private fun SearchEngineRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { menuExpanded = true }
-                .height(56.dp)
-                .padding(horizontal = 16.dp),
+                .heightIn(min = 56.dp)
+                .padding(horizontal = 16.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
@@ -260,8 +260,8 @@ internal fun SettingsCustomEnginesCard(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(56.dp)
-                            .padding(start = 16.dp, end = 8.dp),
+                            .heightIn(min = 56.dp)
+                            .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
@@ -373,8 +373,8 @@ private fun MenuRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .height(56.dp)
-            .padding(horizontal = 16.dp),
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(

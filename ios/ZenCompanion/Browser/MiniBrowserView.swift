@@ -394,7 +394,7 @@ private extension MiniBrowserView {
                 .foregroundStyle(.primary)
 
             Text(text)
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .zenFont(16, weight: .semibold, design: .rounded)
                 .foregroundStyle(.primary)
                 .lineLimit(2)
         }
@@ -427,14 +427,14 @@ private struct ReaderView: View {
 
                 if !article.title.isEmpty {
                     Text(article.title)
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .zenFont(26, weight: .bold, design: .rounded)
                         .foregroundStyle(Palette.ink(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if !article.byline.isEmpty {
                     Text(article.byline)
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .zenFont(13, weight: .medium, design: .rounded)
                         .foregroundStyle(Palette.ink(scheme).opacity(0.5))
                 }
 
@@ -466,7 +466,7 @@ private struct ReaderView: View {
     private var topBar: some View {
         HStack(spacing: 10) {
             Text(article.site.isEmpty ? article.title : article.site)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .zenFont(12, weight: .semibold, design: .rounded)
                 .tracking(0.6)
                 .foregroundStyle(Palette.ink(scheme).opacity(0.45))
                 .lineLimit(1)
@@ -492,19 +492,19 @@ private struct ReaderView: View {
         switch block.kind {
         case "h1", "h2":
             Text(block.text)
-                .font(.system(size: 20, weight: .semibold, design: .rounded))
+                .zenFont(20, weight: .semibold, design: .rounded)
                 .foregroundStyle(Palette.ink(scheme))
                 .padding(.top, 8)
                 .fixedSize(horizontal: false, vertical: true)
         case "h3", "h4", "h5", "h6":
             Text(block.text)
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .zenFont(17, weight: .semibold, design: .rounded)
                 .foregroundStyle(Palette.ink(scheme))
                 .padding(.top, 4)
                 .fixedSize(horizontal: false, vertical: true)
         case "blockquote":
             Text(block.text)
-                .font(.system(size: 16, design: .rounded))
+                .zenFont(16, design: .rounded)
                 .italic()
                 .foregroundStyle(Palette.ink(scheme).opacity(0.7))
                 .padding(.leading, 14)
@@ -516,7 +516,7 @@ private struct ReaderView: View {
                 .fixedSize(horizontal: false, vertical: true)
         case "pre":
             Text(block.text)
-                .font(.system(size: 13.5, design: .monospaced))
+                .zenFont(13.5, design: .monospaced)
                 .foregroundStyle(Palette.ink(scheme).opacity(0.85))
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -527,16 +527,16 @@ private struct ReaderView: View {
         case "li":
             HStack(alignment: .firstTextBaseline, spacing: 9) {
                 Text(verbatim: "•")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .zenFont(15, weight: .bold, design: .rounded)
                     .foregroundStyle(Palette.coral(scheme).opacity(0.85))
                 Text(block.text)
-                    .font(.system(size: 17, design: .rounded))
+                    .zenFont(17, design: .rounded)
                     .foregroundStyle(Palette.ink(scheme).opacity(0.9))
                     .fixedSize(horizontal: false, vertical: true)
             }
         default:
             Text(block.text)
-                .font(.system(size: 17, design: .rounded))
+                .zenFont(17, design: .rounded)
                 .foregroundStyle(Palette.ink(scheme).opacity(0.9))
                 .lineSpacing(5)
                 .fixedSize(horizontal: false, vertical: true)

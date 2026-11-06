@@ -82,13 +82,16 @@ struct SpacesBrowserView: View {
                 VStack(spacing: 0) {
                     if account.isDemo {
                         Text("demo.banner")
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .zenFont(12, weight: .medium, design: .rounded)
                             .foregroundStyle(Palette.ink(effectiveScheme).opacity(0.7))
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 20)
                             .padding(.vertical, 8)
                             .frame(maxWidth: .infinity)
                             .background(Palette.lift(effectiveScheme).opacity(0.65))
+                            // A fixed strip under the status bar: type stops at
+                            // the first accessibility size like the chrome does.
+                            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
                     }
 
                     let placement = model.toolbarPlacement
@@ -378,6 +381,9 @@ struct SpacesBrowserView: View {
         // between the bar and the screen edge, so the dock stays as short as
         // possible.
         .padding(.bottom, placement == .bottom ? 0 : 6)
+        // Chrome band: the pill and cards are 44pt tall, so type stops at the
+        // first accessibility size. Content below scales fully.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         // iPadOS 26 windowed mode puts the system window controls on the
         // window's top-leading corner; the bar makes room on the leading edge
         // so the Activity button stays reachable. No-op when the insets are
@@ -418,7 +424,7 @@ struct SpacesBrowserView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Palette.ink(scheme).opacity(0.55))
                 Text("browser.web_placeholder")
-                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                    .zenFont(16, weight: .medium, design: .rounded)
                     .foregroundStyle(Palette.ink(scheme).opacity(0.55))
                     .lineLimit(1)
                 Spacer(minLength: 0)
@@ -486,7 +492,7 @@ struct SpacesBrowserView: View {
     private func statusLine(scheme: ColorScheme) -> some View {
         if let deleteError = model.deleteError {
             Text(deleteError)
-                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .zenFont(12, weight: .medium, design: .rounded)
                 .foregroundStyle(Palette.ink(scheme).opacity(0.7))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)
@@ -497,7 +503,7 @@ struct SpacesBrowserView: View {
                 Task { await model.reload() }
             } label: {
                 Text("home.refresh_failed")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .zenFont(12, weight: .medium, design: .rounded)
                     .foregroundStyle(Palette.ink(scheme).opacity(0.55))
                     .padding(.horizontal, 20)
                     .padding(.vertical, 4)
@@ -515,7 +521,7 @@ struct SpacesBrowserView: View {
                     .controlSize(.large)
                     .tint(Palette.coral(scheme))
                 Text("spaces.connecting")
-                    .font(.system(size: 15, weight: .medium, design: .rounded))
+                    .zenFont(15, weight: .medium, design: .rounded)
                     .foregroundStyle(Palette.ink(scheme).opacity(0.6))
             }
         } else if let loadError = model.loadError {
@@ -524,13 +530,13 @@ struct SpacesBrowserView: View {
                     .font(.system(size: 30, weight: .medium))
                     .foregroundStyle(Palette.ink(scheme).opacity(0.35))
                 Text(loadError)
-                    .font(.system(size: 15, design: .rounded))
+                    .zenFont(15, design: .rounded)
                     .foregroundStyle(Palette.ink(scheme).opacity(0.7))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
                 Button { Task { await model.reload() } } label: {
                     Label(String(localized: "spaces.retry"), systemImage: "arrow.clockwise")
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .zenFont(16, weight: .semibold, design: .rounded)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 12)
                         .background(Palette.lift(scheme), in: Capsule())
@@ -564,6 +570,7 @@ struct FolderBlock: View {
     /// (Android parity: nested FolderBlocks get no extra padding).
     var isNested: Bool = false
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var isExpanded = false
 
     var body: some View {
@@ -577,9 +584,9 @@ struct FolderBlock: View {
                     folderIconView
 
                     Text(folder.name.isEmpty ? String(localized: "tabs.folder") : folder.name)
-                        .font(.system(size: 17, weight: .bold))
+                        .zenFont(17, weight: .bold)
                         .foregroundStyle(Palette.ink(scheme))
-                        .lineLimit(1)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
 
                     Spacer(minLength: 0)
                 }

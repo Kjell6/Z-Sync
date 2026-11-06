@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.theme.pressFeedback
+import de.kjell.zencompanion.ui.theme.rowTitleMaxLines
 
 internal fun displayTitle(tab: ZenSpaces.ZenTab): String = tab.displayTitle
 
@@ -323,7 +324,7 @@ fun TabRow(
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Normal,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
+                maxLines = rowTitleMaxLines(),
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )

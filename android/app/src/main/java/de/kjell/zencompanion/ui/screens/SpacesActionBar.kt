@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -86,7 +86,7 @@ internal fun ActionBar(
             modifier = Modifier
                 .weight(1f)
                 .clickableNoIndication(onClick = { onOpenBrowser(null, null) })
-                .height(44.dp)
+                .heightIn(min = 44.dp)
                 .clip(cardShape)
                 .background(zen.lift)
                 .liftRim(cardShape)

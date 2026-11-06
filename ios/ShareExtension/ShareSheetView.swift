@@ -108,7 +108,16 @@ struct ShareSheetView: View {
         }
     }
 
+    /// Fills the sheet whenever it fits; scrolls once the system text size
+    /// makes it taller than the sheet, so Save and Cancel stay reachable.
     private var picker: some View {
+        ViewThatFits(in: .vertical) {
+            pickerContent
+            ScrollView { pickerContent }
+        }
+    }
+
+    private var pickerContent: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 20)
 
@@ -116,7 +125,7 @@ struct ShareSheetView: View {
                 .padding(.bottom, 18)
 
             Text(model.headlineTitle)
-                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .zenFont(22, weight: .semibold, design: .rounded)
                 .foregroundStyle(Palette.ink(effectiveScheme))
                 .multilineTextAlignment(.center)
                 .lineLimit(3)
@@ -124,7 +133,7 @@ struct ShareSheetView: View {
 
             if let urlText = model.url?.absoluteString {
                 Text(urlText)
-                    .font(.system(size: 14, weight: .regular, design: .rounded))
+                    .zenFont(14, weight: .regular, design: .rounded)
                     .foregroundStyle(Palette.ink(effectiveScheme).opacity(0.55))
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
@@ -189,7 +198,7 @@ struct ShareSheetView: View {
                             ProgressView().tint(Palette.paper(effectiveScheme))
                         } else {
                             Text(LocalizedStringKey(model.saveKind == .normal ? "share.save_normal" : "share.save"))
-                                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                                .zenFont(17, weight: .semibold, design: .rounded)
                         }
                     }
                     .frame(maxWidth: .infinity)
@@ -203,7 +212,7 @@ struct ShareSheetView: View {
 
                 Button(action: cancel) {
                     Text("common.cancel")
-                        .font(.system(size: 16, weight: .medium, design: .rounded))
+                        .zenFont(16, weight: .medium, design: .rounded)
                         .foregroundStyle(Palette.ink(effectiveScheme).opacity(0.6))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
@@ -227,18 +236,18 @@ struct ShareSheetView: View {
                     .accessibilityHidden(true)
             }
             Text(title)
-                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .zenFont(22, weight: .semibold, design: .rounded)
                 .foregroundStyle(Palette.ink(effectiveScheme))
                 .multilineTextAlignment(.center)
             Text(detail)
-                .font(.system(size: 16, weight: .regular, design: .rounded))
+                .zenFont(16, weight: .regular, design: .rounded)
                 .foregroundStyle(Palette.ink(effectiveScheme).opacity(0.62))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 28)
             if let action {
                 Button(action: run) {
                     Text(action)
-                        .font(.system(size: 17, weight: .semibold, design: .rounded))
+                        .zenFont(17, weight: .semibold, design: .rounded)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .foregroundStyle(Palette.paper(effectiveScheme))

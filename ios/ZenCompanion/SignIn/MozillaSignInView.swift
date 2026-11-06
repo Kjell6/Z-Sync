@@ -37,7 +37,7 @@ struct MozillaSignInView: View {
                             .controlSize(.small)
                             .tint(Palette.coral(scheme))
                         Text("signin.finishing")
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .zenFont(14, weight: .medium, design: .rounded)
                             .foregroundStyle(Palette.ink(scheme).opacity(0.75))
                     }
                     .padding(.horizontal, 14)

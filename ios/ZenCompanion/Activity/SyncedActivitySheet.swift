@@ -23,7 +23,7 @@ struct SyncedActivitySheet: View {
                             .controlSize(.large)
                             .tint(Palette.coral(scheme))
                         Text("activity.connecting")
-                            .font(.system(size: 15, weight: .medium, design: .rounded))
+                            .zenFont(15, weight: .medium, design: .rounded)
                             .foregroundStyle(Palette.ink(scheme).opacity(0.6))
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -85,7 +85,7 @@ struct SyncedActivitySheet: View {
 
                 if model.filteredHistory.isEmpty {
                     Text("activity.empty")
-                        .font(.system(size: 14, design: .rounded))
+                        .zenFont(14, design: .rounded)
                         .foregroundStyle(Palette.ink(scheme).opacity(0.5))
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.top, 60)
@@ -99,7 +99,7 @@ struct SyncedActivitySheet: View {
 
     private func sectionLabel(_ key: LocalizedStringKey) -> some View {
         Text(key)
-            .font(.system(size: 12, weight: .semibold, design: .rounded))
+            .zenFont(12, weight: .semibold, design: .rounded)
             .tracking(0.8)
             .foregroundStyle(Palette.ink(scheme).opacity(0.4))
             .padding(.horizontal, 4)
@@ -107,7 +107,7 @@ struct SyncedActivitySheet: View {
 
     private func footerText(_ key: LocalizedStringKey) -> some View {
         Text(key)
-            .font(.system(size: 11.5, design: .rounded))
+            .zenFont(11.5, design: .rounded)
             .foregroundStyle(Palette.ink(scheme).opacity(0.35))
             .padding(.horizontal, 8)
     }
@@ -140,7 +140,7 @@ struct SyncedActivitySheet: View {
                 .font(.system(size: 30, weight: .medium))
                 .foregroundStyle(Palette.ink(scheme).opacity(0.35))
             Text(message)
-                .font(.system(size: 15, design: .rounded))
+                .zenFont(15, design: .rounded)
                 .foregroundStyle(Palette.ink(scheme).opacity(0.7))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
@@ -148,7 +148,7 @@ struct SyncedActivitySheet: View {
                 Task { await model.load() }
             } label: {
                 Label(String(localized: "spaces.retry"), systemImage: "arrow.clockwise")
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .zenFont(16, weight: .semibold, design: .rounded)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 12)
                     .background(Palette.lift(scheme), in: Capsule())
@@ -181,11 +181,11 @@ private struct HistoryRow: View {
                 }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(entry.title.isEmpty ? entry.url : entry.title)
-                        .font(.system(size: 15.5, weight: .medium, design: .rounded))
+                        .zenFont(15.5, weight: .medium, design: .rounded)
                         .foregroundStyle(Palette.ink(scheme))
                         .lineLimit(1)
                     Text(secondaryText)
-                        .font(.system(size: 12, design: .rounded))
+                        .zenFont(12, design: .rounded)
                         .foregroundStyle(Palette.ink(scheme).opacity(0.4))
                         .lineLimit(1)
                 }

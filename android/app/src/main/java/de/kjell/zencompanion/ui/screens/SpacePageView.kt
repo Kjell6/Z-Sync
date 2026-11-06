@@ -36,6 +36,7 @@ import de.kjell.zencompanion.ui.components.TabRow
 import de.kjell.zencompanion.ui.components.ZenIconView
 import de.kjell.zencompanion.ui.theme.LocalZenColors
 import de.kjell.zencompanion.ui.theme.ZenType
+import de.kjell.zencompanion.ui.theme.rowTitleMaxLines
 
 /** One space page: fixed title row + vertically scrolling tab list (pinned &
  *  normal), with conditional top & bottom strokes when the list is scrollable. */
@@ -81,7 +82,7 @@ internal fun SpacePageView(
                 text = space.name.ifEmpty { fallbackName },
                 style = ZenType.spaceTitle,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
+                maxLines = rowTitleMaxLines(),
                 overflow = TextOverflow.Ellipsis,
             )
         }

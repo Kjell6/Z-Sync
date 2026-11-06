@@ -18,10 +18,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.sp
 import java.util.Base64
 
 /**
@@ -42,6 +42,9 @@ fun ZenIconView(
     val context = LocalContext.current
     val tint = foreground ?: LocalContentColor.current
 
+    // Icons keep their dp size at every system font scale, like SF Symbols on iOS.
+    val glyphSize = with(LocalDensity.current) { (size * 0.90f).toSp() }
+
     Box(
         modifier = modifier
             .defaultMinSize(minWidth = size, minHeight = size)
@@ -61,7 +64,7 @@ fun ZenIconView(
                 // Emoji static icons arrive as `<text>` inside an SVG data URL.
                 Text(
                     text = emoji,
-                    fontSize = (size.value * 0.90f).sp,
+                    fontSize = glyphSize,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     softWrap = false,
@@ -98,7 +101,7 @@ fun ZenIconView(
                 // Original visual size, unbounded container prevents edge clipping
                 Text(
                     text = clean,
-                    fontSize = (size.value * 0.90f).sp,
+                    fontSize = glyphSize,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     softWrap = false,

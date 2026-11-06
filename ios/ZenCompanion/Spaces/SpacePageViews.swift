@@ -86,6 +86,7 @@ private struct SpacePageView: View {
     var onMoveTab: (String, String?) async -> Void = { _, _ in }
     var onPinTab: (String) async -> Void = { _ in }
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var containerHeight: CGFloat = 0
     @State private var contentHeight: CGFloat = 0
     @State private var scrollOffsetY: CGFloat = 0
@@ -205,7 +206,7 @@ private struct SpacePageView: View {
 
                         if space.pinned.isEmpty && space.tabs.isEmpty {
                             Text("tabs.empty")
-                                .font(.system(size: 14, design: .rounded))
+                                .zenFont(14, design: .rounded)
                                 .foregroundStyle(Palette.ink(scheme).opacity(0.45))
                                 .padding(.horizontal, 20)
                                 .padding(.top, 12)
@@ -283,10 +284,10 @@ private struct SpacePageView: View {
                     .frame(width: 28, height: 28, alignment: .leading)
             }
             Text(space.name.isEmpty ? String(localized: "share.workspace") : space.name)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .zenFont(20, weight: .bold, design: .rounded)
                 .tracking(-0.3)
                 .foregroundStyle(Palette.ink(scheme))
-                .lineLimit(1)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 20)

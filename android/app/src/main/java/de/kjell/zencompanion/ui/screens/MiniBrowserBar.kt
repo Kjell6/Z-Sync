@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -757,7 +758,8 @@ private fun ExpandedMenu(
                         // zoom percentage, and it keeps the row to one control.
                         Box(
                             modifier = Modifier
-                                .size(width = 54.dp, height = 32.dp)
+                                .widthIn(min = 54.dp)
+                                .height(32.dp)
                                 .barClickable(
                                     enabled = canReset,
                                     onClick = viewModel::resetPageZoom,
@@ -774,6 +776,7 @@ private fun ExpandedMenu(
                                 style = ZenType.rounded(15, FontWeight.SemiBold),
                                 color = zen.ink,
                                 textAlign = TextAlign.Center,
+                                softWrap = false,
                             )
                         }
                         ZoomStep(

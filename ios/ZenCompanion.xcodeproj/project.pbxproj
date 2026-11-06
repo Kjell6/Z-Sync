@@ -25,6 +25,7 @@
 		0B0AB15B87703B4544F78A60 /* HTTPFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C0BBC938DC26404B12BEABA /* HTTPFixtures.swift */; };
 		0B5E3A3E878989F87C3E02A0 /* SaveKindMenuButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17C9B38551008690BCAFA16F /* SaveKindMenuButton.swift */; };
 		101EEB608A7A1548713908FE /* ZenTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2974B96AFD7C7DC3CBFE0563 /* ZenTheme.swift */; };
+		A7C1E5B30D9F4A6E8B2C7D11 /* ZenTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C1E5B30D9F4A6E8B2C7D10 /* ZenTypography.swift */; };
 		115BD1CA68D68072A0E1869E /* wire-space-numeric-uuid.json in Resources */ = {isa = PBXBuildFile; fileRef = 85500AE3EC45E64832ABF80F /* wire-space-numeric-uuid.json */; };
 		12A158E23C7C9BDFAA0D8E24 /* ContractFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = E17B94AF59A7541120B284E3 /* ContractFixtures.swift */; };
 		13CF8D63B35A17CF202747C4 /* FaviconLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72542D5E48E7226A116200C6 /* FaviconLoader.swift */; };
@@ -55,6 +56,7 @@
 		2B0403C592FD7785E9F2D9A8 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF50823FBB077FEA5EF2366E /* ShareViewController.swift */; };
 		2B21E9A784ED826763911640 /* PinDestination.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACD7FC0B20567414EAE19CFE /* PinDestination.swift */; };
 		2DA38E1F430322F5D30B5FFA /* ZenTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2974B96AFD7C7DC3CBFE0563 /* ZenTheme.swift */; };
+		A7C1E5B30D9F4A6E8B2C7D12 /* ZenTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C1E5B30D9F4A6E8B2C7D10 /* ZenTypography.swift */; };
 		2DAF38865AAAA9EA345D8EAC /* WhatsNewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4D1CA0FC99EA94F707927FC /* WhatsNewTests.swift */; };
 		2EF965C842AEF69F4EB8ACD6 /* http-get-500-hawk.json in Resources */ = {isa = PBXBuildFile; fileRef = FC0EBFB0D59DA20265C43D5C /* http-get-500-hawk.json */; };
 		31ABCC06C83CBF3B8BB215DB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 735001951819B5FAF5C17D4A /* Assets.xcassets */; };
@@ -183,6 +185,7 @@
 		C2F15944CE5BD04AFEDFBCBF /* wire-ignored-records.json in Resources */ = {isa = PBXBuildFile; fileRef = EF21D24DE32B42C6A16D5808 /* wire-ignored-records.json */; };
 		C6A087F0045E03D01134ECBD /* BrowserInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 751D6FACA31E390F2F4F5821 /* BrowserInput.swift */; };
 		C98F230F1934600165298800 /* ZenTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2974B96AFD7C7DC3CBFE0563 /* ZenTheme.swift */; };
+		A7C1E5B30D9F4A6E8B2C7D13 /* ZenTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C1E5B30D9F4A6E8B2C7D10 /* ZenTypography.swift */; };
 		CB8A688A8F1C0AF86D958E78 /* wire-split-normal-pinned-false.json in Resources */ = {isa = PBXBuildFile; fileRef = 2EBB17C5C741E800FC5BA114 /* wire-split-normal-pinned-false.json */; };
 		CD252B92C4C769077D36B393 /* FriendlyError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2416B928630841280B065B18 /* FriendlyError.swift */; };
 		D09BC19A96D1036318FD3D8F /* ShareItemLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = F543E03E379D31A94F3AE88F /* ShareItemLoader.swift */; };
@@ -285,6 +288,7 @@
 		27085BCD70B4032B42A47ABC /* ShareModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareModelTests.swift; sourceTree = "<group>"; };
 		281D2EC999256353D723B96D /* SettingsModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsModelTests.swift; sourceTree = "<group>"; };
 		2974B96AFD7C7DC3CBFE0563 /* ZenTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZenTheme.swift; sourceTree = "<group>"; };
+		A7C1E5B30D9F4A6E8B2C7D10 /* ZenTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZenTypography.swift; sourceTree = "<group>"; };
 		29BDECE22C281907CD422AF2 /* MiniBrowserChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniBrowserChrome.swift; sourceTree = "<group>"; };
 		29F9DA91553F0C57AF371056 /* MiniBrowserModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniBrowserModelTests.swift; sourceTree = "<group>"; };
 		2B8C64318164E4966D554911 /* http-keys-missing.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "http-keys-missing.json"; sourceTree = "<group>"; };
@@ -694,6 +698,7 @@
 				3AE3917F44AF18FA05EBC614 /* SvgRasterizer.swift */,
 				CCCFAC8D0D4BFBA2D7F31FB5 /* ThemeViews.swift */,
 				2974B96AFD7C7DC3CBFE0563 /* ZenTheme.swift */,
+				A7C1E5B30D9F4A6E8B2C7D10 /* ZenTypography.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -1053,6 +1058,7 @@
 				991C1DBDF77F84A79B2D4BB3 /* ZenCompanionApp.swift in Sources */,
 				5C1144A74158A8D8EBBBE323 /* ZenSpaces.swift in Sources */,
 				C98F230F1934600165298800 /* ZenTheme.swift in Sources */,
+				A7C1E5B30D9F4A6E8B2C7D11 /* ZenTypography.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1117,6 +1123,7 @@
 				EE87DD725E8649635E59ADAB /* ZenIconTests.swift in Sources */,
 				819D3B20142E7D50858FCD7B /* ZenSpaces.swift in Sources */,
 				2DA38E1F430322F5D30B5FFA /* ZenTheme.swift in Sources */,
+				A7C1E5B30D9F4A6E8B2C7D12 /* ZenTypography.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1154,6 +1161,7 @@
 				43BFD85068221C3B972DCCCE /* ThemeViews.swift in Sources */,
 				DD7E69A4CCAA4AB9597DACCD /* ZenSpaces.swift in Sources */,
 				101EEB608A7A1548713908FE /* ZenTheme.swift in Sources */,
+				A7C1E5B30D9F4A6E8B2C7D13 /* ZenTypography.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -20,6 +20,7 @@ struct TabRow: View {
     /// Pins the tab to its space root. Only offered on normal tabs.
     var onPin: () async -> Void = {}
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var deleting = false
     @State private var showingRename = false
     @State private var renameDraft = ""
@@ -29,9 +30,11 @@ struct TabRow: View {
             HStack(spacing: 12) {
                 ZenTabIcon(tab: tab, size: 28, scheme: scheme)
                 Text(tab.displayTitle)
-                    .font(.system(size: 17, weight: .medium))
+                    .zenFont(17, weight: .medium)
                     .foregroundStyle(Palette.ink(scheme))
-                    .lineLimit(1)
+                    // At accessibility sizes a single line would truncate
+                    // every title; two lines keep the row usable.
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
                 Spacer(minLength: 0)
                 if deleting {
                     ProgressView().controlSize(.mini)
@@ -258,7 +261,8 @@ private struct SplitCell: View {
                 FadeOutTitle(
                     text: tab.displayTitle,
                     scheme: scheme,
-                    font: .system(size: 17, weight: .medium)
+                    size: 17,
+                    weight: .medium
                 )
             }
             .padding(.vertical, 9)
@@ -275,12 +279,16 @@ private struct SplitCell: View {
 private struct FadeOutTitle: View {
     let text: String
     let scheme: ColorScheme
-    var font: Font = .system(size: 15, weight: .medium)
+    var size: CGFloat = 15
+    var weight: Font.Weight = .medium
 
     var body: some View {
         Text(text)
-            .font(font)
+            .zenFont(size, weight: weight)
             .foregroundStyle(Palette.ink(scheme))
+            // A split pane is half the row wide at the best of times. Two
+            // lines at accessibility sizes break words mid-way, so the pane
+            // truncates like a normal tab row instead.
             .lineLimit(1)
             .truncationMode(.tail)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)

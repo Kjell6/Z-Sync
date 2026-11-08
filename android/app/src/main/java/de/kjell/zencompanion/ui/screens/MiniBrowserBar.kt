@@ -79,6 +79,13 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -116,6 +123,9 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
+import de.kjell.zencompanion.data.SitePermission
+import de.kjell.zencompanion.data.SitePermissionChoice
+import de.kjell.zencompanion.data.SitePermissions
 import de.kjell.zencompanion.data.BlockCategory
 import de.kjell.zencompanion.data.ContentBlockingSettings
 import de.kjell.zencompanion.data.SaveKind
@@ -1268,6 +1278,7 @@ private fun SiteSettingsMenuPage(
                 )
             }
         }
+        SitePermissionRows(host)
         Text(
             text = stringResource(R.string.site_settings_footer, site),
             style = ZenType.rounded(13, FontWeight.Normal),
@@ -1275,6 +1286,77 @@ private fun SiteSettingsMenuPage(
             modifier = Modifier.padding(start = 4.dp, end = 4.dp),
         )
     }
+}
+
+/** What the site may ask for. Ask lets the site's question come back. */
+@Composable
+private fun SitePermissionRows(host: String) {
+    val zen = LocalZenColors.current
+    val choices by SitePermissions.choices.collectAsState()
+    Column(Modifier.fillMaxWidth()) {
+        SitePermission.entries.forEachIndexed { index, kind ->
+            if (index > 0) RowDivider()
+            // Read through the collected map, so a change redraws the row.
+            val current = choices.let { SitePermissions.choice(kind, host) }
+            var expanded by remember { mutableStateOf(false) }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .barClickable { expanded = true }
+                    .heightIn(min = RowHeight)
+                    .padding(vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = when (kind) {
+                        SitePermission.CAMERA -> Icons.Outlined.PhotoCamera
+                        SitePermission.MICROPHONE -> Icons.Outlined.Mic
+                        SitePermission.LOCATION -> Icons.Outlined.LocationOn
+                    },
+                    contentDescription = null,
+                    tint = zen.ink.copy(alpha = 0.6f),
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(14.dp))
+                Text(
+                    text = stringResource(
+                        when (kind) {
+                            SitePermission.CAMERA -> R.string.site_permission_camera
+                            SitePermission.MICROPHONE -> R.string.site_permission_microphone
+                            SitePermission.LOCATION -> R.string.site_permission_location
+                        },
+                    ),
+                    style = ZenType.rounded(16, FontWeight.Medium),
+                    color = zen.ink,
+                    modifier = Modifier.weight(1f),
+                )
+                Box {
+                    Text(
+                        text = stringResource(choiceTitle(current)),
+                        style = ZenType.rounded(15, FontWeight.Normal),
+                        color = zen.ink.copy(alpha = 0.6f),
+                    )
+                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        listOf(null, SitePermissionChoice.ALLOW, SitePermissionChoice.BLOCK).forEach { choice ->
+                            DropdownMenuItem(
+                                text = { Text(stringResource(choiceTitle(choice))) },
+                                onClick = {
+                                    expanded = false
+                                    SitePermissions.set(choice, listOf(kind), host)
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun choiceTitle(choice: SitePermissionChoice?): Int = when (choice) {
+    SitePermissionChoice.ALLOW -> R.string.site_permission_allow
+    SitePermissionChoice.BLOCK -> R.string.site_permission_block
+    null -> R.string.site_permission_ask
 }
 
 /** One site switch as a plain menu row: like the menu's tools, the rows sit

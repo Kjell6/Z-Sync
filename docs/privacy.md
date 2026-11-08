@@ -44,11 +44,18 @@ While you use the app, the following information is kept **only on your device**
 - **Preferences** (last selected space, cache timestamp) — local preferences — convenience
 - **Pages open in the mini-browser** (each page's address, title, a small picture of it and its back and forward history) — the app's local storage, excluded from device backups — reopening them like tabs in a browser. They never enter your Mozilla Sync data. Pages stay until you close them, until they have gone unused for the period chosen in Settings (30 days unless you change it), or until you sign out. With "Keep only chosen pages" on, only the pages you keep are stored; the others are held in memory and end when you close the browser
 - **Content blocking settings and lists** (the three blocking switches, the sites where you turned one off, and the downloaded ad and tracker lists) — local preferences and app storage — blocking in the mini-browser
+- **Website data from the mini-browser** (cookies, site storage and cache of the sites you visit) — the system web view's local storage — staying signed in to websites. You can remove it under Settings › Clear Website Data
+- **Site permissions** (which sites you allowed or blocked for camera, microphone and location) — local app storage, excluded from device backups — not asking you again. They are removed with Clear Website Data and when you sign out
+- **Downloads** (files you download in the mini-browser) — the Z-Sync folder in the Files app on iOS, the Downloads folder on Android — they stay until you delete them, also after signing out
 
 Notes:
 
 - On iOS the Keychain entry uses Apple's *device-only* protection class: it is unavailable until first unlock and is **not included in device backups**. The cached preview file lives in the shared app-group container so the share extension can respond instantly; it may be included in encrypted device backups like any other app file.
 - On Android the session secrets live in EncryptedSharedPreferences backed by the Android Keystore and are excluded from backups.
+
+### Camera, microphone and location
+
+Z-Sync uses these only for websites you open in the mini-browser, and never by itself. When a site asks, the browser first shows its own question, which you can refuse. Only if you allow it does the system ask for the app's permission, the first time. What the camera, microphone or location provide goes to that website, under that website's own privacy policy. It does not go to the developer and is not stored by the app.
 
 ## 4. Signing in via Mozilla
 

@@ -22,15 +22,25 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
 		<key>NSAllowsArbitraryLoadsInWebContent</key>
 		<true/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Websites you allow in the browser can use your camera.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Z-Sync loads the icon of a synced tab from the tab's own address, which may be a device on your local network.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Websites you allow in the browser can use your location.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Websites you allow in the browser can use your microphone.</string>
+	<key>UIFileSharingEnabled</key>
+	<true/>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIRequiresFullScreen</key>

@@ -133,10 +133,72 @@ struct SiteSettingsControls: View {
                 ink: .primary
             )
 
+            SitePermissionRows(host: host)
+
             Text("site_settings.footer \(site)")
                 .zenFont(13, design: .rounded)
                 .foregroundStyle(Color.primary.opacity(0.6))
                 .padding(.horizontal, 4)
+        }
+    }
+}
+
+/// What the site may ask for, on the same page as its switches. The menu lets
+/// a remembered answer be changed, and Ask lets the site's question come back.
+private struct SitePermissionRows: View {
+    let host: String
+
+    private var store: SitePermissionStore { .shared }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(SitePermission.allCases) { kind in
+                row(kind)
+            }
+        }
+    }
+
+    private func row(_ kind: SitePermission) -> some View {
+        let current = store.choice(for: kind, host: host)
+        return HStack(spacing: 14) {
+            Image(systemName: kind.symbol)
+                .zenFont(16)
+                .foregroundStyle(Color.primary.opacity(0.6))
+                .frame(width: 20)
+            Text(kind.title)
+                .zenFont(16, weight: .medium, design: .rounded)
+            Spacer()
+            Menu {
+                option(nil, kind: kind, current: current)
+                option(.allow, kind: kind, current: current)
+                option(.block, kind: kind, current: current)
+            } label: {
+                Text(Self.title(of: current))
+                    .zenFont(15, design: .rounded)
+                    .foregroundStyle(Color.primary.opacity(0.6))
+            }
+        }
+        .frame(minHeight: 44)
+    }
+
+    @ViewBuilder
+    private func option(_ choice: SitePermissionChoice?, kind: SitePermission, current: SitePermissionChoice?) -> some View {
+        Button {
+            store.set(choice, for: [kind], host: host)
+        } label: {
+            if choice == current {
+                Label { Text(Self.title(of: choice)) } icon: { Image(systemName: "checkmark") }
+            } else {
+                Text(Self.title(of: choice))
+            }
+        }
+    }
+
+    private static func title(of choice: SitePermissionChoice?) -> LocalizedStringKey {
+        switch choice {
+        case .allow: "site_permission.allow"
+        case .block: "site_permission.block"
+        case nil: "site_permission.ask"
         }
     }
 }

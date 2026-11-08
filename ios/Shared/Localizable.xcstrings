@@ -247,6 +247,96 @@
         }
       }
     },
+    "browser.dialog.login_failed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That didn't work. Check the name and password."
+          }
+        }
+      }
+    },
+    "browser.dialog.login_title %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in to %@"
+          }
+        }
+      }
+    },
+    "browser.dialog.password": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Password"
+          }
+        }
+      }
+    },
+    "browser.dialog.sign_in": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign In"
+          }
+        }
+      }
+    },
+    "browser.dialog.this_page": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This page"
+          }
+        }
+      }
+    },
+    "browser.dialog.user": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name"
+          }
+        }
+      }
+    },
+    "browser.download.failed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The download failed"
+          }
+        }
+      }
+    },
+    "browser.download.finished %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ saved to Files › Z-Sync"
+          }
+        }
+      }
+    },
+    "browser.download.started %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading %@"
+          }
+        }
+      }
+    },
     "browser.error.crashed.message": {
       "extractionState": "manual",
       "localizations": {
@@ -432,6 +522,126 @@
         }
       }
     },
+    "browser.permission.allow": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow"
+          }
+        }
+      }
+    },
+    "browser.permission.camera %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ wants to use your camera"
+          }
+        }
+      }
+    },
+    "browser.permission.camera_microphone %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ wants to use your camera and microphone"
+          }
+        }
+      }
+    },
+    "browser.permission.camera_off": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Camera access is off for Z-Sync"
+          }
+        }
+      }
+    },
+    "browser.permission.deny": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Don't Allow"
+          }
+        }
+      }
+    },
+    "browser.permission.location %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ wants to know your location"
+          }
+        }
+      }
+    },
+    "browser.permission.location_off": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Location access is off for Z-Sync"
+          }
+        }
+      }
+    },
+    "browser.permission.message": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Z-Sync only asks iOS for access if you allow this. You can change it in the site's settings."
+          }
+        }
+      }
+    },
+    "browser.permission.microphone %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ wants to use your microphone"
+          }
+        }
+      }
+    },
+    "browser.permission.microphone_off": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Microphone access is off for Z-Sync"
+          }
+        }
+      }
+    },
+    "browser.permission.off_message": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn it on in Settings to use it on this site."
+          }
+        }
+      }
+    },
+    "browser.permission.open_settings": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Settings"
+          }
+        }
+      }
+    },
     "browser.pin_failed": {
       "extractionState": "manual",
       "localizations": {
@@ -554,6 +764,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Done"
+          }
+        }
+      }
+    },
+    "common.ok": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
           }
         }
       }
@@ -949,6 +1169,26 @@
       }
     },
     "Settings": {},
+    "settings.clear_website_data": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear Website Data"
+          }
+        }
+      }
+    },
+    "settings.clear_website_data.message": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Removes cookies, site storage and site permissions. You will be signed out of websites. Open pages and your Zen data stay."
+          }
+        }
+      }
+    },
     "settings.content_blocking.caption %@": {
       "localizations": {
         "en": {
@@ -1499,6 +1739,66 @@
           "stringUnit": {
             "state": "translated",
             "value": "Check your email to confirm your Mozilla account. This window continues automatically once confirmed."
+          }
+        }
+      }
+    },
+    "site_permission.allow": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow"
+          }
+        }
+      }
+    },
+    "site_permission.ask": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask"
+          }
+        }
+      }
+    },
+    "site_permission.block": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Block"
+          }
+        }
+      }
+    },
+    "site_permission.camera": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Camera"
+          }
+        }
+      }
+    },
+    "site_permission.location": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Location"
+          }
+        }
+      }
+    },
+    "site_permission.microphone": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Microphone"
           }
         }
       }

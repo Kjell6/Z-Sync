@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Observation
 import SwiftUI
@@ -387,6 +388,8 @@ final class MiniBrowserModel {
     /// Short-lived message for a refusal or a dead end (no spaces to pin to,
     /// no article to read). Rendered in the same bottom toast as the banner.
     var pinNotice: String?
+    /// The page's open questions, oldest first. The view shows the first.
+    private(set) var dialogs: [BrowserDialog] = []
     /// SF Symbol shown with `pinNotice`.
     private(set) var pinNoticeSymbol = "pin.slash.fill"
 
@@ -420,6 +423,7 @@ final class MiniBrowserModel {
     /// row offers pinned only, like the share sheet.
     var allowsNormalTabs: Bool
     private let suggestionClient: SearchSuggestionFetching
+    let sitePermissions: SitePermissionStore
     private let suggestionDebounce: Duration
 
     init(
@@ -432,9 +436,11 @@ final class MiniBrowserModel {
         allowsNormalTabs: Bool = false,
         suggestionClient: SearchSuggestionFetching = LiveSearchSuggestionClient(),
         suggestionDebounce: Duration = SearchSuggestions.debounce,
-        blocker: ContentBlocker = .shared
+        blocker: ContentBlocker = .shared,
+        sitePermissions: SitePermissionStore = .shared
     ) {
         self.initialURL = initialURL
+        self.sitePermissions = sitePermissions
         self.blocker = blocker
         self.pinWriter = pinWriter
         self.urlOpener = urlOpener
@@ -550,6 +556,8 @@ final class MiniBrowserModel {
         reloadScrollY = nil
         isLoading = false
         estimatedProgress = 0
+        // The questions went with the page; dropping them answers WebKit.
+        dialogs = []
         sleptWithBackHistory = canGoBack
         canGoBack = false
         canGoForward = false
@@ -1000,6 +1008,8 @@ final class MiniBrowserModel {
         guard configuration != appliedBlocking else { return }
         appliedBlocking = configuration
         blocker.apply(configuration, to: controller)
+        // `apply` clears every user script, this one included.
+        BrowserGeolocation.addScript(to: controller)
         controller.addUserScript(WKUserScript(
             source: BlockedResourceReport.script,
             injectionTime: .atDocumentStart,
@@ -1108,6 +1118,59 @@ final class MiniBrowserModel {
             showPinBanner = false
         }
         showPinNotice(String(localized: "browser.pin_no_space"))
+    }
+
+    func present(_ kind: BrowserDialog.Kind) {
+        dialogs.append(BrowserDialog(kind: kind))
+    }
+
+    func dismissDialog(_ dialog: BrowserDialog) {
+        dialogs.removeAll { $0.id == dialog.id }
+    }
+
+    /// Runs a site's request through the remembered answer or the browser's
+    /// question. [completion] hears true only for an allowed site whose kinds
+    /// the system has not refused; the system's own dialog comes after that.
+    func requestPermission(_ kinds: [SitePermission], host: String, completion: @escaping (Bool) -> Void) {
+        let store = sitePermissions
+        switch store.decision(for: kinds, host: host) {
+        case .grant:
+            completion(allowedBySystem(kinds))
+        case .deny:
+            completion(false)
+        case .ask:
+            let answer = DialogAnswer<Bool?>(fallback: nil) { [weak self] allowed in
+                guard let allowed else {
+                    completion(false)
+                    return
+                }
+                store.set(allowed ? .allow : .block, for: kinds, host: host)
+                completion(allowed && (self?.allowedBySystem(kinds) ?? false))
+            }
+            present(.permission(host: host, kinds: kinds, answer))
+        }
+    }
+
+    /// True while the system may still say yes. When it already said no it
+    /// shows nothing more, so the browser explains where to change that.
+    private func allowedBySystem(_ kinds: [SitePermission]) -> Bool {
+        let off = kinds.filter { kind in
+            switch kind {
+            case .camera: Self.isCaptureOff(.video)
+            case .microphone: Self.isCaptureOff(.audio)
+            case .location: BrowserLocation.shared.isOffForApp
+            }
+        }
+        guard !off.isEmpty else { return true }
+        present(.systemAccessOff(kinds: off))
+        return false
+    }
+
+    private static func isCaptureOff(_ media: AVMediaType) -> Bool {
+        switch AVCaptureDevice.authorizationStatus(for: media) {
+        case .denied, .restricted: true
+        default: false
+        }
     }
 
     /// Bottom toast for the browser itself, same language as the pin notice.

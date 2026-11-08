@@ -21,6 +21,7 @@ import de.kjell.zencompanion.data.BrowserSettings
 import de.kjell.zencompanion.data.KeptPageLifetime
 import de.kjell.zencompanion.data.OpenPage
 import de.kjell.zencompanion.data.OpenPagesStore
+import de.kjell.zencompanion.data.historyAddress
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.BrowserRepository
 import de.kjell.zencompanion.util.PageTitle
@@ -76,6 +77,8 @@ class PageSession(
     var pendingPopup: Message? = null
     /** A new page goes straight into the address field, once. */
     var opensWithSearch = false
+    /** The address last put in the history, so a reload or a wake is no new visit. */
+    var lastVisit: String? = null
     /** The page's open questions, oldest first. Shown while it is on screen. */
     val prompts = mutableStateListOf<BrowserPrompt>()
 
@@ -189,7 +192,11 @@ class BrowserPages(
         viewModel.onPinFailed = { store.unmarkPinned(id) }
         viewModel.onPinned = { url -> store.pinned(id, url, PageTitle::sameDocument) }
         val session = PageSession(id, viewModel, page.url)
-        if (page.isKept) session.history = readHistory(store.historyFile(id))
+        if (page.isKept) {
+            session.history = readHistory(store.historyFile(id))
+            // Coming back to a page is not visiting it again.
+            session.lastVisit = historyAddress(page.url)
+        }
         return session
     }
 
@@ -307,7 +314,28 @@ class BrowserPages(
     fun pageLoaded(session: PageSession) {
         store.promote(session.id, keepEveryPage(), ::exit)
         saveHistory(session)
-        BrowserHistory.record(session.webView?.url, session.viewModel.state.value.currentTitle)
+        recordVisit(session)
+    }
+
+    /** A page that changes its address without loading, as single-page sites do. */
+    fun pageAddressChanged(session: PageSession) {
+        if (!session.viewModel.state.value.isLoading) recordVisit(session)
+    }
+
+    private fun recordVisit(session: PageSession) {
+        val state = session.viewModel.state.value
+        val address = historyAddress(session.webView?.url) ?: return
+        // A failed load also ends in `onPageFinished`.
+        if (state.pageError != null || address == session.lastVisit) return
+        session.lastVisit = address
+        BrowserHistory.record(address, state.currentTitle)
+    }
+
+    /** Titles often arrive after the page has finished. */
+    fun pageTitleChanged(session: PageSession) {
+        val address = session.lastVisit ?: return
+        if (historyAddress(session.webView?.url) != address) return
+        BrowserHistory.updateTitle(address, session.viewModel.state.value.currentTitle)
     }
 
     /** The app went to the background and may not come back. */

@@ -5,6 +5,7 @@ import de.kjell.zencompanion.data.historyAddress
 import de.kjell.zencompanion.data.searchVisits
 import de.kjell.zencompanion.data.visitSuggestions
 import de.kjell.zencompanion.data.withVisit
+import de.kjell.zencompanion.data.withVisitTitle
 import de.kjell.zencompanion.ui.screens.dayOf
 import java.util.Calendar
 import java.util.TimeZone
@@ -80,6 +81,14 @@ class BrowserHistoryTests {
         val visits = emptyList<BrowserVisit>().with("https://example.com/", "Example")
         assertTrue(visitSuggestions(visits, "example", current = "https://example.com/").isEmpty())
         assertTrue(visitSuggestions(visits, "   ").isEmpty())
+    }
+
+    @Test
+    fun aLateTitleReplacesTheOldOneButEmptyDoesNot() {
+        val visits = emptyList<BrowserVisit>().with("https://a.example", "Old")
+        assertEquals("New", withVisitTitle(visits, "https://a.example", "New").first().title)
+        assertSame(visits, withVisitTitle(visits, "https://a.example", ""))
+        assertSame(visits, withVisitTitle(visits, "https://b.example", "New"))
     }
 
     @Test

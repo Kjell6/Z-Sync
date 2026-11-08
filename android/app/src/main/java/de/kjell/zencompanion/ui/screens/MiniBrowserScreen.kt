@@ -277,7 +277,6 @@ fun MiniBrowserScreen(
         val active = pages.active
         if (active != null) {
             active.webView?.loadUrl(visit.url)
-            active.viewModel.selectVisit(visit)
         } else {
             pages.open(visit.url)
         }
@@ -1212,11 +1211,17 @@ private fun PageStack(
                             }
                         },
                         onSiteThemeColorChange = viewModel::onSiteThemeColorChange,
-                        onCurrentUrlChange = viewModel::onCurrentUrlChange,
+                        onCurrentUrlChange = { url ->
+                            viewModel.onCurrentUrlChange(url)
+                            pages.pageAddressChanged(session)
+                        },
                         onCanGoBackChange = viewModel::onCanGoBackChange,
                         onCanGoForwardChange = viewModel::onCanGoForwardChange,
                         onTextInputChange = viewModel::onAddressTextChange,
-                        onTitleChange = viewModel::onCurrentTitleChange,
+                        onTitleChange = { title ->
+                            viewModel.onCurrentTitleChange(title)
+                            pages.pageTitleChanged(session)
+                        },
                         onProgressChange = viewModel::onProgressChange,
                         onPageStarted = {
                             viewModel.onShowingOriginalChange(session.blocker.showingOriginal)

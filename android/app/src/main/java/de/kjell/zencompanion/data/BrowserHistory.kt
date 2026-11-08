@@ -68,6 +68,12 @@ internal fun withVisit(
     return (listOf(visit) + visits.filter { it.url != address }).take(limit)
 }
 
+/** [visits] with the page at [address] under its real title, once the page has one. */
+internal fun withVisitTitle(visits: List<BrowserVisit>, address: String, title: String): List<BrowserVisit> {
+    if (title.isEmpty() || visits.none { it.url == address && it.title != title }) return visits
+    return visits.map { if (it.url == address) it.copy(title = title) else it }
+}
+
 private fun words(text: String) = text.lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
 
 private fun BrowserVisit.matches(words: List<String>): Boolean {
@@ -98,11 +104,11 @@ internal fun visitSuggestions(
     val open = historyAddress(current)
     return visits
         .filter { it.url != open && it.matches(words) }
-        .sortedWith(
-            compareByDescending<BrowserVisit> { it.host.lowercase().startsWith(words.first()) }
-                .thenByDescending { it.visits },
-        )
+        // Worked out once per page: this runs on every keystroke.
+        .map { it to it.host.lowercase().startsWith(words.first()) }
+        .sortedWith(compareByDescending<Pair<BrowserVisit, Boolean>> { it.second }.thenByDescending { it.first.visits })
         .take(limit)
+        .map { it.first }
 }
 
 /**
@@ -136,6 +142,13 @@ object BrowserHistory {
 
     fun record(url: String?, title: String) {
         val updated = withVisit(_visits.value, url, title, System.currentTimeMillis())
+        if (updated === _visits.value) return
+        _visits.value = updated
+        scheduleSave()
+    }
+
+    fun updateTitle(address: String, title: String) {
+        val updated = withVisitTitle(_visits.value, address, title)
         if (updated === _visits.value) return
         _visits.value = updated
         scheduleSave()

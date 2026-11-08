@@ -646,7 +646,7 @@ private extension MiniBrowserView {
         guard let url = URL(string: visit.url) else { return }
         let page: OpenPage
         if let active = pages.active {
-            active.model.openVisit(visit)
+            active.model.loadVisit(visit)
             page = active
         } else {
             page = pages.open(url: url)

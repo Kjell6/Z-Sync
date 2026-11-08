@@ -267,8 +267,8 @@ private fun VisitRow(visit: BrowserVisit, time: String, onOpen: () -> Unit, onDe
                 .fillMaxWidth()
                 // The card's own fill, opaque: `lift` alone is translucent, so
                 // the swipe background would show through the row at rest.
-                .background(zen.lift)
                 .background(zen.background)
+                .background(zen.lift)
                 .clickable(onClick = onOpen)
                 .padding(horizontal = 16.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,

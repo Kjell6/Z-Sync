@@ -74,6 +74,14 @@ final class BrowserHistoryStore {
         scheduleSave()
     }
 
+    /// Titles often arrive after the page has finished.
+    func updateTitle(_ title: String, of address: String) {
+        guard !title.isEmpty, let index = visits.firstIndex(where: { $0.url == address }),
+              visits[index].title != title else { return }
+        visits[index].title = title
+        scheduleSave()
+    }
+
     func remove(_ visit: BrowserVisit) {
         visits.removeAll { $0.url == visit.url }
         scheduleSave()
@@ -101,15 +109,17 @@ final class BrowserHistoryStore {
         guard !words.isEmpty else { return [] }
         let open = Self.address(of: current)
         let first = words[0]
-        func startsWithText(_ visit: BrowserVisit) -> Bool { visit.host.lowercased().hasPrefix(first) }
-        let found = visits.filter { $0.url != open && Self.matches($0, words: words) }
-        let ranked = found.enumerated().sorted { left, right in
-            let (a, b) = (left.element, right.element)
-            if startsWithText(a) != startsWithText(b) { return startsWithText(a) }
-            if a.visits != b.visits { return a.visits > b.visits }
-            return left.offset < right.offset
+        // Worked out once per page: this runs on every keystroke.
+        let found = visits
+            .filter { $0.url != open && Self.matches($0, words: words) }
+            .enumerated()
+            .map { (visit: $0.element, order: $0.offset, namesSite: $0.element.host.lowercased().hasPrefix(first)) }
+        let ranked = found.sorted { a, b in
+            if a.namesSite != b.namesSite { return a.namesSite }
+            if a.visit.visits != b.visit.visits { return a.visit.visits > b.visit.visits }
+            return a.order < b.order
         }
-        return ranked.prefix(limit).map(\.element)
+        return ranked.prefix(limit).map(\.visit)
     }
 
     /// Writes what is pending right away. For tests and for the app leaving.

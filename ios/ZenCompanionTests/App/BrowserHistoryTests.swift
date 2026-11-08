@@ -89,6 +89,27 @@ final class BrowserHistoryTests: XCTestCase {
         XCTAssertEqual(home.displayAddress, "example.com")
     }
 
+    func testALateTitleReplacesTheOldOneButEmptyDoesNot() {
+        let store = makeStore()
+        store.record(url("https://a.example"), title: "Old")
+        store.updateTitle("", of: "https://a.example/")
+        store.updateTitle("New", of: store.visits[0].url)
+        XCTAssertEqual(store.visits[0].title, "New")
+        store.updateTitle("", of: store.visits[0].url)
+        XCTAssertEqual(store.visits[0].title, "New")
+    }
+
+    func testAReloadIsNoNewVisitButANewAddressIs() {
+        let store = makeStore()
+        let model = MiniBrowserModel(initialURL: nil, history: store)
+        model.updateCurrentURL(url("https://a.example/one"))
+        model.recordVisit()
+        model.recordVisit()
+        XCTAssertEqual(store.visits.first?.visits, 1)
+        model.updateCurrentURL(url("https://a.example/two"))
+        XCTAssertEqual(store.visits.map(\.url), ["https://a.example/two", "https://a.example/one"])
+    }
+
     func testRemovingOnePageLeavesTheOthers() {
         let store = makeStore()
         store.record(url("https://a.example"), title: "A")

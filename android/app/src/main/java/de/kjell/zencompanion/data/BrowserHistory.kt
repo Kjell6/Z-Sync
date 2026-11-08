@@ -143,7 +143,8 @@ object BrowserHistory {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
     private var file: File? = null
     private var pendingSave: Job? = null
-    @Volatile private var cleared = false
+    private val loadLock = Any()
+    private var cleared = false
 
     private val _visits = MutableStateFlow<List<BrowserVisit>>(emptyList())
     /** Newest first. */
@@ -154,10 +155,14 @@ object BrowserHistory {
         file = stored
         scope.launch {
             val saved = runCatching { decode(stored.readText()) }.getOrDefault(emptyList())
-            // A sign-out while this was reading must not bring the list back.
-            if (cleared) return@launch
-            // Anything recorded while this was reading stays on top.
-            _visits.update { (it + saved).distinctBy(BrowserVisit::url).take(MAX_HISTORY_ENTRIES) }
+            // Locked, because a merge into an empty list can't tell that list
+            // from one a sign-out has just emptied.
+            synchronized(loadLock) {
+                // A sign-out while this was reading must not bring the list back.
+                if (cleared) return@launch
+                // Anything recorded while this was reading stays on top.
+                _visits.update { (it + saved).distinctBy(BrowserVisit::url).take(MAX_HISTORY_ENTRIES) }
+            }
         }
     }
 
@@ -178,8 +183,10 @@ object BrowserHistory {
     }
 
     fun clear() {
-        cleared = true
-        _visits.value = emptyList()
+        synchronized(loadLock) {
+            cleared = true
+            _visits.value = emptyList()
+        }
         pendingSave?.cancel()
         pendingSave = null
         scope.launch {

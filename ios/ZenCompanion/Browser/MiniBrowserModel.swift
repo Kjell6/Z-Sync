@@ -536,8 +536,6 @@ final class MiniBrowserModel {
     /// its last address otherwise. Nothing happens to a page that is awake.
     func wake(history: Any? = nil) {
         guard webView == nil else { return }
-        // Coming back to a page is not visiting it again.
-        lastRecordedVisit = BrowserHistoryStore.address(of: pageURL)
         let view = MiniBrowserWebDriver.attach(to: self)
         if let history {
             view.interactionState = history
@@ -583,6 +581,11 @@ final class MiniBrowserModel {
     /// Brings a page back from the list with what was saved about it.
     func restore(title: String) {
         pageTitle = title
+    }
+
+    /// For a page kept from an earlier run: coming back to it is not a visit.
+    func markAddressAsVisited() {
+        lastRecordedVisit = BrowserHistoryStore.address(of: pageURL)
     }
 
     func load(url: URL) {

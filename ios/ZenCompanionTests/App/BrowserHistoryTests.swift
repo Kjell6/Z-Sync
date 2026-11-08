@@ -130,6 +130,32 @@ final class BrowserHistoryTests: XCTestCase {
         XCTAssertEqual(store.visits.map(\.url), ["https://a.example/two", "https://a.example/one"])
     }
 
+    func testANewPagesFirstLoadIsAVisitButWakingItIsNot() {
+        let store = makeStore()
+        let address = url("https://a.example/one")
+        let model = MiniBrowserModel(initialURL: address, preferences: FakePreferences(), history: store)
+        model.wake()
+        model.updateCurrentURL(address)
+        model.recordVisit()
+        XCTAssertEqual(store.visits.first?.visits, 1)
+        model.sleep()
+        model.wake()
+        model.updateCurrentURL(address)
+        model.recordVisit()
+        XCTAssertEqual(store.visits.first?.visits, 1)
+    }
+
+    func testAPageKeptFromAnEarlierRunIsNoNewVisit() {
+        let store = makeStore()
+        let address = url("https://a.example/one")
+        let model = MiniBrowserModel(initialURL: address, preferences: FakePreferences(), history: store)
+        model.markAddressAsVisited()
+        model.wake()
+        model.updateCurrentURL(address)
+        model.recordVisit()
+        XCTAssertTrue(store.visits.isEmpty)
+    }
+
     func testGoingToTheBackgroundSavesWhatIsWaitingButNotARemovedList() {
         let file = makeFile()
         let store = BrowserHistoryStore(fileURL: file, saveDelay: .seconds(60))

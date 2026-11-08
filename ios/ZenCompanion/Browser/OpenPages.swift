@@ -197,6 +197,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
         pages = Self.read(from: directory).map { saved in
             let model = makeModel(saved.url)
             model.restore(title: saved.title)
+            model.markAddressAsVisited()
             let page = OpenPage(id: saved.id, model: model, keptAt: saved.keptAt, lastUsedAt: saved.lastUsedAt)
             model.host = self
             return page

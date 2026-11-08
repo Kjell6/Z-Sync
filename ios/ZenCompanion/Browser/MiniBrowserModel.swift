@@ -357,6 +357,8 @@ final class MiniBrowserModel {
     var addressText: String = ""
     /// Suggestions for the text being typed. Empty hides the list.
     var suggestions: [String] = []
+    /// Pages from the history for the same text, above the suggestions.
+    var historySuggestions: [BrowserVisit] = []
     /// Set while a suggestion was just chosen or the field was submitted, so
     /// the text change that follows does not send another suggest request.
     @ObservationIgnored private var suggestionsSuspended = false
@@ -424,6 +426,9 @@ final class MiniBrowserModel {
     var allowsNormalTabs: Bool
     private let suggestionClient: SearchSuggestionFetching
     let sitePermissions: SitePermissionStore
+    private let history: BrowserHistoryStore
+    /// The address last put in the history.
+    @ObservationIgnored private var lastRecordedVisit: String?
     private let suggestionDebounce: Duration
 
     init(
@@ -437,8 +442,10 @@ final class MiniBrowserModel {
         suggestionClient: SearchSuggestionFetching = LiveSearchSuggestionClient(),
         suggestionDebounce: Duration = SearchSuggestions.debounce,
         blocker: ContentBlocker = .shared,
-        sitePermissions: SitePermissionStore = .shared
+        sitePermissions: SitePermissionStore = .shared,
+        history: BrowserHistoryStore = .shared
     ) {
+        self.history = history
         self.initialURL = initialURL
         self.sitePermissions = sitePermissions
         self.blocker = blocker
@@ -574,6 +581,11 @@ final class MiniBrowserModel {
     /// Brings a page back from the list with what was saved about it.
     func restore(title: String) {
         pageTitle = title
+    }
+
+    /// For a page kept from an earlier run: coming back to it is not a visit.
+    func markAddressAsVisited() {
+        lastRecordedVisit = BrowserHistoryStore.address(of: pageURL)
     }
 
     func load(url: URL) {
@@ -787,6 +799,28 @@ final class MiniBrowserModel {
         load(url: url)
     }
 
+    /// A page from the history, picked while typing an address.
+    func openVisit(_ visit: BrowserVisit) {
+        suggestionsSuspended = true
+        cancelSuggestionRequest()
+        loadVisit(visit)
+    }
+
+    /// A page from the history, picked outside the address field.
+    func loadVisit(_ visit: BrowserVisit) {
+        guard let url = URL(string: visit.url) else { return }
+        load(url: url)
+    }
+
+    /// Puts the page in the history. A reload, or a page coming back from
+    /// sleep, is at the same address and so is no new visit.
+    func recordVisit() {
+        guard pageError == nil, let address = BrowserHistoryStore.address(of: currentURL),
+              address != lastRecordedVisit else { return }
+        lastRecordedVisit = address
+        history.record(currentURL, title: pageTitle)
+    }
+
     /// Asks for suggestions when [isEditing] and the text is a search query.
     /// A URL, blank text, a custom engine, or a closed field sends nothing.
     func refreshSuggestions(isEditing: Bool) {
@@ -798,6 +832,8 @@ final class MiniBrowserModel {
         // Keep the current list until the new answer arrives, so it does not
         // flicker on every keystroke.
         cancelSuggestionRequest(keepingList: true)
+        // Local, so it answers right away and also for a typed address.
+        historySuggestions = history.suggestions(for: addressText, excluding: currentURL)
         guard let url = SearchSuggestions.requestURL(for: addressText, engine: searchEngine.current) else {
             suggestions = []
             return
@@ -832,8 +868,9 @@ final class MiniBrowserModel {
         suggestionTask?.cancel()
         suggestionTask = nil
         suggestionGeneration += 1
-        if !keepingList, !suggestions.isEmpty {
-            suggestions = []
+        if !keepingList {
+            if !suggestions.isEmpty { suggestions = [] }
+            if !historySuggestions.isEmpty { historySuggestions = [] }
         }
     }
 
@@ -849,6 +886,8 @@ final class MiniBrowserModel {
         }
         currentURL = url
         if url != nil { host?.pageDidChange(self) }
+        // A single-page site changes its address without loading anything.
+        if !isLoading { recordVisit() }
     }
 
     /// Keeps a real document title. URL-shaped WebKit titles are ignored so
@@ -857,6 +896,9 @@ final class MiniBrowserModel {
         guard let title = PageTitle.usable(raw, url: currentURL ?? webView?.url) else { return }
         pageTitle = title
         host?.pageDidChange(self)
+        if let lastRecordedVisit, lastRecordedVisit == BrowserHistoryStore.address(of: currentURL) {
+            history.updateTitle(title, of: lastRecordedVisit)
+        }
     }
 
     func currentURLDidChange(_ url: URL?, isAddressFocused: Bool) {

@@ -42,6 +42,9 @@ struct MiniBrowserView: View {
     /// The overview is up, over the page and the chrome.
     @State private var showOverview: Bool
     @State private var confirmCloseAll = false
+    /// The browser's own history is up. It belongs to the browser, not to a
+    /// page: the overview has no page behind it when it is opened from home.
+    @State private var historyShown = false
     /// Fades the overview while a page zooms into or out of it.
     @State private var overviewVisible: Bool
     /// The picture flying between the full page and its card.
@@ -154,6 +157,58 @@ struct MiniBrowserView: View {
         barBackground.isDarkBackground ? .dark : .light
     }
 
+    /// The floating bar and dock, over the page, the overview and the
+    /// picture flying between them.
+    private var chrome: some View {
+        MiniBrowserChrome(
+            model: model,
+            pages: pages,
+            space: space,
+            allSpaces: allSpaces,
+            onToggleMenu: { model.toggleMenu() },
+            onClose: { leaveBrowser() },
+            addressEditing: addressEditing,
+            onPickSuggestion: pickSuggestion,
+            onPickVisit: pickVisit,
+            onOpenPages: openOverview,
+            overviewShown: overviewVisible,
+            onNewPage: openNewPage,
+            onOpenHistory: openHistory,
+            onDone: {
+                if let page = pages.active {
+                    closeOverview(to: page)
+                } else {
+                    onDismiss()
+                }
+            },
+            onCloseAll: { confirmCloseAll = true },
+            navBar: {
+                MiniBrowserTopBar(
+                    model: model,
+                    page: pages.active,
+                    pages: pages,
+                    addressEditing: addressEditing,
+                    isAddressFocused: $isAddressFocused,
+                    swipeOffset: $pageSwipe,
+                    pageSpan: paneWidth + PageHostView.pageGap,
+                    onBeginAddressEdit: beginAddressEditing,
+                    onCancel: cancelAddressEditing,
+                    onSubmit: submitAddress,
+                    onReturnToOpener: returnToOpener,
+                    onSwipeStart: beginSwipe,
+                    onSwipeEnd: finishSwipe
+                )
+            }
+        )
+        .padding(.horizontal, 16)
+        .padding(.bottom, chromeBottomInset)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .offset(y: barCollapsed ? 220 : 0)
+        // With nothing left to show, the cover is on its way out.
+        .opacity(barCollapsed || (pages.active == nil && !showOverview) ? 0 : 1)
+        .accessibilityHidden(barCollapsed)
+    }
+
     /// Bottom to top: the page, the overview, the picture flying between them,
     /// and the chrome. The dock stays on top of it all, so a page zooming into
     /// its card passes under the buttons, never over them.
@@ -229,51 +284,7 @@ struct MiniBrowserView: View {
                         .environment(\.colorScheme, barScheme)
                 }
 
-                MiniBrowserChrome(
-                    model: model,
-                    pages: pages,
-                    space: space,
-                    allSpaces: allSpaces,
-                    onToggleMenu: { model.toggleMenu() },
-                    onClose: { leaveBrowser() },
-                    addressEditing: addressEditing,
-                    onPickSuggestion: pickSuggestion,
-                    onOpenPages: openOverview,
-                    overviewShown: overviewVisible,
-                    onNewPage: openNewPage,
-                    onDone: {
-                        if let page = pages.active {
-                            closeOverview(to: page)
-                        } else {
-                            onDismiss()
-                        }
-                    },
-                    onCloseAll: { confirmCloseAll = true },
-                    navBar: {
-                        MiniBrowserTopBar(
-                            model: model,
-                            page: pages.active,
-                            pages: pages,
-                            addressEditing: addressEditing,
-                            isAddressFocused: $isAddressFocused,
-                            swipeOffset: $pageSwipe,
-                            pageSpan: paneWidth + PageHostView.pageGap,
-                            onBeginAddressEdit: beginAddressEditing,
-                            onCancel: cancelAddressEditing,
-                            onSubmit: submitAddress,
-                            onReturnToOpener: returnToOpener,
-                            onSwipeStart: beginSwipe,
-                            onSwipeEnd: finishSwipe
-                        )
-                    }
-                )
-                .padding(.horizontal, 16)
-                .padding(.bottom, chromeBottomInset)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                .offset(y: barCollapsed ? 220 : 0)
-                // With nothing left to show, the cover is on its way out.
-                .opacity(barCollapsed || (pages.active == nil && !showOverview) ? 0 : 1)
-                .accessibilityHidden(barCollapsed)
+                chrome
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .background(sheetBackground.ignoresSafeArea())
@@ -281,6 +292,7 @@ struct MiniBrowserView: View {
             .ignoresSafeArea(.keyboard)
             .presentationBackground(pages.active == nil ? Palette.background(scheme) : barBackground)
             .modifier(BrowserDialogPresenter(model: model))
+            .modifier(BrowserHistoryPresenter(isPresented: $historyShown, onOpen: openVisit))
             .confirmationDialog(
                 Text("kept.close_all_title"),
                 isPresented: $confirmCloseAll,
@@ -623,6 +635,27 @@ private extension MiniBrowserView {
         }
     }
 
+    /// The browser's own history, opened from the overview's dock.
+    private func openHistory() {
+        historyShown = true
+    }
+
+    /// A page from the browser's history. It lands in the page on screen, the    /// way a typed address would; with the overview opened from home there is
+    /// no page yet, so a new one takes it.
+    private func openVisit(_ visit: BrowserVisit) {
+        guard let url = URL(string: visit.url) else { return }
+        let page: OpenPage
+        if let active = pages.active {
+            active.model.loadVisit(visit)
+            page = active
+        } else {
+            page = pages.open(url: url)
+        }
+        guard showOverview else { return }
+        // The sheet has already closed; the grid goes with it.
+        closeOverview(to: page)
+    }
+
     /// A blank page takes over under the overview, which then fades away.
     private func openNewPage() {
         // The grid stays as it was while it fades: no card joins it on the way out.
@@ -781,6 +814,11 @@ private extension MiniBrowserView {
 
     private func pickSuggestion(_ suggestion: String) {
         model.selectSuggestion(suggestion)
+        endAddressEditing()
+    }
+
+    private func pickVisit(_ visit: BrowserVisit) {
+        model.openVisit(visit)
         endAddressEditing()
     }
 
@@ -956,6 +994,21 @@ private struct ReaderView: View {
                 .foregroundStyle(Palette.ink(scheme).opacity(0.9))
                 .lineSpacing(5)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// The browser's own history, over whatever is on screen: a page or the
+/// overview. A modifier of its own so the browser's body stays one expression
+/// the type checker can still read.
+private struct BrowserHistoryPresenter: ViewModifier {
+    @Binding var isPresented: Bool
+    var onOpen: (BrowserVisit) -> Void
+
+    func body(content: Content) -> some View {
+        content.sheet(isPresented: $isPresented) {
+            BrowserHistoryView(onOpen: onOpen)
+                .presentationDragIndicator(.visible)
         }
     }
 }

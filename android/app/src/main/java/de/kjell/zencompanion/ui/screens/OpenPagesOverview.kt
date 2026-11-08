@@ -122,6 +122,8 @@ internal fun OpenPagesOverview(
     onCardFrame: (String, Rect) -> Unit,
     onOpen: (OpenPage) -> Unit,
     onNewPage: () -> Unit,
+    /** The browser's own history, from the dock. */
+    onOpenHistory: () -> Unit,
     onDone: () -> Unit,
     /** Done only makes sense with a page behind the overview to go back to. */
     showsDone: Boolean,
@@ -265,6 +267,7 @@ internal fun OpenPagesOverview(
 
         OverviewDock(
             onNewPage = onNewPage,
+            onOpenHistory = onOpenHistory,
             onDone = onDone,
             showsDone = showsDone,
             onDoneLongPress = { if (openPages.isNotEmpty()) menuOpen = true },

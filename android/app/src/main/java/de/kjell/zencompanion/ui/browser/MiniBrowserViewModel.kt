@@ -8,6 +8,8 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import de.kjell.zencompanion.R
+import de.kjell.zencompanion.data.BrowserHistory
+import de.kjell.zencompanion.data.BrowserVisit
 import de.kjell.zencompanion.data.SaveKind
 import de.kjell.zencompanion.data.SearchEngines
 import de.kjell.zencompanion.data.SearchSuggestions
@@ -104,6 +106,8 @@ class MiniBrowserViewModel(
         val findQuery: String = "",
         val findProgress: String? = null,
         /** Suggestions for the text being typed. Empty hides the list. */
+        /** Pages from the history for the same text, above the suggestions. */
+        val historySuggestions: List<BrowserVisit> = emptyList(),
         val suggestions: List<String> = emptyList(),
         /** Ads and trackers blocked on the current page. */
         val blockedCount: Int = 0,
@@ -192,6 +196,7 @@ class MiniBrowserViewModel(
             it.copy(
                 isAddressFocused = focused,
                 suggestions = if (focused) it.suggestions else emptyList(),
+                historySuggestions = if (focused) it.historySuggestions else emptyList(),
                 // Opening the field hands the whole address over, ready to be
                 // replaced; a caret at index 0 would prepend into the scheme.
                 addressText = TextFieldValue(
@@ -343,7 +348,7 @@ class MiniBrowserViewModel(
     fun submitAddress(input: String): String {
         suggestionsSuspended = true
         suggestionJob?.cancel()
-        _state.update { it.copy(suggestions = emptyList()) }
+        _state.update { it.copy(suggestions = emptyList(), historySuggestions = emptyList()) }
         return formatBrowserInput(input)
     }
 
@@ -357,10 +362,19 @@ class MiniBrowserViewModel(
         _state.update {
             it.copy(
                 suggestions = emptyList(),
+                historySuggestions = emptyList(),
                 addressText = TextFieldValue(suggestion),
             )
         }
         return SearchSuggestions.target(suggestion, SearchEngines.current)
+    }
+
+    /** A page from the history, picked from the list: its address to open. */
+    fun selectVisit(visit: BrowserVisit): String {
+        suggestionsSuspended = true
+        suggestionJob?.cancel()
+        _state.update { it.copy(suggestions = emptyList(), historySuggestions = emptyList()) }
+        return visit.url
     }
 
     /**
@@ -371,10 +385,12 @@ class MiniBrowserViewModel(
     private fun refreshSuggestions() {
         suggestionJob?.cancel()
         if (suggestionsSuspended || !_state.value.isAddressFocused) {
-            _state.update { it.copy(suggestions = emptyList()) }
+            _state.update { it.copy(suggestions = emptyList(), historySuggestions = emptyList()) }
             return
         }
         val raw = _state.value.addressText.text
+        // Local, so it answers right away and also for a typed address.
+        _state.update { it.copy(historySuggestions = BrowserHistory.suggestions(raw, it.currentUrl)) }
         val url = SearchSuggestions.requestUrl(raw, SearchEngines.current)
         if (url == null) {
             _state.update { it.copy(suggestions = emptyList()) }

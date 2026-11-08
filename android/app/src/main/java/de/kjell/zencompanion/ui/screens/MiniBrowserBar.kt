@@ -86,6 +86,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -123,6 +124,8 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
+import de.kjell.zencompanion.data.BrowserVisit
+import de.kjell.zencompanion.data.SearchSuggestions
 import de.kjell.zencompanion.data.SitePermission
 import de.kjell.zencompanion.data.SitePermissionChoice
 import de.kjell.zencompanion.data.SitePermissions
@@ -251,6 +254,7 @@ internal fun MiniBrowserBar(
     /** False while a page error covers the page: there is nothing to pin. */
     canPin: Boolean = true,
     onPickSuggestion: (String) -> Unit,
+    onPickVisit: (BrowserVisit) -> Unit,
     onBack: () -> Unit,
     onForward: () -> Unit,
     onReload: () -> Unit,
@@ -337,9 +341,11 @@ internal fun MiniBrowserBar(
 
         // Part of the address editing state: the list sits in the space
         // above the composer, on the same plate, and goes away with it.
-        if (state.isAddressFocused && state.suggestions.isNotEmpty()) {
+        if (state.isAddressFocused && (state.suggestions.isNotEmpty() || state.historySuggestions.isNotEmpty())) {
             SuggestionPanel(
-                suggestions = state.suggestions,
+                visits = state.historySuggestions,
+                suggestions = SearchSuggestions.fitting(state.suggestions, state.historySuggestions.size),
+                onSelectVisit = onPickVisit,
                 onSelect = onPickSuggestion,
             )
         }
@@ -797,6 +803,7 @@ private fun LeaveBrowserButton(ink: Color, onClick: () -> Unit) {
 @Composable
 internal fun OverviewDock(
     onNewPage: () -> Unit,
+    onOpenHistory: () -> Unit,
     onDone: () -> Unit,
     showsDone: Boolean,
     onDoneLongPress: () -> Unit,
@@ -814,6 +821,15 @@ internal fun OverviewDock(
             .padding(start = 16.dp + DockInset, end = 16.dp + DockInset, bottom = barBottomGap(navigationInset) + RowGap),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // The browser's own history, next to the new page: the page menu
+        // keeps the page's own tools.
+        DockButton(
+            icon = Icons.Outlined.Schedule,
+            description = stringResource(R.string.history_title),
+            tint = zen.ink,
+            onClick = onOpenHistory,
+        )
+        Spacer(Modifier.size(10.dp))
         DockButton(
             icon = Icons.Outlined.Add,
             description = stringResource(R.string.kept_new_page),
@@ -886,7 +902,9 @@ private fun DockButton(
  */
 @Composable
 private fun SuggestionPanel(
+    visits: List<BrowserVisit>,
     suggestions: List<String>,
+    onSelectVisit: (BrowserVisit) -> Unit,
     onSelect: (String) -> Unit,
 ) {
     val zen = LocalZenColors.current
@@ -895,6 +913,41 @@ private fun SuggestionPanel(
             .fillMaxWidth()
             .pane(DockShape, zen.lift),
     ) {
+        visits.forEachIndexed { index, visit ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = RowHeight)
+                    .barClickable { onSelectVisit(visit) }
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Schedule,
+                    contentDescription = null,
+                    tint = zen.ink.copy(alpha = 0.45f),
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = visit.title.ifEmpty { visit.host },
+                        style = ZenType.rounded(16, FontWeight.Medium),
+                        color = zen.ink,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = visit.displayAddress,
+                        style = ZenType.rounded(13, FontWeight.Normal),
+                        color = zen.ink.copy(alpha = 0.6f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            if (index < visits.lastIndex || suggestions.isNotEmpty()) RowDivider()
+        }
         suggestions.forEachIndexed { index, suggestion ->
             Row(
                 modifier = Modifier

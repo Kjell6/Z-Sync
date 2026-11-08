@@ -119,6 +119,7 @@ import de.kjell.zencompanion.ui.browser.BrowserPages
 import de.kjell.zencompanion.ui.browser.MiniBrowserViewModel
 import de.kjell.zencompanion.ui.browser.PageSession
 import de.kjell.zencompanion.ui.browser.BlockingCard
+import de.kjell.zencompanion.data.BrowserVisit
 import de.kjell.zencompanion.data.ContentBlocking
 import de.kjell.zencompanion.data.ContentBlockingSettings
 import de.kjell.zencompanion.data.OpenPage
@@ -169,6 +170,9 @@ fun MiniBrowserScreen(
 ) {
     val context = LocalContext.current
     var showOverview by rememberSaveable { mutableStateOf(startsInOverview) }
+    /** The browser's own history is up. It belongs to the browser, not to a
+     *  page: the overview opened from home has no page behind it. */
+    var historyVisible by rememberSaveable { mutableStateOf(false) }
     // Still set after the process died: the page to come back to is then the
     // last one in use, not the one this browser was first opened with.
     var launched by rememberSaveable { mutableStateOf(false) }
@@ -267,6 +271,20 @@ fun MiniBrowserScreen(
         if (session == null && !showOverview) onDismiss()
     }
 
+    /** A page from the browser's history: the page on screen takes it, or a
+     *  new one when the overview came up without a page. */
+    fun openHistoryVisit(visit: BrowserVisit) {
+        // A page whose renderer died has no WebView to load into.
+        val view = pages.active?.webView
+        if (view != null) view.loadUrl(visit.url) else pages.open(visit.url)
+        if (showOverview) {
+            scope.launch {
+                overviewAlpha.animateTo(0f, tween(200))
+                showOverview = false
+            }
+        }
+    }
+
     Box(modifier.fillMaxSize()) {
         if (session != null) {
             BrowserPageScreen(
@@ -310,6 +328,7 @@ fun MiniBrowserScreen(
                     hiddenCardId = hiddenCardId,
                     onCardFrame = { id, frame -> cardFrames[id] = frame },
                     onOpen = ::closeOverview,
+                    onOpenHistory = { historyVisible = true },
                     onNewPage = {
                         // The grid stays as it was while it fades: no card joins it on the way out.
                         excludedCardId = pages.open(null).id
@@ -402,6 +421,16 @@ fun MiniBrowserScreen(
                     .graphicsLayer { alpha = heroAlpha.value },
             )
         }
+    }
+
+    if (historyVisible) {
+        BrowserHistoryScreen(
+            onOpen = { visit ->
+                historyVisible = false
+                openHistoryVisit(visit)
+            },
+            onClose = { historyVisible = false },
+        )
     }
 }
 
@@ -572,6 +601,7 @@ private fun BrowserPageScreen(
             viewModel.onLinkUnavailable()
         }
     }
+
 
     fun finishAddressEdit() {
         focusManager.clearFocus()
@@ -910,6 +940,10 @@ private fun BrowserPageScreen(
                             openAddressTarget(viewModel.selectSuggestion(suggestion))
                             finishAddressEdit()
                         },
+                        onPickVisit = { visit ->
+                            openAddressTarget(viewModel.selectVisit(visit))
+                            finishAddressEdit()
+                        },
                         // A page that failed to load has nothing worth pinning.
                         canPin = allSpaces.isNotEmpty() && state.pageError == null,
                         onBack = { webView?.goBack() },
@@ -1174,11 +1208,17 @@ private fun PageStack(
                             }
                         },
                         onSiteThemeColorChange = viewModel::onSiteThemeColorChange,
-                        onCurrentUrlChange = viewModel::onCurrentUrlChange,
+                        onCurrentUrlChange = { url ->
+                            viewModel.onCurrentUrlChange(url)
+                            pages.pageAddressChanged(session)
+                        },
                         onCanGoBackChange = viewModel::onCanGoBackChange,
                         onCanGoForwardChange = viewModel::onCanGoForwardChange,
                         onTextInputChange = viewModel::onAddressTextChange,
-                        onTitleChange = viewModel::onCurrentTitleChange,
+                        onTitleChange = { title ->
+                            viewModel.onCurrentTitleChange(title)
+                            pages.pageTitleChanged(session)
+                        },
                         onProgressChange = viewModel::onProgressChange,
                         onPageStarted = {
                             viewModel.onShowingOriginalChange(session.blocker.showingOriginal)

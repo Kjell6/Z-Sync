@@ -4,6 +4,8 @@
         <exclude domain="sharedpref" path="zen_secure_prefs.xml" />
         <exclude domain="sharedpref" path="zen_secure_prefs_plain.xml" />
         <exclude domain="file" path="spaces-cache.json" />
+        <exclude domain="file" path="browser-history.json" />
+        <exclude domain="file" path="browser-history.json.tmp" />
         <exclude domain="sharedpref" path="site_permissions.xml" />
         <exclude domain="root" path="app_webview/" />
     </cloud-backup>
@@ -11,6 +13,8 @@
         <exclude domain="sharedpref" path="zen_secure_prefs.xml" />
         <exclude domain="sharedpref" path="zen_secure_prefs_plain.xml" />
         <exclude domain="file" path="spaces-cache.json" />
+        <exclude domain="file" path="browser-history.json" />
+        <exclude domain="file" path="browser-history.json.tmp" />
         <exclude domain="sharedpref" path="site_permissions.xml" />
         <exclude domain="root" path="app_webview/" />
     </device-transfer>

@@ -1020,6 +1020,56 @@
         }
       }
     },
+    "history.delete": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete"
+          }
+        }
+      }
+    },
+    "history.empty": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pages you open will show up here"
+          }
+        }
+      }
+    },
+    "history.no_results": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No pages found"
+          }
+        }
+      }
+    },
+    "history.search": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search history"
+          }
+        }
+      }
+    },
+    "history.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browsing History"
+          }
+        }
+      }
+    },
     "home.delete_failed": {
       "extractionState": "manual",
       "localizations": {

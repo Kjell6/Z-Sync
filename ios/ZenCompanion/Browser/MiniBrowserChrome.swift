@@ -42,6 +42,8 @@ struct MiniBrowserChrome<NavBar: View>: View {
     var addressEditing = false
     /// A tapped suggestion goes through the same submit path as typed text.
     var onPickSuggestion: (String) -> Void
+    /// A page from the history, picked from the list.
+    var onPickVisit: (BrowserVisit) -> Void
     /// Opens the overview of the open pages.
     var onOpenPages: () -> Void
     /// The overview is up. The dock stays in place and its outer controls turn
@@ -49,6 +51,8 @@ struct MiniBrowserChrome<NavBar: View>: View {
     var overviewShown = false
     /// Whether a page is open behind the overview, so there is a browser to leave.
     var onNewPage: () -> Void = {}
+    /// Opens the browser's own history from the overview.
+    var onOpenHistory: () -> Void = {}
     var onDone: () -> Void = {}
     var onCloseAll: () -> Void = {}
     /// The navigation bar. It stays in place while the menu grows above it.
@@ -94,7 +98,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
 
             // Only while the address field is open. The list grows out of the
             // bar the same way the page menu does, and shares its glass.
-            if addressEditing, !model.suggestions.isEmpty {
+            if addressEditing, !model.suggestions.isEmpty || !model.historySuggestions.isEmpty {
                 suggestionList
                     .frame(maxWidth: .infinity)
                     .fixedSize(horizontal: false, vertical: true)
@@ -116,6 +120,16 @@ struct MiniBrowserChrome<NavBar: View>: View {
 
             if !addressEditing {
                 HStack(spacing: 10) {
+                    // Only in the overview: that is where the browser's own
+                    // history belongs, next to the new page. The page menu
+                    // keeps the page's own tools.
+                    if overviewShown {
+                        historyControl
+                            .transition(
+                                .scale(scale: 0.6, anchor: .leading)
+                                    .combined(with: .opacity)
+                            )
+                    }
                     leadingControl
                     Spacer(minLength: 0)
                     // Closes the mini-browser.
@@ -143,6 +157,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
         .animation(motion, value: model.menuExpanded)
         .animation(motion, value: model.menuSiteSettings)
         .animation(motion, value: model.suggestions)
+        .animation(motion, value: model.historySuggestions)
         // Chrome, not content: the rows have fixed 44pt metrics, so type stops
         // at the first accessibility size instead of overflowing the bar.
         .dynamicTypeSize(...DynamicTypeSize.accessibility1)
@@ -153,9 +168,48 @@ struct MiniBrowserChrome<NavBar: View>: View {
     /// Part of the address editing state, not a new layer: the rows use the
     /// same ink and row height as the menu, and the panel sits in the space
     /// above the bar that only exists while typing.
+    private var shownSuggestions: [String] {
+        SearchSuggestions.fitting(model.suggestions, beside: model.historySuggestions.count)
+    }
+
     private var suggestionList: some View {
         VStack(spacing: 0) {
-            ForEach(Array(model.suggestions.enumerated()), id: \.offset) { index, suggestion in
+            ForEach(model.historySuggestions) { visit in
+                Button {
+                    onPickVisit(visit)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "clock")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Palette.ink(scheme).opacity(0.45))
+                            .frame(width: 22, height: 22)
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(verbatim: visit.title.isEmpty ? visit.host : visit.title)
+                                .zenFont(16, weight: .medium, design: .rounded)
+                                .foregroundStyle(Palette.ink(scheme))
+                                .lineLimit(1)
+                            Text(verbatim: visit.displayAddress)
+                                .zenFont(13, design: .rounded)
+                                .foregroundStyle(Palette.ink(scheme).opacity(0.6))
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.horizontal, 20)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                    .overlay(alignment: .bottom) {
+                        if visit != model.historySuggestions.last || !model.suggestions.isEmpty {
+                            Rectangle()
+                                .fill(Color.primary.opacity(0.08))
+                                .frame(height: 0.5)
+                                .padding(.leading, 52)
+                        }
+                    }
+                }
+                .buttonStyle(SuggestionPressStyle())
+            }
+            ForEach(Array(shownSuggestions.enumerated()), id: \.offset) { index, suggestion in
                 Button {
                     onPickSuggestion(suggestion)
                 } label: {
@@ -174,7 +228,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
                     .frame(minHeight: 44)
                     .contentShape(Rectangle())
                     .overlay(alignment: .bottom) {
-                        if index < model.suggestions.count - 1 {
+                        if index < shownSuggestions.count - 1 {
                             Rectangle()
                                 .fill(Color.primary.opacity(0.08))
                                 .frame(height: 0.5)
@@ -187,6 +241,21 @@ struct MiniBrowserChrome<NavBar: View>: View {
         }
         .padding(.vertical, 6)
         .accessibilityElement(children: .contain)
+    }
+
+    /// The browser's own history, next to the new page while the overview is
+    /// up. Its own piece of glass, like the other outer controls.
+    private var historyControl: some View {
+        Button(action: onOpenHistory) {
+            Image(systemName: "clock")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Palette.ink(scheme))
+                .frame(width: controlSide, height: controlSide)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(GlassPressStyle())
+        .floatingGlassCapsule()
+        .accessibilityLabel(Text("history.title"))
     }
 
     /// The open pages, or a new one once the overview is up. One piece of

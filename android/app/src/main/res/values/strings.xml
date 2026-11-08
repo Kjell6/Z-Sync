@@ -307,4 +307,11 @@
     <string name="site_permission_block">Block</string>
     <string name="settings_clear_website_data">Clear Website Data</string>
     <string name="settings_clear_website_data_message">Removes cookies, site storage and site permissions. You will be signed out of websites. Open pages and your Zen data stay.</string>
+
+    <!-- Browsing history -->
+    <string name="history_title">Browsing History</string>
+    <string name="history_search">Search history</string>
+    <string name="history_empty">Pages you open will show up here</string>
+    <string name="history_no_results">No pages found</string>
+    <string name="history_delete">Delete</string>
 </resources>

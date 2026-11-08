@@ -342,6 +342,7 @@ class BrowserPages(
     fun appWentToBackground() {
         store.promote(keepEveryPage(), ::exit)
         store.markActiveUsed()
+        BrowserHistory.saveNow()
         sessions.values.forEach(::saveHistory)
         keptShotsToDisk()
     }

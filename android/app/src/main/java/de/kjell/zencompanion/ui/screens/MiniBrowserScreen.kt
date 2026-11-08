@@ -274,12 +274,9 @@ fun MiniBrowserScreen(
     /** A page from the browser's history: the page on screen takes it, or a
      *  new one when the overview came up without a page. */
     fun openHistoryVisit(visit: BrowserVisit) {
-        val active = pages.active
-        if (active != null) {
-            active.webView?.loadUrl(visit.url)
-        } else {
-            pages.open(visit.url)
-        }
+        // A page whose renderer died has no WebView to load into.
+        val view = pages.active?.webView
+        if (view != null) view.loadUrl(visit.url) else pages.open(visit.url)
         if (showOverview) {
             scope.launch {
                 overviewAlpha.animateTo(0f, tween(200))

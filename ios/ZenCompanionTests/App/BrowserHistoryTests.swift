@@ -1,3 +1,4 @@
+import UIKit
 import XCTest
 
 @testable import ZenCompanion
@@ -108,6 +109,17 @@ final class BrowserHistoryTests: XCTestCase {
         XCTAssertEqual(store.visits.first?.visits, 1)
         model.updateCurrentURL(url("https://a.example/two"))
         XCTAssertEqual(store.visits.map(\.url), ["https://a.example/two", "https://a.example/one"])
+    }
+
+    func testGoingToTheBackgroundSavesWhatIsWaitingButNotARemovedList() {
+        let file = makeFile()
+        let store = BrowserHistoryStore(fileURL: file, saveDelay: .seconds(60))
+        store.record(url("https://a.example"), title: "A")
+        NotificationCenter.default.post(name: UIApplication.didEnterBackgroundNotification, object: nil)
+        XCTAssertEqual(makeStore(file: file).visits.map(\.title), ["A"])
+        store.removeAll()
+        NotificationCenter.default.post(name: UIApplication.didEnterBackgroundNotification, object: nil)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
     }
 
     func testRemovingOnePageLeavesTheOthers() {

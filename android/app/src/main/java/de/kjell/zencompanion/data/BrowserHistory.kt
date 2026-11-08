@@ -12,6 +12,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
@@ -125,6 +126,7 @@ object BrowserHistory {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
     private var file: File? = null
     private var pendingSave: Job? = null
+    @Volatile private var cleared = false
 
     private val _visits = MutableStateFlow<List<BrowserVisit>>(emptyList())
     /** Newest first. */
@@ -135,34 +137,45 @@ object BrowserHistory {
         file = stored
         scope.launch {
             val saved = runCatching { decode(stored.readText()) }.getOrDefault(emptyList())
+            // A sign-out while this was reading must not bring the list back.
+            if (cleared) return@launch
             // Anything recorded while this was reading stays on top.
-            _visits.value = (_visits.value + saved).distinctBy { it.url }
+            _visits.update { (it + saved).distinctBy(BrowserVisit::url).take(MAX_HISTORY_ENTRIES) }
         }
     }
 
     fun record(url: String?, title: String) {
-        val updated = withVisit(_visits.value, url, title, System.currentTimeMillis())
-        if (updated === _visits.value) return
-        _visits.value = updated
+        if (historyAddress(url) == null) return
+        _visits.update { withVisit(it, url, title, System.currentTimeMillis()) }
         scheduleSave()
     }
 
     fun updateTitle(address: String, title: String) {
-        val updated = withVisitTitle(_visits.value, address, title)
-        if (updated === _visits.value) return
-        _visits.value = updated
+        _visits.update { withVisitTitle(it, address, title) }
         scheduleSave()
     }
 
     fun remove(visit: BrowserVisit) {
-        _visits.value = _visits.value.filter { it.url != visit.url }
+        _visits.update { visits -> visits.filter { it.url != visit.url } }
         scheduleSave()
     }
 
     fun clear() {
+        cleared = true
         _visits.value = emptyList()
         pendingSave?.cancel()
-        scope.launch { file?.delete() }
+        pendingSave = null
+        scope.launch {
+            file?.delete()
+            temporaryFile()?.delete()
+        }
+    }
+
+    /** The app is leaving and may not come back: a waiting save goes now. */
+    fun saveNow() {
+        if (pendingSave?.isActive != true) return
+        pendingSave?.cancel()
+        pendingSave = scope.launch { write() }
     }
 
     fun suggestions(text: String, current: String?): List<BrowserVisit> =
@@ -172,14 +185,20 @@ object BrowserHistory {
         pendingSave?.cancel()
         pendingSave = scope.launch {
             delay(SAVE_DELAY_MS)
-            val target = file ?: return@launch
-            val temp = File(target.parentFile, "$FILE.tmp")
-            runCatching {
-                temp.writeText(encode(_visits.value))
-                temp.renameTo(target)
-            }
+            write()
         }
     }
+
+    private fun write() {
+        val target = file ?: return
+        val temp = temporaryFile() ?: return
+        runCatching {
+            temp.writeText(encode(_visits.value))
+            temp.renameTo(target)
+        }
+    }
+
+    private fun temporaryFile(): File? = file?.let { File(it.parentFile, "$FILE.tmp") }
 
     private fun encode(visits: List<BrowserVisit>): String = JSONArray().apply {
         visits.forEach { visit ->

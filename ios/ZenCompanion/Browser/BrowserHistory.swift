@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UIKit
 
 /// One address the reader has been to. A second visit updates the entry, so
 /// the list holds each page once, at the time it was last open.
@@ -41,12 +42,21 @@ final class BrowserHistoryStore {
     @ObservationIgnored private let fileURL: URL
     @ObservationIgnored private let saveDelay: Duration
     @ObservationIgnored private var saveTask: Task<Void, Never>?
+    @ObservationIgnored private var backgroundObserver: NSObjectProtocol?
 
     init(fileURL: URL = BrowserHistoryStore.defaultFileURL, saveDelay: Duration = .seconds(1)) {
         self.fileURL = fileURL
         self.saveDelay = saveDelay
         let decoder = JSONDecoder()
         visits = (try? Data(contentsOf: fileURL)).flatMap { try? decoder.decode([BrowserVisit].self, from: $0) } ?? []
+        // The app may be ended while in the background, before the save is due.
+        backgroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.saveNow() }
+        }
     }
 
     /// The address history keeps, or nil for what is not a web page. A jump
@@ -122,8 +132,10 @@ final class BrowserHistoryStore {
         return ranked.prefix(limit).map(\.visit)
     }
 
-    /// Writes what is pending right away. For tests and for the app leaving.
+    /// Writes a waiting save right away. Nothing is waiting after `removeAll`,
+    /// so this cannot bring a removed list back.
     func saveNow() {
+        guard saveTask != nil else { return }
         saveTask?.cancel()
         saveTask = nil
         write(visits)
@@ -135,6 +147,7 @@ final class BrowserHistoryStore {
         saveTask = Task { [weak self] in
             try? await Task.sleep(for: delay)
             guard !Task.isCancelled, let self else { return }
+            self.saveTask = nil
             self.write(self.visits)
         }
     }
@@ -145,7 +158,7 @@ final class BrowserHistoryStore {
             at: fileURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        guard (try? data.write(to: fileURL, options: [.atomic, .completeFileProtection])) != nil else { return }
+        guard (try? data.write(to: fileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])) != nil else { return }
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
         var url = fileURL

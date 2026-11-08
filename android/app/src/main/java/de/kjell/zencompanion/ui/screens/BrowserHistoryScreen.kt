@@ -41,6 +41,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -232,6 +235,7 @@ private fun DaySection(
 @Composable
 private fun VisitRow(visit: BrowserVisit, time: String, onOpen: () -> Unit, onDelete: () -> Unit) {
     val zen = LocalZenColors.current
+    val deleteLabel = stringResource(R.string.history_delete)
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
             if (value == SwipeToDismissBoxValue.EndToStart) {
@@ -270,6 +274,15 @@ private fun VisitRow(visit: BrowserVisit, time: String, onOpen: () -> Unit, onDe
                 .background(zen.background)
                 .background(zen.lift)
                 .clickable(onClick = onOpen)
+                // A swipe alone would leave screen readers no way to delete.
+                .semantics {
+                    customActions = listOf(
+                        CustomAccessibilityAction(deleteLabel) {
+                            onDelete()
+                            true
+                        },
+                    )
+                }
                 .padding(horizontal = 16.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

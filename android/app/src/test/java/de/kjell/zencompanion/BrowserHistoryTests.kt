@@ -10,6 +10,7 @@ import de.kjell.zencompanion.ui.screens.dayOf
 import java.util.Calendar
 import java.util.TimeZone
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -107,5 +108,6 @@ class BrowserHistoryTests {
         val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
         val morning = 1_800_000_000_000L
         assertEquals(dayOf(morning, calendar), dayOf(morning + 60_000L, calendar))
+        assertNotEquals(dayOf(morning, calendar), dayOf(morning + 24 * 60 * 60_000L, calendar))
     }
 }

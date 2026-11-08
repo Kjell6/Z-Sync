@@ -97,19 +97,24 @@ private struct DeckCardPlacement: ViewModifier, Animatable {
     var lift: CGFloat
     /// 1 is this card grown to the whole screen.
     var expansion: CGFloat
+    /// The cards the deck holds. Fractional while one leaves, and animated
+    /// with the rest, so the deck's end moves along the same curve.
+    var count: CGFloat
 
-    var animatableData: AnimatablePair<AnimatablePair<CGFloat, CGFloat>, AnimatablePair<CGFloat, AnimatablePair<CGFloat, CGFloat>>> {
-        get { AnimatablePair(AnimatablePair(index, focus), AnimatablePair(reveal, AnimatablePair(lift, expansion))) }
+    var animatableData: AnimatablePair<AnimatablePair<CGFloat, CGFloat>, AnimatablePair<CGFloat, AnimatablePair<CGFloat, AnimatablePair<CGFloat, CGFloat>>>> {
+        get { AnimatablePair(AnimatablePair(index, focus), AnimatablePair(reveal, AnimatablePair(lift, AnimatablePair(expansion, count)))) }
         set {
             index = newValue.first.first
             focus = newValue.first.second
             reveal = newValue.second.first
             lift = newValue.second.second.first
-            expansion = newValue.second.second.second
+            expansion = newValue.second.second.second.first
+            count = newValue.second.second.second.second
         }
     }
 
     func body(content: Content) -> some View {
+        let deck = PageDeckGeometry(screen: self.deck.screen, count: count)
         let resting = deck.frame(index: index, focus: focus)
         let frame = CGRect(
             x: resting.minX * (1 - expansion),
@@ -300,9 +305,6 @@ struct OpenPagesOverview: View {
             let cards = visiblePages
             let lifted = liftedID.flatMap { id in cards.firstIndex { $0.id == id } }
             let closedFocus = lifted.map { focusAfterClosing($0, count: cards.count) } ?? focus
-            // A lifted card already counts as gone for the deck's end, so the
-            // others settle once instead of moving again when it is removed.
-            let liveDeck = PageDeckGeometry(screen: deck.screen, count: max(1, deck.count - gap))
             ForEach(Array(cards.enumerated()), id: \.element.id) { index, page in
                 // Where the lifted card is going to leave a hole, the others
                 // are already on their way into it. The card itself stays.
@@ -332,12 +334,15 @@ struct OpenPagesOverview: View {
                     menu(for: page)
                 }
                 .modifier(DeckCardPlacement(
-                    deck: liveDeck,
+                    deck: deck,
                     index: place,
                     focus: deckFocus,
                     reveal: place > deckFocus ? min(reveal, aheadReveal) : reveal,
                     lift: page.id == liftedID ? lift : 0,
-                    expansion: page.id == expandingCardID ? expansion : 0
+                    expansion: page.id == expandingCardID ? expansion : 0,
+                    // A lifted card already counts as gone for the deck's end, so
+                    // the others settle once instead of moving again when it goes.
+                    count: max(1, deck.count - gap)
                 ))
                 // Further right is further on top, as with the running apps.
                 .zIndex(Double(index))

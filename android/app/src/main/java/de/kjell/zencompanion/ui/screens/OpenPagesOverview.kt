@@ -132,19 +132,20 @@ internal class PageDeckGeometry(
     /** Where a page sits at full size. */
     val pageFrame = Rect(0f, 0f, screen.width, pageHeight)
 
-    fun frame(index: Float, focus: Float): Rect {
+    /** [cards] is fractional while one leaves, so the deck's end moves with it. */
+    fun frame(index: Float, focus: Float, cards: Float = count.toFloat()): Rect {
         val offset = index - focus
         val scale = FocusScale + ScaleStep * offset.coerceIn(-4f, 2f)
         val width = screen.width * scale
         val height = pageHeight * scale
-        val left = screen.width * left(min(3f, offset)) + endShift(focus)
+        val left = screen.width * left(min(3f, offset)) + endShift(focus, cards)
         val top = screen.height * Middle - height / 2
         return Rect(left, top, left + width, top + height)
     }
 
     /** With nothing on top of it the last card moves to the true middle. */
-    private fun endShift(focus: Float): Float {
-        val last = max(0, count - 1).toFloat()
+    private fun endShift(focus: Float, cards: Float): Float {
+        val last = max(0f, cards - 1f)
         val near = (1f - (last - focus)).coerceIn(0f, 1f)
         val eased = near * near * (3f - 2f * near)
         val centered = (screen.width - cardSize.width) / 2f
@@ -530,7 +531,9 @@ internal fun OpenPagesOverview(
                             .graphicsLayer {
                                 val focused = deckFocus()
                                 val spot = place()
-                                val resting = deck.frame(spot, focused)
+                                // A lifted card already counts as gone for the deck's end,
+                                // so the others settle once instead of moving again.
+                                val resting = deck.frame(spot, focused, max(1f, deck.count - gap.value))
                                 val grown = if (isExpanding) expansion() else 0f
                                 val left = resting.left * (1f - grown)
                                 val top = resting.top * (1f - grown)

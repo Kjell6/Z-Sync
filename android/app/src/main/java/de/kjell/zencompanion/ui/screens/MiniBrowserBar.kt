@@ -189,7 +189,7 @@ private val PanelInset = 14.dp
 private val RowGap = 8.dp
 
 /** The bar turning into the composer, and the dock fading as it does. */
-private const val BarMorphMs = 160
+internal const val BarMorphMs = 160
 /** How far the dock drops into the gesture area: the safe area is not touched,
  * only the slack above it is used up. */
 private val BottomLift = 15.dp

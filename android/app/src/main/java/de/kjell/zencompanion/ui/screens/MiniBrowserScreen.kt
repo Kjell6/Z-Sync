@@ -372,6 +372,7 @@ fun MiniBrowserScreen(
     fun returnPage() {
         committingPull = false
         overviewControls = false
+        excludedCardId = null
         transition {
             val spec = spring<Float>(stiffness = 400f, visibilityThreshold = 0.5f)
             listOf(
@@ -466,6 +467,53 @@ fun MiniBrowserScreen(
         }
     }
 
+    /**
+     * A blank sheet comes in from the right and grows to the whole screen while
+     * the deck parts around it. The address field follows it in.
+     */
+    fun openNewPage() {
+        pages.releaseSwitchingOrder()
+        val arriving = pages.open(null)
+        // Not under the deck: the field and the keyboard come once it is nearly here.
+        arriving.opensWithSearch = false
+        // The deck stays as it was while it goes: no card joins it on the way out.
+        excludedCardId = arriving.id
+        overviewControls = false
+        val count = pages.store.pages.value.size
+        val last = (count - 1).coerceAtLeast(0).toFloat()
+        val card = PageDeckGeometry(screen, count, bottomBand).frame(last, last - 1f)
+        val scale = if (screen.width > 0f) card.width / screen.width else 1f
+        floatCorner = deckCardCorner / scale
+        pageFloats = true
+        transition {
+            poseX.snapTo(card.center.x - screen.width / 2f)
+            poseY.snapTo(card.bottom + bottomBand * scale - screen.height)
+            poseScale.snapTo(scale)
+            poseBandCut.snapTo(bottomBand)
+            chromeAlpha.snapTo(0f)
+            // Building the WebView holds the main thread; the move starts after it.
+            var waited = 0
+            while (arriving.webView == null && waited++ < 40) withFrameNanos { }
+            withFrameNanos { }
+            val spec = spring<Float>(stiffness = 300f, visibilityThreshold = 0.5f)
+            listOf(
+                launch { poseX.animateTo(0f, spec) },
+                launch { poseY.animateTo(0f, spec) },
+                launch { poseScale.animateTo(1f, spring(stiffness = 300f, visibilityThreshold = 0.001f)) },
+                launch { poseBandCut.animateTo(0f, spec) },
+                launch { overviewReveal.animateTo(0f, spring(stiffness = 300f, visibilityThreshold = 0.002f)) },
+            ).joinAll()
+            pageFloats = false
+            showOverview = false
+            excludedCardId = null
+            // Only now: the keyboard would stop the move dead in the middle.
+            arriving.viewModel.beginAddressEdit()
+            // The bar turns into the field first, out of sight.
+            delay(BarMorphMs.toLong())
+            chromeAlpha.animateTo(1f, tween(200))
+        }
+    }
+
     /** From home the overview fades in over the spaces; a recreated screen just comes back. */
     LaunchedEffect(Unit) {
         if (showOverview) overviewReveal.animateTo(1f, tween(220))
@@ -507,6 +555,19 @@ fun MiniBrowserScreen(
             .fillMaxSize()
             .onSizeChanged { screen = Size(it.width.toFloat(), it.height.toFloat()) },
     ) {
+        // Nothing of the screen behind the browser shows around a flying page:
+        // the page's own color lies under it, as it does on iOS.
+        if (pageFloats && session != null) {
+            val floating by session.viewModel.state.collectAsState()
+            val under = floating.siteThemeColor.takeIf { floating.pageError == null } ?: MaterialTheme.colorScheme.surface
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .zIndex(-1f)
+                    .background(under),
+            )
+        }
+
         if (session != null) {
             BrowserPageScreen(
                 modifier = Modifier
@@ -535,6 +596,8 @@ fun MiniBrowserScreen(
                 allSpaces = allSpaces,
                 browserRepository = browserRepository,
                 chromeAlpha = { chromeAlpha.value },
+                // A new page flies in on its own color, not on its way there.
+                colorArrives = excludedCardId != null,
                 onPullStart = ::beginPagePull,
                 onPullChange = ::updatePagePull,
                 onPullEnd = ::endPagePull,
@@ -621,18 +684,7 @@ fun MiniBrowserScreen(
                     .graphicsLayer { alpha = dockAlpha },
                 // A placeholder until the browser history lands here.
                 onHistory = {},
-                onNewPage = {
-                    pages.releaseSwitchingOrder()
-                    // The deck stays as it was while it goes: no card joins it on the way out.
-                    excludedCardId = pages.open(null).id
-                    overviewControls = false
-                    transition {
-                        overviewReveal.animateTo(0f, tween(200))
-                        showOverview = false
-                        excludedCardId = null
-                        chromeAlpha.animateTo(1f, tween(180))
-                    }
-                },
+                onNewPage = ::openNewPage,
                 onPlusLongPress = { if (openPages.isNotEmpty()) plusMenuOpen = true },
                 onLeave = {
                     if (pages.active != null) {
@@ -716,6 +768,8 @@ private fun BrowserPageScreen(
     browserRepository: BrowserRepository,
     /** The bar's opacity: it goes as the page becomes a card. */
     chromeAlpha: () -> Float,
+    /** The page's color is there at once, with no blend from the page before. */
+    colorArrives: Boolean,
     onPullStart: () -> Unit,
     onPullChange: (Offset) -> Unit,
     onPullEnd: (PagePullEnd) -> Unit,
@@ -885,12 +939,12 @@ private fun BrowserPageScreen(
     val targetBg = state.siteThemeColor.takeIf { state.pageError == null } ?: defaultSurface
     val animatedBgColor by animateColorAsState(
         targetValue = targetBg,
-        animationSpec = if (colorJumps) snap() else tween(300),
+        animationSpec = if (colorJumps || colorArrives) snap() else tween(300),
         label = "browserThemeColor",
     )
     // The animation answers a frame late, and a page switch has no frame to
     // spare: the plate would go back to the old page's color for a moment.
-    val shownBgColor = if (colorJumps) targetBg else animatedBgColor
+    val shownBgColor = if (colorJumps || colorArrives) targetBg else animatedBgColor
 
     // The bar stays put while a sheet, a reader, the find bar or a banner is up.
     val barVisible = !barHidden ||

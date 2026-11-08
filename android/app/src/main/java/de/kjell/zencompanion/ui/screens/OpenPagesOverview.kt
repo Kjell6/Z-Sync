@@ -74,8 +74,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.isTraversalGroup
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -507,7 +511,12 @@ internal fun OpenPagesOverview(
                         offset = { place() - deckFocus() },
                         reveal = reveal,
                         menuOpen = menuCardId == page.id,
+                        onMenuOpen = { menuCardId = page.id },
                         onMenuDismiss = { menuCardId = null },
+                        onOpen = {
+                            scope.launch { focus.animateTo(index.toFloat(), DeckOpenSpring) }
+                            onOpen(page)
+                        },
                         spaces = spaces,
                         pinsIntoFolders = saveKind == SaveKind.PINNED,
                         onClose = {
@@ -592,7 +601,9 @@ private fun OpenPageCard(
     offset: () -> Float,
     reveal: () -> Float,
     menuOpen: Boolean,
+    onMenuOpen: () -> Unit,
     onMenuDismiss: () -> Unit,
+    onOpen: () -> Unit,
     spaces: List<ZenSpaces.ZenSpace>,
     pinsIntoFolders: Boolean,
     onClose: () -> Unit,
@@ -604,6 +615,7 @@ private fun OpenPageCard(
     val context = LocalContext.current
     val title = if (page.url.isEmpty()) stringResource(R.string.kept_new_page) else PageTitle.headline(page.title, page.url)
     val currentLabel = stringResource(R.string.kept_current_page)
+    val closeLabel = stringResource(R.string.kept_close_page)
     val session = remember(page.id) { pages.session(page.id) }
     val cornerPx = rememberDeckCardCornerPx()
     val shape = remember(cornerPx) { RoundedCornerShape(cornerPx) }
@@ -632,8 +644,23 @@ private fun OpenPageCard(
                     this.shape = RoundedCornerShape(cornerPx, cornerPx, bottom, bottom)
                     clip = true
                 }
+                // The deck's gestures sit on its parent; TalkBack needs them here.
                 .semantics {
                     contentDescription = if (isCurrent) "$title, $currentLabel" else title
+                    onClick {
+                        onOpen()
+                        true
+                    }
+                    onLongClick {
+                        onMenuOpen()
+                        true
+                    }
+                    customActions = listOf(
+                        CustomAccessibilityAction(closeLabel) {
+                            onClose()
+                            true
+                        },
+                    )
                 },
         ) {
             OpenPageShot(page = page, session = session, topInset = topInset, surface = surface)

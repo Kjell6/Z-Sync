@@ -61,6 +61,8 @@ struct MiniBrowserView: View {
     @State private var transitionEpoch = 0
     /// The deck's cards above the page's own; see `OpenPagesOverview`.
     @State private var aheadReveal: CGFloat = 1
+    /// A new page from the deck: its address field waits until it has flown in.
+    @State private var holdsNewPageSearch = false
     /// A new deck each time the page leaves for it, with the order fresh.
     @State private var deckGeneration = 0
     /// The card growing back into its page, and how far it has got.
@@ -238,7 +240,7 @@ struct MiniBrowserView: View {
                 if showOverview {
                     overview
                         .id(deckGeneration)
-                        .allowsHitTesting(expandingCardID == nil)
+                        .allowsHitTesting(expandingCardID == nil && !overviewHoldsCards)
                         .zIndex(1)
                 }
 
@@ -432,8 +434,9 @@ struct MiniBrowserView: View {
     @ViewBuilder
     private var floatingPageShadow: some View {
         if pageFloats {
+            // In the page's own color: a new page has nothing painted yet.
             RoundedRectangle(cornerRadius: pagePose.corner, style: .continuous)
-                .fill(.black)
+                .fill(sheetBackground)
                 .padding(.top, -pageFrame.minY)
                 .shadow(color: .black.opacity(0.26), radius: 20, x: -4.4, y: 0)
                 .opacity(Double(overviewReveal))
@@ -561,6 +564,11 @@ private extension MiniBrowserView {
             model.restoreAddressDisplay()
             return
         }
+        guard !holdsNewPageSearch else { return }
+        startNewPageSearch()
+    }
+
+    private func startNewPageSearch() {
         startsInSearch = true
         editingAddress = true
         DispatchQueue.main.async { isAddressFocused = true }
@@ -839,19 +847,73 @@ private extension MiniBrowserView {
         }
     }
 
-    /// A blank page takes over under the overview, which then moves away.
+    /// Where a new page starts: beside the deck, as the card after the last.
+    private func newPageStartPose() -> PageCardPose? {
+        guard screenSize.width > 0, screenSize.height > 0 else { return nil }
+        let count = pages.pages.count
+        let deck = PageDeckGeometry(screen: screenSize, count: count)
+        let last = CGFloat(max(0, count - 1))
+        let card = deck.frame(index: last, focus: last - 1)
+        let scale = card.width / screenSize.width
+        return PageCardPose(
+            x: card.midX - screenSize.width / 2,
+            y: card.maxY - screenSize.height,
+            scale: scale,
+            corner: PageDeckGeometry.cornerRadius / scale
+        )
+    }
+
+    /// A blank sheet comes in from the right and grows to the whole screen
+    /// while the deck parts around it. The address field follows it in.
     private func openNewPage() {
-        // The deck stays as it was while it goes: no card joins it on the way out.
         transitionEpoch += 1
         let epoch = transitionEpoch
-        overviewHoldsCards = true
         pages.releaseSwitchingOrder()
+        // The deck stays as it was while it goes: no card joins it on the way out.
+        overviewHoldsCards = true
+        holdsNewPageSearch = !reduceMotion
         pages.open(url: nil)
-        overviewControls = false
-        withAnimation(.easeOut(duration: 0.2)) { overviewReveal = 0 } completion: {
+        guard !reduceMotion, let start = newPageStartPose() else {
+            overviewControls = false
+            withAnimation(.easeOut(duration: 0.2)) { overviewReveal = 0 } completion: {
+                guard epoch == transitionEpoch else { return }
+                showOverview = false
+                overviewHoldsCards = false
+            }
+            return
+        }
+        var placed = Transaction()
+        placed.disablesAnimations = true
+        withTransaction(placed) {
+            pagePose = start
+            pageFloats = true
+            chromeRides = false
+        }
+        Task { @MainActor in
+            // On screen where it starts, before it moves.
+            try? await Task.sleep(for: .milliseconds(30))
             guard epoch == transitionEpoch else { return }
-            showOverview = false
-            overviewHoldsCards = false
+            withAnimation(.spring(duration: 0.42, bounce: 0)) {
+                pagePose = PageCardPose(x: 0, y: 0, scale: 1, corner: start.corner)
+                overviewReveal = 0
+            } completion: {
+                guard epoch == transitionEpoch else { return }
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    pagePose = .identity
+                    pageFloats = false
+                    showOverview = false
+                    overviewHoldsCards = false
+                    overviewControls = false
+                }
+                // Only now: bringing up the keyboard holds the main thread,
+                // and the flight would stop dead in the middle.
+                holdsNewPageSearch = false
+                startNewPageSearch()
+                withAnimation(.easeOut(duration: 0.22)) { chromeFade = 1 }
+            }
+            withAnimation(.easeOut(duration: 0.1)) { chromeFade = 0 }
         }
     }
 

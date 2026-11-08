@@ -182,6 +182,9 @@ struct OpenPagesOverview: View {
     var excludedCardID: String?
     /// 0 with only the page on screen, 1 with the deck fully there.
     var reveal: CGFloat
+    /// Cards that lie on top of the page's own card wait until it has landed:
+    /// the page flies above the deck and could not pass under them.
+    var aheadReveal: CGFloat
     /// Status bar height: the part of a card above the page's picture.
     var topInset: CGFloat
     /// Height of the browser's dock, which stays over the overview.
@@ -215,6 +218,7 @@ struct OpenPagesOverview: View {
         expansion: CGFloat,
         excludedCardID: String?,
         reveal: CGFloat,
+        aheadReveal: CGFloat,
         topInset: CGFloat,
         bottomClearance: CGFloat,
         onOpen: @escaping (OpenPage) -> Void
@@ -227,12 +231,16 @@ struct OpenPagesOverview: View {
         self.expansion = expansion
         self.excludedCardID = excludedCardID
         self.reveal = reveal
+        self.aheadReveal = aheadReveal
         self.topInset = topInset
         self.bottomClearance = bottomClearance
         self.onOpen = onOpen
-        let ordered = pages.recencyOrder.filter { $0.id != excludedCardID }
+        let ordered = pages.deckOrder.filter { $0.id != excludedCardID }
         _order = State(initialValue: ordered.map(\.id))
-        _focus = State(initialValue: CGFloat(max(0, ordered.count - 1)))
+        // Right after a swipe the page on screen need not be the front card.
+        let start = pages.activeID.flatMap { id in ordered.firstIndex { $0.id == id } }
+            ?? max(0, ordered.count - 1)
+        _focus = State(initialValue: CGFloat(start))
     }
 
     private var visiblePages: [OpenPage] {
@@ -321,7 +329,7 @@ struct OpenPagesOverview: View {
                     deck: deck,
                     index: place,
                     focus: deckFocus,
-                    reveal: reveal,
+                    reveal: place > deckFocus ? min(reveal, aheadReveal) : reveal,
                     lift: page.id == liftedID ? lift : 0,
                     expansion: page.id == expandingCardID ? expansion : 0
                 ))

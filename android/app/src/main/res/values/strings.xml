@@ -177,6 +177,7 @@
     <string name="browser_normal">Normal tab</string>
     <string name="browser_open_in_browser">Open in external browser</string>
     <string name="browser_close">Close</string>
+    <string name="browser_history">History</string>
     <string name="browser_error_offline_title">You\'re offline</string>
     <string name="browser_error_offline_message">The page loads by itself once you\'re back online.</string>
     <string name="browser_error_offline_waiting">Waiting for a connection</string>

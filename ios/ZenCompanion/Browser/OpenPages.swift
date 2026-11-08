@@ -225,9 +225,10 @@ final class OpenPagesStore: MiniBrowserPageHost {
             + pages.filter { $0.id == activeID }
     }
 
-    /// The order the address bar swipes through. It holds still while the
-    /// user is switching, so swiping back lands on the page just left.
-    private var switchingOrderedPages: [OpenPage] {
+    /// The order the deck and the address bar share. It holds still while the
+    /// user is switching, so swiping back lands on the page just left and a
+    /// page swiped to does not jump to the front of the deck yet.
+    var deckOrder: [OpenPage] {
         guard let switchingOrder else { return recencyOrder }
         return switchingOrder.compactMap(page(_:))
             + pages.filter { !switchingOrder.contains($0.id) }
@@ -236,7 +237,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
     /// The pages either side of the active one, for the address bar swipe:
     /// the same neighbours the deck shows it between.
     var neighbours: (previous: OpenPage?, next: OpenPage?) {
-        let ordered = switchingOrderedPages
+        let ordered = deckOrder
         guard let activeID, let index = ordered.firstIndex(where: { $0.id == activeID }) else { return (nil, nil) }
         return (
             index > 0 ? ordered[index - 1] : nil,
@@ -261,7 +262,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
         }
     }
 
-    /// The deck is coming up, sorted by what was really used last.
+    /// A page was chosen in the deck: it is the current one at once.
     func releaseSwitchingOrder() {
         switchingRelease?.cancel()
         switchingOrder = nil

@@ -59,6 +59,8 @@ struct MiniBrowserView: View {
     /// Every move of the overview takes a new number. A move that finishes
     /// after another has started finds its number gone and leaves things alone.
     @State private var transitionEpoch = 0
+    /// The deck's cards above the page's own; see `OpenPagesOverview`.
+    @State private var aheadReveal: CGFloat = 1
     /// A new deck each time the page leaves for it, with the order fresh.
     @State private var deckGeneration = 0
     /// The card growing back into its page, and how far it has got.
@@ -298,7 +300,8 @@ struct MiniBrowserView: View {
                     }
                 )
                 .padding(.horizontal, 16)
-                .padding(.bottom, chromeBottomInset)
+                .padding(.bottom, chromeBottomInset + (overviewControls ? MiniBrowserChromeMetrics.overviewDockLift : 0))
+                .animation(.spring(response: 0.24, dampingFraction: 0.82), value: overviewControls)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 .offset(y: barCollapsed ? 220 : 0)
                 // While the page is pulled the chrome is part of it.
@@ -416,8 +419,10 @@ struct MiniBrowserView: View {
             expansion: cardExpansion,
             excludedCardID: overviewHoldsCards ? pages.activeID : nil,
             reveal: overviewReveal,
+            aheadReveal: aheadReveal,
             topInset: pageFrame.minY,
-            bottomClearance: MiniBrowserChromeMetrics.dockHeight + chromeBottomPadding + 12,
+            bottomClearance: MiniBrowserChromeMetrics.overviewDockHeight + MiniBrowserChromeMetrics.overviewDockLift
+                + chromeBottomPadding + 10,
             onOpen: closeOverview(to:)
         )
     }
@@ -574,13 +579,18 @@ private extension MiniBrowserView {
     /// How far up the finger has to go for the page to reach its card's size.
     private var pullTravel: CGFloat { max(screenSize.height * 0.32, 1) }
 
+    /// The page's place in the deck: the front, unless it was just swiped to.
+    private var activeDeckIndex: Int {
+        let ordered = pages.deckOrder
+        return ordered.firstIndex { $0.id == pages.activeID } ?? max(0, ordered.count - 1)
+    }
+
     /// Where the page has to be to lie exactly on its card.
     private func cardPose() -> PageCardPose? {
         guard screenSize.width > 0, screenSize.height > 0 else { return nil }
         let deck = PageDeckGeometry(screen: screenSize, count: pages.pages.count)
-        // The page on screen is always the deck's front card.
-        let front = CGFloat(max(0, pages.pages.count - 1))
-        let card = deck.frame(index: front, focus: front)
+        let place = CGFloat(activeDeckIndex)
+        let card = deck.frame(index: place, focus: place)
         let scale = card.width / screenSize.width
         return PageCardPose(
             x: card.midX - screenSize.width / 2,
@@ -594,8 +604,8 @@ private extension MiniBrowserView {
     /// away, and the page's picture is taken while it is still the whole page.
     private func beginPagePull() {
         guard let page = pages.active, !committingPull else { return }
-        pages.releaseSwitchingOrder()
         transitionEpoch += 1
+        aheadReveal = activeDeckIndex < pages.pages.count - 1 ? 0 : 1
         pullPassedPoint = false
         // A card may still be growing into this page, and that deck has its
         // focus and order from before. A page coming back keeps its deck.
@@ -680,6 +690,7 @@ private extension MiniBrowserView {
                 pagePose = .identity
                 committingPull = false
             }
+            withAnimation(.spring(duration: 0.32, bounce: 0)) { aheadReveal = 1 }
         }
         withAnimation(.easeOut(duration: 0.12)) { chromeFade = 0 } completion: {
             guard epoch == transitionEpoch else { return }
@@ -705,6 +716,7 @@ private extension MiniBrowserView {
             chromeRides = false
             chromeFade = 1
             overviewReveal = 1
+            aheadReveal = 1
         }
     }
 
@@ -727,6 +739,7 @@ private extension MiniBrowserView {
                 pageFloats = false
                 chromeRides = false
                 hiddenCardID = nil
+                aheadReveal = 1
             }
         }
     }
@@ -749,6 +762,9 @@ private extension MiniBrowserView {
     }
 
     private func fadeOverviewIn() {
+        // A fade-out still running must not hide the deck coming back.
+        transitionEpoch += 1
+        overviewHoldsCards = false
         showOverview = true
         overviewControls = true
         withAnimation(.easeOut(duration: 0.2)) { overviewReveal = 1 }
@@ -778,6 +794,8 @@ private extension MiniBrowserView {
             settleFloatingPage()
         }
         let wasAsleep = page.model.webView == nil
+        // Chosen here, it is the current page at once; no waiting as after a swipe.
+        pages.releaseSwitchingOrder()
         pages.activate(page.id)
         guard !reduceMotion else {
             fadeOverviewOut()
@@ -827,6 +845,7 @@ private extension MiniBrowserView {
         transitionEpoch += 1
         let epoch = transitionEpoch
         overviewHoldsCards = true
+        pages.releaseSwitchingOrder()
         pages.open(url: nil)
         overviewControls = false
         withAnimation(.easeOut(duration: 0.2)) { overviewReveal = 0 } completion: {
@@ -950,6 +969,8 @@ private extension MiniBrowserView {
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
+                // The page that slid in stays; closing alone would pick by list.
+                pages.activate(previous.id)
                 pages.close(page.id)
                 peeking = false
                 pageSwipe = 0

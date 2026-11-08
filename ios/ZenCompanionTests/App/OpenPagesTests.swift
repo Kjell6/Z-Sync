@@ -250,6 +250,11 @@ final class OpenPagesTests: XCTestCase {
         pages.activate(second.id)
 
         XCTAssertEqual(pages.neighbours.next?.id, third.id)
+        // The deck shows the same order: the page swiped to is not in front.
+        XCTAssertEqual(pages.deckOrder.last?.id, third.id)
+
+        pages.releaseSwitchingOrder()
+        XCTAssertEqual(pages.deckOrder.last?.id, second.id)
     }
 
     func testAMovedPageKeepsItsPlaceAcrossARestart() {

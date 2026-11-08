@@ -10,6 +10,10 @@ enum MiniBrowserChromeMetrics {
     static let rowSpacing: CGFloat = 8
     /// The dock row. The side buttons are square at this size.
     static let dockHeight: CGFloat = 44
+    /// The same row over the overview, where the buttons are all there is.
+    static let overviewDockHeight: CGFloat = 48
+    /// How much further up the dock sits over the overview.
+    static let overviewDockLift: CGFloat = 16
 
     /// Dock bottom to navigation bar top.
     static var height: CGFloat { navBarHeight + rowSpacing + dockHeight }
@@ -68,7 +72,11 @@ struct MiniBrowserChrome<NavBar: View>: View {
     @State private var copied = false
     @State private var copyGeneration = 0
 
-    private let controlSide: CGFloat = MiniBrowserChromeMetrics.dockHeight
+    private var controlSide: CGFloat {
+        overviewShown ? MiniBrowserChromeMetrics.overviewDockHeight : MiniBrowserChromeMetrics.dockHeight
+    }
+    /// The glyphs grow with their buttons.
+    private var glyphSize: CGFloat { overviewShown ? 19 : 18 }
     /// Menu tiles keep the app's own tile corner.
     private let tileRadius: CGFloat = Palette.liftCornerRadius
 
@@ -149,6 +157,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
         .onChange(of: addressEditing) { _, editing in
             model.refreshSuggestions(isEditing: editing)
         }
+        .animation(motion, value: overviewShown)
         .animation(motion, value: model.menuExpanded)
         .animation(motion, value: model.menuSiteSettings)
         .animation(motion, value: model.suggestions)
@@ -217,7 +226,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
 
             Button(action: onHistory) {
                 Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: glyphSize, weight: .semibold))
                     .foregroundStyle(Palette.ink(scheme))
                     .frame(width: controlSide, height: controlSide)
                     .contentShape(Capsule())
@@ -239,7 +248,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
                 withAnimation(motion) { onToggleMenu() }
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: glyphSize, weight: .semibold))
                     .foregroundStyle(Palette.ink(scheme))
                     .frame(width: controlSide, height: controlSide)
                     .contentShape(Capsule())
@@ -261,7 +270,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
                 .disabled(pages.pages.isEmpty)
             } label: {
                 Image(systemName: "plus")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: glyphSize, weight: .semibold))
                     .foregroundStyle(Palette.ink(scheme))
                     .frame(width: controlSide, height: controlSide)
                     .contentShape(Capsule())
@@ -280,9 +289,9 @@ struct MiniBrowserChrome<NavBar: View>: View {
     private var closeButton: some View {
         Button(action: onClose) {
             Image(systemName: "xmark")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: overviewShown ? 17 : 16, weight: .semibold))
                 .foregroundStyle(Palette.ink(scheme))
-                .frame(width: 92, height: 42)
+                .frame(width: overviewShown ? 100 : 92, height: overviewShown ? 46 : 42)
                 .contentShape(Capsule())
                 // Inside the label on purpose: the pressed state has to move
                 // the whole pill, not only the glyph on it.

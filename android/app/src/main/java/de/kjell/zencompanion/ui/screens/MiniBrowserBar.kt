@@ -13,7 +13,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -46,6 +48,7 @@ import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Description
@@ -90,8 +93,13 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import kotlin.math.abs
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -420,6 +428,9 @@ private fun Modifier.pane(shape: Shape, color: Color): Modifier = this
     .border(liftBorder(), shape)
 
 /** Height of the chrome's rows, without the air below the dock. */
+internal fun pageBottomBand(navigationInset: Dp): Dp =
+    CollapsedBarHeightBase + barBottomGap(navigationInset)
+
 internal val CollapsedBarHeightBase: Dp =
     TopGap + BarHeight + RowGap + DockSide
 
@@ -437,6 +448,20 @@ internal class PageSwipe(
     val onDrag: (Float) -> Unit,
     /** The finger let go, at this speed in pixels per second. */
     val onEnd: (Float) -> Unit,
+    /** A pull upwards on the bar: the page follows the finger from the first point on. */
+    val onPullStart: () -> Unit = {},
+    /** How far the finger has moved since the pull took over, in window pixels. */
+    val onPullChange: (Offset) -> Unit = {},
+    val onPullEnd: (PagePullEnd) -> Unit = {},
+)
+
+/** How a pull upwards on the address bar ended. */
+internal class PagePullEnd(
+    val translation: Offset,
+    /** Pixels per second; negative is upwards. */
+    val velocity: Float,
+    /** The system took the finger away. */
+    val cancelled: Boolean,
 )
 
 /** A neighbour's bar: what it shows when it is the real one. No address means the new page past the last one. */
@@ -457,23 +482,68 @@ private fun SwipeableNavBar(swipe: PageSwipe, bar: @Composable () -> Unit) {
         val span = current.span()
         return if (span > 0f) current.offset() * (barWidth + gap) / span else current.offset()
     }
+    // The bar moves and shrinks under the finger during a pull, so the pull is
+    // measured in window coordinates.
+    val barCoordinates = remember { arrayOfNulls<LayoutCoordinates>(1) }
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .onSizeChanged { barWidth = it.width }
+            .onGloballyPositioned { barCoordinates[0] = it }
             .pointerInput(Unit) {
-                var velocity = VelocityTracker()
-                detectHorizontalDragGestures(
-                    onDragStart = {
-                        velocity = VelocityTracker()
+                fun inWindow(position: Offset): Offset =
+                    barCoordinates[0]?.takeIf { it.isAttached }?.localToRoot(position) ?: position
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    var moved = Offset.Zero
+                    val first = awaitTouchSlopOrCancellation(down.id) { change, over ->
+                        moved = over
+                        change.consume()
+                    } ?: return@awaitEachGesture
+                    val pulling = moved.y < 0f && abs(moved.y) > abs(moved.x)
+                    if (!pulling && abs(moved.x) <= abs(moved.y) * 1.2f) return@awaitEachGesture
+                    val velocity = VelocityTracker()
+                    if (pulling) {
+                        val origin = inWindow(first.position)
+                        velocity.addPosition(first.uptimeMillis, origin)
+                        current.onPullStart()
+                        var last = Offset.Zero
+                        while (true) {
+                            val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
+                            if (change == null) {
+                                current.onPullEnd(PagePullEnd(last, 0f, cancelled = true))
+                                break
+                            }
+                            if (!change.pressed) {
+                                current.onPullEnd(PagePullEnd(last, velocity.calculateVelocity().y, cancelled = false))
+                                break
+                            }
+                            change.consume()
+                            val here = inWindow(change.position)
+                            velocity.addPosition(change.uptimeMillis, here)
+                            last = here - origin
+                            current.onPullChange(last)
+                        }
+                    } else {
+                        velocity.addPosition(first.uptimeMillis, first.position)
                         current.onStart()
-                    },
-                    onDragEnd = { current.onEnd(velocity.calculateVelocity().x) },
-                    onDragCancel = { current.onEnd(0f) },
-                ) { change, amount ->
-                    change.consume()
-                    velocity.addPosition(change.uptimeMillis, change.position)
-                    current.onDrag(amount * current.span() / (barWidth + gap).coerceAtLeast(1f))
+                        current.onDrag(moved.x * current.span() / (barWidth + gap).coerceAtLeast(1f))
+                        while (true) {
+                            val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
+                            if (change == null) {
+                                current.onEnd(0f)
+                                break
+                            }
+                            if (!change.pressed) {
+                                current.onEnd(velocity.calculateVelocity().x)
+                                break
+                            }
+                            val amount = change.positionChange().x
+                            change.consume()
+                            velocity.addPosition(change.uptimeMillis, change.position)
+                            current.onDrag(amount * current.span() / (barWidth + gap).coerceAtLeast(1f))
+                        }
+                    }
                 }
             },
     ) {
@@ -775,58 +845,63 @@ private fun LeaveBrowserButton(ink: Color, onClick: () -> Unit) {
     )
 }
 
+/** Space the deck keeps free at the bottom for the overview's dock. */
+internal fun overviewDockClearance(navigationInset: Dp): Dp =
+    DockSide + barBottomGap(navigationInset) + RowGap + 10.dp
+
 /**
  * The overview's controls, drawn exactly where the browser's dock has its own.
- * The two fade into each other as the overview opens, so nothing may move:
- * only the outer glyphs change, and the close control looks like it stayed.
- *
- * Opened from home there is no page behind the overview, so Done is left out:
- * it would only do what the close control already does. Its slot still keeps
- * its width, so the close control stays in the middle.
+ * History is a placeholder until the browser history lands here. A long press
+ * on the plus closes everything.
  */
 @Composable
 internal fun OverviewDock(
     onNewPage: () -> Unit,
-    onDone: () -> Unit,
-    showsDone: Boolean,
-    onDoneLongPress: () -> Unit,
+    onHistory: () -> Unit,
+    onPlusLongPress: () -> Unit,
     onLeave: () -> Unit,
-    doneMenu: @Composable () -> Unit,
+    plusMenu: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val zen = LocalZenColors.current
     val navigationInset = WindowInsets.navigationBars
         .asPaddingValues()
         .calculateBottomPadding()
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            // The browser's bar spaces its rows with RowGap, the gap below the dock included.
-            .padding(start = 16.dp + DockInset, end = 16.dp + DockInset, bottom = barBottomGap(navigationInset) + RowGap),
+            .padding(
+                start = 16.dp + DockInset,
+                end = 16.dp + DockInset,
+                bottom = barBottomGap(navigationInset) + RowGap,
+            ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         DockButton(
-            icon = Icons.Outlined.Add,
-            description = stringResource(R.string.kept_new_page),
+            icon = Icons.Outlined.History,
+            description = stringResource(R.string.browser_history),
             tint = zen.ink,
-            onClick = onNewPage,
+            onClick = onHistory,
         )
         Spacer(Modifier.weight(1f))
-        LeaveBrowserButton(ink = zen.ink, onClick = onLeave)
+        DockButton(
+            icon = Icons.Outlined.Close,
+            description = stringResource(R.string.browser_close),
+            tint = zen.ink,
+            width = CloseWidth,
+            height = CloseHeight,
+            onClick = onLeave,
+        )
         Spacer(Modifier.weight(1f))
-        if (showsDone) {
-            Box {
-                DockButton(
-                    icon = Icons.Outlined.Check,
-                    description = stringResource(R.string.common_done),
-                    tint = zen.ink,
-                    onLongClick = onDoneLongPress,
-                    onClick = onDone,
-                )
-                doneMenu()
-            }
-        } else {
-            // Keeps the close control in the middle of the row.
-            Spacer(Modifier.size(DockSide))
+        Box {
+            DockButton(
+                icon = Icons.Outlined.Add,
+                description = stringResource(R.string.kept_new_page),
+                tint = zen.ink,
+                onLongClick = onPlusLongPress,
+                onClick = onNewPage,
+            )
+            plusMenu()
         }
     }
 }

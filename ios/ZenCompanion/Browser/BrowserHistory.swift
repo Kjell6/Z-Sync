@@ -112,18 +112,18 @@ final class BrowserHistoryStore {
     }
 
     /// Up to [limit] pages for the text in the address field, leaving out the
-    /// page that is already open. A site whose name starts with the text comes
-    /// first, then the pages visited most.
-    func suggestions(for text: String, excluding current: URL? = nil, limit: Int = 3) -> [BrowserVisit] {
-        let words = Self.words(in: text)
-        guard !words.isEmpty else { return [] }
+    /// page that is already open. Only a real match counts: every typed word
+    /// must start a word of the page's title or address. A site whose name
+    /// starts with the text comes first, then the pages visited most.
+    func suggestions(for text: String, excluding current: URL? = nil, limit: Int = 2) -> [BrowserVisit] {
+        let typed = Self.typedWords(text)
+        guard typed.joined().count >= Self.minimumTypedLetters else { return [] }
         let open = Self.address(of: current)
-        let first = words[0]
         // Worked out once per page: this runs on every keystroke.
         let found = visits
-            .filter { $0.url != open && Self.matches($0, words: words) }
+            .filter { $0.url != open && Self.isCloseMatch($0, typed: typed) }
             .enumerated()
-            .map { (visit: $0.element, order: $0.offset, namesSite: $0.element.host.lowercased().hasPrefix(first)) }
+            .map { (visit: $0.element, order: $0.offset, namesSite: $0.element.host.lowercased().hasPrefix(typed[0])) }
         let ranked = found.sorted { a, b in
             if a.namesSite != b.namesSite { return a.namesSite }
             if a.visit.visits != b.visit.visits { return a.visit.visits > b.visit.visits }
@@ -163,6 +163,27 @@ final class BrowserHistoryStore {
         values.isExcludedFromBackup = true
         var url = fileURL
         try? url.setResourceValues(values)
+    }
+
+    private nonisolated static let minimumTypedLetters = 2
+
+    /// The typed text as words, without the parts every address shares.
+    private nonisolated static func typedWords(_ text: String) -> [String] {
+        var value = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        for prefix in ["https://", "http://", "www."] where value.hasPrefix(prefix) {
+            value.removeFirst(prefix.count)
+        }
+        return tokens(in: value)
+    }
+
+    private nonisolated static func tokens(in text: String) -> [String] {
+        text.lowercased().split { !$0.isLetter && !$0.isNumber }.map(String.init)
+    }
+
+    private nonisolated static func isCloseMatch(_ visit: BrowserVisit, typed: [String]) -> Bool {
+        let address = visit.displayAddress.split(separator: "?", maxSplits: 1).first.map(String.init) ?? ""
+        let pageWords = tokens(in: visit.title) + tokens(in: address)
+        return typed.allSatisfy { word in pageWords.contains { $0.hasPrefix(word) } }
     }
 
     private nonisolated static func words(in text: String) -> [String] {

@@ -125,6 +125,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.BrowserVisit
+import de.kjell.zencompanion.data.SearchSuggestions
 import de.kjell.zencompanion.data.SitePermission
 import de.kjell.zencompanion.data.SitePermissionChoice
 import de.kjell.zencompanion.data.SitePermissions
@@ -343,7 +344,7 @@ internal fun MiniBrowserBar(
         if (state.isAddressFocused && (state.suggestions.isNotEmpty() || state.historySuggestions.isNotEmpty())) {
             SuggestionPanel(
                 visits = state.historySuggestions,
-                suggestions = state.suggestions,
+                suggestions = SearchSuggestions.fitting(state.suggestions, state.historySuggestions.size),
                 onSelectVisit = onPickVisit,
                 onSelect = onPickSuggestion,
             )

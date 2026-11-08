@@ -1,6 +1,7 @@
 package de.kjell.zencompanion
 
 import de.kjell.zencompanion.data.BrowserVisit
+import de.kjell.zencompanion.data.SearchSuggestions
 import de.kjell.zencompanion.data.historyAddress
 import de.kjell.zencompanion.data.searchVisits
 import de.kjell.zencompanion.data.visitSuggestions
@@ -72,9 +73,29 @@ class BrowserHistoryTests {
             .with("https://github.com/b", "B")
         assertEquals(
             listOf("https://github.com/b", "https://github.com/a", "https://other.example/github"),
-            visitSuggestions(visits, "git").map { it.url },
+            visitSuggestions(visits, "git", limit = 3).map { it.url },
         )
-        assertEquals(1, visitSuggestions(visits, "git", limit = 1).size)
+        assertEquals(2, visitSuggestions(visits, "git").size)
+    }
+
+    @Test
+    fun onlyARealMatchIsSuggested() {
+        val visits = emptyList<BrowserVisit>().with("https://github.com/login?next=rust", "Sign in to GitHub")
+        assertEquals(1, visitSuggestions(visits, "sign").size)
+        assertEquals(1, visitSuggestions(visits, "https://www.github").size)
+        assertEquals(1, visitSuggestions(visits, "log").size)
+        assertTrue(visitSuggestions(visits, "hub").isEmpty())
+        assertTrue(visitSuggestions(visits, "rust").isEmpty())
+        assertTrue(visitSuggestions(visits, "g").isEmpty())
+        assertTrue(visitSuggestions(visits, "sign python").isEmpty())
+    }
+
+    @Test
+    fun theListNeverPassesEightRows() {
+        val eight = (1..8).map(Int::toString)
+        assertEquals(8, SearchSuggestions.fitting(eight, 0).size)
+        assertEquals(eight.take(6), SearchSuggestions.fitting(eight, 2))
+        assertEquals(listOf("a"), SearchSuggestions.fitting(listOf("a"), 2))
     }
 
     @Test

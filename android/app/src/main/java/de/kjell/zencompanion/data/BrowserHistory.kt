@@ -89,24 +89,41 @@ internal fun searchVisits(visits: List<BrowserVisit>, query: String): List<Brows
     return if (words.isEmpty()) visits else visits.filter { it.matches(words) }
 }
 
+private const val MINIMUM_TYPED_LETTERS = 2
+
+private fun tokens(text: String) = text.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
+
+/** The typed text as words, without the parts every address shares. */
+private fun typedWords(text: String): List<String> {
+    var value = text.trim().lowercase()
+    listOf("https://", "http://", "www.").forEach { value = value.removePrefix(it) }
+    return tokens(value)
+}
+
+private fun BrowserVisit.isCloseMatch(typed: List<String>): Boolean {
+    val pageWords = tokens(title) + tokens(displayAddress.substringBefore('?'))
+    return typed.all { word -> pageWords.any { it.startsWith(word) } }
+}
+
 /**
  * Up to [limit] pages for the text in the address field, leaving out the page
- * that is already open. A site whose name starts with the text comes first,
- * then the pages visited most.
+ * that is already open. Only a real match counts: every typed word must start
+ * a word of the page's title or address. A site whose name starts with the
+ * text comes first, then the pages visited most.
  */
 internal fun visitSuggestions(
     visits: List<BrowserVisit>,
     text: String,
     current: String? = null,
-    limit: Int = 3,
+    limit: Int = 2,
 ): List<BrowserVisit> {
-    val words = words(text)
-    if (words.isEmpty()) return emptyList()
+    val typed = typedWords(text)
+    if (typed.sumOf { it.length } < MINIMUM_TYPED_LETTERS) return emptyList()
     val open = historyAddress(current)
     return visits
-        .filter { it.url != open && it.matches(words) }
+        .filter { it.url != open && it.isCloseMatch(typed) }
         // Worked out once per page: this runs on every keystroke.
-        .map { it to it.host.lowercase().startsWith(words.first()) }
+        .map { it to it.host.lowercase().startsWith(typed.first()) }
         .sortedWith(compareByDescending<Pair<BrowserVisit, Boolean>> { it.second }.thenByDescending { it.first.visits })
         .take(limit)
         .map { it.first }

@@ -70,10 +70,29 @@ final class BrowserHistoryTests: XCTestCase {
         store.record(url("https://github.com/b"), title: "B")
         store.record(url("https://github.com/b"), title: "B")
         XCTAssertEqual(
-            store.suggestions(for: "git").map(\.url),
+            store.suggestions(for: "git", limit: 3).map(\.url),
             ["https://github.com/b", "https://github.com/a", "https://other.example/github"]
         )
-        XCTAssertEqual(store.suggestions(for: "git", limit: 1).count, 1)
+        XCTAssertEqual(store.suggestions(for: "git").count, 2)
+    }
+
+    func testOnlyARealMatchIsSuggested() {
+        let store = makeStore()
+        store.record(url("https://github.com/login?next=rust"), title: "Sign in to GitHub")
+        XCTAssertEqual(store.suggestions(for: "sign").count, 1)
+        XCTAssertEqual(store.suggestions(for: "https://www.github").count, 1)
+        XCTAssertEqual(store.suggestions(for: "log").count, 1)
+        XCTAssertTrue(store.suggestions(for: "hub").isEmpty, "Not the middle of a word")
+        XCTAssertTrue(store.suggestions(for: "rust").isEmpty, "Not the query string")
+        XCTAssertTrue(store.suggestions(for: "g").isEmpty, "One letter says too little")
+        XCTAssertTrue(store.suggestions(for: "sign python").isEmpty)
+    }
+
+    func testTheListNeverPassesEightRows() {
+        let eight = (1...8).map(String.init)
+        XCTAssertEqual(SearchSuggestions.fitting(eight, beside: 0).count, 8)
+        XCTAssertEqual(SearchSuggestions.fitting(eight, beside: 2), Array(eight.prefix(6)))
+        XCTAssertEqual(SearchSuggestions.fitting(["a"], beside: 2), ["a"])
     }
 
     func testSuggestionsLeaveOutTheOpenPageAndBlankText() {

@@ -168,6 +168,10 @@ struct MiniBrowserChrome<NavBar: View>: View {
     /// Part of the address editing state, not a new layer: the rows use the
     /// same ink and row height as the menu, and the panel sits in the space
     /// above the bar that only exists while typing.
+    private var shownSuggestions: [String] {
+        SearchSuggestions.fitting(model.suggestions, beside: model.historySuggestions.count)
+    }
+
     private var suggestionList: some View {
         VStack(spacing: 0) {
             ForEach(model.historySuggestions) { visit in
@@ -205,7 +209,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
                 }
                 .buttonStyle(SuggestionPressStyle())
             }
-            ForEach(Array(model.suggestions.enumerated()), id: \.offset) { index, suggestion in
+            ForEach(Array(shownSuggestions.enumerated()), id: \.offset) { index, suggestion in
                 Button {
                     onPickSuggestion(suggestion)
                 } label: {
@@ -224,7 +228,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
                     .frame(minHeight: 44)
                     .contentShape(Rectangle())
                     .overlay(alignment: .bottom) {
-                        if index < model.suggestions.count - 1 {
+                        if index < shownSuggestions.count - 1 {
                             Rectangle()
                                 .fill(Color.primary.opacity(0.08))
                                 .frame(height: 0.5)

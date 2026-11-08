@@ -213,10 +213,6 @@
     <string name="kept_close_all_message">They are removed from this phone. Tabs in your spaces stay.</string>
     <string name="kept_empty_title">No open pages</string>
     <string name="kept_empty_message">Tap + to open a page.</string>
-    <string name="kept_hint_never">Auto-close off</string>
-    <string name="kept_hint_day">Auto-close after 1 day</string>
-    <string name="kept_hint_week">Auto-close after 7 days</string>
-    <string name="kept_hint_month">Auto-close after 30 days</string>
     <string name="kept_pin_to_space">Pin to space</string>
     <string name="kept_copy_link">Copy link</string>
     <string name="kept_close_page">Close page</string>

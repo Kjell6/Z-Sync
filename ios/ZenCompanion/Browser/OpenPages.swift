@@ -84,16 +84,6 @@ enum KeptPageLifetime: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The short note in the overview.
-    var hint: String {
-        switch self {
-        case .never: return String(localized: "kept.hint.never")
-        case .day: return String(localized: "kept.hint.day")
-        case .week: return String(localized: "kept.hint.week")
-        case .month: return String(localized: "kept.hint.month")
-        }
-    }
-
     var interval: TimeInterval? {
         switch self {
         case .never: return nil
@@ -273,11 +263,6 @@ final class OpenPagesStore: MiniBrowserPageHost {
     /// Keep controls exist for that mode alone.
     var keepsOnlyChosenPages: Bool {
         preferences.bool(PreferenceKeys.keepOnlyChosenPages, scope: .standard)
-    }
-
-    /// What the overview says will happen to the pages.
-    var lifetimeHint: String {
-        KeptPageLifetime.stored(in: preferences).hint
     }
 
     func canKeep(_ page: OpenPage) -> Bool {

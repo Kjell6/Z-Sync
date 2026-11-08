@@ -861,10 +861,6 @@ private fun LeaveBrowserButton(ink: Color, onClick: () -> Unit) {
     )
 }
 
-/** Space the deck keeps free at the bottom for the overview's dock. */
-internal fun overviewDockClearance(navigationInset: Dp): Dp =
-    DockSide + barBottomGap(navigationInset) + RowGap + 10.dp
-
 /**
  * The overview's controls, drawn exactly where the browser's dock has its own.
  * A long press on the plus closes everything.

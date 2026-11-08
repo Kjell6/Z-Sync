@@ -272,11 +272,6 @@ struct OpenPagesOverview: View {
                 } else {
                     cards(deck)
                 }
-
-                lifetimeNote
-                    .padding(.bottom, bottomClearance + 2)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .opacity(pages.pages.isEmpty ? 0 : Double(reveal))
             }
             .simultaneousGesture(deckGesture(deck))
         }
@@ -478,17 +473,6 @@ struct OpenPagesOverview: View {
         .task(id: pages.activeID ?? pages.pages.first?.id) {
             if let page = pages.active ?? pages.pages.first { await pages.loadShot(of: page) }
         }
-    }
-
-    /// A small note under the cards, so nothing closes by surprise.
-    private var lifetimeNote: some View {
-        HStack(spacing: 5) {
-            Image(systemName: "clock")
-            Text(verbatim: pages.lifetimeHint)
-        }
-        .font(.footnote)
-        .foregroundStyle(Color.secondary)
-        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Empty

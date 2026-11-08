@@ -2562,46 +2562,6 @@
         }
       }
     },
-    "kept.hint.never": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Auto-close off"
-          }
-        }
-      }
-    },
-    "kept.hint.day": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Auto-close after 1 day"
-          }
-        }
-      }
-    },
-    "kept.hint.week": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Auto-close after 7 days"
-          }
-        }
-      }
-    },
-    "kept.hint.month": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Auto-close after 30 days"
-          }
-        }
-      }
-    },
     "settings.kept_lifetime": {
       "localizations": {
         "en": {

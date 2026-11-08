@@ -5,7 +5,6 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.os.Build
 import android.view.RoundedCorner
-import androidx.annotation.StringRes
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
@@ -18,12 +17,9 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
@@ -557,32 +553,6 @@ internal fun OpenPagesOverview(
                 }
             }
         }
-
-        if (openPages.isNotEmpty()) {
-            val navigationInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-            Row(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = overviewDockClearance(navigationInset) - 8.dp)
-                    .graphicsLayer { alpha = reveal() },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-            ) {
-                Icon(
-                    Icons.Outlined.Schedule,
-                    contentDescription = null,
-                    tint = zen.ink.copy(alpha = 0.6f),
-                    modifier = Modifier.size(14.dp),
-                )
-                Text(
-                    text = stringResource(lifetimeHint(pages.lifetime())),
-                    style = ZenType.rounded(12, FontWeight.Normal),
-                    color = zen.ink.copy(alpha = 0.6f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
     }
 }
 
@@ -835,14 +805,6 @@ private fun PageCardMenu(
             onClick = onClose,
         )
     }
-}
-
-@StringRes
-private fun lifetimeHint(lifetime: KeptPageLifetime): Int = when (lifetime) {
-    KeptPageLifetime.NEVER -> R.string.kept_hint_never
-    KeptPageLifetime.DAY -> R.string.kept_hint_day
-    KeptPageLifetime.WEEK -> R.string.kept_hint_week
-    KeptPageLifetime.MONTH -> R.string.kept_hint_month
 }
 
 /** Long press on a link in a page. */

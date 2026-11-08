@@ -140,14 +140,6 @@ final class OpenPagesTests: XCTestCase {
         XCTAssertEqual(pages.pages.map(\.id), [page.id])
     }
 
-    func testTheOverviewNamesTheChosenPeriod() {
-        XCTAssertEqual(store().lifetimeHint, String(localized: "kept.hint.month"))
-
-        let never = FakePreferences()
-        never.setString(KeptPageLifetime.never.rawValue, PreferenceKeys.keptPageLifetime, scope: .standard)
-        XCTAssertEqual(store(preferences: never).lifetimeHint, String(localized: "kept.hint.never"))
-    }
-
     // MARK: - Keep only chosen pages
 
     func testOnlyChosenPagesStay() {

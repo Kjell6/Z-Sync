@@ -163,8 +163,6 @@ struct MiniBrowserChrome<NavBar: View>: View {
         .animation(motion, value: overviewShown)
         .animation(motion, value: model.menuExpanded)
         .animation(motion, value: model.menuSiteSettings)
-        .animation(motion, value: model.suggestions)
-        .animation(motion, value: model.historySuggestions)
         // Chrome, not content: the rows have fixed 44pt metrics, so type stops
         // at the first accessibility size instead of overflowing the bar.
         .dynamicTypeSize(...DynamicTypeSize.accessibility1)

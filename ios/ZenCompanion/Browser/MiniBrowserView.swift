@@ -178,54 +178,59 @@ struct MiniBrowserView: View {
     /// The floating bar and dock, over the page, the overview and the
     /// picture flying between them.
     private var chrome: some View {
-        MiniBrowserChrome(
-            model: model,
-            pages: pages,
-            space: space,
-            allSpaces: allSpaces,
-            onToggleMenu: { model.toggleMenu() },
-            onClose: { leaveBrowser() },
-            addressEditing: addressEditing,
-            onPickSuggestion: pickSuggestion,
-            onPickVisit: pickVisit,
-            onOpenPages: openOverview,
-            overviewShown: overviewControls,
-            onNewPage: openNewPage,
-            onOpenHistory: openHistory,
-            onCloseAll: { confirmCloseAll = true },
-            navBar: {
-                MiniBrowserTopBar(
-                    model: model,
-                    page: pages.active,
-                    pages: pages,
-                    addressEditing: addressEditing,
-                    isAddressFocused: $isAddressFocused,
-                    swipeOffset: $pageSwipe,
-                    pageSpan: paneWidth + PageHostView.pageGap,
-                    onBeginAddressEdit: beginAddressEditing,
-                    onCancel: cancelAddressEditing,
-                    onSubmit: submitAddress,
-                    onReturnToOpener: returnToOpener,
-                    onSwipeStart: beginSwipe,
-                    onSwipeEnd: finishSwipe,
-                    onPullStart: beginPagePull,
-                    onPullChange: updatePagePull,
-                    onPullEnd: endPagePull
-                )
-            }
-        )
-        .padding(.horizontal, 16)
-        .padding(.bottom, chromeBottomInset + (overviewControls ? MiniBrowserChromeMetrics.overviewDockLift : 0))
-        .animation(.spring(response: 0.24, dampingFraction: 0.82), value: overviewControls)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .offset(y: barCollapsed ? 220 : 0)
-        // While the page is pulled the chrome is part of it.
-        .scaleEffect(chromeRides ? pagePose.scale : 1, anchor: .bottom)
-        .offset(x: chromeRides ? pagePose.x : 0, y: chromeRides ? pagePose.y : 0)
-        // With nothing left to show, the cover is on its way out.
-        .opacity(barCollapsed || (pages.active == nil && !showOverview) ? 0 : Double(chromeFade))
-        .allowsHitTesting(!committingPull)
-        .accessibilityHidden(barCollapsed)
+        // Hung from an empty layer: with the keyboard up and a full list of
+        // suggestions the column is taller than the screen, and laid out as a
+        // sibling it would stretch the whole browser, page and bar with it.
+        Color.clear.overlay(alignment: .bottom) {
+            MiniBrowserChrome(
+                model: model,
+                pages: pages,
+                space: space,
+                allSpaces: allSpaces,
+                onToggleMenu: { model.toggleMenu() },
+                onClose: { leaveBrowser() },
+                addressEditing: addressEditing,
+                onPickSuggestion: pickSuggestion,
+                onPickVisit: pickVisit,
+                onOpenPages: openOverview,
+                overviewShown: overviewControls,
+                onNewPage: openNewPage,
+                onOpenHistory: openHistory,
+                onCloseAll: { confirmCloseAll = true },
+                navBar: {
+                    MiniBrowserTopBar(
+                        model: model,
+                        page: pages.active,
+                        pages: pages,
+                        addressEditing: addressEditing,
+                        isAddressFocused: $isAddressFocused,
+                        swipeOffset: $pageSwipe,
+                        pageSpan: paneWidth + PageHostView.pageGap,
+                        onBeginAddressEdit: beginAddressEditing,
+                        onCancel: cancelAddressEditing,
+                        onSubmit: submitAddress,
+                        onReturnToOpener: returnToOpener,
+                        onSwipeStart: beginSwipe,
+                        onSwipeEnd: finishSwipe,
+                        onPullStart: beginPagePull,
+                        onPullChange: updatePagePull,
+                        onPullEnd: endPagePull
+                    )
+                }
+            )
+            .padding(.horizontal, 16)
+            .padding(.bottom, chromeBottomInset + (overviewControls ? MiniBrowserChromeMetrics.overviewDockLift : 0))
+            .animation(.spring(response: 0.24, dampingFraction: 0.82), value: overviewControls)
+            .frame(maxWidth: .infinity)
+            .offset(y: barCollapsed ? 220 : 0)
+            // While the page is pulled the chrome is part of it.
+            .scaleEffect(chromeRides ? pagePose.scale : 1, anchor: .bottom)
+            .offset(x: chromeRides ? pagePose.x : 0, y: chromeRides ? pagePose.y : 0)
+            // With nothing left to show, the cover is on its way out.
+            .opacity(barCollapsed || (pages.active == nil && !showOverview) ? 0 : Double(chromeFade))
+            .allowsHitTesting(!committingPull)
+            .accessibilityHidden(barCollapsed)
+        }
     }
 
     /// Bottom to top: the page, the overview, the picture flying between them,

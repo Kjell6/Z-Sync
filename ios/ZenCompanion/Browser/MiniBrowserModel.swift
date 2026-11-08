@@ -833,9 +833,10 @@ final class MiniBrowserModel {
         // flicker on every keystroke.
         cancelSuggestionRequest(keepingList: true)
         // Local, so it answers right away and also for a typed address.
-        historySuggestions = history.suggestions(for: addressText, excluding: currentURL)
+        let visits = history.suggestions(for: addressText, excluding: currentURL)
+        animateSuggestions { historySuggestions = visits }
         guard let url = SearchSuggestions.requestURL(for: addressText, engine: searchEngine.current) else {
-            suggestions = []
+            animateSuggestions { suggestions = [] }
             return
         }
         let generation = suggestionGeneration
@@ -849,14 +850,26 @@ final class MiniBrowserModel {
             do {
                 let data = try await client.fetch(url)
                 guard !Task.isCancelled, generation == suggestionGeneration else { return }
-                suggestions = SearchSuggestions.parse(data)
+                let parsed = SearchSuggestions.parse(data)
+                animateSuggestions { suggestions = parsed }
             } catch is CancellationError {
                 return
             } catch {
                 guard !Task.isCancelled, generation == suggestionGeneration else { return }
-                suggestions = []
+                animateSuggestions { suggestions = [] }
             }
         }
+    }
+
+    /// The list arrives on its own, so nobody else animates it. The change
+    /// has to be one transaction for the whole screen: the column grows
+    /// upwards as the list comes, and animated only from inside, its new
+    /// place is taken at once and the address field jumps up and springs back.
+    private func animateSuggestions(_ change: () -> Void) {
+        let motion: Animation = UIAccessibility.isReduceMotionEnabled
+            ? .easeOut(duration: 0.12)
+            : .spring(response: 0.24, dampingFraction: 0.82)
+        withAnimation(motion, change)
     }
 
     /// Test seam. Production never waits on the suggest request.
@@ -869,8 +882,10 @@ final class MiniBrowserModel {
         suggestionTask = nil
         suggestionGeneration += 1
         if !keepingList {
-            if !suggestions.isEmpty { suggestions = [] }
-            if !historySuggestions.isEmpty { historySuggestions = [] }
+            animateSuggestions {
+                if !suggestions.isEmpty { suggestions = [] }
+                if !historySuggestions.isEmpty { historySuggestions = [] }
+            }
         }
     }
 

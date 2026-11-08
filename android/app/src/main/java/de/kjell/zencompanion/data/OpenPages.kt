@@ -108,12 +108,50 @@ class OpenPagesStore(
 
     fun page(id: String): OpenPage? = _pages.value.firstOrNull { it.id == id }
 
-    /** The pages either side of the active one, for the address bar swipe. */
+    private val _switchingOrder = MutableStateFlow<List<String>?>(null)
+
+    /** Page ids in the order the address bar swipes through, while switching. */
+    val switchingOrder: StateFlow<List<String>?> = _switchingOrder
+
+    /**
+     * Least recently used first, the page on screen last: the order of the
+     * deck, where further right is more recent, as with the running apps.
+     */
+    fun recencyOrder(): List<OpenPage> {
+        val active = _activeId.value
+        return _pages.value.filter { it.id != active }.sortedBy { it.lastUsedAt } +
+            _pages.value.filter { it.id == active }
+    }
+
+    /**
+     * The order the deck and the address bar share. It holds still while the
+     * user is switching, so swiping back lands on the page just left and a
+     * page swiped to does not jump to the front of the deck yet.
+     */
+    fun deckOrder(): List<OpenPage> {
+        val frozen = _switchingOrder.value ?: return recencyOrder()
+        return frozen.mapNotNull(::page) + _pages.value.filter { it.id !in frozen }
+    }
+
+    /**
+     * The pages either side of the active one, for the address bar swipe: the
+     * same neighbours the deck shows it between.
+     */
     fun neighbours(): Pair<OpenPage?, OpenPage?> {
-        val pages = _pages.value
-        val index = pages.indexOfFirst { it.id == _activeId.value }
+        val ordered = deckOrder()
+        val index = ordered.indexOfFirst { it.id == _activeId.value }
         if (index < 0) return null to null
-        return pages.getOrNull(index - 1) to pages.getOrNull(index + 1)
+        return ordered.getOrNull(index - 1) to ordered.getOrNull(index + 1)
+    }
+
+    /** A swipe started: the order stays as it is until the user settles. */
+    fun beginSwitching() {
+        if (_switchingOrder.value == null) _switchingOrder.value = recencyOrder().map { it.id }
+    }
+
+    /** The user settled on a page, or chose one in the deck: it is the current one. */
+    fun releaseSwitchingOrder() {
+        _switchingOrder.value = null
     }
 
     fun canKeep(page: OpenPage, failed: Boolean): Boolean =
@@ -129,7 +167,9 @@ class OpenPagesStore(
             openedFromSpace = openedFromSpace,
             openerId = openerId,
         )
-        val pages = _pages.value
+        // The page it replaces on screen was in use until now.
+        val previous = _activeId.value
+        val pages = _pages.value.map { if (it.id == previous) it.copy(lastUsedAt = page.lastUsedAt) else it }
         val after = pages.indexOfFirst { it.id == openerId }
         _pages.value = if (after >= 0) {
             pages.subList(0, after + 1) + page + pages.subList(after + 1, pages.size)
@@ -221,8 +261,8 @@ class OpenPagesStore(
     }
 
     /**
-     * Ends a page. Back on screen comes the page that opened it, otherwise its
-     * neighbour. Returns the page now on screen.
+     * Ends a page. Back on screen comes the page that opened it, otherwise the
+     * one used last. Returns the page now on screen.
      */
     fun close(id: String): String? {
         val pages = _pages.value
@@ -235,7 +275,8 @@ class OpenPagesStore(
         removeFiles(id)
         onPageRemoved(id)
         if (_activeId.value == id) {
-            val next = rest.firstOrNull { it.id == page.openerId } ?: rest.getOrNull(index.coerceAtMost(rest.size - 1))
+            // The deck runs by recency: the page used last comes back.
+            val next = rest.firstOrNull { it.id == page.openerId } ?: rest.maxByOrNull { it.lastUsedAt }
             _activeId.value = null
             next?.let { activate(it.id) }
         }

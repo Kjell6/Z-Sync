@@ -149,17 +149,52 @@ class OpenPagesTests {
     }
 
     @Test
-    fun neighboursFollowTheListOrder() {
+    fun neighboursFollowTheRecencyOrder() {
         val pages = store()
-        val first = pages.open(a)
+        pages.open(a)
         val second = pages.open(b)
         val third = pages.open(c)
 
         pages.activate(second.id)
 
         val (previous, next) = pages.neighbours()
-        assertEquals(first.id, previous?.id)
-        assertEquals(third.id, next?.id)
+        assertEquals(second.id, pages.recencyOrder().last().id)
+        assertEquals(third.id, previous?.id)
+        assertEquals(null, next?.id)
+    }
+
+    @Test
+    fun closingTheActivePageBringsBackTheOneUsedLast() {
+        val pages = store()
+        val first = pages.open(a)
+        clock += 1
+        val second = pages.open(b)
+        clock += 1
+        pages.open(c)
+        clock += 1
+        pages.activate(first.id)
+        clock += 1
+        pages.activate(second.id)
+
+        assertEquals(first.id, pages.close(second.id))
+    }
+
+    @Test
+    fun switchingKeepsTheOrderUntilThePageIsChosen() {
+        val pages = store()
+        pages.open(a)
+        val second = pages.open(b)
+        val third = pages.open(c)
+
+        pages.beginSwitching()
+        pages.activate(second.id)
+
+        assertEquals(third.id, pages.neighbours().second?.id)
+        // The deck shows the same order: the page swiped to is not in front.
+        assertEquals(third.id, pages.deckOrder().last().id)
+
+        pages.releaseSwitchingOrder()
+        assertEquals(second.id, pages.deckOrder().last().id)
     }
 
     @Test

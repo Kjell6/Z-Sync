@@ -10,6 +10,10 @@ enum MiniBrowserChromeMetrics {
     static let rowSpacing: CGFloat = 8
     /// The dock row. The side buttons are square at this size.
     static let dockHeight: CGFloat = 44
+    /// The same row over the overview, where the buttons are all there is.
+    static let overviewDockHeight: CGFloat = 48
+    /// How much further up the dock sits over the overview.
+    static let overviewDockLift: CGFloat = 16
 
     /// Dock bottom to navigation bar top.
     static var height: CGFloat { navBarHeight + rowSpacing + dockHeight }
@@ -18,6 +22,15 @@ enum MiniBrowserChromeMetrics {
     static func height(above bottomPadding: CGFloat) -> CGFloat {
         bottomPadding + height
     }
+}
+
+/// How a pull upwards on the address bar ended.
+struct PagePullEnd {
+    let translation: CGSize
+    /// Points per second; negative is upwards.
+    let velocity: CGFloat
+    /// A system gesture or a call took the finger away.
+    let cancelled: Bool
 }
 
 /// Bottom browser chrome: two rows of floating Liquid Glass, bottom to top.
@@ -53,7 +66,6 @@ struct MiniBrowserChrome<NavBar: View>: View {
     var onNewPage: () -> Void = {}
     /// Opens the browser's own history from the overview.
     var onOpenHistory: () -> Void = {}
-    var onDone: () -> Void = {}
     var onCloseAll: () -> Void = {}
     /// The navigation bar. It stays in place while the menu grows above it.
     @ViewBuilder var navBar: () -> NavBar
@@ -63,7 +75,11 @@ struct MiniBrowserChrome<NavBar: View>: View {
     @State private var copied = false
     @State private var copyGeneration = 0
 
-    private let controlSide: CGFloat = MiniBrowserChromeMetrics.dockHeight
+    private var controlSide: CGFloat {
+        overviewShown ? MiniBrowserChromeMetrics.overviewDockHeight : MiniBrowserChromeMetrics.dockHeight
+    }
+    /// The glyphs grow with their buttons.
+    private var glyphSize: CGFloat { overviewShown ? 19 : 18 }
     /// Menu tiles keep the app's own tile corner.
     private let tileRadius: CGFloat = Palette.liftCornerRadius
 
@@ -103,14 +119,12 @@ struct MiniBrowserChrome<NavBar: View>: View {
                     .frame(maxWidth: .infinity)
                     .fixedSize(horizontal: false, vertical: true)
                     .floatingGlassPanel(cornerRadius: 26)
-                    .transition(
-                        .asymmetric(
-                            insertion: .scale(scale: 0.88, anchor: .bottom)
-                                .combined(with: .opacity),
-                            removal: .opacity
-                                .combined(with: .scale(scale: 0.95, anchor: .bottom))
-                        )
-                    )
+                    .transition(reduceMotion ? AnyTransition.opacity : .asymmetric(
+                        insertion: .scale(scale: 0.88, anchor: .bottom)
+                            .combined(with: .opacity),
+                        removal: .opacity
+                            .combined(with: .scale(scale: 0.95, anchor: .bottom))
+                    ))
             }
 
             navBar()
@@ -120,16 +134,6 @@ struct MiniBrowserChrome<NavBar: View>: View {
 
             if !addressEditing {
                 HStack(spacing: 10) {
-                    // Only in the overview: that is where the browser's own
-                    // history belongs, next to the new page. The page menu
-                    // keeps the page's own tools.
-                    if overviewShown {
-                        historyControl
-                            .transition(
-                                .scale(scale: 0.6, anchor: .leading)
-                                    .combined(with: .opacity)
-                            )
-                    }
                     leadingControl
                     Spacer(minLength: 0)
                     // Closes the mini-browser.
@@ -154,10 +158,9 @@ struct MiniBrowserChrome<NavBar: View>: View {
         .onChange(of: addressEditing) { _, editing in
             model.refreshSuggestions(isEditing: editing)
         }
+        .animation(motion, value: overviewShown)
         .animation(motion, value: model.menuExpanded)
         .animation(motion, value: model.menuSiteSettings)
-        .animation(motion, value: model.suggestions)
-        .animation(motion, value: model.historySuggestions)
         // Chrome, not content: the rows have fixed 44pt metrics, so type stops
         // at the first accessibility size instead of overflowing the bar.
         .dynamicTypeSize(...DynamicTypeSize.accessibility1)
@@ -243,22 +246,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
         .accessibilityElement(children: .contain)
     }
 
-    /// The browser's own history, next to the new page while the overview is
-    /// up. Its own piece of glass, like the other outer controls.
-    private var historyControl: some View {
-        Button(action: onOpenHistory) {
-            Image(systemName: "clock")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Palette.ink(scheme))
-                .frame(width: controlSide, height: controlSide)
-                .contentShape(Capsule())
-        }
-        .buttonStyle(GlassPressStyle())
-        .floatingGlassCapsule()
-        .accessibilityLabel(Text("history.title"))
-    }
-
-    /// The open pages, or a new one once the overview is up. One piece of
+    /// The open pages, or the history once the overview is up. One piece of
     /// glass: only what is printed on it changes.
     private var leadingControl: some View {
         let count = pages.pages.count
@@ -275,9 +263,9 @@ struct MiniBrowserChrome<NavBar: View>: View {
             .accessibilityHidden(overviewShown)
             .accessibilityLabel(Text("browser.page_count \(count)"))
 
-            Button(action: onNewPage) {
-                Image(systemName: "plus")
-                    .font(.system(size: 18, weight: .semibold))
+            Button(action: onOpenHistory) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: glyphSize, weight: .semibold))
                     .foregroundStyle(Palette.ink(scheme))
                     .frame(width: controlSide, height: controlSide)
                     .contentShape(Capsule())
@@ -286,73 +274,63 @@ struct MiniBrowserChrome<NavBar: View>: View {
             .opacity(overviewShown ? 1 : 0)
             .allowsHitTesting(overviewShown)
             .accessibilityHidden(!overviewShown)
-            .accessibilityLabel(Text("kept.new_page"))
+            .accessibilityLabel(Text("history.title"))
         }
         .floatingGlassCapsule()
     }
 
-    /// The page menu, or Done once the overview is up. A long press on Done
-    /// closes everything, as a long press on Safari's Done does.
-    ///
-    /// Opened from home there is no page behind the overview: Done would only
-    /// do what Close already does, so the slot stays empty. It still holds its
-    /// width, so the close control stays in the middle of the row.
-    @ViewBuilder
+    /// The page menu, or a new page once the overview is up. A long press on
+    /// the plus closes everything.
     private var trailingControl: some View {
-        if overviewShown && pages.active == nil {
-            Color.clear
-                .frame(width: controlSide, height: controlSide)
-        } else {
-            ZStack {
-                Button {
-                    withAnimation(motion) { onToggleMenu() }
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(Palette.ink(scheme))
-                        .frame(width: controlSide, height: controlSide)
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(GlassPressStyle())
-                .opacity(overviewShown ? 0 : 1)
-                .allowsHitTesting(!overviewShown)
-                .accessibilityHidden(overviewShown)
-                .accessibilityLabel(Text(menuOpen ? "browser.close_menu" : "browser.more"))
-
-                Menu {
-                    Button(role: .destructive, action: onCloseAll) {
-                        Label {
-                            Text("kept.close_all")
-                        } icon: {
-                            Image(systemName: "xmark")
-                        }
-                    }
-                    .disabled(pages.pages.isEmpty)
-                } label: {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(Palette.ink(scheme))
-                        .frame(width: controlSide, height: controlSide)
-                        .contentShape(Capsule())
-                } primaryAction: {
-                    onDone()
-                }
-                .opacity(overviewShown ? 1 : 0)
-                .allowsHitTesting(overviewShown)
-                .accessibilityHidden(!overviewShown)
-                .accessibilityLabel(Text("common.done"))
+        ZStack {
+            Button {
+                withAnimation(motion) { onToggleMenu() }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: glyphSize, weight: .semibold))
+                    .foregroundStyle(Palette.ink(scheme))
+                    .frame(width: controlSide, height: controlSide)
+                    .contentShape(Capsule())
             }
-            .floatingGlassCapsule()
+            .buttonStyle(GlassPressStyle())
+            .opacity(overviewShown ? 0 : 1)
+            .allowsHitTesting(!overviewShown)
+            .accessibilityHidden(overviewShown)
+            .accessibilityLabel(Text(menuOpen ? "browser.close_menu" : "browser.more"))
+
+            Menu {
+                Button(role: .destructive, action: onCloseAll) {
+                    Label {
+                        Text("kept.close_all")
+                    } icon: {
+                        Image(systemName: "xmark")
+                    }
+                }
+                .disabled(pages.pages.isEmpty)
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: glyphSize, weight: .semibold))
+                    .foregroundStyle(Palette.ink(scheme))
+                    .frame(width: controlSide, height: controlSide)
+                    .contentShape(Capsule())
+            } primaryAction: {
+                onNewPage()
+            }
+            .opacity(overviewShown ? 1 : 0)
+            .allowsHitTesting(overviewShown)
+            .accessibilityHidden(!overviewShown)
+            .accessibilityLabel(Text("kept.new_page"))
         }
+        .floatingGlassCapsule()
     }
 
     /// Smaller than the side buttons, as the middle control of the row.
     private var closeButton: some View {
         Button(action: onClose) {
             Image(systemName: "xmark")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: overviewShown ? 17 : 16, weight: .semibold))
                 .foregroundStyle(Palette.ink(scheme))
-                .frame(width: 92, height: 42)
+                .frame(width: overviewShown ? 100 : 92, height: overviewShown ? 46 : 42)
                 .contentShape(Capsule())
                 // Inside the label on purpose: the pressed state has to move
                 // the whole pill, not only the glyph on it.
@@ -1025,10 +1003,20 @@ struct MiniBrowserTopBar: View {
     var onReturnToOpener: () -> Void
     var onSwipeStart: () -> Void
     var onSwipeEnd: (PageSwipeEnd) -> Void
+    /// A pull upwards on the bar, the home-bar gesture that opens the pages.
+    /// The page follows the finger from the first point on.
+    var onPullStart: () -> Void = {}
+    var onPullChange: (CGSize) -> Void = { _ in }
+    var onPullEnd: (PagePullEnd) -> Void = { _ in }
 
     @Environment(\.colorScheme) private var scheme
     /// A swipe is under way; the address under the finger must not open.
     @State private var swiping = false
+    /// A pull upwards is under way.
+    @State private var pulling = false
+    /// Where the pull took over, so the page does not jump by the distance
+    /// the gesture needed to recognise itself.
+    @State private var pullOrigin: CGSize = .zero
     /// Resets when the drag ends in any way. A system gesture or a call ends
     /// it without `onEnded`, and the page must not stay where it was left.
     @GestureState private var fingerDown = false
@@ -1069,6 +1057,10 @@ struct MiniBrowserTopBar: View {
                     guard !down else {
                         swipeLetGo = false
                         return
+                    }
+                    if pulling, !swipeLetGo {
+                        pulling = false
+                        onPullEnd(PagePullEnd(translation: .zero, velocity: 0, cancelled: true))
                     }
                     guard swiping, !swipeLetGo else { return }
                     swiping = false
@@ -1163,14 +1155,32 @@ struct MiniBrowserTopBar: View {
     }
 
     private var swipeGesture: some Gesture {
-        DragGesture(minimumDistance: 10)
+        // Global: the bar itself moves and shrinks under the finger.
+        DragGesture(minimumDistance: 10, coordinateSpace: .global)
             .updating($fingerDown) { _, down, _ in down = true }
             .onChanged { value in
                 let width = value.translation.width
-                if !swiping {
-                    guard abs(width) > abs(value.translation.height) * 1.2 else { return }
-                    swiping = true
-                    onSwipeStart()
+                let height = value.translation.height
+                if !swiping, !pulling {
+                    // Up with the bar belongs to the pages, the way the home
+                    // bar opens the app switcher. Sideways switches pages.
+                    if height < 0, abs(height) > abs(width) {
+                        pulling = true
+                        pullOrigin = value.translation
+                        onPullStart()
+                    } else if abs(width) > abs(height) * 1.2 {
+                        swiping = true
+                        onSwipeStart()
+                    } else {
+                        return
+                    }
+                }
+                if pulling {
+                    onPullChange(CGSize(
+                        width: width - pullOrigin.width,
+                        height: height - pullOrigin.height
+                    ))
+                    return
                 }
                 let neighbours = pages.neighbours
                 let hasTarget = width < 0
@@ -1182,6 +1192,21 @@ struct MiniBrowserTopBar: View {
                 swipeOffset = width * (hasTarget ? scale : 0.2)
             }
             .onEnded { value in
+                if pulling {
+                    swipeLetGo = true
+                    // A beat later: the bar travels with the finger, so the
+                    // address button still sees this as a tap on itself.
+                    DispatchQueue.main.async { pulling = false }
+                    onPullEnd(PagePullEnd(
+                        translation: CGSize(
+                            width: value.translation.width - pullOrigin.width,
+                            height: value.translation.height - pullOrigin.height
+                        ),
+                        velocity: value.velocity.height,
+                        cancelled: false
+                    ))
+                    return
+                }
                 guard swiping else { return }
                 swipeLetGo = true
                 let neighbours = pages.neighbours
@@ -1217,7 +1242,7 @@ struct MiniBrowserTopBar: View {
             }
 
             Button {
-                guard !swiping else { return }
+                guard !swiping, !pulling else { return }
                 onBeginAddressEdit()
             } label: {
                 HStack(spacing: 8) {

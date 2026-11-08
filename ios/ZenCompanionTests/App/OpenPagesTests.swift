@@ -227,16 +227,53 @@ final class OpenPagesTests: XCTestCase {
 
     // MARK: - Switching and closing
 
-    func testNeighboursFollowTheListOrder() {
+    func testNeighboursFollowTheRecencyOrder() {
         let pages = store()
-        let first = pages.open(url: a)
+        _ = pages.open(url: a)
         let second = pages.open(url: b)
         let third = pages.open(url: c)
 
         pages.activate(second.id)
 
-        XCTAssertEqual(pages.neighbours.previous?.id, first.id)
+        XCTAssertEqual(pages.recencyOrder.last?.id, second.id)
+        XCTAssertEqual(pages.neighbours.previous?.id, third.id)
+        XCTAssertNil(pages.neighbours.next)
+    }
+
+    func testClosingTheActivePageBringsBackTheOneUsedLast() {
+        var clock = Date(timeIntervalSince1970: 1_000)
+        func tick() { clock = clock.addingTimeInterval(1) }
+        let pages = store(now: { clock })
+        let first = pages.open(url: a)
+        tick()
+        let second = pages.open(url: b)
+        tick()
+        _ = pages.open(url: c)
+        tick()
+        pages.activate(first.id)
+        tick()
+        pages.activate(second.id)
+
+        pages.close(second.id)
+
+        XCTAssertEqual(pages.activeID, first.id)
+    }
+
+    func testSwitchingKeepsTheOrderSoSwipingBackReturns() {
+        let pages = store()
+        _ = pages.open(url: a)
+        let second = pages.open(url: b)
+        let third = pages.open(url: c)
+
+        pages.beginSwitching()
+        pages.activate(second.id)
+
         XCTAssertEqual(pages.neighbours.next?.id, third.id)
+        // The deck shows the same order: the page swiped to is not in front.
+        XCTAssertEqual(pages.deckOrder.last?.id, third.id)
+
+        pages.releaseSwitchingOrder()
+        XCTAssertEqual(pages.deckOrder.last?.id, second.id)
     }
 
     func testAMovedPageKeepsItsPlaceAcrossARestart() {

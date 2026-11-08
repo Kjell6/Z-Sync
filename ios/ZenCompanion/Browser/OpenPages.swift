@@ -181,6 +181,9 @@ final class OpenPagesStore: MiniBrowserPageHost {
     @ObservationIgnored private let directory: URL
     @ObservationIgnored private let preferences: PreferencesStoring
     @ObservationIgnored private let now: () -> Date
+    /// Page ids in the order the address bar swipes through, while switching.
+    private var switchingOrder: [String]?
+    @ObservationIgnored private var switchingRelease: Task<Void, Never>?
     @ObservationIgnored private let makeModel: @MainActor (URL?) -> MiniBrowserModel
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
@@ -216,13 +219,54 @@ final class OpenPagesStore: MiniBrowserPageHost {
         pages.first { $0.id == id }
     }
 
-    /// The pages either side of the active one, for the address bar swipe.
+    /// Least recently used first, the page on screen last: the order of the
+    /// deck, where further right is more recent, as with the running apps.
+    var recencyOrder: [OpenPage] {
+        pages.filter { $0.id != activeID }.sorted { $0.lastUsedAt < $1.lastUsedAt }
+            + pages.filter { $0.id == activeID }
+    }
+
+    /// The order the deck and the address bar share. It holds still while the
+    /// user is switching, so swiping back lands on the page just left and a
+    /// page swiped to does not jump to the front of the deck yet.
+    var deckOrder: [OpenPage] {
+        guard let switchingOrder else { return recencyOrder }
+        return switchingOrder.compactMap(page(_:))
+            + pages.filter { !switchingOrder.contains($0.id) }
+    }
+
+    /// The pages either side of the active one, for the address bar swipe:
+    /// the same neighbours the deck shows it between.
     var neighbours: (previous: OpenPage?, next: OpenPage?) {
-        guard let activeID, let index = pages.firstIndex(where: { $0.id == activeID }) else { return (nil, nil) }
+        let ordered = deckOrder
+        guard let activeID, let index = ordered.firstIndex(where: { $0.id == activeID }) else { return (nil, nil) }
         return (
-            index > 0 ? pages[index - 1] : nil,
-            index < pages.count - 1 ? pages[index + 1] : nil
+            index > 0 ? ordered[index - 1] : nil,
+            index < ordered.count - 1 ? ordered[index + 1] : nil
         )
+    }
+
+    /// A swipe started: the order stays as it is until the user settles.
+    func beginSwitching() {
+        switchingRelease?.cancel()
+        if switchingOrder == nil { switchingOrder = recencyOrder.map(\.id) }
+    }
+
+    /// A swipe ended. A page stayed on for a moment becomes the most recent
+    /// one, the way a running app moves to the front once it has been used.
+    func finishSwitching(after delay: Duration = .seconds(3)) {
+        switchingRelease?.cancel()
+        switchingRelease = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            self?.switchingOrder = nil
+        }
+    }
+
+    /// A page was chosen in the deck: it is the current one at once.
+    func releaseSwitchingOrder() {
+        switchingRelease?.cancel()
+        switchingOrder = nil
     }
 
     /// Keeping a page is a choice only with "Keep only chosen pages" on; the
@@ -328,7 +372,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
     // MARK: - Closing
 
     /// Ends a page. Back on screen comes the page that opened it, otherwise
-    /// its neighbour. Returns false when no page is left on screen.
+    /// the one used last. Returns false when no page is left on screen.
     @discardableResult
     func close(_ id: String) -> Bool {
         guard let index = pages.firstIndex(where: { $0.id == id }) else { return activeID != nil }
@@ -343,7 +387,8 @@ final class OpenPagesStore: MiniBrowserPageHost {
         }
         if wasActive {
             activeID = nil
-            let next = page.openerID.flatMap(self.page) ?? (pages.isEmpty ? nil : pages[min(index, pages.count - 1)])
+            // The deck runs by recency: the page used last comes back.
+            let next = page.openerID.flatMap(self.page) ?? pages.max { $0.lastUsedAt < $1.lastUsedAt }
             if let next {
                 activate(next.id)
             }

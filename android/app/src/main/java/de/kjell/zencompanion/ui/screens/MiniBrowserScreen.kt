@@ -12,6 +12,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateDpAsState
@@ -42,6 +44,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.BoxScope
@@ -58,6 +61,8 @@ import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -82,11 +87,15 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.lerp
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
@@ -107,7 +116,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
@@ -134,8 +145,15 @@ import de.kjell.zencompanion.ui.theme.liftBorder
 import de.kjell.zencompanion.util.Haptics
 import de.kjell.zencompanion.util.PageTitle
 import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -189,81 +207,323 @@ fun MiniBrowserScreen(
     val openPages by pages.store.pages.collectAsState()
     val session = pages.active
     val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val statusBars = WindowInsets.statusBars
+    val bottomBand = with(density) {
+        pageBottomBand(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()).toPx()
+    }
+    var screen by remember { mutableStateOf(Size.Zero) }
 
-    val overviewAlpha = remember { Animatable(0f) }
-    /** The picture flying between the page (1) and its card (0). */
-    val heroProgress = remember { Animatable(1f) }
-    val heroAlpha = remember { Animatable(1f) }
-    var hero by remember { mutableStateOf<OverviewHero?>(null) }
+    /** How far the deck has come in: 0 is only the page, 1 is the whole deck. */
+    val overviewReveal = remember { Animatable(0f) }
+    /** The deck's cards above the page's own, once it has landed. */
+    val aheadReveal = remember { Animatable(1f) }
+    /** The live page between full screen and its card. */
+    val poseX = remember { Animatable(0f) }
+    val poseY = remember { Animatable(0f) }
+    val poseScale = remember { Animatable(1f) }
+    /** How much of the strip under the page has been cut away. */
+    val poseBandCut = remember { Animatable(0f) }
+    val chromeAlpha = remember { Animatable(if (startsInOverview) 0f else 1f) }
+    /** How far the tapped card has grown back into its page. */
+    val cardExpansion = remember { Animatable(0f) }
+    var overviewControls by remember { mutableStateOf(showOverview) }
+    /** The page is above the deck, moving with the finger or landing on its card. */
+    var pageFloats by remember { mutableStateOf(false) }
+    /** The pull has let go for the overview; the bar takes no new one. */
+    var committingPull by remember { mutableStateOf(false) }
+    var pullPassedPoint by remember { mutableStateOf(false) }
     /** Why pinning a page from the overview failed. */
     var pinErrorRes by remember { mutableStateOf<Int?>(null) }
-    /** The card the picture stands in for; it shows once the picture lands. */
+    var confirmCloseAll by remember { mutableStateOf(false) }
+    var plusMenuOpen by remember { mutableStateOf(false) }
+    /** The card the page stands in for; it shows once the page lands. */
     var hiddenCardId by remember { mutableStateOf<String?>(null) }
-    /** A page that must not join the grid while it fades out. */
+    var expandingCardId by remember { mutableStateOf<String?>(null) }
+    /** A page that must not join the deck while it goes. */
     var excludedCardId by remember { mutableStateOf<String?>(null) }
-    val cardFrames = remember { HashMap<String, Rect>() }
-    var pageFrame by remember { mutableStateOf(Rect.Zero) }
+    /** A new deck each time the page leaves for it, with the order fresh. */
+    var deckGeneration by remember { mutableIntStateOf(0) }
+    /** Every move of the overview replaces the one before; only the last one finishes. */
+    val move = remember { arrayOfNulls<Job>(1) }
 
-    suspend fun awaitLayout() {
-        repeat(3) { withFrameNanos { } }
+    fun transition(block: suspend CoroutineScope.() -> Unit) {
+        move[0]?.cancel()
+        move[0] = scope.launch(block = block)
     }
 
-    /** The page shrinks into its card, once the grid has laid out and the card's place is known. */
-    fun openOverview(page: PageSession) {
+    val deckCardCorner = rememberDeckCardCornerPx()
+    var floatCorner by remember { mutableStateOf(0f) }
+
+    fun activeDeckIndex(): Int {
+        val ordered = pages.store.deckOrder()
+        return ordered.indexOfFirst { it.id == pages.active?.id }.takeIf { it >= 0 }
+            ?: (ordered.size - 1).coerceAtLeast(0)
+    }
+
+    /** Where the page has to be to lie exactly on its card. */
+    fun cardPose(): PageCardPose? {
+        if (screen.width <= 0f || screen.height <= 0f) return null
+        val deck = PageDeckGeometry(screen, pages.store.pages.value.size, bottomBand)
+        val place = activeDeckIndex().toFloat()
+        val card = deck.frame(place, place)
+        val scale = card.width / screen.width
+        return PageCardPose(
+            x = card.center.x - screen.width / 2f,
+            // The screen's bottom edge lies a scaled strip below the card's.
+            y = card.bottom + bottomBand * scale - screen.height,
+            scale = scale,
+            corner = deckCardCorner / scale,
+        )
+    }
+
+    fun settleFloatingPage() {
         scope.launch {
-            pages.capture(page)
-            val shot = page.shot
-            hiddenCardId = page.id
-            overviewAlpha.snapTo(0f)
-            showOverview = true
-            awaitLayout()
-            val card = cardFrames[page.id]
-            if (shot == null || card == null || pageFrame.isEmpty) {
-                hiddenCardId = null
-                overviewAlpha.animateTo(1f, tween(200))
-                return@launch
-            }
-            heroAlpha.snapTo(1f)
-            heroProgress.snapTo(1f)
-            hero = OverviewHero(shot, card)
-            launch { overviewAlpha.animateTo(1f, tween(HeroMillis)) }
-            heroProgress.animateTo(0f, tween(HeroMillis, easing = FastOutSlowInEasing))
-            hiddenCardId = null
-            hero = null
+            poseX.snapTo(0f)
+            poseY.snapTo(0f)
+            poseScale.snapTo(1f)
+            poseBandCut.snapTo(0f)
+            overviewReveal.snapTo(1f)
+            aheadReveal.snapTo(1f)
+            chromeAlpha.snapTo(0f)
+        }
+        hiddenCardId = null
+        pageFloats = false
+        committingPull = false
+    }
+
+    /** The finger took hold of the page: the deck goes in behind it right away. */
+    fun beginPagePull() {
+        val page = pages.active ?: return
+        if (committingPull) return
+        move[0]?.cancel()
+        pullPassedPoint = false
+        // A card may still be growing into this page, and that deck has its
+        // focus and order from before. A page coming back keeps its deck.
+        if (!pageFloats) deckGeneration++
+        expandingCardId = null
+        excludedCardId = null
+        scope.launch {
+            cardExpansion.snapTo(0f)
+            aheadReveal.snapTo(if (activeDeckIndex() < pages.store.pages.value.size - 1) 0f else 1f)
+        }
+        page.viewModel.collapseMenu()
+        hiddenCardId = page.id
+        cardPose()?.let { floatCorner = it.corner }
+        pageFloats = true
+        showOverview = true
+        pages.capture(page)
+    }
+
+    /** The page shrinks under the finger, bottom edge with the finger, the deck coming in around it. */
+    fun updatePagePull(translation: Offset) {
+        if (!pageFloats || committingPull) return
+        val card = cardPose() ?: return
+        val travel = max(screen.height * 0.32f, 1f)
+        val progress = (-translation.y / travel).coerceIn(0f, 1f)
+        val eased = 1f - (1f - progress).pow(1.7f)
+        val appearing = ((progress - 0.03f) / 0.52f).coerceIn(0f, 1f)
+        scope.launch {
+            poseX.snapTo(translation.x * 0.6f)
+            poseY.snapTo(min(0f, translation.y))
+            poseScale.snapTo(1f - (1f - card.scale) * eased)
+            poseBandCut.snapTo(bottomBand * eased)
+            overviewReveal.snapTo(appearing * appearing * (3f - 2f * appearing))
+            chromeAlpha.snapTo(1f - ((progress - 0.1f) / 0.3f).coerceIn(0f, 1f))
+        }
+        val passed = progress > PullCommitPoint
+        if (passed != pullPassedPoint) {
+            pullPassedPoint = passed
+            if (passed) Haptics.perform(context, Haptics.Kind.SELECTION)
         }
     }
 
-    /** The chosen page grows out of its card and lands on the live page. */
-    fun closeOverview(page: OpenPage) {
-        val session = pages.session(page.id)
-        val shot = session?.shot
-        val card = cardFrames[page.id]
-        pages.activate(page.id)
-        scope.launch {
-            if (shot == null || card == null) {
-                overviewAlpha.animateTo(0f, tween(200))
-                showOverview = false
-                return@launch
+    /** The page lands on its card at the finger's speed; the card takes over once it is there. */
+    fun landOnCard(velocity: Float) {
+        val card = cardPose()
+        if (card == null) {
+            settleFloatingPage()
+            showOverview = true
+            overviewControls = true
+            return
+        }
+        committingPull = true
+        transition {
+            launch {
+                chromeAlpha.animateTo(0f, tween(120))
+                overviewControls = true
             }
-            hiddenCardId = page.id
-            heroAlpha.snapTo(1f)
-            heroProgress.snapTo(0f)
-            hero = OverviewHero(shot, card)
-            // From home the page has only just joined the screen.
-            awaitLayout()
-            launch { overviewAlpha.animateTo(0f, tween(HeroMillis)) }
-            heroProgress.animateTo(1f, tween(HeroMillis, easing = FastOutSlowInEasing))
-            showOverview = false
+            val spec = spring<Float>(stiffness = 300f, visibilityThreshold = 0.5f)
+            listOf(
+                launch { poseX.animateTo(card.x, spec) },
+                launch { poseY.animateTo(card.y, spec, initialVelocity = velocity) },
+                launch { poseScale.animateTo(card.scale, spring(stiffness = 300f, visibilityThreshold = 0.001f)) },
+                launch { poseBandCut.animateTo(bottomBand, spec) },
+                launch { overviewReveal.animateTo(1f, spring(stiffness = 300f, visibilityThreshold = 0.002f)) },
+            ).joinAll()
             hiddenCardId = null
-            // A woken page may still be loading under the picture.
-            heroAlpha.animateTo(0f, tween(140))
-            hero = null
+            pageFloats = false
+            committingPull = false
+            poseX.snapTo(0f)
+            poseY.snapTo(0f)
+            poseScale.snapTo(1f)
+            poseBandCut.snapTo(0f)
+            aheadReveal.animateTo(1f, spring(stiffness = 400f, visibilityThreshold = 0.002f))
+        }
+    }
+
+    /** The pull was too short, or came back down: the page takes the screen again. */
+    fun returnPage() {
+        committingPull = false
+        overviewControls = false
+        excludedCardId = null
+        transition {
+            val spec = spring<Float>(stiffness = 400f, visibilityThreshold = 0.5f)
+            listOf(
+                launch { poseX.animateTo(0f, spec) },
+                launch { poseY.animateTo(0f, spec) },
+                launch { poseScale.animateTo(1f, spring(stiffness = 400f, visibilityThreshold = 0.001f)) },
+                launch { poseBandCut.animateTo(0f, spec) },
+                launch { overviewReveal.animateTo(0f, spring(stiffness = 400f, visibilityThreshold = 0.002f)) },
+                launch { chromeAlpha.animateTo(1f, tween(180)) },
+            ).joinAll()
+            showOverview = false
+            pageFloats = false
+            hiddenCardId = null
+            aheadReveal.snapTo(1f)
+        }
+    }
+
+    fun endPagePull(end: PagePullEnd) {
+        if (!pageFloats || committingPull) return
+        val travel = max(screen.height * 0.32f, 1f)
+        val progress = -end.translation.y / travel
+        val opens = !end.cancelled && end.velocity < 750f &&
+            (progress > PullCommitPoint || end.velocity < -1050f)
+        if (opens) landOnCard(end.velocity) else returnPage()
+    }
+
+    /** The dock's button takes the same way the finger does. */
+    fun openOverview() {
+        beginPagePull()
+        scope.launch {
+            // The deck has to be on screen for its way in to animate.
+            withFrameNanos { }
+            withFrameNanos { }
+            if (pageFloats && !committingPull) landOnCard(0f)
+        }
+    }
+
+    fun fadeOverviewOut() {
+        overviewControls = false
+        transition {
+            overviewReveal.animateTo(0f, tween(200))
+            showOverview = false
+            chromeAlpha.snapTo(1f)
+        }
+    }
+
+    /**
+     * A page that was asleep has an empty WebView at first, and taking the card
+     * away would flash it. The card stays until the page has loaded, briefly.
+     */
+    suspend fun awaitFirstPaint(page: PageSession) {
+        var sawLoading = false
+        repeat(80) {
+            val state = page.viewModel.state.value
+            if (state.isLoading) sawLoading = true
+            if (state.progress >= 0.9f || (sawLoading && !state.isLoading)) return
+            delay(50)
+        }
+    }
+
+    /**
+     * The tapped card grows to the whole screen inside the deck, so the cards
+     * lying on it run off over it. The live page takes over under the finished
+     * card: a cut, the card shows this very page.
+     */
+    fun closeOverview(page: OpenPage) {
+        if (expandingCardId != null) return
+        if (pageFloats) {
+            // Tapped while the page was still landing.
+            if (page.id == pages.active?.id) {
+                returnPage()
+                return
+            }
+            settleFloatingPage()
+        }
+        val target = pages.session(page.id)
+        val wasAsleep = target?.webView == null
+        // Chosen here, it is the current page at once. The deck's order still
+        // holds for a moment, so going straight back to the deck — or swiping
+        // from the page — finds the tab where it was, not already at the front.
+        pages.beginSwitching()
+        pages.activate(page.id)
+        pages.finishSwitching(afterMs = BrowserPages.CHOSEN_SETTLE_MS)
+        overviewControls = false
+        expandingCardId = page.id
+        transition {
+            launch { overviewReveal.animateTo(0f, DeckOpenSpring) }
+            cardExpansion.animateTo(1f, DeckOpenSpring)
+            if (wasAsleep && target != null) awaitFirstPaint(target)
+            showOverview = false
+            expandingCardId = null
+            cardExpansion.snapTo(0f)
+            // The bar sits under the deck until now.
+            chromeAlpha.animateTo(1f, tween(180))
+        }
+    }
+
+    /**
+     * A blank sheet comes in from the right and grows to the whole screen while
+     * the deck parts around it. The address field follows it in.
+     */
+    fun openNewPage() {
+        pages.releaseSwitchingOrder()
+        val arriving = pages.open(null)
+        // Not under the deck: the field and the keyboard come once it is nearly here.
+        arriving.opensWithSearch = false
+        // The deck stays as it was while it goes: no card joins it on the way out.
+        excludedCardId = arriving.id
+        overviewControls = false
+        val count = pages.store.pages.value.size
+        val last = (count - 1).coerceAtLeast(0).toFloat()
+        val card = PageDeckGeometry(screen, count, bottomBand).frame(last, last - 1f)
+        val scale = if (screen.width > 0f) card.width / screen.width else 1f
+        floatCorner = deckCardCorner / scale
+        pageFloats = true
+        transition {
+            poseX.snapTo(card.center.x - screen.width / 2f)
+            poseY.snapTo(card.bottom + bottomBand * scale - screen.height)
+            poseScale.snapTo(scale)
+            poseBandCut.snapTo(bottomBand)
+            chromeAlpha.snapTo(0f)
+            // Building the WebView holds the main thread; the move starts after it.
+            var waited = 0
+            while (arriving.webView == null && waited++ < 40) withFrameNanos { }
+            withFrameNanos { }
+            val spec = spring<Float>(stiffness = 300f, visibilityThreshold = 0.5f)
+            listOf(
+                launch { poseX.animateTo(0f, spec) },
+                launch { poseY.animateTo(0f, spec) },
+                launch { poseScale.animateTo(1f, spring(stiffness = 300f, visibilityThreshold = 0.001f)) },
+                launch { poseBandCut.animateTo(0f, spec) },
+                launch { overviewReveal.animateTo(0f, spring(stiffness = 300f, visibilityThreshold = 0.002f)) },
+            ).joinAll()
+            pageFloats = false
+            showOverview = false
+            excludedCardId = null
+            // Only now: the keyboard would stop the move dead in the middle.
+            arriving.viewModel.beginAddressEdit()
+            // The bar turns into the field first, out of sight.
+            delay(BarMorphMs.toLong())
+            chromeAlpha.animateTo(1f, tween(200))
         }
     }
 
     /** From home the overview fades in over the spaces; a recreated screen just comes back. */
     LaunchedEffect(Unit) {
-        if (showOverview && hero == null) overviewAlpha.animateTo(1f, tween(220))
+        if (showOverview) overviewReveal.animateTo(1f, tween(220))
     }
 
     // The overview stays up empty, like Safari's; its Done goes.
@@ -271,32 +531,101 @@ fun MiniBrowserScreen(
         if (session == null && !showOverview) onDismiss()
     }
 
-    /** A page from the browser's history: the page on screen takes it, or a
-     *  new one when the overview came up without a page. */
+    /**
+     * A page from the browser's history: the page on screen takes it, or a new
+     * one when the overview came up without a page.
+     */
     fun openHistoryVisit(visit: BrowserVisit) {
         // A page whose renderer died has no WebView to load into.
-        val view = pages.active?.webView
-        if (view != null) view.loadUrl(visit.url) else pages.open(visit.url)
-        if (showOverview) {
-            scope.launch {
-                overviewAlpha.animateTo(0f, tween(200))
-                showOverview = false
+        val active = pages.active
+        val view = active?.webView
+        val page = if (active != null && view != null) {
+            view.loadUrl(visit.url)
+            pages.store.page(active.id)
+        } else {
+            pages.store.page(pages.open(visit.url).id)
+        }
+        if (showOverview && page != null) closeOverview(page)
+    }
+
+    // Over the deck the status bar goes by the app's background, not the page's.
+    val deckIsDark = LocalZenColors.current.background.luminance() < 0.5f
+    val systemBarsView = LocalView.current
+    DisposableEffect(systemBarsView, overviewControls, deckIsDark) {
+        val window = (systemBarsView.context as? Activity)?.window
+        val bars = window?.let { WindowCompat.getInsetsController(it, systemBarsView) }
+        val lightStatusBars = bars?.isAppearanceLightStatusBars
+        val lightNavigationBars = bars?.isAppearanceLightNavigationBars
+        if (overviewControls) {
+            bars?.isAppearanceLightStatusBars = !deckIsDark
+            bars?.isAppearanceLightNavigationBars = !deckIsDark
+        }
+        onDispose {
+            if (overviewControls && bars != null && lightStatusBars != null && lightNavigationBars != null) {
+                bars.isAppearanceLightStatusBars = lightStatusBars
+                bars.isAppearanceLightNavigationBars = lightNavigationBars
             }
         }
     }
 
-    Box(modifier.fillMaxSize()) {
+    val saveKind = if (browserRepository.cachedSnapshot?.normalTabsCapability == ZenSpaces.NormalTabsCapability.ENABLED) {
+        browserRepository.saveKind()
+    } else {
+        SaveKind.PINNED
+    }
+
+    Box(
+        modifier
+            .fillMaxSize()
+            .onSizeChanged { screen = Size(it.width.toFloat(), it.height.toFloat()) },
+    ) {
+        // Nothing of the screen behind the browser shows around a flying page:
+        // the page's own color lies under it, as it does on iOS.
+        if (pageFloats && session != null) {
+            val floating by session.viewModel.state.collectAsState()
+            val under = floating.siteThemeColor.takeIf { floating.pageError == null } ?: MaterialTheme.colorScheme.surface
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .zIndex(-1f)
+                    .background(under),
+            )
+        }
+
         if (session != null) {
             BrowserPageScreen(
-                modifier = if (showOverview) Modifier.clearAndSetSemantics { } else Modifier,
+                modifier = Modifier
+                    .zIndex(if (pageFloats) 2f else 0f)
+                    .graphicsLayer {
+                        if (pageFloats) {
+                            transformOrigin = TransformOrigin(0.5f, 1f)
+                            scaleX = poseScale.value
+                            scaleY = poseScale.value
+                            translationX = poseX.value
+                            translationY = poseY.value
+                            shape = PageCardClip(floatCorner, poseBandCut.value)
+                            clip = true
+                            // The same shadow the card has, there from the
+                            // moment the page leaves the screen's edges.
+                            shadowElevation = 7.dp.toPx() / poseScale.value * overviewReveal.value
+                            ambientShadowColor = Color.Black.copy(alpha = 0.3f)
+                            spotShadowColor = Color.Black.copy(alpha = 0.3f)
+                        }
+                    }
+                    .then(if (showOverview) Modifier.clearAndSetSemantics { } else Modifier),
                 session = session,
                 pages = pages,
                 pageCount = openPages.size,
                 currentSpace = currentSpace,
                 allSpaces = allSpaces,
                 browserRepository = browserRepository,
-                onPageFrame = { pageFrame = it },
-                onOpenOverview = { openOverview(session) },
+                chromeAlpha = { chromeAlpha.value },
+                // A new page flies in on its own color, not on its way there.
+                colorArrives = excludedCardId != null,
+                onPullStart = ::beginPagePull,
+                onPullChange = ::updatePagePull,
+                onPullEnd = ::endPagePull,
+                onOpenOverview = ::openOverview,
                 onDismiss = {
                     pages.leaveBrowser()
                     onDismiss()
@@ -309,89 +638,119 @@ fun MiniBrowserScreen(
             BackHandler {
                 pages.active?.let { active ->
                     pages.store.page(active.id)?.let(::closeOverview)
-                } ?: scope.launch {
-                    overviewAlpha.animateTo(0f, tween(200))
-                    showOverview = false
+                } ?: fadeOverviewOut()
+            }
+            key(deckGeneration) {
+                Box(Modifier.zIndex(1f)) {
+                    OpenPagesOverview(
+                        pages = pages,
+                        openPages = openPages,
+                        activeId = pages.active?.id.takeIf { excludedCardId == null },
+                        spaces = allSpaces,
+                        saveKind = saveKind,
+                        hiddenCardId = hiddenCardId,
+                        expandingCardId = expandingCardId,
+                        expansion = { cardExpansion.value },
+                        excludedCardId = excludedCardId,
+                        reveal = { overviewReveal.value },
+                        aheadReveal = { aheadReveal.value },
+                        topInsetPx = statusBars.getTop(density).toFloat(),
+                        bottomBandPx = bottomBand,
+                        onOpen = ::closeOverview,
+                        onPin = { page, destination ->
+                            scope.launch {
+                                try {
+                                    // Leaving the browser must not cut the write off.
+                                    withContext(NonCancellable) {
+                                        browserRepository.addTab(
+                                            url = page.url,
+                                            title = PageTitle.headline(page.title, page.url),
+                                            spaceId = destination.spaceId,
+                                            folderId = if (saveKind == SaveKind.NORMAL) null else destination.folderId,
+                                            kind = saveKind,
+                                        )
+                                    }
+                                    Haptics.perform(context, Haptics.Kind.CONFIRM)
+                                    pages.close(page.id)
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    pinErrorRes = FriendlyError.messageRes(e)
+                                }
+                            }
+                        },
+                        onShare = { page -> shareUrl(context, page.url, page.title) },
+                    )
                 }
             }
-            Box(Modifier.graphicsLayer { alpha = overviewAlpha.value }) {
-                OpenPagesOverview(
-                    pages = pages,
-                    openPages = openPages.filter { it.id != excludedCardId },
-                    activeId = pages.active?.id.takeIf { excludedCardId == null },
-                    spaces = allSpaces,
-                    saveKind = if (browserRepository.cachedSnapshot?.normalTabsCapability == ZenSpaces.NormalTabsCapability.ENABLED) {
-                        browserRepository.saveKind()
+        }
+
+        // A tap on the page while it lands takes it back.
+        if (committingPull) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .zIndex(2.5f)
+                    .pointerInput(Unit) { detectTapGestures { returnPage() } },
+            )
+        }
+
+        val dockAlpha by animateFloatAsState(
+            targetValue = if (overviewControls) 1f else 0f,
+            animationSpec = tween(200),
+            label = "overviewDock",
+        )
+        if (showOverview && dockAlpha > 0f) {
+            OverviewDock(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .zIndex(3f)
+                    .graphicsLayer { alpha = dockAlpha },
+                onOpenHistory = { historyVisible = true },
+                onNewPage = ::openNewPage,
+                onPlusLongPress = { if (openPages.isNotEmpty()) plusMenuOpen = true },
+                onLeave = {
+                    if (pages.active != null) {
+                        pages.leaveBrowser()
+                        onDismiss()
                     } else {
-                        SaveKind.PINNED
-                    },
-                    hiddenCardId = hiddenCardId,
-                    onCardFrame = { id, frame -> cardFrames[id] = frame },
-                    onOpen = ::closeOverview,
-                    onOpenHistory = { historyVisible = true },
-                    onNewPage = {
-                        // The grid stays as it was while it fades: no card joins it on the way out.
-                        excludedCardId = pages.open(null).id
-                        scope.launch {
-                            overviewAlpha.animateTo(0f, tween(200))
-                            showOverview = false
-                            excludedCardId = null
-                        }
-                    },
-                    onDone = {
-                        val active = pages.active?.let { pages.store.page(it.id) }
-                        if (active != null) {
-                            closeOverview(active)
-                        } else {
-                            scope.launch {
-                                overviewAlpha.animateTo(0f, tween(200))
-                                showOverview = false
-                            }
-                        }
-                    },
-                    showsDone = session != null && excludedCardId == null,
-                    onLeave = {
-                        if (pages.active != null) {
-                            pages.leaveBrowser()
-                            onDismiss()
-                        } else {
-                            // Over home nothing is open behind it, only the overview goes.
-                            scope.launch {
-                                overviewAlpha.animateTo(0f, tween(200))
-                                showOverview = false
-                            }
-                        }
-                    },
-                    onPin = { page, destination ->
-                        scope.launch {
-                            val kind = if (browserRepository.cachedSnapshot?.normalTabsCapability == ZenSpaces.NormalTabsCapability.ENABLED) {
-                                browserRepository.saveKind()
-                            } else {
-                                SaveKind.PINNED
-                            }
-                            try {
-                                // Leaving the browser must not cut the write off.
-                                withContext(NonCancellable) {
-                                    browserRepository.addTab(
-                                        url = page.url,
-                                        title = PageTitle.headline(page.title, page.url),
-                                        spaceId = destination.spaceId,
-                                        folderId = if (kind == SaveKind.NORMAL) null else destination.folderId,
-                                        kind = kind,
-                                    )
-                                }
-                                Haptics.perform(context, Haptics.Kind.CONFIRM)
-                                pages.close(page.id)
-                            } catch (e: CancellationException) {
-                                throw e
-                            } catch (e: Exception) {
-                                pinErrorRes = FriendlyError.messageRes(e)
-                            }
-                        }
-                    },
-                    onShare = { page -> shareUrl(context, page.url, page.title) },
-                )
-            }
+                        // Over home nothing is open behind it, only the overview goes.
+                        fadeOverviewOut()
+                    }
+                },
+                plusMenu = {
+                    DropdownMenu(expanded = plusMenuOpen, onDismissRequest = { plusMenuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.kept_close_all), color = MaterialTheme.colorScheme.error) },
+                            onClick = {
+                                plusMenuOpen = false
+                                confirmCloseAll = true
+                            },
+                        )
+                    }
+                },
+            )
+        }
+
+        if (confirmCloseAll) {
+            AlertDialog(
+                onDismissRequest = { confirmCloseAll = false },
+                title = { Text(stringResource(R.string.kept_close_all_title)) },
+                text = { Text(stringResource(R.string.kept_close_all_message)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        confirmCloseAll = false
+                        pages.closeAll()
+                    }) {
+                        Text(stringResource(R.string.kept_close_all), color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirmCloseAll = false }) {
+                        Text(stringResource(R.string.common_cancel))
+                    }
+                },
+            )
         }
 
         pinErrorRes?.let { message ->
@@ -402,23 +761,6 @@ fun MiniBrowserScreen(
                 confirmButton = {
                     TextButton(onClick = { pinErrorRes = null }) { Text(stringResource(R.string.common_done)) }
                 },
-            )
-        }
-
-        hero?.let { flying ->
-            val density = LocalDensity.current
-            val progress = heroProgress.value
-            val frame = lerp(flying.card, pageFrame, progress)
-            Image(
-                bitmap = flying.image,
-                contentDescription = null,
-                contentScale = ContentScale.FillWidth,
-                alignment = Alignment.TopCenter,
-                modifier = Modifier
-                    .offset { IntOffset(frame.left.roundToInt(), frame.top.roundToInt()) }
-                    .size(with(density) { frame.width.toDp() }, with(density) { frame.height.toDp() })
-                    .clip(RoundedCornerShape(18.dp * (1f - progress)))
-                    .graphicsLayer { alpha = heroAlpha.value },
             )
         }
     }
@@ -434,10 +776,18 @@ fun MiniBrowserScreen(
     }
 }
 
-/** The picture standing in for a page between the page and its card. */
-private class OverviewHero(val image: ImageBitmap, val card: Rect)
+/** The floating page's outline: rounded, and short of the strip under the page. */
+private class PageCardClip(private val radius: Float, private val bottomCut: Float) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline =
+        Outline.Rounded(
+            RoundRect(0f, 0f, size.width, size.height - bottomCut, CornerRadius(radius)),
+        )
+}
 
-private const val HeroMillis = 340
+/** The live page between full screen and its card, scaled about the bottom edge. */
+private class PageCardPose(val x: Float, val y: Float, val scale: Float, val corner: Float)
+
+private const val PullCommitPoint = 0.16f
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -449,8 +799,13 @@ private fun BrowserPageScreen(
     currentSpace: ZenSpaces.ZenSpace,
     allSpaces: List<ZenSpaces.ZenSpace>,
     browserRepository: BrowserRepository,
-    /** Where the page sits in the window, for the zoom into the overview. */
-    onPageFrame: (Rect) -> Unit,
+    /** The bar's opacity: it goes as the page becomes a card. */
+    chromeAlpha: () -> Float,
+    /** The page's color is there at once, with no blend from the page before. */
+    colorArrives: Boolean,
+    onPullStart: () -> Unit,
+    onPullChange: (Offset) -> Unit,
+    onPullEnd: (PagePullEnd) -> Unit,
     onOpenOverview: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
@@ -549,9 +904,12 @@ private fun BrowserPageScreen(
         when {
             // The way back runs the way it came: the page before slides in, live.
             pages.store.neighbours().first != null -> scope.launch {
+                val before = pages.store.neighbours().first
                 pages.prepareNeighbours()
                 pageSwipe.animateTo(paneWidth + pageGapPx, tween(300, easing = FastOutSlowInEasing))
                 colorJumps = true
+                // The page that slid in stays; closing alone would pick by list.
+                before?.let { pages.activate(it.id) }
                 pages.close(session.id)
                 pageSwipe.snapTo(0f)
                 withFrameNanos { }
@@ -615,12 +973,12 @@ private fun BrowserPageScreen(
     val targetBg = state.siteThemeColor.takeIf { state.pageError == null } ?: defaultSurface
     val animatedBgColor by animateColorAsState(
         targetValue = targetBg,
-        animationSpec = if (colorJumps) snap() else tween(300),
+        animationSpec = if (colorJumps || colorArrives) snap() else tween(300),
         label = "browserThemeColor",
     )
     // The animation answers a frame late, and a page switch has no frame to
     // spare: the plate would go back to the old page's color for a moment.
-    val shownBgColor = if (colorJumps) targetBg else animatedBgColor
+    val shownBgColor = if (colorJumps || colorArrives) targetBg else animatedBgColor
 
     // The bar stays put while a sheet, a reader, the find bar or a banner is up.
     val barVisible = !barHidden ||
@@ -670,9 +1028,9 @@ private fun BrowserPageScreen(
 
     val openPages by pages.store.pages.collectAsState()
     val pageInfo = openPages.firstOrNull { it.id == session.id }
-    val index = openPages.indexOfFirst { it.id == session.id }
-    val previousPage = openPages.getOrNull(index - 1)
-    val nextPage = openPages.getOrNull(index + 1)
+    // The same neighbours the deck shows this page between.
+    val switchingOrder by pages.store.switchingOrder.collectAsState()
+    val (previousPage, nextPage) = remember(openPages, switchingOrder, session.id) { pages.store.neighbours() }
     // Past the last page there is a new one, as in Safari. Not from a page
     // that is itself still empty.
     val offersNewPage = nextPage == null && effectiveUrl.isNotEmpty()
@@ -698,7 +1056,13 @@ private fun BrowserPageScreen(
         span = { paneWidth + pageGapPx },
         previous = previousPage?.let { peekBar(pages, it) },
         next = nextPage?.let { peekBar(pages, it) } ?: if (offersNewPage) PeekBar(null, "") else null,
-        onStart = { pages.prepareNeighbours() },
+        onStart = {
+            pages.beginSwitching()
+            pages.prepareNeighbours()
+        },
+        onPullStart = onPullStart,
+        onPullChange = onPullChange,
+        onPullEnd = onPullEnd,
         onDrag = { amount ->
             scope.launch {
                 val next = pageSwipe.value + amount
@@ -709,6 +1073,7 @@ private fun BrowserPageScreen(
             }
         },
         onEnd = { velocity ->
+            pages.finishSwitching()
             scope.launch {
                 val span = paneWidth + pageGapPx
                 val moved = pageSwipe.value
@@ -785,7 +1150,6 @@ private fun BrowserPageScreen(
                     .weight(1f)
                     .fillMaxWidth()
                     .onSizeChanged { paneWidth = it.width }
-                    .onGloballyPositioned { onPageFrame(it.boundsInRoot()) }
                     .clipToBounds(),
             ) {
                 PageStack(
@@ -901,6 +1265,7 @@ private fun BrowserPageScreen(
                 exit = slideOutVertically(targetOffsetY = { it }),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
+                    .graphicsLayer { alpha = chromeAlpha() }
                     // Only the address composer rides the keyboard. A page
                     // field must not push the whole bar up into the page.
                     .then(if (ridesKeyboard) Modifier.imePadding() else Modifier),
@@ -1109,9 +1474,10 @@ private fun PageStack(
     onLinkLongPress: (String) -> Unit,
 ) {
     val openPages by pages.store.pages.collectAsState()
-    val index = openPages.indexOfFirst { it.id == active.id }
-    val previousId = openPages.getOrNull(index - 1)?.id
-    val nextId = openPages.getOrNull(index + 1)?.id
+    val switchingOrder by pages.store.switchingOrder.collectAsState()
+    val (previous, next) = remember(openPages, switchingOrder, active.id) { pages.store.neighbours() }
+    val previousId = previous?.id
+    val nextId = next?.id
     val currentActive by rememberUpdatedState(active)
     val requests = rememberBrowserPageRequests(pages)
     BrowserPromptDialogs(active, requests)

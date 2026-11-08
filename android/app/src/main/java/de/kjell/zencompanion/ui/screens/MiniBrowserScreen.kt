@@ -450,9 +450,12 @@ fun MiniBrowserScreen(
         }
         val target = pages.session(page.id)
         val wasAsleep = target?.webView == null
-        // Chosen here, it is the current page at once; no waiting as after a swipe.
-        pages.releaseSwitchingOrder()
+        // Chosen here, it is the current page at once. The deck's order still
+        // holds for a moment, so going straight back to the deck — or swiping
+        // from the page — finds the tab where it was, not already at the front.
+        pages.beginSwitching()
         pages.activate(page.id)
+        pages.finishSwitching(afterMs = BrowserPages.CHOSEN_SETTLE_MS)
         overviewControls = false
         expandingCardId = page.id
         transition {

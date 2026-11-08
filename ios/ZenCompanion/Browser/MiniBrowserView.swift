@@ -364,6 +364,12 @@ struct MiniBrowserView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
                 let overlap = Self.keyboardOverlap(from: note)
+                // While the address field is focused, a frame that reports the
+                // keyboard gone is a transient (predictive bar, dictation, a
+                // hardware keyboard taking over). Dropping the composer to the
+                // dock and springing it back is what made it jump under the
+                // finger while typing.
+                guard !(isAddressFocused && overlap == 0 && keyboardOverlap > 0) else { return }
                 withAnimation(Self.keyboardAnimation(from: note)) {
                     keyboardOverlap = overlap
                 }
@@ -609,7 +615,7 @@ private extension MiniBrowserView {
     /// Where the page has to be to lie exactly on its card.
     private func cardPose() -> PageCardPose? {
         guard screenSize.width > 0, screenSize.height > 0 else { return nil }
-        let deck = PageDeckGeometry(screen: screenSize, count: pages.pages.count)
+        let deck = PageDeckGeometry(screen: screenSize, count: CGFloat(pages.pages.count))
         let place = CGFloat(activeDeckIndex)
         let card = deck.frame(index: place, focus: place)
         let scale = card.width / screenSize.width
@@ -626,6 +632,8 @@ private extension MiniBrowserView {
     private func beginPagePull() {
         guard let page = pages.active, !committingPull else { return }
         transitionEpoch += 1
+        // A flight cut short must not hold back the search of later new pages.
+        holdsNewPageSearch = false
         aheadReveal = activeDeckIndex < pages.pages.count - 1 ? 0 : 1
         pullPassedPoint = false
         // A card may still be growing into this page, and that deck has its
@@ -786,6 +794,7 @@ private extension MiniBrowserView {
         // A fade-out still running must not hide the deck coming back.
         transitionEpoch += 1
         overviewHoldsCards = false
+        holdsNewPageSearch = false
         showOverview = true
         overviewControls = true
         withAnimation(.easeOut(duration: 0.2)) { overviewReveal = 1 }
@@ -815,9 +824,12 @@ private extension MiniBrowserView {
             settleFloatingPage()
         }
         let wasAsleep = page.model.webView == nil
-        // Chosen here, it is the current page at once; no waiting as after a swipe.
-        pages.releaseSwitchingOrder()
+        // Chosen here, it is the current page at once. The deck's order still
+        // holds for a moment, so going straight back to the deck — or swiping
+        // from the page — finds the tab where it was, not already at the front.
+        pages.beginSwitching()
         pages.activate(page.id)
+        pages.finishSwitching(after: .seconds(1.5))
         guard !reduceMotion else {
             fadeOverviewOut()
             return
@@ -864,7 +876,7 @@ private extension MiniBrowserView {
     private func newPageStartPose() -> PageCardPose? {
         guard screenSize.width > 0, screenSize.height > 0 else { return nil }
         let count = pages.pages.count
-        let deck = PageDeckGeometry(screen: screenSize, count: count)
+        let deck = PageDeckGeometry(screen: screenSize, count: CGFloat(count))
         let last = CGFloat(max(0, count - 1))
         let card = deck.frame(index: last, focus: last - 1)
         let scale = card.width / screenSize.width
@@ -888,6 +900,8 @@ private extension MiniBrowserView {
         holdsNewPageSearch = !reduceMotion
         pages.open(url: nil)
         guard !reduceMotion, let start = newPageStartPose() else {
+            // No flight follows: the page change starts the search as usual.
+            holdsNewPageSearch = false
             overviewControls = false
             withAnimation(.easeOut(duration: 0.2)) { overviewReveal = 0 } completion: {
                 guard epoch == transitionEpoch else { return }

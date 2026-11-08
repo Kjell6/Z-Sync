@@ -238,9 +238,9 @@ class BrowserPages(
     }
 
     /** A swipe ended. A page stayed on for a moment becomes the most recent one. */
-    fun finishSwitching() {
+    fun finishSwitching(afterMs: Long = SETTLE_MS) {
         settling.removeCallbacksAndMessages(null)
-        settling.postDelayed({ store.releaseSwitchingOrder() }, SETTLE_MS)
+        settling.postDelayed({ store.releaseSwitchingOrder() }, afterMs)
     }
 
     /** A page was chosen in the deck: it is the current one at once. */
@@ -442,6 +442,9 @@ class BrowserPages(
 
         /** How long a page swiped to has to stay on to count as the current one. */
         private const val SETTLE_MS = 3_000L
+
+        /** The same hold after a card is chosen, short enough not to feel stuck. */
+        const val CHOSEN_SETTLE_MS = 1_500L
 
         /** Sharp enough to stand in for the whole page while it zooms. */
         private const val SHOT_WIDTH_PX = 720

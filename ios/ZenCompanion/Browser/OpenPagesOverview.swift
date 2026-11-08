@@ -31,7 +31,10 @@ enum DisplayCorners {
 /// each card further left tucks in behind with less and less showing.
 struct PageDeckGeometry {
     let screen: CGSize
-    let count: Int
+    /// How many cards the deck holds. A card on its way out already counts as
+    /// gone, so the cards sliding into its place do not move a second time
+    /// when it is removed.
+    let count: CGFloat
 
     /// The display's own curve, scaled down with the card.
     @MainActor static var cornerRadius: CGFloat { max(20, DisplayCorners.radius * focusScale) }
@@ -69,7 +72,7 @@ struct PageDeckGeometry {
 
     /// With nothing on top of it the last card moves to the true middle.
     private func endShift(focus: CGFloat) -> CGFloat {
-        let last = CGFloat(max(0, count - 1))
+        let last = max(0, count - 1)
         let near = min(1, max(0, 1 - (last - focus)))
         let eased = near * near * (3 - 2 * near)
         let centered = (screen.width - cardSize.width) / 2
@@ -252,7 +255,7 @@ struct OpenPagesOverview: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let deck = PageDeckGeometry(screen: proxy.size, count: visiblePages.count)
+            let deck = PageDeckGeometry(screen: proxy.size, count: CGFloat(visiblePages.count))
             ZStack {
                 backdrop
                     .opacity(Double(reveal))
@@ -297,6 +300,9 @@ struct OpenPagesOverview: View {
             let cards = visiblePages
             let lifted = liftedID.flatMap { id in cards.firstIndex { $0.id == id } }
             let closedFocus = lifted.map { focusAfterClosing($0, count: cards.count) } ?? focus
+            // A lifted card already counts as gone for the deck's end, so the
+            // others settle once instead of moving again when it is removed.
+            let liveDeck = PageDeckGeometry(screen: deck.screen, count: max(1, deck.count - gap))
             ForEach(Array(cards.enumerated()), id: \.element.id) { index, page in
                 // Where the lifted card is going to leave a hole, the others
                 // are already on their way into it. The card itself stays.
@@ -326,7 +332,7 @@ struct OpenPagesOverview: View {
                     menu(for: page)
                 }
                 .modifier(DeckCardPlacement(
-                    deck: deck,
+                    deck: liveDeck,
                     index: place,
                     focus: deckFocus,
                     reveal: place > deckFocus ? min(reveal, aheadReveal) : reveal,

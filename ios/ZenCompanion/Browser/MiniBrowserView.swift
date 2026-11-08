@@ -184,6 +184,19 @@ struct MiniBrowserView: View {
                     }
 
                     ZStack {
+                        // A new page is still blank while it flies in. Its own
+                        // surface fills the card, so the deck behind it does
+                        // not show through the empty web view.
+                        if holdsNewPageSearch {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: pagePose.corner, style: .continuous)
+                                    .fill(defaultBackground)
+                                RoundedRectangle(cornerRadius: pagePose.corner, style: .continuous)
+                                    .fill(Palette.lift(scheme))
+                            }
+                            .glassRim(cornerRadius: pagePose.corner)
+                        }
+
                         webPane
                             .overlay {
                                 if let error = model.pageError {
@@ -863,8 +876,9 @@ private extension MiniBrowserView {
         )
     }
 
-    /// A blank sheet comes in from the right and grows to the whole screen
-    /// while the deck parts around it. The address field follows it in.
+    /// A blank sheet comes in from the right and grows to the whole screen.
+    /// The deck stays exactly where it is: only the new page moves, and the
+    /// cards are covered instead of sliding or fading away under it.
     private func openNewPage() {
         transitionEpoch += 1
         let epoch = transitionEpoch
@@ -895,7 +909,6 @@ private extension MiniBrowserView {
             guard epoch == transitionEpoch else { return }
             withAnimation(.spring(duration: 0.42, bounce: 0)) {
                 pagePose = PageCardPose(x: 0, y: 0, scale: 1, corner: start.corner)
-                overviewReveal = 0
             } completion: {
                 guard epoch == transitionEpoch else { return }
                 var transaction = Transaction()
@@ -903,8 +916,10 @@ private extension MiniBrowserView {
                 withTransaction(transaction) {
                     pagePose = .identity
                     pageFloats = false
+                    // The page covers the deck by now; it goes without a trace.
                     showOverview = false
                     overviewHoldsCards = false
+                    overviewReveal = 0
                     overviewControls = false
                 }
                 // Only now: bringing up the keyboard holds the main thread,

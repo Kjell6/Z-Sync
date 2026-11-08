@@ -372,7 +372,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
     // MARK: - Closing
 
     /// Ends a page. Back on screen comes the page that opened it, otherwise
-    /// its neighbour. Returns false when no page is left on screen.
+    /// the one used last. Returns false when no page is left on screen.
     @discardableResult
     func close(_ id: String) -> Bool {
         guard let index = pages.firstIndex(where: { $0.id == id }) else { return activeID != nil }
@@ -387,7 +387,8 @@ final class OpenPagesStore: MiniBrowserPageHost {
         }
         if wasActive {
             activeID = nil
-            let next = page.openerID.flatMap(self.page) ?? (pages.isEmpty ? nil : pages[min(index, pages.count - 1)])
+            // The deck runs by recency: the page used last comes back.
+            let next = page.openerID.flatMap(self.page) ?? pages.max { $0.lastUsedAt < $1.lastUsedAt }
             if let next {
                 activate(next.id)
             }

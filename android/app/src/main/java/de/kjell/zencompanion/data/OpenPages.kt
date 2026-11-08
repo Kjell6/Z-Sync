@@ -261,8 +261,8 @@ class OpenPagesStore(
     }
 
     /**
-     * Ends a page. Back on screen comes the page that opened it, otherwise its
-     * neighbour. Returns the page now on screen.
+     * Ends a page. Back on screen comes the page that opened it, otherwise the
+     * one used last. Returns the page now on screen.
      */
     fun close(id: String): String? {
         val pages = _pages.value
@@ -275,7 +275,8 @@ class OpenPagesStore(
         removeFiles(id)
         onPageRemoved(id)
         if (_activeId.value == id) {
-            val next = rest.firstOrNull { it.id == page.openerId } ?: rest.getOrNull(index.coerceAtMost(rest.size - 1))
+            // The deck runs by recency: the page used last comes back.
+            val next = rest.firstOrNull { it.id == page.openerId } ?: rest.maxByOrNull { it.lastUsedAt }
             _activeId.value = null
             next?.let { activate(it.id) }
         }

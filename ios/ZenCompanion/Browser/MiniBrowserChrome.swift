@@ -119,14 +119,12 @@ struct MiniBrowserChrome<NavBar: View>: View {
                     .frame(maxWidth: .infinity)
                     .fixedSize(horizontal: false, vertical: true)
                     .floatingGlassPanel(cornerRadius: 26)
-                    .transition(
-                        .asymmetric(
-                            insertion: .scale(scale: 0.88, anchor: .bottom)
-                                .combined(with: .opacity),
-                            removal: .opacity
-                                .combined(with: .scale(scale: 0.95, anchor: .bottom))
-                        )
-                    )
+                    .transition(reduceMotion ? AnyTransition.opacity : .asymmetric(
+                        insertion: .scale(scale: 0.88, anchor: .bottom)
+                            .combined(with: .opacity),
+                        removal: .opacity
+                            .combined(with: .scale(scale: 0.95, anchor: .bottom))
+                    ))
             }
 
             navBar()

@@ -164,6 +164,22 @@ class OpenPagesTests {
     }
 
     @Test
+    fun closingTheActivePageBringsBackTheOneUsedLast() {
+        val pages = store()
+        val first = pages.open(a)
+        clock += 1
+        val second = pages.open(b)
+        clock += 1
+        pages.open(c)
+        clock += 1
+        pages.activate(first.id)
+        clock += 1
+        pages.activate(second.id)
+
+        assertEquals(first.id, pages.close(second.id))
+    }
+
+    @Test
     fun switchingKeepsTheOrderUntilThePageIsChosen() {
         val pages = store()
         pages.open(a)

@@ -240,6 +240,25 @@ final class OpenPagesTests: XCTestCase {
         XCTAssertNil(pages.neighbours.next)
     }
 
+    func testClosingTheActivePageBringsBackTheOneUsedLast() {
+        var clock = Date(timeIntervalSince1970: 1_000)
+        func tick() { clock = clock.addingTimeInterval(1) }
+        let pages = store(now: { clock })
+        let first = pages.open(url: a)
+        tick()
+        let second = pages.open(url: b)
+        tick()
+        _ = pages.open(url: c)
+        tick()
+        pages.activate(first.id)
+        tick()
+        pages.activate(second.id)
+
+        pages.close(second.id)
+
+        XCTAssertEqual(pages.activeID, first.id)
+    }
+
     func testSwitchingKeepsTheOrderSoSwipingBackReturns() {
         let pages = store()
         _ = pages.open(url: a)

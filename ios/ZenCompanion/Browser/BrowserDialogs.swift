@@ -34,7 +34,9 @@ struct BrowserDialog: Identifiable {
         case confirm(host: String, message: String, DialogAnswer<Bool>)
         case prompt(host: String, message: String, defaultText: String, DialogAnswer<String?>)
         case login(host: String, failedBefore: Bool, DialogAnswer<BrowserLogin?>)
-        case permission(host: String, kinds: [SitePermission], DialogAnswer<Bool>)
+        /// Nil when the dialog went away with its page: nobody refused, so
+        /// nothing is remembered.
+        case permission(host: String, kinds: [SitePermission], DialogAnswer<Bool?>)
         /// The site is allowed, but the system says no for the whole app.
         case systemAccessOff(kinds: [SitePermission])
     }

@@ -16,6 +16,8 @@ import androidx.annotation.RequiresApi
 import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStream
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.UUID
 import org.json.JSONObject
 
@@ -53,21 +55,69 @@ internal fun isWebDownload(url: String): Boolean {
     return scheme == "http" || scheme == "https"
 }
 
+/** Where a response sends the download next, or null when it is the file. */
+internal fun nextDownloadHop(url: String, status: Int, location: String?): String? {
+    if (status !in 300..399 || status == HttpURLConnection.HTTP_NOT_MODIFIED || location.isNullOrEmpty()) return null
+    return runCatching { URL(URL(url), location).toString() }.getOrNull()?.takeIf(::isWebDownload)
+}
+
 /**
- * Hands a web file to the system's downloader with the page's cookies, so a
- * file behind a sign-in loads too. It keeps going when the app is closed, and
- * the system shows the progress.
+ * Follows the redirects of [start] by hand. Null when there are too many to
+ * tell where the file really is.
+ */
+internal fun resolveDownloadUrl(start: String, probe: (String) -> Pair<Int, String?>): String? {
+    var current = start
+    repeat(MAX_DOWNLOAD_REDIRECTS) {
+        val (status, location) = probe(current)
+        current = nextDownloadHop(current, status, location) ?: return current
+    }
+    return null
+}
+
+private const val MAX_DOWNLOAD_REDIRECTS = 8
+private const val PROBE_TIMEOUT_MS = 10_000
+
+/** Status and redirect of [url], asking with only that address's own cookies. */
+private fun probeDownload(url: String, userAgent: String?): Pair<Int, String?> {
+    fun ask(method: String): Pair<Int, String?> {
+        val connection = URL(url).openConnection() as HttpURLConnection
+        try {
+            connection.requestMethod = method
+            connection.instanceFollowRedirects = false
+            connection.connectTimeout = PROBE_TIMEOUT_MS
+            connection.readTimeout = PROBE_TIMEOUT_MS
+            CookieManager.getInstance().getCookie(url)?.let { connection.setRequestProperty("Cookie", it) }
+            userAgent?.takeIf { it.isNotEmpty() }?.let { connection.setRequestProperty("User-Agent", it) }
+            return connection.responseCode to connection.getHeaderField("Location")
+        } finally {
+            connection.disconnect()
+        }
+    }
+    return runCatching {
+        val answer = ask("HEAD")
+        // Not every server answers HEAD. Only the headers of GET are read.
+        if (answer.first == 405 || answer.first == 501) ask("GET") else answer
+    }.getOrDefault(0 to null)
+}
+
+/**
+ * Hands a web file to the system's downloader, so it keeps going when the app
+ * is closed and the system shows the progress. The downloader sends the same
+ * headers to every redirect, so it gets the file's final address and only that
+ * address's cookies: a redirect to another site never sees the sign-in.
+ * Blocks on the network; call it off the main thread.
  */
 internal fun enqueueWebDownload(context: Context, download: BrowserDownload): Boolean = runCatching {
     val name = safeDownloadName(
         URLUtil.guessFileName(download.url, download.contentDisposition, download.mimeType),
     )
-    val request = DownloadManager.Request(Uri.parse(download.url))
+    val target = resolveDownloadUrl(download.url) { probeDownload(it, download.userAgent) }
+    val request = DownloadManager.Request(Uri.parse(target ?: download.url))
         .setTitle(name)
         .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
         .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name)
     download.mimeType?.takeIf { it.isNotEmpty() }?.let(request::setMimeType)
-    CookieManager.getInstance().getCookie(download.url)?.let { request.addRequestHeader("Cookie", it) }
+    target?.let(CookieManager.getInstance()::getCookie)?.let { request.addRequestHeader("Cookie", it) }
     download.userAgent?.takeIf { it.isNotEmpty() }?.let { request.addRequestHeader("User-Agent", it) }
     download.referer?.takeIf(::isWebDownload)?.let { request.addRequestHeader("Referer", it) }
     context.getSystemService(DownloadManager::class.java).enqueue(request)

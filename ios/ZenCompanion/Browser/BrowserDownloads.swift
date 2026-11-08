@@ -66,7 +66,11 @@ final class BrowserDownloads: NSObject, WKDownloadDelegate {
         let folder = manager.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let name = BrowserDownloadPolicy.uniqueFileName(
             BrowserDownloadPolicy.safeFileName(suggestedFilename)
-        ) { manager.fileExists(atPath: folder.appendingPathComponent($0).path) }
+        ) { candidate in
+            // WebKit creates the file later, so a running download's name is taken too.
+            running.values.contains { $0.fileName == candidate }
+                || manager.fileExists(atPath: folder.appendingPathComponent(candidate).path)
+        }
         running[ObjectIdentifier(download)]?.fileName = name
         running[ObjectIdentifier(download)]?.model?.showNotice(
             String(localized: "browser.download.started \(name)"),

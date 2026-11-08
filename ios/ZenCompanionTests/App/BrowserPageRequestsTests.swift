@@ -70,8 +70,8 @@ final class BrowserPageRequestsTests: XCTestCase {
     // MARK: - The order of the questions
 
     func testAskingShowsTheBrowsersQuestionAndWaits() {
-        let model = MiniBrowserModel(initialURL: nil)
-        defer { SitePermissionStore.shared.removeAll() }
+        let store = makeStore()
+        let model = MiniBrowserModel(initialURL: nil, sitePermissions: store)
         var answers: [Bool] = []
         model.requestPermission([.camera], host: "ask.example") { answers.append($0) }
         XCTAssertTrue(answers.isEmpty, "Nothing reaches the system before the reader answered")
@@ -82,13 +82,23 @@ final class BrowserPageRequestsTests: XCTestCase {
         XCTAssertEqual(kinds, [.camera])
         answer.send(false)
         XCTAssertEqual(answers, [false])
-        XCTAssertEqual(SitePermissionStore.shared.choice(for: .camera, host: "ask.example"), .block)
+        XCTAssertEqual(store.choice(for: .camera, host: "ask.example"), .block)
+    }
+
+    func testAQuestionThatGoesAwayRefusesWithoutRemembering() {
+        let store = makeStore()
+        var answers: [Bool] = []
+        let model = MiniBrowserModel(initialURL: nil, sitePermissions: store)
+        model.requestPermission([.camera], host: "gone.example") { answers.append($0) }
+        model.dismissDialog(model.dialogs[0])
+        XCTAssertEqual(answers, [false])
+        XCTAssertNil(store.choice(for: .camera, host: "gone.example"))
     }
 
     func testABlockedSiteHearsNoWithoutAQuestion() {
-        let model = MiniBrowserModel(initialURL: nil)
-        SitePermissionStore.shared.set(.block, for: [.location], host: "blocked.example")
-        defer { SitePermissionStore.shared.removeAll() }
+        let store = makeStore()
+        let model = MiniBrowserModel(initialURL: nil, sitePermissions: store)
+        store.set(.block, for: [.location], host: "blocked.example")
         var answers: [Bool] = []
         model.requestPermission([.location], host: "blocked.example") { answers.append($0) }
         XCTAssertEqual(answers, [false])

@@ -61,6 +61,11 @@ import de.kjell.zencompanion.ui.browser.enqueueWebDownload
 import de.kjell.zencompanion.ui.browser.isPageLocalDownload
 import de.kjell.zencompanion.ui.browser.isWebDownload
 import de.kjell.zencompanion.ui.browser.pageFileScript
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** What a page's WebView needs from the screen around it. */
 internal interface PageRequests {
@@ -98,6 +103,9 @@ internal class BrowserPageRequests(
     private val permissions: ManagedActivityResultLauncher<Array<String>, Map<String, Boolean>>,
     private val files: ManagedActivityResultLauncher<Intent, ActivityResult>,
 ) {
+    /** Not tied to the screen: a started download outlasts it. */
+    private val downloads = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
     /** Kinds the system refuses for good, for the dialog that explains it. */
     var systemAccessOff by mutableStateOf<List<SitePermission>?>(null)
     private var fullscreen by mutableStateOf<Fullscreen?>(null)
@@ -154,7 +162,7 @@ internal class BrowserPageRequests(
             when (SitePermissions.decision(kinds, host)) {
                 SitePermissionDecision.GRANT -> requestSystem(kinds, done)
                 SitePermissionDecision.DENY -> done(false)
-                SitePermissionDecision.ASK -> session.prompts += BrowserPrompt.Permission(host, kinds) { allowed ->
+                SitePermissionDecision.ASK -> session.prompts += BrowserPrompt.Permission(host, kinds, onDismiss = { done(false) }) { allowed ->
                     SitePermissions.set(
                         if (allowed) SitePermissionChoice.ALLOW else SitePermissionChoice.BLOCK,
                         kinds,
@@ -194,8 +202,8 @@ internal class BrowserPageRequests(
 
         private fun save(view: WebView, download: BrowserDownload) {
             when {
-                isWebDownload(download.url) -> {
-                    val queued = enqueueWebDownload(context, download)
+                isWebDownload(download.url) -> downloads.launch {
+                    val queued = withContext(Dispatchers.IO) { enqueueWebDownload(context, download) }
                     if (queued) session.viewModel.onDownloadStarted() else session.viewModel.onDownloadFinished(false)
                 }
                 isPageLocalDownload(download.url) ->

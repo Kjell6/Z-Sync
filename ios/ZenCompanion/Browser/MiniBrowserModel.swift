@@ -423,6 +423,7 @@ final class MiniBrowserModel {
     /// row offers pinned only, like the share sheet.
     var allowsNormalTabs: Bool
     private let suggestionClient: SearchSuggestionFetching
+    let sitePermissions: SitePermissionStore
     private let suggestionDebounce: Duration
 
     init(
@@ -435,9 +436,11 @@ final class MiniBrowserModel {
         allowsNormalTabs: Bool = false,
         suggestionClient: SearchSuggestionFetching = LiveSearchSuggestionClient(),
         suggestionDebounce: Duration = SearchSuggestions.debounce,
-        blocker: ContentBlocker = .shared
+        blocker: ContentBlocker = .shared,
+        sitePermissions: SitePermissionStore = .shared
     ) {
         self.initialURL = initialURL
+        self.sitePermissions = sitePermissions
         self.blocker = blocker
         self.pinWriter = pinWriter
         self.urlOpener = urlOpener
@@ -1129,14 +1132,18 @@ final class MiniBrowserModel {
     /// question. [completion] hears true only for an allowed site whose kinds
     /// the system has not refused; the system's own dialog comes after that.
     func requestPermission(_ kinds: [SitePermission], host: String, completion: @escaping (Bool) -> Void) {
-        let store = SitePermissionStore.shared
+        let store = sitePermissions
         switch store.decision(for: kinds, host: host) {
         case .grant:
             completion(allowedBySystem(kinds))
         case .deny:
             completion(false)
         case .ask:
-            let answer = DialogAnswer<Bool>(fallback: false) { [weak self] allowed in
+            let answer = DialogAnswer<Bool?>(fallback: nil) { [weak self] allowed in
+                guard let allowed else {
+                    completion(false)
+                    return
+                }
                 store.set(allowed ? .allow : .block, for: kinds, host: host)
                 completion(allowed && (self?.allowedBySystem(kinds) ?? false))
             }

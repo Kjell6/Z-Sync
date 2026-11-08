@@ -13,10 +13,8 @@ import de.kjell.zencompanion.data.SitePermissions
  * and stay. Your Zen sign-in does not live in these stores.
  */
 fun clearBrowserWebsiteData(context: Context) {
-    CookieManager.getInstance().apply {
-        removeAllCookies(null)
-        flush()
-    }
+    // Removal finishes later, so the jar is written once it has.
+    CookieManager.getInstance().run { removeAllCookies { flush() } }
     WebStorage.getInstance().deleteAllData()
     GeolocationPermissions.getInstance().clearAll()
     WebViewDatabase.getInstance(context).apply {

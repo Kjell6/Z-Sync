@@ -189,7 +189,7 @@ enum BrowserGeolocation {
                 return
             }
             // A page can post here by itself, so the answer is read again.
-            guard SitePermissionStore.shared.decision(for: [.location], host: origin.host) == .grant else {
+            guard model.sitePermissions.decision(for: [.location], host: origin.host) == .grant else {
                 replyHandler(BrowserGeolocation.errorReply(code: 1), nil)
                 return
             }

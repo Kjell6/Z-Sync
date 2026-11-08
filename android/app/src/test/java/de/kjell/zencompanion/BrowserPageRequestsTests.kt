@@ -10,13 +10,16 @@ import de.kjell.zencompanion.ui.browser.grantableResources
 import de.kjell.zencompanion.ui.browser.isPageLocalDownload
 import de.kjell.zencompanion.ui.browser.isWebDownload
 import de.kjell.zencompanion.ui.browser.nameWithExtension
+import de.kjell.zencompanion.ui.browser.nextDownloadHop
 import de.kjell.zencompanion.ui.browser.pageFileScript
+import de.kjell.zencompanion.ui.browser.resolveDownloadUrl
 import de.kjell.zencompanion.ui.browser.safeDownloadName
 import de.kjell.zencompanion.ui.browser.sitePermissionsFor
 import de.kjell.zencompanion.ui.screens.systemAccessGranted
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -84,17 +87,50 @@ class BrowserPageRequestsTests {
     @Test
     fun aPromptAnswersOnce() {
         val answers = mutableListOf<Boolean>()
-        val prompt = BrowserPrompt.Permission("example.com", listOf(SitePermission.CAMERA)) { answers += it }
+        val prompt = BrowserPrompt.Permission("example.com", listOf(SitePermission.CAMERA), onDismiss = {}) { answers += it }
         prompt.send(true)
         prompt.dismiss()
         assertEquals(listOf(true), answers)
     }
 
     @Test
-    fun aDismissedPromptRefuses() {
+    fun aDismissedPromptIsNotAnAnswer() {
         val answers = mutableListOf<Boolean>()
-        BrowserPrompt.Permission("example.com", listOf(SitePermission.LOCATION)) { answers += it }.dismiss()
-        assertEquals(listOf(false), answers)
+        var dismissed = 0
+        val prompt = BrowserPrompt.Permission("example.com", listOf(SitePermission.LOCATION), onDismiss = { dismissed++ }) { answers += it }
+        prompt.dismiss()
+        prompt.dismiss()
+        prompt.send(false)
+        assertEquals(1, dismissed)
+        assertTrue(answers.isEmpty())
+    }
+
+    @Test
+    fun aRedirectIsFollowedToTheFile() {
+        val hops = mapOf(
+            "https://a.example/file" to (302 to "/moved"),
+            "https://a.example/moved" to (301 to "https://cdn.example/file.zip"),
+            "https://cdn.example/file.zip" to (200 to null),
+        )
+        assertEquals("https://cdn.example/file.zip", resolveDownloadUrl("https://a.example/file") { hops.getValue(it) })
+    }
+
+    @Test
+    fun aFileThatCannotBeProbedStaysWhereItIs() {
+        assertEquals("https://a.example/f", resolveDownloadUrl("https://a.example/f") { 0 to null })
+    }
+
+    @Test
+    fun endlessRedirectsLeaveNoAddressToTrust() {
+        assertNull(resolveDownloadUrl("https://a.example/f") { 302 to "https://a.example/f" })
+    }
+
+    @Test
+    fun onlyWebAddressesAreFollowed() {
+        assertNull(nextDownloadHop("https://a.example/f", 302, "intent://x"))
+        assertNull(nextDownloadHop("https://a.example/f", 304, "https://a.example/g"))
+        assertNull(nextDownloadHop("https://a.example/f", 200, "https://a.example/g"))
+        assertNull(nextDownloadHop("https://a.example/f", 302, null))
     }
 
     @Test

@@ -10,9 +10,11 @@ import de.kjell.zencompanion.data.SitePermission
 sealed class BrowserPrompt {
     abstract fun dismiss()
 
+    /** [onDismiss] runs when the page went away: nobody refused, so nothing is remembered. */
     class Permission(
         val host: String,
         val kinds: List<SitePermission>,
+        private val onDismiss: () -> Unit,
         private val answer: (Boolean) -> Unit,
     ) : BrowserPrompt() {
         private var answered = false
@@ -23,7 +25,11 @@ sealed class BrowserPrompt {
             answer(allowed)
         }
 
-        override fun dismiss() = send(false)
+        override fun dismiss() {
+            if (answered) return
+            answered = true
+            onDismiss()
+        }
     }
 
     class HttpLogin(

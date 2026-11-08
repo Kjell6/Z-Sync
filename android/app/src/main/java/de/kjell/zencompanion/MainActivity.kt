@@ -286,7 +286,6 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
                 // Clears encrypted store + sync cache + wipes WebView data.
                 de.kjell.zencompanion.ui.screens.FxAWeb.wipeWebSession()
                 pages.closeAll()
-                de.kjell.zencompanion.data.SitePermissions.clear()
                 viewModel.signOut()
             },
             onOpenWhatsNew = {

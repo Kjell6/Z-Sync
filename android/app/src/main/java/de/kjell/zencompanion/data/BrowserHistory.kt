@@ -91,7 +91,9 @@ internal fun searchVisits(visits: List<BrowserVisit>, query: String): List<Brows
 
 private const val MINIMUM_TYPED_LETTERS = 2
 
-private fun tokens(text: String) = text.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
+private val NON_WORD_CHARACTERS = Regex("[^\\p{L}\\p{N}]+")
+
+private fun tokens(text: String) = text.lowercase().split(NON_WORD_CHARACTERS).filter { it.isNotEmpty() }
 
 /** The typed text as words, without the parts every address shares. */
 private fun typedWords(text: String): List<String> {

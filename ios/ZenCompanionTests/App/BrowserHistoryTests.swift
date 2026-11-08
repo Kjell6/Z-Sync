@@ -121,7 +121,7 @@ final class BrowserHistoryTests: XCTestCase {
 
     func testAReloadIsNoNewVisitButANewAddressIs() {
         let store = makeStore()
-        let model = MiniBrowserModel(initialURL: nil, history: store)
+        let model = MiniBrowserModel(initialURL: nil, preferences: FakePreferences(), history: store)
         model.updateCurrentURL(url("https://a.example/one"))
         model.recordVisit()
         model.recordVisit()

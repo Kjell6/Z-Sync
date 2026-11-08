@@ -42,9 +42,15 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
             previous: previous,
             next: next,
             slidingColor: slidingColor,
-            topOverflow: topOverflow,
-            cornerRadius: cornerRadius
+            topOverflow: topOverflow
         )
+        // Carried by the SwiftUI animation that changed it, so the corners
+        // round in step with the page shrinking into its card.
+        if #available(iOS 18.0, *) {
+            context.animate { host.setCornerRadius(cornerRadius) }
+        } else {
+            host.setCornerRadius(cornerRadius)
+        }
         for peek in [previous, next] {
             (peek?.webView as? MiniBrowserWebView)?.setBottomClearance(bottomClearance)
         }
@@ -58,7 +64,8 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
     }
 
     static func dismantleUIView(_ host: PageHostView, coordinator: ()) {
-        host.show(current: nil, previous: nil, next: nil, slidingColor: nil, topOverflow: 0, cornerRadius: 0)
+        host.show(current: nil, previous: nil, next: nil, slidingColor: nil, topOverflow: 0)
+        host.setCornerRadius(0)
     }
 }
 
@@ -104,8 +111,7 @@ final class PageHostView: UIView {
         previous: PeekingPage?,
         next: PeekingPage?,
         slidingColor: UIColor?,
-        topOverflow: CGFloat,
-        cornerRadius: CGFloat
+        topOverflow: CGFloat
     ) {
         let wanted = [current, previous?.webView, next?.webView].compactMap { $0 }
         for view in subviews where view is WKWebView && !wanted.contains(where: { $0 === view }) {
@@ -119,14 +125,6 @@ final class PageHostView: UIView {
         previousPeek = previous
         nextPeek = next
         self.topOverflow = topOverflow
-        // The backing carries the top corners, which sit above the web view;
-        // the web view rounds only the bottom ones.
-        currentBacking.layer.cornerRadius = cornerRadius
-        currentBacking.layer.cornerCurve = .continuous
-        current?.layer.cornerRadius = cornerRadius
-        current?.layer.cornerCurve = .continuous
-        current?.layer.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
-        current?.layer.masksToBounds = cornerRadius > 0
         currentBacking.backgroundColor = slidingColor
         currentBacking.isHidden = slidingColor == nil
         previousBacking.backgroundColor = previous?.color
@@ -139,6 +137,18 @@ final class PageHostView: UIView {
         nextShot.isHidden = next?.shot == nil
         setNeedsLayout()
         layoutIfNeeded()
+    }
+
+    /// The backing carries the top corners, which sit above the web view; the
+    /// web view rounds only the bottom ones. It keeps masking at zero, so the
+    /// corners can still animate on their way back to square.
+    func setCornerRadius(_ radius: CGFloat) {
+        currentBacking.layer.cornerRadius = radius
+        currentBacking.layer.cornerCurve = .continuous
+        current?.layer.cornerCurve = .continuous
+        current?.layer.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+        current?.layer.masksToBounds = true
+        current?.layer.cornerRadius = radius
     }
 
     override func layoutSubviews() {

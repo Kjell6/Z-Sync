@@ -42,19 +42,32 @@ struct MiniBrowserView: View {
     /// The overview is up, over the page and the chrome.
     @State private var showOverview: Bool
     @State private var confirmCloseAll = false
-    /// Fades the overview while a page zooms into or out of it.
-    @State private var overviewVisible: Bool
-    /// The picture flying between the full page and its card.
-    @State private var hero: OverviewHero?
-    @State private var heroAtFullSize = true
-    @State private var heroOpacity: Double = 1
-    /// The card the picture stands in for; it shows once the picture lands.
+    /// The dock shows the overview's controls.
+    @State private var overviewControls: Bool
+    /// How far the deck has come in: 0 is only the page, 1 is the whole deck.
+    @State private var overviewReveal: CGFloat
+    /// The live page on its way between full screen and its card.
+    @State private var pagePose = PageCardPose.identity
+    /// The page is above the deck, moving with the finger or landing on its card.
+    @State private var pageFloats = false
+    /// The chrome is part of the card while the page is pulled up.
+    @State private var chromeRides = false
+    @State private var chromeFade: CGFloat = 1
+    /// The pull has let go for the overview; the bar takes no new one.
+    @State private var committingPull = false
+    @State private var pullPassedPoint = false
+    /// Every move of the overview takes a new number. A move that finishes
+    /// after another has started finds its number gone and leaves things alone.
+    @State private var transitionEpoch = 0
+    /// A new deck each time the page leaves for it, with the order fresh.
+    @State private var deckGeneration = 0
+    /// The card growing back into its page, and how far it has got.
+    @State private var expandingCardID: String?
+    @State private var cardExpansion: CGFloat = 0
+    /// The card the live page stands in for; it shows once the page lands.
     @State private var hiddenCardID: String?
     /// The overview is on its way out for a new page and shows no changes.
     @State private var overviewHoldsCards = false
-    /// The page at full size, from the moment the overview opened.
-    @State private var lastPicture: (pageID: String, image: UIImage)?
-    @State private var cardFrames: [String: CGRect] = [:]
     @State private var pageFrame: CGRect = .zero
     /// The neighbours sit beside the page while the address bar is swiped.
     @State private var peeking = false
@@ -83,7 +96,8 @@ struct MiniBrowserView: View {
         _startsInSearch = State(initialValue: pages.active?.model.opensWithSearch ?? false)
         _showOverview = State(initialValue: startsInOverview)
         // From home it comes up with the cover, like the browser does.
-        _overviewVisible = State(initialValue: startsInOverview)
+        _overviewControls = State(initialValue: startsInOverview)
+        _overviewReveal = State(initialValue: startsInOverview ? 1 : 0)
     }
 
     /// The page on screen.
@@ -184,8 +198,19 @@ struct MiniBrowserView: View {
                             .transition(.opacity)
                         }
                     }
-                    .background(revealingNewPage ? Color.clear : sheetBackground)
+                    .background(revealingNewPage || pageFloats ? Color.clear : sheetBackground)
+                    .background { floatingPageShadow }
+                    .overlay {
+                        // A tap on the page while it lands takes it back.
+                        if committingPull {
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .onTapGesture { returnPage() }
+                        }
+                    }
                     .offset(x: pageSwipe)
+                    .scaleEffect(pagePose.scale, anchor: .bottom)
+                    .offset(x: pagePose.x, y: pagePose.y)
 
                     if model.menuExpanded {
                         // UIKit scrim, not a SwiftUI tap gesture. A SwiftUI
@@ -206,20 +231,26 @@ struct MiniBrowserView: View {
                     pageFrame = $0
                     paneWidth = $0.width
                 }
+                .zIndex(pageFloats ? 2 : 0)
 
                 if showOverview {
                     overview
-                        .opacity(overviewVisible ? 1 : 0)
+                        .id(deckGeneration)
+                        .allowsHitTesting(expandingCardID == nil)
+                        .zIndex(1)
                 }
-
-                heroLayer
 
                 // The page runs out into a soft blur at the bottom instead of
                 // stopping against the controls.
                 PageBottomFade()
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .opacity(barCollapsed || showOverview ? 0 : 1)
+                    // Back before the card has finished growing, so the page
+                    // does not change at the bottom when the card goes.
+                    .opacity(barCollapsed || (showOverview && expandingCardID == nil) ? 0 : 1)
                     .animation(barMotion, value: barCollapsed)
+                    .animation(.easeOut(duration: 0.12), value: showOverview)
+                    .animation(.easeOut(duration: 0.3), value: expandingCardID)
+                    .zIndex(4)
 
                 if let notice = model.pinNotice {
                     pinNoticeToast(notice)
@@ -227,6 +258,7 @@ struct MiniBrowserView: View {
                         .padding(.bottom, 132)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                         .environment(\.colorScheme, barScheme)
+                        .zIndex(5)
                 }
 
                 MiniBrowserChrome(
@@ -239,15 +271,10 @@ struct MiniBrowserView: View {
                     addressEditing: addressEditing,
                     onPickSuggestion: pickSuggestion,
                     onOpenPages: openOverview,
-                    overviewShown: overviewVisible,
+                    overviewShown: overviewControls,
                     onNewPage: openNewPage,
-                    onDone: {
-                        if let page = pages.active {
-                            closeOverview(to: page)
-                        } else {
-                            onDismiss()
-                        }
-                    },
+                    // A placeholder until the browser history lands here.
+                    onHistory: {},
                     onCloseAll: { confirmCloseAll = true },
                     navBar: {
                         MiniBrowserTopBar(
@@ -263,7 +290,10 @@ struct MiniBrowserView: View {
                             onSubmit: submitAddress,
                             onReturnToOpener: returnToOpener,
                             onSwipeStart: beginSwipe,
-                            onSwipeEnd: finishSwipe
+                            onSwipeEnd: finishSwipe,
+                            onPullStart: beginPagePull,
+                            onPullChange: updatePagePull,
+                            onPullEnd: endPagePull
                         )
                     }
                 )
@@ -271,9 +301,14 @@ struct MiniBrowserView: View {
                 .padding(.bottom, chromeBottomInset)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 .offset(y: barCollapsed ? 220 : 0)
+                // While the page is pulled the chrome is part of it.
+                .scaleEffect(chromeRides ? pagePose.scale : 1, anchor: .bottom)
+                .offset(x: chromeRides ? pagePose.x : 0, y: chromeRides ? pagePose.y : 0)
                 // With nothing left to show, the cover is on its way out.
-                .opacity(barCollapsed || (pages.active == nil && !showOverview) ? 0 : 1)
+                .opacity(barCollapsed || (pages.active == nil && !showOverview) ? 0 : Double(chromeFade))
+                .allowsHitTesting(!committingPull)
                 .accessibilityHidden(barCollapsed)
+                .zIndex(6)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .background(sheetBackground.ignoresSafeArea())
@@ -377,36 +412,31 @@ struct MiniBrowserView: View {
             spaces: allSpaces,
             saveKind: allowsNormalTabs ? model.saveKind : .pinned,
             hiddenCardID: hiddenCardID,
+            expandingCardID: expandingCardID,
+            expansion: cardExpansion,
             excludedCardID: overviewHoldsCards ? pages.activeID : nil,
-            onCardFrames: { cardFrames = $0 },
+            reveal: overviewReveal,
+            topInset: pageFrame.minY,
             bottomClearance: MiniBrowserChromeMetrics.dockHeight + chromeBottomPadding + 12,
             onOpen: closeOverview(to:)
         )
     }
 
-    /// The page shrinking into its card, or growing back out of it. Both frames
-    /// are in screen coordinates and the layer spans the whole screen, so the
-    /// picture starts exactly over the thing it stands in for.
+    /// The same shadow the card has, there from the moment the page leaves
+    /// the screen's edges. Sized up by what the page's scale will take off.
     @ViewBuilder
-    private var heroLayer: some View {
-        if let hero {
-            let frame = heroAtFullSize ? pageFrame : hero.card
-            ZStack(alignment: .topLeading) {
-                Color.clear
-                Color.clear
-                    .overlay(alignment: .top) {
-                        Image(uiImage: hero.image)
-                            .resizable()
-                            .scaledToFill()
-                    }
-                    .frame(width: frame.width, height: frame.height)
-                    .clipShape(RoundedRectangle(cornerRadius: heroAtFullSize ? 0 : 18, style: .continuous))
-                    .position(x: frame.midX, y: frame.midY)
-            }
-            .opacity(heroOpacity)
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
+    private var floatingPageShadow: some View {
+        if pageFloats {
+            RoundedRectangle(cornerRadius: pagePose.corner, style: .continuous)
+                .fill(.black)
+                .padding(.top, -pageFrame.minY)
+                .shadow(color: .black.opacity(0.26), radius: 20, x: -4.4, y: 0)
+                .opacity(Double(overviewReveal))
         }
+    }
+
+    private var screenSize: CGSize {
+        CGSize(width: pageFrame.width, height: pageFrame.maxY)
     }
 
     /// The page stops at the bar: the plate is opaque, so there is nothing to
@@ -418,9 +448,9 @@ struct MiniBrowserView: View {
             bottomClearance: pageBottomClearance,
             previous: peeking ? neighbours.previous.map(peek) : nil,
             next: peeking ? neighbours.next.map(peek) : nil,
-            slidingColor: peeking ? UIColor(sheetBackground) : nil,
+            slidingColor: peeking || pageFloats ? UIColor(sheetBackground) : nil,
             topOverflow: pageFrame.minY,
-            cornerRadius: revealingNewPage ? Self.screenCornerRadius : 0
+            cornerRadius: revealingNewPage ? DisplayCorners.radius : pagePose.corner
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -435,8 +465,6 @@ struct MiniBrowserView: View {
         return MiniBrowserChromeMetrics.height(above: chromeBottomInset)
     }
 
-    private static let screenCornerRadius: CGFloat = 48
-
     /// What waits past the last page: not a page yet, so it does not pretend to
     /// be one. A blank sheet grows up out of the background as the finger
     /// pulls it in, the way Safari's does.
@@ -446,7 +474,7 @@ struct MiniBrowserView: View {
         return ZStack {
             Palette.background(scheme)
                 .ignoresSafeArea()
-            RoundedRectangle(cornerRadius: Self.screenCornerRadius, style: .continuous)
+            RoundedRectangle(cornerRadius: DisplayCorners.radius, style: .continuous)
                 .fill(defaultBackground)
                 .ignoresSafeArea()
                 .scaleEffect(0.9 + 0.1 * progress)
@@ -543,91 +571,266 @@ private extension MiniBrowserView {
         }
     }
 
-    private static var heroMotion: Animation { .spring(duration: 0.36, bounce: 0) }
+    /// How far up the finger has to go for the page to reach its card's size.
+    private var pullTravel: CGFloat { max(screenSize.height * 0.32, 1) }
 
-    /// The page shrinks into its card. Nothing moves until the overview has
-    /// laid out behind the scenes and the card's place is known for certain;
-    /// the target is then fixed, so nothing can change it mid-flight.
-    private func openOverview() {
-        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
-            model.collapseMenu()
-        }
+    /// Where the page has to be to lie exactly on its card.
+    private func cardPose() -> PageCardPose? {
+        guard screenSize.width > 0, screenSize.height > 0 else { return nil }
+        let deck = PageDeckGeometry(screen: screenSize, count: pages.pages.count)
+        // The page on screen is always the deck's front card.
+        let front = CGFloat(max(0, pages.pages.count - 1))
+        let card = deck.frame(index: front, focus: front)
+        let scale = card.width / screenSize.width
+        return PageCardPose(
+            x: card.midX - screenSize.width / 2,
+            y: card.maxY - screenSize.height,
+            scale: scale,
+            corner: PageDeckGeometry.cornerRadius / scale
+        )
+    }
+
+    /// The finger took hold of the page: the deck goes in behind it right
+    /// away, and the page's picture is taken while it is still the whole page.
+    private func beginPagePull() {
+        guard let page = pages.active, !committingPull else { return }
+        pages.releaseSwitchingOrder()
+        transitionEpoch += 1
+        pullPassedPoint = false
+        // A card may still be growing into this page, and that deck has its
+        // focus and order from before. A page coming back keeps its deck.
+        if !pageFloats { deckGeneration += 1 }
+        expandingCardID = nil
+        cardExpansion = 0
+        overviewHoldsCards = false
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) { model.collapseMenu() }
+        hiddenCardID = page.id
+        // Round from the first point on: the display's own curve, so nothing
+        // changes where the page meets the screen's edge.
+        if let card = cardPose() { pagePose.corner = card.corner }
+        pageFloats = true
+        chromeRides = true
+        showOverview = true
         Task { @MainActor in
-            guard let page = pages.active, let picture = await pages.capture(page), !reduceMotion else {
-                fadeOverviewIn()
-                return
-            }
-            lastPicture = (page.id, picture)
-            hiddenCardID = page.id
-            showOverview = true
-            // Laid out at zero opacity; the grid has scrolled to the card by now.
-            try? await Task.sleep(for: .milliseconds(60))
-            guard let card = cardFrames[page.id], !pageFrame.isEmpty else {
+            await pages.capture(page)
+        }
+    }
+
+    /// The page shrinks under the finger, like an app pulled up from the home
+    /// bar: bottom edge with the finger, the deck coming in around it.
+    private func updatePagePull(_ translation: CGSize) {
+        guard pageFloats, !committingPull, let card = cardPose() else { return }
+        let progress = min(1, max(0, -translation.height / pullTravel))
+        let eased = 1 - pow(1 - progress, 1.7)
+        pagePose = PageCardPose(
+            x: translation.width * 0.6,
+            y: min(0, translation.height),
+            scale: 1 - (1 - card.scale) * eased,
+            corner: card.corner
+        )
+        let appearing = min(1, max(0, (progress - 0.03) / 0.52))
+        overviewReveal = appearing * appearing * (3 - 2 * appearing)
+        chromeFade = 1 - min(1, max(0, (progress - 0.1) / 0.3))
+        let passed = progress > Self.pullCommitPoint
+        if passed != pullPassedPoint {
+            pullPassedPoint = passed
+            if passed { AppServices.haptics.selectionChanged() }
+        }
+    }
+
+    private static let pullCommitPoint: CGFloat = 0.16
+
+    /// A pull past the point, or a throw upwards, goes on to the deck. A pull
+    /// back down, or too short a one, gives the page back.
+    private func endPagePull(_ end: PagePullEnd) {
+        guard pageFloats, !committingPull else { return }
+        let progress = -end.translation.height / pullTravel
+        let opens = !end.cancelled && end.velocity < 250
+            && (progress > Self.pullCommitPoint || end.velocity < -350)
+        if opens {
+            landOnCard(velocity: end.velocity)
+        } else {
+            returnPage()
+        }
+    }
+
+    /// The page lands on its card at the finger's speed. The card takes over
+    /// once it is there, and the dock changes its controls while the page flies.
+    private func landOnCard(velocity: CGFloat) {
+        guard let card = cardPose() else {
+            settleFloatingPage()
+            fadeOverviewIn()
+            return
+        }
+        transitionEpoch += 1
+        let epoch = transitionEpoch
+        committingPull = true
+        let distance = card.y - pagePose.y
+        let speed = distance == 0 ? 0 : min(10, max(-10, velocity / distance))
+        withAnimation(.interpolatingSpring(duration: 0.42, bounce: 0, initialVelocity: speed)) {
+            pagePose = card
+            overviewReveal = 1
+        } completion: {
+            guard epoch == transitionEpoch else { return }
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
                 hiddenCardID = nil
-                fadeOverviewIn()
-                return
+                pageFloats = false
+                pagePose = .identity
+                committingPull = false
             }
-            heroAtFullSize = true
-            heroOpacity = 1
-            hero = OverviewHero(pageID: page.id, image: picture, card: card)
-            withAnimation(Self.heroMotion) {
-                heroAtFullSize = false
-                overviewVisible = true
-            } completion: {
+        }
+        withAnimation(.easeOut(duration: 0.12)) { chromeFade = 0 } completion: {
+            guard epoch == transitionEpoch else { return }
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                chromeRides = false
+                overviewControls = true
+            }
+            withAnimation(.easeOut(duration: 0.2)) { chromeFade = 1 }
+        }
+    }
+
+    /// The page at once where a landing would leave it, under its card.
+    private func settleFloatingPage() {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            hiddenCardID = nil
+            pageFloats = false
+            pagePose = .identity
+            committingPull = false
+            chromeRides = false
+            chromeFade = 1
+            overviewReveal = 1
+        }
+    }
+
+    private func returnPage() {
+        transitionEpoch += 1
+        let epoch = transitionEpoch
+        committingPull = false
+        overviewControls = false
+        withAnimation(.spring(duration: 0.36, bounce: 0)) {
+            pagePose = PageCardPose(x: 0, y: 0, scale: 1, corner: pagePose.corner)
+            overviewReveal = 0
+            chromeFade = 1
+        } completion: {
+            guard epoch == transitionEpoch else { return }
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                pagePose = .identity
+                showOverview = false
+                pageFloats = false
+                chromeRides = false
                 hiddenCardID = nil
-                hero = nil
             }
+        }
+    }
+
+    /// The dock's button takes the same way the finger does.
+    private func openOverview() {
+        guard !reduceMotion, pages.active != nil else {
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) { model.collapseMenu() }
+            fadeOverviewIn()
+            return
+        }
+        beginPagePull()
+        let epoch = transitionEpoch
+        Task { @MainActor in
+            // The deck has to be on screen for its way in to animate.
+            try? await Task.sleep(for: .milliseconds(30))
+            guard epoch == transitionEpoch, pageFloats else { return }
+            landOnCard(velocity: 0)
         }
     }
 
     private func fadeOverviewIn() {
         showOverview = true
-        withAnimation(.easeOut(duration: 0.2)) { overviewVisible = true }
+        overviewControls = true
+        withAnimation(.easeOut(duration: 0.2)) { overviewReveal = 1 }
     }
 
     private func fadeOverviewOut() {
-        withAnimation(.easeOut(duration: 0.2)) { overviewVisible = false } completion: {
+        transitionEpoch += 1
+        let epoch = transitionEpoch
+        overviewControls = false
+        withAnimation(.easeOut(duration: 0.2)) { overviewReveal = 0 } completion: {
+            guard epoch == transitionEpoch else { return }
             showOverview = false
         }
     }
 
-    /// The chosen page grows out of its card and lands on the live page.
+    /// The tapped card grows to the whole screen inside the deck, so the
+    /// cards lying on it run off over it instead of it jumping in front of them.
+    /// The live page takes over under the finished card.
     private func closeOverview(to page: OpenPage) {
-        let picture = lastPicture?.pageID == page.id ? lastPicture?.image : page.shot
-        let card = cardFrames[page.id]
+        guard expandingCardID == nil else { return }
+        if pageFloats {
+            // Tapped while the page was still landing.
+            if page.id == pages.activeID {
+                returnPage()
+                return
+            }
+            settleFloatingPage()
+        }
+        let wasAsleep = page.model.webView == nil
         pages.activate(page.id)
-        guard !reduceMotion, let picture, let card else {
+        guard !reduceMotion else {
             fadeOverviewOut()
             return
         }
-        hiddenCardID = page.id
-        heroAtFullSize = false
-        heroOpacity = 1
-        hero = OverviewHero(pageID: page.id, image: picture, card: card)
-        Task { @MainActor in
-            // From home the page has only just joined the screen.
-            try? await Task.sleep(for: .milliseconds(40))
-            withAnimation(Self.heroMotion) {
-                heroAtFullSize = true
-                overviewVisible = false
-            } completion: {
-                showOverview = false
-                hiddenCardID = nil
-                // A woken page may still be loading under the picture.
-                withAnimation(.easeOut(duration: 0.14)) { heroOpacity = 0 } completion: {
-                    hero = nil
-                    heroOpacity = 1
+        transitionEpoch += 1
+        let epoch = transitionEpoch
+        overviewControls = false
+        withAnimation(PageDeckGeometry.openMotion) {
+            expandingCardID = page.id
+            cardExpansion = 1
+            overviewReveal = 0
+        } completion: {
+            guard epoch == transitionEpoch else { return }
+            Task { @MainActor in
+                if wasAsleep { await waitForFirstPaint(of: page) }
+                guard epoch == transitionEpoch else { return }
+                // A cut, not a fade: the card shows this very page, and the
+                // two blended into each other dimmed for a few frames.
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    showOverview = false
+                    expandingCardID = nil
+                    cardExpansion = 0
                 }
             }
         }
     }
 
-    /// A blank page takes over under the overview, which then fades away.
+    /// A page that was asleep has an empty web view at first, and fading the
+    /// card away would flash it. The card stays over it until the page has
+    /// loaded. It lets touches through meanwhile, so waiting blocks nothing.
+    private func waitForFirstPaint(of page: OpenPage) async {
+        var sawLoading = false
+        for _ in 0..<80 {
+            let model = page.model
+            if model.isLoading { sawLoading = true }
+            if model.estimatedProgress >= 0.9 || (sawLoading && !model.isLoading) { return }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+    }
+
+    /// A blank page takes over under the overview, which then moves away.
     private func openNewPage() {
-        // The grid stays as it was while it fades: no card joins it on the way out.
+        // The deck stays as it was while it goes: no card joins it on the way out.
+        transitionEpoch += 1
+        let epoch = transitionEpoch
         overviewHoldsCards = true
         pages.open(url: nil)
-        withAnimation(.easeOut(duration: 0.2)) { overviewVisible = false } completion: {
+        overviewControls = false
+        withAnimation(.easeOut(duration: 0.2)) { overviewReveal = 0 } completion: {
+            guard epoch == transitionEpoch else { return }
             showOverview = false
             overviewHoldsCards = false
         }
@@ -635,6 +838,7 @@ private extension MiniBrowserView {
 
     /// A swipe started: the neighbours wake and take their places beside the page.
     private func beginSwipe() {
+        pages.beginSwitching()
         pages.prepareNeighbours()
         peeking = true
         Task { await pictureActivePage() }
@@ -656,6 +860,7 @@ private extension MiniBrowserView {
     /// the page never changes pace. Pages already sit where they end up, so
     /// the switch itself shows nothing.
     private func finishSwipe(_ end: PageSwipeEnd) {
+        pages.finishSwitching()
         let span = paneWidth + PageHostView.pageGap
         guard end.target != .stay else {
             let speed = pageSwipe == 0 ? 0 : -end.velocity / pageSwipe
@@ -816,12 +1021,15 @@ private extension MiniBrowserView {
     }
 }
 
-/// The picture flying between the page and its card in the overview.
-private struct OverviewHero {
-    let pageID: String
-    let image: UIImage
-    /// Where the card sits on screen, fixed when the flight starts.
-    let card: CGRect
+/// The live page between full screen and its card. Scaled about the bottom
+/// edge, the one that travels with the finger.
+struct PageCardPose: Equatable {
+    var x: CGFloat
+    var y: CGFloat
+    var scale: CGFloat
+    var corner: CGFloat
+
+    static let identity = PageCardPose(x: 0, y: 0, scale: 1, corner: 0)
 }
 
 // MARK: - Reading view

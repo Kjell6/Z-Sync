@@ -422,6 +422,16 @@
         }
       }
     },
+    "browser.history": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "History"
+          }
+        }
+      }
+    },
     "browser.open_in_browser": {
       "localizations": {
         "en": {

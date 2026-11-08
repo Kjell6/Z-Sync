@@ -227,15 +227,28 @@ final class OpenPagesTests: XCTestCase {
 
     // MARK: - Switching and closing
 
-    func testNeighboursFollowTheListOrder() {
+    func testNeighboursFollowTheRecencyOrder() {
         let pages = store()
-        let first = pages.open(url: a)
+        _ = pages.open(url: a)
         let second = pages.open(url: b)
         let third = pages.open(url: c)
 
         pages.activate(second.id)
 
-        XCTAssertEqual(pages.neighbours.previous?.id, first.id)
+        XCTAssertEqual(pages.recencyOrder.last?.id, second.id)
+        XCTAssertEqual(pages.neighbours.previous?.id, third.id)
+        XCTAssertNil(pages.neighbours.next)
+    }
+
+    func testSwitchingKeepsTheOrderSoSwipingBackReturns() {
+        let pages = store()
+        _ = pages.open(url: a)
+        let second = pages.open(url: b)
+        let third = pages.open(url: c)
+
+        pages.beginSwitching()
+        pages.activate(second.id)
+
         XCTAssertEqual(pages.neighbours.next?.id, third.id)
     }
 

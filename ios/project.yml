@@ -47,6 +47,13 @@ targets:
           # http hosts. WKWebView drops that hop unless web content is exempt.
           NSAllowsArbitraryLoadsInWebContent: true
         NSLocalNetworkUsageDescription: Z-Sync loads the icon of a synced tab from the tab's own address, which may be a device on your local network.
+        # Asked only after a website in the browser wants them and the reader allows it.
+        NSCameraUsageDescription: Websites you allow in the browser can use your camera.
+        NSMicrophoneUsageDescription: Websites you allow in the browser can use your microphone.
+        NSLocationWhenInUseUsageDescription: Websites you allow in the browser can use your location.
+        # Downloads land in Documents, which Files shows under On My iPhone.
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UISupportedInterfaceOrientations~ipad:

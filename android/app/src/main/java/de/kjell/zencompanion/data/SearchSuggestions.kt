@@ -27,6 +27,10 @@ internal object SearchSuggestions {
     /** Same cap as iOS: the list sits over the page and is not scrolled. */
     const val LIMIT = 8
 
+    /** What still fits in the list beside [taken] rows from the history. */
+    fun fitting(suggestions: List<String>, taken: Int): List<String> =
+        suggestions.take((LIMIT - taken).coerceAtLeast(0))
+
     /** Wait after the last keystroke before a request leaves the device. */
     const val DEBOUNCE_MS = 200L
 

@@ -19,6 +19,7 @@ struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var model = SettingsModel()
+    @State private var isShowingClearWebsiteData = false
     @State private var isShowingSignOutConfirm: Bool = false
     @State private var isShowingWhatsNew: Bool = false
     @State private var isShowingAddEngine: Bool = false
@@ -77,6 +78,18 @@ struct SettingsSheet: View {
                     model.signOut()
                 }
                 Button("common.cancel", role: .cancel) {}
+            }
+            .confirmationDialog(
+                "settings.clear_website_data",
+                isPresented: $isShowingClearWebsiteData,
+                titleVisibility: .visible
+            ) {
+                Button("settings.clear_website_data", role: .destructive) {
+                    BrowserWebsiteData.clearAll()
+                }
+                Button("common.cancel", role: .cancel) {}
+            } message: {
+                Text("settings.clear_website_data.message")
             }
             .sheet(isPresented: $isShowingWhatsNew) {
                 WhatsNewSheet(release: WhatsNewRelease.latest, scheme: scheme)
@@ -278,6 +291,17 @@ struct SettingsSheet: View {
                     scheme: scheme,
                     isOn: $model.alwaysOpenExternally
                 )
+
+                SettingsHairline(scheme: scheme)
+
+                Button {
+                    isShowingClearWebsiteData = true
+                } label: {
+                    SettingsRow(title: "settings.clear_website_data", systemImage: "trash", scheme: scheme) {
+                        EmptyView()
+                    }
+                }
+                .buttonStyle(PressedButtonStyle())
             }
             .liftCard(scheme)
         }

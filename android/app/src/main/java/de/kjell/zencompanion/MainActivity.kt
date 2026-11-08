@@ -280,6 +280,7 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
             onSetOpenIntoSearch = { viewModel.setOpenIntoSearch(it) },
             onSetKeepOnlyChosenPages = { viewModel.setKeepOnlyChosenPages(it) },
             onSetKeptPageLifetime = { viewModel.setKeptPageLifetime(it) },
+            onClearWebsiteData = { de.kjell.zencompanion.ui.browser.clearBrowserWebsiteData(context) },
             onSignOut = {
                 showSettings = false
                 // Clears encrypted store + sync cache + wipes WebView data.

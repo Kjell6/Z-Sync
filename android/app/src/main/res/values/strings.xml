@@ -177,7 +177,6 @@
     <string name="browser_normal">Normal tab</string>
     <string name="browser_open_in_browser">Open in external browser</string>
     <string name="browser_close">Close</string>
-    <string name="browser_history">History</string>
     <string name="browser_error_offline_title">You\'re offline</string>
     <string name="browser_error_offline_message">The page loads by itself once you\'re back online.</string>
     <string name="browser_error_offline_waiting">Waiting for a connection</string>
@@ -278,4 +277,41 @@
     <string name="blocking_setup_body">Pages you open in Z-Sync load without ads and trackers, and cookie banners are refused for you.</string>
     <string name="blocking_setup_continue">Continue</string>
     <string name="blocking_setup_note">You can change this in Settings, or for a single site from the browser menu.</string>
+
+    <!-- Page requests -->
+    <string name="browser_dialog_this_page">This page</string>
+    <string name="browser_dialog_login_title">Sign in to %1$s</string>
+    <string name="browser_dialog_user">Name</string>
+    <string name="browser_dialog_password">Password</string>
+    <string name="browser_dialog_sign_in">Sign In</string>
+    <string name="browser_permission_camera">%1$s wants to use your camera</string>
+    <string name="browser_permission_microphone">%1$s wants to use your microphone</string>
+    <string name="browser_permission_camera_microphone">%1$s wants to use your camera and microphone</string>
+    <string name="browser_permission_location">%1$s wants to know your location</string>
+    <string name="browser_permission_message">Z-Sync only asks Android for access if you allow this. You can change it in the site\'s settings.</string>
+    <string name="browser_permission_allow">Allow</string>
+    <string name="browser_permission_deny">Don\'t Allow</string>
+    <string name="browser_permission_camera_off">Camera access is off for Z-Sync</string>
+    <string name="browser_permission_microphone_off">Microphone access is off for Z-Sync</string>
+    <string name="browser_permission_location_off">Location access is off for Z-Sync</string>
+    <string name="browser_permission_off_message">Turn it on in Settings to use it on this site.</string>
+    <string name="browser_permission_open_settings">Open Settings</string>
+    <string name="browser_download_started">Downloading to your Downloads folder</string>
+    <string name="browser_download_finished">Saved to your Downloads folder</string>
+    <string name="browser_download_failed">The download failed</string>
+    <string name="site_permission_camera">Camera</string>
+    <string name="site_permission_microphone">Microphone</string>
+    <string name="site_permission_location">Location</string>
+    <string name="site_permission_ask">Ask</string>
+    <string name="site_permission_allow">Allow</string>
+    <string name="site_permission_block">Block</string>
+    <string name="settings_clear_website_data">Clear Website Data</string>
+    <string name="settings_clear_website_data_message">Removes cookies, site storage and site permissions. You will be signed out of websites. Open pages and your Zen data stay.</string>
+
+    <!-- Browsing history -->
+    <string name="history_title">Browsing History</string>
+    <string name="history_search">Search history</string>
+    <string name="history_empty">Pages you open will show up here</string>
+    <string name="history_no_results">No pages found</string>
+    <string name="history_delete">Delete</string>
 </resources>

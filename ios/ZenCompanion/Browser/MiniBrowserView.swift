@@ -68,6 +68,9 @@ struct MiniBrowserView: View {
     /// The card growing back into its page, and how far it has got.
     @State private var expandingCardID: String?
     @State private var cardExpansion: CGFloat = 0
+    /// The browser's own history is up. It belongs to the browser, not to a
+    /// page: the overview has no page behind it when it is opened from home.
+    @State private var historyShown = false
     /// The card the live page stands in for; it shows once the page lands.
     @State private var hiddenCardID: String?
     /// The overview is on its way out for a new page and shows no changes.
@@ -170,6 +173,59 @@ struct MiniBrowserView: View {
     /// controls must be light or dark — not the system theme.
     private var barScheme: ColorScheme {
         barBackground.isDarkBackground ? .dark : .light
+    }
+
+    /// The floating bar and dock, over the page, the overview and the
+    /// picture flying between them.
+    private var chrome: some View {
+        MiniBrowserChrome(
+            model: model,
+            pages: pages,
+            space: space,
+            allSpaces: allSpaces,
+            onToggleMenu: { model.toggleMenu() },
+            onClose: { leaveBrowser() },
+            addressEditing: addressEditing,
+            onPickSuggestion: pickSuggestion,
+            onPickVisit: pickVisit,
+            onOpenPages: openOverview,
+            overviewShown: overviewControls,
+            onNewPage: openNewPage,
+            onOpenHistory: openHistory,
+            onCloseAll: { confirmCloseAll = true },
+            navBar: {
+                MiniBrowserTopBar(
+                    model: model,
+                    page: pages.active,
+                    pages: pages,
+                    addressEditing: addressEditing,
+                    isAddressFocused: $isAddressFocused,
+                    swipeOffset: $pageSwipe,
+                    pageSpan: paneWidth + PageHostView.pageGap,
+                    onBeginAddressEdit: beginAddressEditing,
+                    onCancel: cancelAddressEditing,
+                    onSubmit: submitAddress,
+                    onReturnToOpener: returnToOpener,
+                    onSwipeStart: beginSwipe,
+                    onSwipeEnd: finishSwipe,
+                    onPullStart: beginPagePull,
+                    onPullChange: updatePagePull,
+                    onPullEnd: endPagePull
+                )
+            }
+        )
+        .padding(.horizontal, 16)
+        .padding(.bottom, chromeBottomInset + (overviewControls ? MiniBrowserChromeMetrics.overviewDockLift : 0))
+        .animation(.spring(response: 0.24, dampingFraction: 0.82), value: overviewControls)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .offset(y: barCollapsed ? 220 : 0)
+        // While the page is pulled the chrome is part of it.
+        .scaleEffect(chromeRides ? pagePose.scale : 1, anchor: .bottom)
+        .offset(x: chromeRides ? pagePose.x : 0, y: chromeRides ? pagePose.y : 0)
+        // With nothing left to show, the cover is on its way out.
+        .opacity(barCollapsed || (pages.active == nil && !showOverview) ? 0 : Double(chromeFade))
+        .allowsHitTesting(!committingPull)
+        .accessibilityHidden(barCollapsed)
     }
 
     /// Bottom to top: the page, the overview, the picture flying between them,
@@ -278,61 +334,16 @@ struct MiniBrowserView: View {
                         .zIndex(5)
                 }
 
-                MiniBrowserChrome(
-                    model: model,
-                    pages: pages,
-                    space: space,
-                    allSpaces: allSpaces,
-                    onToggleMenu: { model.toggleMenu() },
-                    onClose: { leaveBrowser() },
-                    addressEditing: addressEditing,
-                    onPickSuggestion: pickSuggestion,
-                    onOpenPages: openOverview,
-                    overviewShown: overviewControls,
-                    onNewPage: openNewPage,
-                    // A placeholder until the browser history lands here.
-                    onHistory: {},
-                    onCloseAll: { confirmCloseAll = true },
-                    navBar: {
-                        MiniBrowserTopBar(
-                            model: model,
-                            page: pages.active,
-                            pages: pages,
-                            addressEditing: addressEditing,
-                            isAddressFocused: $isAddressFocused,
-                            swipeOffset: $pageSwipe,
-                            pageSpan: paneWidth + PageHostView.pageGap,
-                            onBeginAddressEdit: beginAddressEditing,
-                            onCancel: cancelAddressEditing,
-                            onSubmit: submitAddress,
-                            onReturnToOpener: returnToOpener,
-                            onSwipeStart: beginSwipe,
-                            onSwipeEnd: finishSwipe,
-                            onPullStart: beginPagePull,
-                            onPullChange: updatePagePull,
-                            onPullEnd: endPagePull
-                        )
-                    }
-                )
-                .padding(.horizontal, 16)
-                .padding(.bottom, chromeBottomInset + (overviewControls ? MiniBrowserChromeMetrics.overviewDockLift : 0))
-                .animation(.spring(response: 0.24, dampingFraction: 0.82), value: overviewControls)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                .offset(y: barCollapsed ? 220 : 0)
-                // While the page is pulled the chrome is part of it.
-                .scaleEffect(chromeRides ? pagePose.scale : 1, anchor: .bottom)
-                .offset(x: chromeRides ? pagePose.x : 0, y: chromeRides ? pagePose.y : 0)
-                // With nothing left to show, the cover is on its way out.
-                .opacity(barCollapsed || (pages.active == nil && !showOverview) ? 0 : Double(chromeFade))
-                .allowsHitTesting(!committingPull)
-                .accessibilityHidden(barCollapsed)
-                .zIndex(6)
+                chrome
+                    .zIndex(6)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .background(sheetBackground.ignoresSafeArea())
             .ignoresSafeArea(edges: .bottom)
             .ignoresSafeArea(.keyboard)
             .presentationBackground(pages.active == nil ? Palette.background(scheme) : barBackground)
+            .modifier(BrowserDialogPresenter(model: model))
+            .modifier(BrowserHistoryPresenter(isPresented: $historyShown, onOpen: openVisit))
             .confirmationDialog(
                 Text("kept.close_all_title"),
                 isPresented: $confirmCloseAll,
@@ -859,6 +870,28 @@ private extension MiniBrowserView {
         }
     }
 
+    /// The browser's own history, opened from the overview's dock.
+    private func openHistory() {
+        historyShown = true
+    }
+
+    /// A page from the browser's history. It lands in the page on screen, the
+    /// way a typed address would; with the overview opened from home there is
+    /// no page yet, so a new one takes it.
+    private func openVisit(_ visit: BrowserVisit) {
+        guard let url = URL(string: visit.url) else { return }
+        let page: OpenPage
+        if let active = pages.active {
+            active.model.loadVisit(visit)
+            page = active
+        } else {
+            page = pages.open(url: url)
+        }
+        guard showOverview else { return }
+        // The sheet has already closed; the deck goes with it.
+        closeOverview(to: page)
+    }
+
     /// A page that was asleep has an empty web view at first, and fading the
     /// card away would flash it. The card stays over it until the page has
     /// loaded. It lets touches through meanwhile, so waiting blocks nothing.
@@ -1100,6 +1133,11 @@ private extension MiniBrowserView {
         endAddressEditing()
     }
 
+    private func pickVisit(_ visit: BrowserVisit) {
+        model.openVisit(visit)
+        endAddressEditing()
+    }
+
     private func endAddressEditing() {
         if isAddressFocused {
             isAddressFocused = false
@@ -1275,6 +1313,21 @@ private struct ReaderView: View {
                 .foregroundStyle(Palette.ink(scheme).opacity(0.9))
                 .lineSpacing(5)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// The browser's own history, over whatever is on screen: a page or the
+/// overview. A modifier of its own so the browser's body stays one expression
+/// the type checker can still read.
+private struct BrowserHistoryPresenter: ViewModifier {
+    @Binding var isPresented: Bool
+    var onOpen: (BrowserVisit) -> Void
+
+    func body(content: Content) -> some View {
+        content.sheet(isPresented: $isPresented) {
+            BrowserHistoryView(onOpen: onOpen)
+                .presentationDragIndicator(.visible)
         }
     }
 }

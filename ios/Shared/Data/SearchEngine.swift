@@ -333,6 +333,11 @@ enum SearchSuggestions {
     /// without covering the whole screen. Longer answers are cut, not scrolled.
     static let limit = 8
 
+    /// What still fits in the list beside [taken] rows from the history.
+    static func fitting(_ suggestions: [String], beside taken: Int) -> [String] {
+        Array(suggestions.prefix(max(0, limit - taken)))
+    }
+
     /// Wait after the last keystroke before a request leaves the device.
     static let debounce: Duration = .milliseconds(200)
 

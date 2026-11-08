@@ -37,6 +37,12 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         // lists and scripts are swapped per site, so each page needs its own.
         configuration.userContentController = WKUserContentController()
         configuration.allowsInlineMediaPlayback = true
+        configuration.userContentController.addScriptMessageHandler(
+            BrowserGeolocation.Handler(model: model),
+            contentWorld: .page,
+            name: BrowserGeolocation.handlerName
+        )
+        BrowserGeolocation.addScript(to: configuration.userContentController)
         // The blocked count's reports. The lists and scripts themselves go on
         // per page, in `decidePolicyFor`.
         configuration.userContentController.add(
@@ -122,6 +128,156 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         })
     }
 
+    // MARK: - What a page asks of the reader
+
+    /// The browser's question comes first. Granting here is what lets WebKit
+    /// raise the system's camera or microphone dialog.
+    func webView(
+        _ webView: WKWebView,
+        requestMediaCapturePermissionFor origin: WKSecurityOrigin,
+        initiatedByFrame frame: WKFrameInfo,
+        type: WKMediaCaptureType,
+        decisionHandler: @escaping (WKPermissionDecision) -> Void
+    ) {
+        let kinds: [SitePermission] = switch type {
+        case .camera: [.camera]
+        case .microphone: [.microphone]
+        case .cameraAndMicrophone: [.camera, .microphone]
+        @unknown default: []
+        }
+        MainActor.assumeIsolated {
+            guard let model, !kinds.isEmpty else {
+                decisionHandler(.deny)
+                return
+            }
+            model.requestPermission(kinds, host: origin.host) { granted in
+                decisionHandler(granted ? .grant : .deny)
+            }
+        }
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        runJavaScriptAlertPanelWithMessage message: String,
+        initiatedByFrame frame: WKFrameInfo,
+        completionHandler: @escaping () -> Void
+    ) {
+        MainActor.assumeIsolated {
+            guard let model else {
+                completionHandler()
+                return
+            }
+            let answer = DialogAnswer<Void>(fallback: (), completionHandler)
+            model.present(.alert(host: frame.securityOrigin.host, message: message, answer))
+        }
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        runJavaScriptConfirmPanelWithMessage message: String,
+        initiatedByFrame frame: WKFrameInfo,
+        completionHandler: @escaping (Bool) -> Void
+    ) {
+        MainActor.assumeIsolated {
+            guard let model else {
+                completionHandler(false)
+                return
+            }
+            let answer = DialogAnswer<Bool>(fallback: false, completionHandler)
+            model.present(.confirm(host: frame.securityOrigin.host, message: message, answer))
+        }
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        runJavaScriptTextInputPanelWithPrompt prompt: String,
+        defaultText: String?,
+        initiatedByFrame frame: WKFrameInfo,
+        completionHandler: @escaping (String?) -> Void
+    ) {
+        MainActor.assumeIsolated {
+            guard let model else {
+                completionHandler(nil)
+                return
+            }
+            let answer = DialogAnswer<String?>(fallback: nil, completionHandler)
+            model.present(.prompt(
+                host: frame.securityOrigin.host,
+                message: prompt,
+                defaultText: defaultText ?? "",
+                answer
+            ))
+        }
+    }
+
+    /// HTTP login, as on a router's page. Other challenges, certificates
+    /// among them, keep WebKit's own handling.
+    func webView(
+        _ webView: WKWebView,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        let method = challenge.protectionSpace.authenticationMethod
+        let asksForLogin = method == NSURLAuthenticationMethodHTTPBasic
+            || method == NSURLAuthenticationMethodHTTPDigest
+            || method == NSURLAuthenticationMethodNTLM
+        MainActor.assumeIsolated {
+            guard asksForLogin, let model else {
+                completionHandler(.performDefaultHandling, nil)
+                return
+            }
+            let answer = DialogAnswer<BrowserLogin?>(fallback: nil) { login in
+                guard let login else {
+                    // The server's own 401 page stays, as in Safari.
+                    completionHandler(.rejectProtectionSpace, nil)
+                    return
+                }
+                let credential = URLCredential(user: login.user, password: login.password, persistence: .forSession)
+                completionHandler(.useCredential, credential)
+            }
+            model.present(.login(
+                host: challenge.protectionSpace.host,
+                failedBefore: challenge.previousFailureCount > 0,
+                answer
+            ))
+        }
+    }
+
+    // MARK: - Downloads
+
+    func webView(
+        _ webView: WKWebView,
+        decidePolicyFor navigationResponse: WKNavigationResponse,
+        decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void
+    ) {
+        let disposition = (navigationResponse.response as? HTTPURLResponse)?
+            .value(forHTTPHeaderField: "Content-Disposition")
+        let downloads = BrowserDownloadPolicy.shouldDownload(
+            isMainFrame: navigationResponse.isForMainFrame,
+            canShowMIMEType: navigationResponse.canShowMIMEType,
+            contentDisposition: disposition
+        )
+        decisionHandler(downloads ? .download : .allow)
+    }
+
+    func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
+        startDownload(download, in: webView)
+    }
+
+    func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
+        startDownload(download, in: webView)
+    }
+
+    private func startDownload(_ download: WKDownload, in webView: WKWebView) {
+        MainActor.assumeIsolated {
+            BrowserDownloads.shared.adopt(download, from: model)
+            // A link that opened a window only for its file leaves nothing to show.
+            if webView.url == nil, !webView.canGoBack, let model {
+                model.host?.pageRequestedClose(model)
+            }
+        }
+    }
+
     /// Offers a link to the app that owns its scheme. When nothing takes it
     /// the page stays where it is and the toast says why - silently doing
     /// nothing reads like a broken browser.
@@ -141,6 +297,11 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void
     ) {
         preferences.preferredContentMode = (model?.requestsDesktopSite ?? false) ? .desktop : .mobile
+        // `<a download>`, `blob:` files included.
+        if navigationAction.shouldPerformDownload {
+            decisionHandler(.download, preferences)
+            return
+        }
         if navigationAction.targetFrame?.isMainFrame ?? true,
            let url = navigationAction.request.url,
            BrowserNavigationPolicy.loadsInWebView(url) {
@@ -306,6 +467,7 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
             self.model?.updateCurrentURL(webView.url)
             if let model = self.model { model.host?.pageDidFinishLoading(model) }
             self.model?.adoptPageTitle(webView.title ?? "")
+            self.model?.recordVisit()
             // A page whose own scripts rewrote the root style gets the
             // zoom back once it has settled.
             self.model?.applyPageZoom(force: true)

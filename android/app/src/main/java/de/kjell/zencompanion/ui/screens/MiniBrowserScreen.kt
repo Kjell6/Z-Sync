@@ -130,6 +130,7 @@ import de.kjell.zencompanion.ui.browser.BrowserPages
 import de.kjell.zencompanion.ui.browser.MiniBrowserViewModel
 import de.kjell.zencompanion.ui.browser.PageSession
 import de.kjell.zencompanion.ui.browser.BlockingCard
+import de.kjell.zencompanion.data.BrowserVisit
 import de.kjell.zencompanion.data.ContentBlocking
 import de.kjell.zencompanion.data.ContentBlockingSettings
 import de.kjell.zencompanion.data.OpenPage
@@ -187,6 +188,9 @@ fun MiniBrowserScreen(
 ) {
     val context = LocalContext.current
     var showOverview by rememberSaveable { mutableStateOf(startsInOverview) }
+    /** The browser's own history is up. It belongs to the browser, not to a
+     *  page: the overview opened from home has no page behind it. */
+    var historyVisible by rememberSaveable { mutableStateOf(false) }
     // Still set after the process died: the page to come back to is then the
     // last one in use, not the one this browser was first opened with.
     var launched by rememberSaveable { mutableStateOf(false) }
@@ -527,6 +531,23 @@ fun MiniBrowserScreen(
         if (session == null && !showOverview) onDismiss()
     }
 
+    /**
+     * A page from the browser's history: the page on screen takes it, or a new
+     * one when the overview came up without a page.
+     */
+    fun openHistoryVisit(visit: BrowserVisit) {
+        // A page whose renderer died has no WebView to load into.
+        val active = pages.active
+        val view = active?.webView
+        val page = if (active != null && view != null) {
+            view.loadUrl(visit.url)
+            pages.store.page(active.id)
+        } else {
+            pages.store.page(pages.open(visit.url).id)
+        }
+        if (showOverview && page != null) closeOverview(page)
+    }
+
     // Over the deck the status bar goes by the app's background, not the page's.
     val deckIsDark = LocalZenColors.current.background.luminance() < 0.5f
     val systemBarsView = LocalView.current
@@ -685,8 +706,7 @@ fun MiniBrowserScreen(
                     .align(Alignment.BottomCenter)
                     .zIndex(3f)
                     .graphicsLayer { alpha = dockAlpha },
-                // A placeholder until the browser history lands here.
-                onHistory = {},
+                onOpenHistory = { historyVisible = true },
                 onNewPage = ::openNewPage,
                 onPlusLongPress = { if (openPages.isNotEmpty()) plusMenuOpen = true },
                 onLeave = {
@@ -743,6 +763,16 @@ fun MiniBrowserScreen(
                 },
             )
         }
+    }
+
+    if (historyVisible) {
+        BrowserHistoryScreen(
+            onOpen = { visit ->
+                historyVisible = false
+                openHistoryVisit(visit)
+            },
+            onClose = { historyVisible = false },
+        )
     }
 }
 
@@ -929,6 +959,7 @@ private fun BrowserPageScreen(
             viewModel.onLinkUnavailable()
         }
     }
+
 
     fun finishAddressEdit() {
         focusManager.clearFocus()
@@ -1274,6 +1305,10 @@ private fun BrowserPageScreen(
                             openAddressTarget(viewModel.selectSuggestion(suggestion))
                             finishAddressEdit()
                         },
+                        onPickVisit = { visit ->
+                            openAddressTarget(viewModel.selectVisit(visit))
+                            finishAddressEdit()
+                        },
                         // A page that failed to load has nothing worth pinning.
                         canPin = allSpaces.isNotEmpty() && state.pageError == null,
                         onBack = { webView?.goBack() },
@@ -1444,6 +1479,8 @@ private fun PageStack(
     val previousId = previous?.id
     val nextId = next?.id
     val currentActive by rememberUpdatedState(active)
+    val requests = rememberBrowserPageRequests(pages)
+    BrowserPromptDialogs(active, requests)
     // A blank page is the bare plate, in the app's paper: the same background
     // the Settings sheet uses, not a darker version of it.
     val surface = MaterialTheme.colorScheme.surface
@@ -1537,11 +1574,17 @@ private fun PageStack(
                             }
                         },
                         onSiteThemeColorChange = viewModel::onSiteThemeColorChange,
-                        onCurrentUrlChange = viewModel::onCurrentUrlChange,
+                        onCurrentUrlChange = { url ->
+                            viewModel.onCurrentUrlChange(url)
+                            pages.pageAddressChanged(session)
+                        },
                         onCanGoBackChange = viewModel::onCanGoBackChange,
                         onCanGoForwardChange = viewModel::onCanGoForwardChange,
                         onTextInputChange = viewModel::onAddressTextChange,
-                        onTitleChange = viewModel::onCurrentTitleChange,
+                        onTitleChange = { title ->
+                            viewModel.onCurrentTitleChange(title)
+                            pages.pageTitleChanged(session)
+                        },
                         onProgressChange = viewModel::onProgressChange,
                         onPageStarted = {
                             viewModel.onShowingOriginalChange(session.blocker.showingOriginal)
@@ -1556,6 +1599,7 @@ private fun PageStack(
                             session.webViewGeneration++
                         },
                         onLinkUnavailable = viewModel::onLinkUnavailable,
+                        requests = remember(session.id) { requests.forSession(session) },
                         onScrollChange = { if (session === currentActive) onActiveScroll(it) },
                         onFindResult = { current, total ->
                             viewModel.setFindProgress(if (total > 0) "$current/$total" else null)

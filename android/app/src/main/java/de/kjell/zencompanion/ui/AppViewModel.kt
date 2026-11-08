@@ -6,6 +6,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import de.kjell.zencompanion.BuildConfig
+import de.kjell.zencompanion.data.BrowserHistory
+import de.kjell.zencompanion.data.SitePermissions
 import de.kjell.zencompanion.data.AccountStore
 import de.kjell.zencompanion.data.AppEvents
 import de.kjell.zencompanion.data.AndroidWhatsNewRepository
@@ -460,6 +462,9 @@ class AppViewModel(
         SnapshotCache.deleteCachedSnapshot(appContext)
         SnapshotCache.invalidateMemory()
         FaviconLoader.clear()
+        // Here and not in the Settings button: a session that dies signs out too.
+        SitePermissions.clear()
+        BrowserHistory.clear()
         preferencesRepository.setSyncSetupHintDismissed(false)
         _browser.value = BrowserState()
         _activity.value = ActivityState()

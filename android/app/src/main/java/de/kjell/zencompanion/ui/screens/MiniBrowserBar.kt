@@ -82,6 +82,14 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -124,6 +132,11 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
+import de.kjell.zencompanion.data.BrowserVisit
+import de.kjell.zencompanion.data.SearchSuggestions
+import de.kjell.zencompanion.data.SitePermission
+import de.kjell.zencompanion.data.SitePermissionChoice
+import de.kjell.zencompanion.data.SitePermissions
 import de.kjell.zencompanion.data.BlockCategory
 import de.kjell.zencompanion.data.ContentBlockingSettings
 import de.kjell.zencompanion.data.SaveKind
@@ -249,6 +262,7 @@ internal fun MiniBrowserBar(
     /** False while a page error covers the page: there is nothing to pin. */
     canPin: Boolean = true,
     onPickSuggestion: (String) -> Unit,
+    onPickVisit: (BrowserVisit) -> Unit,
     onBack: () -> Unit,
     onForward: () -> Unit,
     onReload: () -> Unit,
@@ -335,9 +349,11 @@ internal fun MiniBrowserBar(
 
         // Part of the address editing state: the list sits in the space
         // above the composer, on the same plate, and goes away with it.
-        if (state.isAddressFocused && state.suggestions.isNotEmpty()) {
+        if (state.isAddressFocused && (state.suggestions.isNotEmpty() || state.historySuggestions.isNotEmpty())) {
             SuggestionPanel(
-                suggestions = state.suggestions,
+                visits = state.historySuggestions,
+                suggestions = SearchSuggestions.fitting(state.suggestions, state.historySuggestions.size),
+                onSelectVisit = onPickVisit,
                 onSelect = onPickSuggestion,
             )
         }
@@ -851,13 +867,12 @@ internal fun overviewDockClearance(navigationInset: Dp): Dp =
 
 /**
  * The overview's controls, drawn exactly where the browser's dock has its own.
- * History is a placeholder until the browser history lands here. A long press
- * on the plus closes everything.
+ * A long press on the plus closes everything.
  */
 @Composable
 internal fun OverviewDock(
     onNewPage: () -> Unit,
-    onHistory: () -> Unit,
+    onOpenHistory: () -> Unit,
     onPlusLongPress: () -> Unit,
     onLeave: () -> Unit,
     plusMenu: @Composable () -> Unit,
@@ -879,9 +894,9 @@ internal fun OverviewDock(
     ) {
         DockButton(
             icon = Icons.Outlined.History,
-            description = stringResource(R.string.browser_history),
+            description = stringResource(R.string.history_title),
             tint = zen.ink,
-            onClick = onHistory,
+            onClick = onOpenHistory,
         )
         Spacer(Modifier.weight(1f))
         DockButton(
@@ -951,7 +966,9 @@ private fun DockButton(
  */
 @Composable
 private fun SuggestionPanel(
+    visits: List<BrowserVisit>,
     suggestions: List<String>,
+    onSelectVisit: (BrowserVisit) -> Unit,
     onSelect: (String) -> Unit,
 ) {
     val zen = LocalZenColors.current
@@ -960,6 +977,41 @@ private fun SuggestionPanel(
             .fillMaxWidth()
             .pane(DockShape, zen.lift),
     ) {
+        visits.forEachIndexed { index, visit ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = RowHeight)
+                    .barClickable { onSelectVisit(visit) }
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Schedule,
+                    contentDescription = null,
+                    tint = zen.ink.copy(alpha = 0.45f),
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = visit.title.ifEmpty { visit.host },
+                        style = ZenType.rounded(16, FontWeight.Medium),
+                        color = zen.ink,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = visit.displayAddress,
+                        style = ZenType.rounded(13, FontWeight.Normal),
+                        color = zen.ink.copy(alpha = 0.6f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            if (index < visits.lastIndex || suggestions.isNotEmpty()) RowDivider()
+        }
         suggestions.forEachIndexed { index, suggestion ->
             Row(
                 modifier = Modifier
@@ -1343,6 +1395,7 @@ private fun SiteSettingsMenuPage(
                 )
             }
         }
+        SitePermissionRows(host)
         Text(
             text = stringResource(R.string.site_settings_footer, site),
             style = ZenType.rounded(13, FontWeight.Normal),
@@ -1350,6 +1403,77 @@ private fun SiteSettingsMenuPage(
             modifier = Modifier.padding(start = 4.dp, end = 4.dp),
         )
     }
+}
+
+/** What the site may ask for. Ask lets the site's question come back. */
+@Composable
+private fun SitePermissionRows(host: String) {
+    val zen = LocalZenColors.current
+    val choices by SitePermissions.choices.collectAsState()
+    Column(Modifier.fillMaxWidth()) {
+        SitePermission.entries.forEachIndexed { index, kind ->
+            if (index > 0) RowDivider()
+            // Read through the collected map, so a change redraws the row.
+            val current = choices.let { SitePermissions.choice(kind, host) }
+            var expanded by remember { mutableStateOf(false) }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .barClickable { expanded = true }
+                    .heightIn(min = RowHeight)
+                    .padding(vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = when (kind) {
+                        SitePermission.CAMERA -> Icons.Outlined.PhotoCamera
+                        SitePermission.MICROPHONE -> Icons.Outlined.Mic
+                        SitePermission.LOCATION -> Icons.Outlined.LocationOn
+                    },
+                    contentDescription = null,
+                    tint = zen.ink.copy(alpha = 0.6f),
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(14.dp))
+                Text(
+                    text = stringResource(
+                        when (kind) {
+                            SitePermission.CAMERA -> R.string.site_permission_camera
+                            SitePermission.MICROPHONE -> R.string.site_permission_microphone
+                            SitePermission.LOCATION -> R.string.site_permission_location
+                        },
+                    ),
+                    style = ZenType.rounded(16, FontWeight.Medium),
+                    color = zen.ink,
+                    modifier = Modifier.weight(1f),
+                )
+                Box {
+                    Text(
+                        text = stringResource(choiceTitle(current)),
+                        style = ZenType.rounded(15, FontWeight.Normal),
+                        color = zen.ink.copy(alpha = 0.6f),
+                    )
+                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        listOf(null, SitePermissionChoice.ALLOW, SitePermissionChoice.BLOCK).forEach { choice ->
+                            DropdownMenuItem(
+                                text = { Text(stringResource(choiceTitle(choice))) },
+                                onClick = {
+                                    expanded = false
+                                    SitePermissions.set(choice, listOf(kind), host)
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun choiceTitle(choice: SitePermissionChoice?): Int = when (choice) {
+    SitePermissionChoice.ALLOW -> R.string.site_permission_allow
+    SitePermissionChoice.BLOCK -> R.string.site_permission_block
+    null -> R.string.site_permission_ask
 }
 
 /** One site switch as a plain menu row: like the menu's tools, the rows sit

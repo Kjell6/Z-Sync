@@ -3,4 +3,7 @@
     <exclude domain="sharedpref" path="zen_secure_prefs.xml" />
     <exclude domain="sharedpref" path="zen_secure_prefs_plain.xml" />
     <exclude domain="file" path="spaces-cache.json" />
+    <exclude domain="file" path="browser-history.json" />
+    <exclude domain="file" path="browser-history.json.tmp" />
+    <exclude domain="sharedpref" path="site_permissions.xml" />
 </full-backup-content>

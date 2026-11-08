@@ -108,8 +108,6 @@ class MiniBrowserViewModel(
         /** Suggestions for the text being typed. Empty hides the list. */
         /** Pages from the history for the same text, above the suggestions. */
         val historySuggestions: List<BrowserVisit> = emptyList(),
-        /** The history screen is up. */
-        val historyVisible: Boolean = false,
         val suggestions: List<String> = emptyList(),
         /** Ads and trackers blocked on the current page. */
         val blockedCount: Int = 0,
@@ -377,14 +375,6 @@ class MiniBrowserViewModel(
         suggestionJob?.cancel()
         _state.update { it.copy(suggestions = emptyList(), historySuggestions = emptyList()) }
         return visit.url
-    }
-
-    fun openHistory() {
-        _state.update { it.copy(menuExpanded = false, menuSiteSettings = false, historyVisible = true) }
-    }
-
-    fun closeHistory() {
-        _state.update { it.copy(historyVisible = false) }
     }
 
     /**

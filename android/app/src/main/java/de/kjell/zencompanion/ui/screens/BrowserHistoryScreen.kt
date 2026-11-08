@@ -1,47 +1,60 @@
 package de.kjell.zencompanion.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.unit.sp
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.BrowserHistory
 import de.kjell.zencompanion.data.BrowserVisit
 import de.kjell.zencompanion.data.searchVisits
+import de.kjell.zencompanion.ui.components.Favicon
+import de.kjell.zencompanion.ui.sheets.ZenSheet
+import de.kjell.zencompanion.ui.theme.LiftCard
 import de.kjell.zencompanion.ui.theme.LocalZenColors
 import de.kjell.zencompanion.ui.theme.ZenType
+import de.kjell.zencompanion.ui.theme.liftBorder
 import java.text.DateFormat
 import java.util.Calendar
 import java.util.Date
@@ -56,7 +69,11 @@ internal fun dayOf(time: Long, calendar: Calendar = Calendar.getInstance()): Lon
     return calendar.timeInMillis
 }
 
-/** The pages opened in this browser, newest first and grouped by day. */
+/**
+ * The pages opened in this browser, newest first and grouped by day. The same
+ * card look as the Settings and Activity sheets: a quiet day label over one
+ * lift card, favicons, app colours only.
+ */
 @Composable
 internal fun BrowserHistoryScreen(
     onOpen: (BrowserVisit) -> Unit,
@@ -65,26 +82,22 @@ internal fun BrowserHistoryScreen(
     val zen = LocalZenColors.current
     val visits by BrowserHistory.visits.collectAsState()
     var query by remember { mutableStateOf("") }
-    var confirmClear by remember { mutableStateOf(false) }
     val found = remember(visits, query) { searchVisits(visits, query) }
-    val days = remember(found) { found.groupBy { dayOf(it.lastVisited) } }
+    val days = remember(found) { found.groupBy { dayOf(it.lastVisited) }.toList() }
     val dayFormat = remember { DateFormat.getDateInstance(DateFormat.FULL) }
     val timeFormat = remember { DateFormat.getTimeInstance(DateFormat.SHORT) }
 
-    Dialog(
-        onDismissRequest = onClose,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
-    ) {
+    ZenSheet(onDismiss = onClose, skipPartiallyExpanded = true) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surface)
-                .safeDrawingPadding(),
+                .background(zen.background)
+                .statusBarsPadding(),
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp, end = 4.dp, top = 4.dp),
+                    .padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -93,9 +106,6 @@ internal fun BrowserHistoryScreen(
                     color = zen.ink,
                     modifier = Modifier.weight(1f),
                 )
-                TextButton(enabled = visits.isNotEmpty(), onClick = { confirmClear = true }) {
-                    Text(stringResource(R.string.history_clear))
-                }
                 IconButton(onClick = onClose) {
                     Icon(
                         imageVector = Icons.Outlined.Close,
@@ -104,104 +114,184 @@ internal fun BrowserHistoryScreen(
                     )
                 }
             }
-            OutlinedTextField(
+
+            // Filled field, app-toned instead of Material outline.
+            TextField(
                 value = query,
                 onValueChange = { query = it },
-                placeholder = { Text(stringResource(R.string.history_search)) },
                 singleLine = true,
+                leadingIcon = {
+                    Icon(Icons.Outlined.Search, contentDescription = null, tint = zen.ink.copy(alpha = 0.5f))
+                },
+                placeholder = {
+                    Text(
+                        text = stringResource(R.string.history_search),
+                        style = ZenType.rounded(15, FontWeight.Normal),
+                        color = zen.ink.copy(alpha = 0.4f),
+                    )
+                },
+                textStyle = ZenType.rounded(15, FontWeight.Normal),
+                shape = RoundedCornerShape(16.dp),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = zen.lift,
+                    unfocusedContainerColor = zen.lift,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    cursorColor = zen.coral,
+                    focusedTextColor = zen.ink,
+                    unfocusedTextColor = zen.ink,
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 20.dp, vertical = 8.dp)
+                    .border(liftBorder(), RoundedCornerShape(16.dp)),
             )
+
             if (found.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
                         text = stringResource(
                             if (query.isBlank()) R.string.history_empty else R.string.history_no_results,
                         ),
-                        style = ZenType.rounded(16, FontWeight.Normal),
-                        color = zen.ink.copy(alpha = 0.6f),
+                        style = ZenType.rounded(15, FontWeight.Medium),
+                        color = zen.ink.copy(alpha = 0.55f),
                     )
                 }
             } else {
-                LazyColumn(Modifier.fillMaxSize()) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                        start = 20.dp,
+                        end = 20.dp,
+                        top = 6.dp,
+                        bottom = 32.dp,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(22.dp),
+                ) {
                     days.forEach { (day, group) ->
                         item(key = day) {
-                            Text(
-                                text = dayFormat.format(Date(day)),
-                                style = ZenType.rounded(13, FontWeight.Medium),
-                                color = zen.ink.copy(alpha = 0.6f),
-                                modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
-                            )
-                        }
-                        items(group, key = { it.url }) { visit ->
-                            VisitRow(
-                                visit = visit,
-                                time = timeFormat.format(Date(visit.lastVisited)),
-                                onOpen = { onOpen(visit) },
-                                onDelete = { BrowserHistory.remove(visit) },
+                            DaySection(
+                                label = dayFormat.format(Date(day)),
+                                visits = group,
+                                timeFormat = timeFormat,
+                                onOpen = onOpen,
                             )
                         }
                     }
                 }
             }
         }
+    }
+}
 
-        if (confirmClear) {
-            AlertDialog(
-                onDismissRequest = { confirmClear = false },
-                title = { Text(stringResource(R.string.history_clear_title)) },
-                text = { Text(stringResource(R.string.history_clear_message)) },
-                confirmButton = {
-                    TextButton(onClick = {
-                        confirmClear = false
-                        BrowserHistory.clear()
-                    }) { Text(stringResource(R.string.history_clear)) }
-                },
-                dismissButton = {
-                    TextButton(onClick = { confirmClear = false }) {
-                        Text(stringResource(R.string.common_cancel))
+/** One day: its label, then its pages in one card. */
+@Composable
+private fun DaySection(
+    label: String,
+    visits: List<BrowserVisit>,
+    timeFormat: DateFormat,
+    onOpen: (BrowserVisit) -> Unit,
+) {
+    val zen = LocalZenColors.current
+    Column {
+        Text(
+            text = label,
+            style = ZenType.rounded(12, FontWeight.SemiBold).copy(letterSpacing = 0.8.sp),
+            color = zen.ink.copy(alpha = 0.4f),
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+        )
+        LiftCard(modifier = Modifier.fillMaxWidth()) {
+            Column {
+                visits.forEachIndexed { index, visit ->
+                    // Keyed: a deleted entry must not hand its swipe state to
+                    // the row that takes its place.
+                    key(visit.url) {
+                        VisitRow(
+                            visit = visit,
+                            time = timeFormat.format(Date(visit.lastVisited)),
+                            onOpen = { onOpen(visit) },
+                            onDelete = { BrowserHistory.remove(visit) },
+                        )
+                        if (index < visits.size - 1) {
+                            HorizontalDivider(
+                                color = zen.ink.copy(alpha = 0.08f),
+                                modifier = Modifier.padding(start = 54.dp),
+                            )
+                        }
                     }
-                },
-            )
+                }
+            }
         }
     }
 }
 
+/**
+ * One page in the day's card. Swiping it to the side deletes it, the way a
+ * list on this platform does.
+ */
 @Composable
 private fun VisitRow(visit: BrowserVisit, time: String, onOpen: () -> Unit, onDelete: () -> Unit) {
     val zen = LocalZenColors.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onOpen)
-            .heightIn(min = 56.dp)
-            .padding(start = 16.dp, end = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) {
+                onDelete()
+                true
+            } else {
+                false
+            }
+        },
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = false,
+        backgroundContent = {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.error),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Delete,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onError,
+                    modifier = Modifier.padding(end = 24.dp),
+                )
+            }
+        },
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = visit.title.ifEmpty { visit.host },
-                style = ZenType.rounded(16, FontWeight.Medium),
-                color = zen.ink,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = "$time · ${visit.displayAddress}",
-                style = ZenType.rounded(13, FontWeight.Normal),
-                color = zen.ink.copy(alpha = 0.6f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        IconButton(onClick = onDelete) {
-            Icon(
-                imageVector = Icons.Outlined.Close,
-                contentDescription = stringResource(R.string.history_delete),
-                tint = zen.ink.copy(alpha = 0.5f),
-            )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                // The card's own fill, opaque: `lift` alone is translucent, so
+                // the swipe background would show through the row at rest.
+                .background(zen.lift)
+                .background(zen.background)
+                .clickable(onClick = onOpen)
+                .padding(horizontal = 16.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Favicon(urlString = visit.url, size = 26.dp)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = visit.title.ifEmpty { visit.host },
+                    style = ZenType.rounded(15, FontWeight.Medium),
+                    color = zen.ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(1.dp))
+                Text(
+                    text = "$time · ${visit.displayAddress}",
+                    style = ZenType.rounded(12, FontWeight.Normal),
+                    color = zen.ink.copy(alpha = 0.4f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }

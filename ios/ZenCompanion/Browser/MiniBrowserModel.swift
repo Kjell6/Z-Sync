@@ -359,8 +359,6 @@ final class MiniBrowserModel {
     var suggestions: [String] = []
     /// Pages from the history for the same text, above the suggestions.
     var historySuggestions: [BrowserVisit] = []
-    /// The history sheet is up.
-    var historyShown = false
     /// Set while a suggestion was just chosen or the field was submitted, so
     /// the text change that follows does not send another suggest request.
     @ObservationIgnored private var suggestionsSuspended = false

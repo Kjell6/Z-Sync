@@ -311,9 +311,6 @@
     <!-- Browsing history -->
     <string name="history_title">Browsing History</string>
     <string name="history_search">Search history</string>
-    <string name="history_clear">Clear History</string>
-    <string name="history_clear_title">Clear browsing history?</string>
-    <string name="history_clear_message">Removes every page from this list. Open pages and website data stay.</string>
     <string name="history_empty">Pages you open will show up here</string>
     <string name="history_no_results">No pages found</string>
     <string name="history_delete">Delete</string>

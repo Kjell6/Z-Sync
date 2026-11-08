@@ -119,6 +119,7 @@ import de.kjell.zencompanion.ui.browser.BrowserPages
 import de.kjell.zencompanion.ui.browser.MiniBrowserViewModel
 import de.kjell.zencompanion.ui.browser.PageSession
 import de.kjell.zencompanion.ui.browser.BlockingCard
+import de.kjell.zencompanion.data.BrowserVisit
 import de.kjell.zencompanion.data.ContentBlocking
 import de.kjell.zencompanion.data.ContentBlockingSettings
 import de.kjell.zencompanion.data.OpenPage
@@ -169,6 +170,9 @@ fun MiniBrowserScreen(
 ) {
     val context = LocalContext.current
     var showOverview by rememberSaveable { mutableStateOf(startsInOverview) }
+    /** The browser's own history is up. It belongs to the browser, not to a
+     *  page: the overview opened from home has no page behind it. */
+    var historyVisible by rememberSaveable { mutableStateOf(false) }
     // Still set after the process died: the page to come back to is then the
     // last one in use, not the one this browser was first opened with.
     var launched by rememberSaveable { mutableStateOf(false) }
@@ -267,6 +271,24 @@ fun MiniBrowserScreen(
         if (session == null && !showOverview) onDismiss()
     }
 
+    /** A page from the browser's history: the page on screen takes it, or a
+     *  new one when the overview came up without a page. */
+    fun openHistoryVisit(visit: BrowserVisit) {
+        val active = pages.active
+        if (active != null) {
+            active.webView?.loadUrl(visit.url)
+            active.viewModel.selectVisit(visit)
+        } else {
+            pages.open(visit.url)
+        }
+        if (showOverview) {
+            scope.launch {
+                overviewAlpha.animateTo(0f, tween(200))
+                showOverview = false
+            }
+        }
+    }
+
     Box(modifier.fillMaxSize()) {
         if (session != null) {
             BrowserPageScreen(
@@ -310,6 +332,7 @@ fun MiniBrowserScreen(
                     hiddenCardId = hiddenCardId,
                     onCardFrame = { id, frame -> cardFrames[id] = frame },
                     onOpen = ::closeOverview,
+                    onOpenHistory = { historyVisible = true },
                     onNewPage = {
                         // The grid stays as it was while it fades: no card joins it on the way out.
                         excludedCardId = pages.open(null).id
@@ -402,6 +425,16 @@ fun MiniBrowserScreen(
                     .graphicsLayer { alpha = heroAlpha.value },
             )
         }
+    }
+
+    if (historyVisible) {
+        BrowserHistoryScreen(
+            onOpen = { visit ->
+                historyVisible = false
+                openHistoryVisit(visit)
+            },
+            onClose = { historyVisible = false },
+        )
     }
 }
 
@@ -573,15 +606,6 @@ private fun BrowserPageScreen(
         }
     }
 
-    if (state.historyVisible) {
-        BrowserHistoryScreen(
-            onOpen = { visit ->
-                viewModel.closeHistory()
-                openAddressTarget(viewModel.selectVisit(visit))
-            },
-            onClose = viewModel::closeHistory,
-        )
-    }
 
     fun finishAddressEdit() {
         focusManager.clearFocus()

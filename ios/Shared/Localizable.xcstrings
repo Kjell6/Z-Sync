@@ -1020,36 +1020,6 @@
         }
       }
     },
-    "history.clear": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Clear History"
-          }
-        }
-      }
-    },
-    "history.clear_message": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Removes every page from this list. Open pages and website data stay."
-          }
-        }
-      }
-    },
-    "history.clear_title": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Clear browsing history?"
-          }
-        }
-      }
-    },
     "history.delete": {
       "localizations": {
         "en": {

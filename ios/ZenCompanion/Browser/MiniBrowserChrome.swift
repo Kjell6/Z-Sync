@@ -51,6 +51,8 @@ struct MiniBrowserChrome<NavBar: View>: View {
     var overviewShown = false
     /// Whether a page is open behind the overview, so there is a browser to leave.
     var onNewPage: () -> Void = {}
+    /// Opens the browser's own history from the overview.
+    var onOpenHistory: () -> Void = {}
     var onDone: () -> Void = {}
     var onCloseAll: () -> Void = {}
     /// The navigation bar. It stays in place while the menu grows above it.
@@ -118,6 +120,16 @@ struct MiniBrowserChrome<NavBar: View>: View {
 
             if !addressEditing {
                 HStack(spacing: 10) {
+                    // Only in the overview: that is where the browser's own
+                    // history belongs, next to the new page. The page menu
+                    // keeps the page's own tools.
+                    if overviewShown {
+                        historyControl
+                            .transition(
+                                .scale(scale: 0.6, anchor: .leading)
+                                    .combined(with: .opacity)
+                            )
+                    }
                     leadingControl
                     Spacer(minLength: 0)
                     // Closes the mini-browser.
@@ -225,6 +237,21 @@ struct MiniBrowserChrome<NavBar: View>: View {
         }
         .padding(.vertical, 6)
         .accessibilityElement(children: .contain)
+    }
+
+    /// The browser's own history, next to the new page while the overview is
+    /// up. Its own piece of glass, like the other outer controls.
+    private var historyControl: some View {
+        Button(action: onOpenHistory) {
+            Image(systemName: "clock")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Palette.ink(scheme))
+                .frame(width: controlSide, height: controlSide)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(GlassPressStyle())
+        .floatingGlassCapsule()
+        .accessibilityLabel(Text("history.title"))
     }
 
     /// The open pages, or a new one once the overview is up. One piece of
@@ -431,9 +458,6 @@ struct MiniBrowserChrome<NavBar: View>: View {
 
             // Its own card: one destination, not a group.
             siteSettingsRow
-                .liftCard(scheme)
-
-            historyRow
                 .liftCard(scheme)
 
             actionRow
@@ -790,31 +814,6 @@ struct MiniBrowserChrome<NavBar: View>: View {
         }
         .buttonStyle(CardPressStyle())
         .liftCard(scheme)
-    }
-
-    private var historyRow: some View {
-        Button {
-            model.collapseMenu()
-            model.historyShown = true
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "clock")
-                    .font(.system(size: 16, weight: .semibold))
-                    .frame(width: 24)
-                    .foregroundStyle(Color.primary)
-                Text("history.title")
-                    .zenFont(16, weight: .medium, design: .rounded)
-                    .foregroundStyle(Color.primary)
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.primary.opacity(0.35))
-            }
-            .padding(.horizontal, 14)
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(CardPressStyle())
     }
 
     private var siteSettingsRow: some View {

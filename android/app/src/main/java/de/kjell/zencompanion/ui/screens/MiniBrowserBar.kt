@@ -802,6 +802,7 @@ private fun LeaveBrowserButton(ink: Color, onClick: () -> Unit) {
 @Composable
 internal fun OverviewDock(
     onNewPage: () -> Unit,
+    onOpenHistory: () -> Unit,
     onDone: () -> Unit,
     showsDone: Boolean,
     onDoneLongPress: () -> Unit,
@@ -819,6 +820,15 @@ internal fun OverviewDock(
             .padding(start = 16.dp + DockInset, end = 16.dp + DockInset, bottom = barBottomGap(navigationInset) + RowGap),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // The browser's own history, next to the new page: the page menu
+        // keeps the page's own tools.
+        DockButton(
+            icon = Icons.Outlined.Schedule,
+            description = stringResource(R.string.history_title),
+            tint = zen.ink,
+            onClick = onOpenHistory,
+        )
+        Spacer(Modifier.size(10.dp))
         DockButton(
             icon = Icons.Outlined.Add,
             description = stringResource(R.string.kept_new_page),
@@ -1206,21 +1216,6 @@ private fun ExpandedMenu(
                 )
             },
             onClick = viewModel::openSiteSettings,
-        )
-
-        MenuRow(
-            icon = Icons.Outlined.Schedule,
-            title = stringResource(R.string.history_title),
-            tint = zen.ink,
-            trailing = {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = zen.ink.copy(alpha = 0.5f),
-                    modifier = Modifier.size(20.dp),
-                )
-            },
-            onClick = viewModel::openHistory,
         )
 
         Row(

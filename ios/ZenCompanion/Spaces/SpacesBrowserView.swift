@@ -20,7 +20,6 @@ struct SpacesBrowserView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.requestReview) private var requestReview
-    @AppStorage(StyleComparison.storageKey) private var showsOriginalStyle = false
     @State private var model: BrowserModel
 
     private enum ActiveSheet: Identifiable, Equatable {
@@ -65,12 +64,6 @@ struct SpacesBrowserView: View {
             return isDark ? .dark : .light
         }
         return scheme
-    }
-
-    /// True only in Debug builds while the comparison chip shows the original
-    /// pre-Liquid-Glass chrome. Release builds always render the new look.
-    private var showsOriginalChrome: Bool {
-        StyleComparison.isAvailable && showsOriginalStyle
     }
 
     var body: some View {
@@ -249,16 +242,6 @@ struct SpacesBrowserView: View {
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        // Debug A/B control: flips every surface back to its pre-change chrome
-        // so a new look can be judged against the original on the device.
-        // Clear of the action bar when the bar owns the top edge.
-        .overlay(alignment: .topTrailing) {
-            if StyleComparison.isAvailable {
-                StyleComparisonControl(showsOriginal: $showsOriginalStyle, scheme: effectiveScheme)
-                    .padding(.trailing, 12)
-                    .padding(.top, model.toolbarPlacement == .top ? 58 : 6)
-            }
-        }
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
             case .account:
@@ -373,9 +356,6 @@ struct SpacesBrowserView: View {
             requestReview()
             model.consumeReviewPrompt()
         }
-        // Read by every surface that opts into the comparison (rim weights,
-        // the action bar shapes). Late in the chain so sheets inherit it too.
-        .environment(\.zenCompareOriginalStyle, showsOriginalChrome)
     }
 
     // MARK: - Action bar: Activity (left) + Search (center) + Settings (right)
@@ -428,25 +408,13 @@ struct SpacesBrowserView: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            let icon = Image(systemName: systemName)
+            Image(systemName: systemName)
                 .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(Palette.ink(scheme).opacity(0.75))
                 .frame(width: 44, height: 44)
-
-            if showsOriginalChrome {
-                icon
-                    .background(
-                        Palette.lift(scheme),
-                        in: RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous)
-                    )
-                    .glassRim(cornerRadius: Palette.liftCornerRadius)
-                    .contentShape(RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous))
-            } else {
-                icon
-                    .modifier(DomedLiftFill(shape: actionBarShape, scheme: scheme))
-                    .glassRim(cornerRadius: Self.actionBarRadius)
-                    .contentShape(actionBarShape)
-            }
+                .modifier(DomedFill(shape: actionBarShape, scheme: scheme))
+                .glassRim(cornerRadius: Self.actionBarRadius)
+                .contentShape(actionBarShape)
         }
         .buttonStyle(LiquidPressButtonStyle())
         .accessibilityLabel(Text(LocalizedStringKey(accessibilityKey)))
@@ -458,7 +426,7 @@ struct SpacesBrowserView: View {
         Button {
             openNewTab(in: model.activeSpace)
         } label: {
-            let content = HStack(spacing: 10) {
+            HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Palette.ink(scheme).opacity(0.55))
@@ -468,27 +436,12 @@ struct SpacesBrowserView: View {
                     .lineLimit(1)
                 Spacer(minLength: 0)
             }
-
-            if showsOriginalChrome {
-                content
-                    .padding(.leading, 16)
-                    .padding(.trailing, pageCount > 0 ? 52 : 12)
-                    .frame(height: 44)
-                    .background(
-                        Palette.lift(scheme),
-                        in: RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous)
-                    )
-                    .glassRim(cornerRadius: Palette.liftCornerRadius)
-                    .contentShape(RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous))
-            } else {
-                content
-                    .padding(.leading, 16)
-                    .padding(.trailing, pageCount > 0 ? 56 : 16)
-                    .frame(height: 46)
-                    .modifier(DomedLiftFill(shape: actionBarShape, scheme: scheme))
-                    .glassRim(cornerRadius: Self.actionBarRadius)
-                    .contentShape(actionBarShape)
-            }
+            .padding(.leading, 18)
+            .padding(.trailing, pageCount > 0 ? 56 : 16)
+            .frame(height: 46)
+            .modifier(DomedFill(shape: actionBarShape, scheme: scheme))
+            .glassRim(cornerRadius: Self.actionBarRadius)
+            .contentShape(actionBarShape)
         }
         .buttonStyle(LiquidPressButtonStyle())
         .accessibilityLabel(Text("browser.web_placeholder"))
@@ -501,7 +454,7 @@ struct SpacesBrowserView: View {
                 } label: {
                     PageCountBadge(count: pageCount, side: 26)
                         .foregroundStyle(Palette.ink(scheme).opacity(0.8))
-                        .frame(width: showsOriginalChrome ? 48 : 52, height: showsOriginalChrome ? 44 : 46)
+                        .frame(width: 52, height: 46)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(LiquidPressButtonStyle())
@@ -614,11 +567,11 @@ struct SpacesBrowserView: View {
                         .zenFont(16, weight: .semibold, design: .rounded)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 12)
-                        .background(Palette.lift(scheme), in: Capsule())
+                        .modifier(DomedFill(shape: Capsule(), scheme: scheme))
                         .glassRimCapsule()
                         .foregroundStyle(Palette.ink(scheme))
                 }
-                .buttonStyle(PressedButtonStyle())
+                .buttonStyle(LiquidPressButtonStyle())
             }
         }
     }

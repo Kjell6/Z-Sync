@@ -32,9 +32,9 @@ struct ZeroSpacesHelp: View {
                         .padding(.horizontal, 20)
                         .padding(.vertical, 12)
                         .foregroundStyle(Palette.paper(scheme))
-                        .background(Palette.ink(scheme), in: Capsule())
+                        .modifier(DomedFill(shape: Capsule(), scheme: scheme, fill: Palette.ink(scheme)))
                 }
-                .buttonStyle(PressedButtonStyle())
+                .buttonStyle(LiquidPressButtonStyle())
 
                 if reloading {
                     ProgressView()
@@ -46,11 +46,11 @@ struct ZeroSpacesHelp: View {
                             .zenFont(16, weight: .semibold, design: .rounded)
                             .padding(.horizontal, 20)
                             .padding(.vertical, 12)
-                            .background(Palette.lift(scheme), in: Capsule())
+                            .modifier(DomedFill(shape: Capsule(), scheme: scheme))
                             .glassRimCapsule()
                             .foregroundStyle(Palette.ink(scheme))
                     }
-                    .buttonStyle(PressedButtonStyle())
+                    .buttonStyle(LiquidPressButtonStyle())
                 }
             }
         }
@@ -105,7 +105,7 @@ struct SyncSetupHint: View {
                     .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(PressedButtonStyle())
+            .buttonStyle(LiquidPressButtonStyle())
             .accessibilityLabel(Text("common.dismiss"))
         }
         .padding(.leading, 12)
@@ -173,9 +173,9 @@ struct SyncSetupSheet: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
                             .foregroundStyle(Palette.paper(scheme))
-                            .background(Palette.ink(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .modifier(DomedFill(shape: RoundedRectangle(cornerRadius: 16, style: .continuous), scheme: scheme, fill: Palette.ink(scheme)))
                     }
-                    .buttonStyle(PressedButtonStyle())
+                    .buttonStyle(LiquidPressButtonStyle())
                 }
                 .padding(20)
             }
@@ -245,7 +245,7 @@ struct ShareExtensionTip: View {
                     .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(PressedButtonStyle())
+            .buttonStyle(LiquidPressButtonStyle())
             .accessibilityLabel(Text("common.dismiss"))
         }
         .padding(14)

@@ -71,10 +71,10 @@ struct WhatsNewSheet: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Palette.ink(scheme).opacity(0.65))
                 .frame(width: 36, height: 36)
-                .background(Palette.lift(scheme), in: Circle())
+                .modifier(DomedFill(shape: Circle(), scheme: scheme))
                 .contentShape(Circle())
         }
-        .buttonStyle(PressedButtonStyle())
+        .buttonStyle(LiquidPressButtonStyle())
         .accessibilityLabel(Text("common.done"))
     }
 
@@ -115,11 +115,8 @@ struct WhatsNewSheet: View {
                 .foregroundStyle(Palette.onCoral(scheme))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 15)
-                .background(
-                    Palette.coral(scheme),
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                )
+                .modifier(DomedFill(shape: RoundedRectangle(cornerRadius: 14, style: .continuous), scheme: scheme, fill: Palette.coral(scheme)))
         }
-        .buttonStyle(PressedButtonStyle())
+        .buttonStyle(LiquidPressButtonStyle())
     }
 }

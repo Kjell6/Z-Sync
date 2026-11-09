@@ -151,11 +151,11 @@ struct SyncedActivitySheet: View {
                     .zenFont(16, weight: .semibold, design: .rounded)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 12)
-                    .background(Palette.lift(scheme), in: Capsule())
+                    .modifier(DomedFill(shape: Capsule(), scheme: scheme))
                     .glassRimCapsule()
                     .foregroundStyle(Palette.ink(scheme))
             }
-            .buttonStyle(PressedButtonStyle())
+            .buttonStyle(LiquidPressButtonStyle())
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

@@ -55,7 +55,7 @@ struct SaveKindMenuButton: View {
             glyph(size: 15)
                 .foregroundStyle(Palette.ink(scheme))
                 .frame(width: 44, height: 44)
-                .background(Circle().fill(Palette.lift(scheme)))
+                .modifier(DomedFill(shape: Circle(), scheme: scheme))
                 .glassRimCapsule()
                 .contentShape(Circle())
         case .compact:
@@ -64,7 +64,7 @@ struct SaveKindMenuButton: View {
             glyph(size: 14)
                 .foregroundStyle(Palette.ink(scheme))
                 .frame(width: 32, height: 32)
-                .background(Circle().fill(Palette.lift(scheme)))
+                .modifier(DomedFill(shape: Circle(), scheme: scheme))
                 .glassRimCapsule()
                 // 32pt reads right in the row; 44pt is what a finger needs.
                 .frame(width: 44, height: 44)

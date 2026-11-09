@@ -53,31 +53,98 @@ enum Palette {
     /// One hairline weight for every lift surface, so a tile and a settings
     /// card share the same edge. Android keeps its own slightly lighter pair
     /// in `ButtonChrome.kt`.
-    static let rimWidth: CGFloat = 0.5
-    static let rimOpacity: Double = 0.08
+    static let rimWidth: CGFloat = 0.6
+    static let rimOpacity: Double = 0.12
 
+    /// The pre-Liquid-Glass hairline. Only used while the debug comparison
+    /// control (`StyleComparison`) shows the original chrome.
+    static let originalRimWidth: CGFloat = 0.5
+    static let originalRimOpacity: Double = 0.08
+
+}
+
+// MARK: - Design comparison (debug only)
+
+/// A/B switch for the Liquid Glass pass. While `zenCompareOriginalStyle` is
+/// true, every surface that reads the environment flag renders its pre-change
+/// chrome, so a new look can be flipped back to the original on the device.
+/// The on-screen control is compiled into Debug builds only; the flag is a
+/// plain local default, so it never syncs or ships.
+enum StyleComparison {
+    static let storageKey = "zen.debug.compareOriginalStyle"
+
+    #if DEBUG
+    static let isAvailable = true
+    #else
+    static let isAvailable = false
+    #endif
+}
+
+private struct ZenCompareOriginalStyleKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// True while the design comparison control shows the pre-change look.
+    /// New styling branches on this; nothing in a release build sets it.
+    var zenCompareOriginalStyle: Bool {
+        get { self[ZenCompareOriginalStyleKey.self] }
+        set { self[ZenCompareOriginalStyleKey.self] = newValue }
+    }
+}
+
+/// Floating chip that flips between the current look ("Original" label) and
+/// the pre-change look ("New" label). Drag it anywhere it is in the way; the
+/// position is per launch and needs no persistence.
+struct StyleComparisonControl: View {
+    @Binding var showsOriginal: Bool
+    let scheme: ColorScheme
+
+    @State private var dragOffset: CGSize = .zero
+
+    var body: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.18)) {
+                showsOriginal.toggle()
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: showsOriginal ? "sparkles" : "clock.arrow.circlepath")
+                    .font(.system(size: 12, weight: .semibold))
+                Text(verbatim: showsOriginal ? "New" : "Original")
+                    .zenFont(12, weight: .semibold, design: .rounded)
+            }
+            .foregroundStyle(Palette.ink(scheme).opacity(0.8))
+            .padding(.horizontal, 12)
+            .frame(height: 30)
+            .background(Palette.lift(scheme), in: Capsule(style: .continuous))
+            .glassRimCapsule()
+            .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(PressedButtonStyle())
+        .offset(dragOffset)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 8)
+                .onChanged { value in
+                    dragOffset = value.translation
+                }
+        )
+        .accessibilityLabel(Text(verbatim: showsOriginal ? "Show new style" : "Show original style"))
+    }
 }
 
 extension View {
     /// Flat hairline for lift surfaces. One color, just stronger than the lift
     /// fill (0.06–0.07), so the edge does not read as a separate line.
-    /// Width stays 0.5. Stays inside the shape so neighboring tiles do not
+    /// Stays inside the shape so neighboring tiles do not
     /// share an edge.
     func glassRim(cornerRadius: CGFloat) -> some View {
-        overlay {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(Color.primary.opacity(Palette.rimOpacity), lineWidth: Palette.rimWidth)
-                .allowsHitTesting(false)
-        }
+        modifier(GlassRim(cornerRadius: cornerRadius))
     }
 
     /// Same hairline on a pill. Capsules are the other lift shape in the app.
     func glassRimCapsule() -> some View {
-        overlay {
-            Capsule(style: .continuous)
-                .strokeBorder(Color.primary.opacity(Palette.rimOpacity), lineWidth: Palette.rimWidth)
-                .allowsHitTesting(false)
-        }
+        modifier(GlassRimCapsule())
     }
 
     /// The one card look: lift fill plus the hairline rim, on the shared
@@ -102,6 +169,39 @@ extension View {
             .scaleEffect(reduceMotion || !isPressed ? 1 : 0.94)
             .opacity(isPressed ? 0.58 : 1)
             .animation(.easeOut(duration: reduceMotion ? 0.01 : 0.08), value: isPressed)
+    }
+}
+
+/// Continuous-corner hairline that falls back to the thinner, lighter pair
+/// while the design comparison control shows the original chrome.
+private struct GlassRim: ViewModifier {
+    let cornerRadius: CGFloat
+    @Environment(\.zenCompareOriginalStyle) private var compareOriginal
+
+    func body(content: Content) -> some View {
+        content.overlay {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(
+                    Color.primary.opacity(compareOriginal ? Palette.originalRimOpacity : Palette.rimOpacity),
+                    lineWidth: compareOriginal ? Palette.originalRimWidth : Palette.rimWidth
+                )
+                .allowsHitTesting(false)
+        }
+    }
+}
+
+private struct GlassRimCapsule: ViewModifier {
+    @Environment(\.zenCompareOriginalStyle) private var compareOriginal
+
+    func body(content: Content) -> some View {
+        content.overlay {
+            Capsule(style: .continuous)
+                .strokeBorder(
+                    Color.primary.opacity(compareOriginal ? Palette.originalRimOpacity : Palette.rimOpacity),
+                    lineWidth: compareOriginal ? Palette.originalRimWidth : Palette.rimWidth
+                )
+                .allowsHitTesting(false)
+        }
     }
 }
 

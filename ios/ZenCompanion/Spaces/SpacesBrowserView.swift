@@ -20,6 +20,7 @@ struct SpacesBrowserView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.requestReview) private var requestReview
+    @AppStorage(StyleComparison.storageKey) private var showsOriginalStyle = false
     @State private var model: BrowserModel
 
     private enum ActiveSheet: Identifiable, Equatable {
@@ -64,6 +65,12 @@ struct SpacesBrowserView: View {
             return isDark ? .dark : .light
         }
         return scheme
+    }
+
+    /// True only in Debug builds while the comparison chip shows the original
+    /// pre-Liquid-Glass chrome. Release builds always render the new look.
+    private var showsOriginalChrome: Bool {
+        StyleComparison.isAvailable && showsOriginalStyle
     }
 
     var body: some View {
@@ -242,6 +249,16 @@ struct SpacesBrowserView: View {
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
+        // Debug A/B control: flips every surface back to its pre-change chrome
+        // so a new look can be judged against the original on the device.
+        // Clear of the action bar when the bar owns the top edge.
+        .overlay(alignment: .topTrailing) {
+            if StyleComparison.isAvailable {
+                StyleComparisonControl(showsOriginal: $showsOriginalStyle, scheme: effectiveScheme)
+                    .padding(.trailing, 12)
+                    .padding(.top, model.toolbarPlacement == .top ? 58 : 6)
+            }
+        }
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
             case .account:
@@ -356,6 +373,9 @@ struct SpacesBrowserView: View {
             requestReview()
             model.consumeReviewPrompt()
         }
+        // Read by every surface that opts into the comparison (rim weights,
+        // the action bar shapes). Late in the chain so sheets inherit it too.
+        .environment(\.zenCompareOriginalStyle, showsOriginalChrome)
     }
 
     // MARK: - Action bar: Activity (left) + Search (center) + Settings (right)
@@ -383,7 +403,7 @@ struct SpacesBrowserView: View {
         // between the bar and the screen edge, so the dock stays as short as
         // possible.
         .padding(.bottom, placement == .bottom ? 0 : 6)
-        // Chrome band: the pill and cards are 44pt tall, so type stops at the
+        // Chrome band: the bar's buttons have a fixed height, so type stops at the
         // first accessibility size. Content below scales fully.
         .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         // iPadOS 26 windowed mode puts the system window controls on the
@@ -393,6 +413,14 @@ struct SpacesBrowserView: View {
         .containerCornerOffsetCompat(.horizontal)
     }
 
+    /// A touch rounder than the 16pt lift corner, so the bar sits closer to the
+    /// system's softer squircles.
+    private static let actionBarRadius: CGFloat = 18
+
+    private var actionBarShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: Self.actionBarRadius, style: .continuous)
+    }
+
     private func actionCard(
         systemName: String,
         accessibilityKey: String,
@@ -400,18 +428,27 @@ struct SpacesBrowserView: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            Image(systemName: systemName)
+            let icon = Image(systemName: systemName)
                 .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(Palette.ink(scheme).opacity(0.75))
                 .frame(width: 44, height: 44)
-                .background(
-                    Palette.lift(scheme),
-                    in: RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous)
-                )
-                .glassRim(cornerRadius: Palette.liftCornerRadius)
-                .contentShape(RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous))
+
+            if showsOriginalChrome {
+                icon
+                    .background(
+                        Palette.lift(scheme),
+                        in: RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous)
+                    )
+                    .glassRim(cornerRadius: Palette.liftCornerRadius)
+                    .contentShape(RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous))
+            } else {
+                icon
+                    .modifier(DomedLiftFill(shape: actionBarShape, scheme: scheme))
+                    .glassRim(cornerRadius: Self.actionBarRadius)
+                    .contentShape(actionBarShape)
+            }
         }
-        .buttonStyle(SquircleButtonStyle())
+        .buttonStyle(LiquidPressButtonStyle())
         .accessibilityLabel(Text(LocalizedStringKey(accessibilityKey)))
     }
 
@@ -421,7 +458,7 @@ struct SpacesBrowserView: View {
         Button {
             openNewTab(in: model.activeSpace)
         } label: {
-            HStack(spacing: 10) {
+            let content = HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Palette.ink(scheme).opacity(0.55))
@@ -431,17 +468,29 @@ struct SpacesBrowserView: View {
                     .lineLimit(1)
                 Spacer(minLength: 0)
             }
-            .padding(.leading, 16)
-            .padding(.trailing, pageCount > 0 ? 52 : 12)
-            .frame(height: 44)
-            .background(
-                Palette.lift(scheme),
-                in: RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous)
-            )
-            .glassRim(cornerRadius: Palette.liftCornerRadius)
-            .contentShape(RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous))
+
+            if showsOriginalChrome {
+                content
+                    .padding(.leading, 16)
+                    .padding(.trailing, pageCount > 0 ? 52 : 12)
+                    .frame(height: 44)
+                    .background(
+                        Palette.lift(scheme),
+                        in: RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous)
+                    )
+                    .glassRim(cornerRadius: Palette.liftCornerRadius)
+                    .contentShape(RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous))
+            } else {
+                content
+                    .padding(.leading, 16)
+                    .padding(.trailing, pageCount > 0 ? 56 : 16)
+                    .frame(height: 46)
+                    .modifier(DomedLiftFill(shape: actionBarShape, scheme: scheme))
+                    .glassRim(cornerRadius: Self.actionBarRadius)
+                    .contentShape(actionBarShape)
+            }
         }
-        .buttonStyle(SquircleButtonStyle())
+        .buttonStyle(LiquidPressButtonStyle())
         .accessibilityLabel(Text("browser.web_placeholder"))
         .overlay(alignment: .trailing) {
             if pageCount > 0 {
@@ -452,10 +501,10 @@ struct SpacesBrowserView: View {
                 } label: {
                     PageCountBadge(count: pageCount, side: 26)
                         .foregroundStyle(Palette.ink(scheme).opacity(0.8))
-                        .frame(width: 48, height: 44)
+                        .frame(width: showsOriginalChrome ? 48 : 52, height: showsOriginalChrome ? 44 : 46)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(SquircleButtonStyle())
+                .buttonStyle(LiquidPressButtonStyle())
                 .accessibilityLabel(Text("browser.page_count \(pageCount)"))
             }
         }

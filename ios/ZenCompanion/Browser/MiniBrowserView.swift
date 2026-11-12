@@ -138,7 +138,12 @@ struct MiniBrowserView: View {
               !showOverview,
               !addressEditing,
               !model.menuExpanded,
-              model.pinNotice == nil else { return false }
+              model.pinNotice == nil,
+              !model.showPinBanner,
+              model.pageError == nil,
+              model.readerArticle == nil,
+              model.dialogs.isEmpty,
+              keyboardOverlap == 0 else { return false }
         return true
     }
 
@@ -341,6 +346,27 @@ struct MiniBrowserView: View {
 
                 chrome
                     .zIndex(6)
+
+                // A small, accessible way back even when the page cannot be
+                // scrolled (for example after its content changes dynamically).
+                if barCollapsed {
+                    Button {
+                        model.setScrollHidesBar(false)
+                    } label: {
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(barScheme == .dark ? Color.white : Color.black)
+                            .frame(width: 30, height: 30)
+                            .background(barBackground.opacity(0.9), in: Circle())
+                            .frame(width: 48, height: 48)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Show browser controls")
+                    .padding(.bottom, max(0, safeBottom - 14))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .zIndex(7)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .background(sheetBackground.ignoresSafeArea())
@@ -386,6 +412,7 @@ struct MiniBrowserView: View {
                 // dock and springing it back is what made it jump under the
                 // finger while typing.
                 guard !(isAddressFocused && overlap == 0 && keyboardOverlap > 0) else { return }
+                if overlap > 0 || keyboardOverlap > 0 { model.setScrollHidesBar(false) }
                 withAnimation(Self.keyboardAnimation(from: note)) {
                     keyboardOverlap = overlap
                 }
@@ -399,6 +426,7 @@ struct MiniBrowserView: View {
             .animation(.easeInOut(duration: 0.25), value: model.themeColor)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)
+            .statusBarHidden(barCollapsed)
             .tint(Palette.ink(scheme))
             .onAppear {
                 safeBottom = Self.windowSafeBottom()

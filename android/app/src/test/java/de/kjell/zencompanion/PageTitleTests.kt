@@ -65,6 +65,20 @@ class PageTitleTests {
     }
 
     @Test
+    fun usableTitleDropsBidiControls() {
+        // A page can hide a right-to-left override in its title to reorder what
+        // the bar shows; the character goes, the rest of the name stays.
+        assertEquals("Pinned Page", PageTitle.usable("Pinned Page\u202E", page))
+        assertEquals("Pinned Page", PageTitle.usable("\u202EPinned Page", page))
+        // Stripped before the address check, so a disguised address is still
+        // rejected instead of wearing a lookalike name.
+        assertNull(PageTitle.usable("\u202Ehttps://pin.example/page", page))
+        // Ordinary right-to-left titles carry no controls and stay as they are.
+        assertEquals("مصر", PageTitle.usable("مصر", page))
+        assertEquals("שלום", PageTitle.usable("שלום", page))
+    }
+
+    @Test
     fun pickJsPayloadPrefersTheTabTitle() {
         assertEquals("Pinned Page", PageTitle.pickJsPayload("\"Pinned Page\\u001eOther\"", page))
         assertEquals(

@@ -533,9 +533,15 @@ internal fun MiniBrowserWebView(
  * The page's WebView inside the platform's pull-to-refresh indicator.
  *
  * A WebView scrolls its content itself and never says whether it can scroll
- * up. The page answers that over the scroll bridge for every touch, so a pull
- * only refreshes at its very top and never inside a map, a chat list or any
- * other element that scrolls on its own.
+ * up. The page answers that over the scroll bridge, but only after the touch
+ * has started: the layout first asks while it hands the touch down to itself,
+ * and the page's `touchstart` listener answers once the WebView has seen that
+ * same event. So the down is let through at the top of the document, which is
+ * where the layout records the pointer and the offset the pull is measured
+ * from; every move after it waits for the page's answer. A move that arrives
+ * before the answer is ignored, and the next one after it starts the pull. A
+ * pull therefore only refreshes at the document's very top and never inside a
+ * map, a chat list or any other element that scrolls on its own.
  */
 internal class BrowserPullRefresh(context: Context) : SwipeRefreshLayout(context) {
     lateinit var webView: WebView
@@ -544,14 +550,23 @@ internal class BrowserPullRefresh(context: Context) : SwipeRefreshLayout(context
     @Volatile
     var pageAllowsPull = false
 
+    /**
+     * Whether the event being intercepted right now is the one that starts a
+     * touch. Set only around the call that hands that event to the layout.
+     */
+    private var interceptingDown = false
+
     private val endRefresh = Runnable { isRefreshing = false }
     private var circleColor: Int? = null
     private var arrowColor: Int? = null
 
     init {
         setOnChildScrollUpCallback { _, _ ->
-            // "The child can scroll up, do not refresh" unless both hold.
-            !(pageAllowsPull && webView.scrollY == 0)
+            childCanScrollUp(
+                isDownEvent = interceptingDown,
+                scrollY = webView.scrollY,
+                pageAllowsPull = pageAllowsPull,
+            )
         }
     }
 
@@ -577,9 +592,18 @@ internal class BrowserPullRefresh(context: Context) : SwipeRefreshLayout(context
 
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
         // The page has to allow this very touch: a page that allowed the last
-        // one says nothing about this one.
-        if (ev.actionMasked == MotionEvent.ACTION_DOWN) pageAllowsPull = false
-        return super.onInterceptTouchEvent(ev)
+        // one says nothing about this one. The reset lands before the layout
+        // handles the down, so the answer can only be about the moves.
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
+            pageAllowsPull = false
+            interceptingDown = true
+        }
+        return try {
+            super.onInterceptTouchEvent(ev)
+        } finally {
+            // Any other event, a second finger included, waits for the answer.
+            interceptingDown = false
+        }
     }
 
     override fun onDetachedFromWindow() {
@@ -590,6 +614,27 @@ internal class BrowserPullRefresh(context: Context) : SwipeRefreshLayout(context
     private companion object {
         const val REFRESH_TIMEOUT_MS = 10_000L
     }
+}
+
+/**
+ * Whether the page inside the pull layout can still scroll up.
+ *
+ * The layout asks this before it looks at the event itself, and an answer of
+ * true drops the touch before the pointer is recorded. [isDownEvent] is the
+ * event that starts a touch: the page's `touchstart` listener has not answered
+ * yet, so only the document's own position may keep the layout from recording
+ * the touch. Every event after it follows the page's permission: a pull starts
+ * only at the document's top ([scrollY] is 0) and only when the page allowed
+ * the touch.
+ */
+internal fun childCanScrollUp(
+    isDownEvent: Boolean,
+    scrollY: Int,
+    pageAllowsPull: Boolean,
+): Boolean = if (isDownEvent) {
+    scrollY > 0
+} else {
+    !(pageAllowsPull && scrollY == 0)
 }
 
 /** Receives the page's scroll offset and pull permission. Called on a WebView thread. */

@@ -65,6 +65,13 @@ class ShareUrlTests {
         assertEquals("https://example.com/search?q=wow!", sharedLink("\"https://example.com/search?q=wow!\""))
     }
 
+    /** A Unicode domain has a host, so it is a link; it is kept as shared. */
+    @Test
+    fun linkWithUnicodeDomainIsAccepted() {
+        assertEquals("https://bücher.example/a", sharedLink("https://bücher.example/a"))
+        assertEquals("https://bücher.example/a?q=1", sharedLink("see https://bücher.example/a?q=1."))
+    }
+
     @Test
     fun firstOfSeveralLinksWins() {
         assertEquals(

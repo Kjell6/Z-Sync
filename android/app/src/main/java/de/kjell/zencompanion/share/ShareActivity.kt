@@ -128,8 +128,21 @@ internal fun sharedLink(text: String): String? {
 internal fun linkCandidate(text: String): String? {
     val bare = trimSurroundingMarks(text.trim())
     if (bare.isEmpty() || !looksLikeHttpUrl(bare)) return null
-    val host = runCatching { java.net.URI(bare).host }.getOrNull()
-    return if (host.isNullOrEmpty()) null else bare
+    return if (hostOf(bare).isNullOrEmpty()) null else bare
+}
+
+/**
+ * The address's host, or null. `java.net.URI` only knows ASCII domain labels,
+ * so a Unicode domain has no host until it is checked in the punycode form
+ * `IDN` makes of it; the address itself is still returned as it was shared
+ * (iOS's Foundation rewrites the domain to punycode on its own).
+ */
+private fun hostOf(text: String): String? {
+    val uri = runCatching { java.net.URI(text) }.getOrNull() ?: return null
+    if (!uri.host.isNullOrEmpty()) return uri.host
+    val authority = uri.rawAuthority ?: return null
+    val host = authority.substringAfterLast('@').substringBeforeLast(':')
+    return runCatching { java.net.IDN.toASCII(host) }.getOrNull()?.takeIf { it.isNotEmpty() }
 }
 
 /** Marks a sentence puts before a link; they never belong to its address. */

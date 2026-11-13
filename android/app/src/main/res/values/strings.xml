@@ -151,6 +151,9 @@
     <string name="settings_kept_lifetime_month">After a month</string>
     <string name="settings_open_into_search_subtitle">Opens a search tab when the app starts</string>
     <string name="settings_external_browser">Open tabs in default browser</string>
+    <string name="settings_default_browser">Default browser</string>
+    <string name="settings_default_browser_subtitle">Open links from other apps in Z-Sync</string>
+    <string name="settings_default_browser_value">Z-Sync</string>
     <string name="settings_essentials_columns">Essentials per row</string>
     <string name="settings_essentials_columns_automatic">Automatic</string>
     <string name="settings_save_kind">Save shared link as</string>

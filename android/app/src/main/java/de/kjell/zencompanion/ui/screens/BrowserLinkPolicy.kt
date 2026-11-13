@@ -1,5 +1,6 @@
 package de.kjell.zencompanion.ui.screens
 
+import android.content.Intent
 import android.webkit.WebView
 
 internal enum class BrowserLinkAction {
@@ -61,6 +62,18 @@ internal fun browserLinkAction(
         return BrowserLinkAction.LOAD_IN_WEBVIEW
     }
     return BrowserLinkAction.OPEN_EXTERNALLY
+}
+
+/**
+ * The address a `VIEW` intent from another app hands to Z-Sync, or null when
+ * it is not a web link. Any app on the device can send the intent, so only the
+ * data URI counts and only `http`/`https` pass; nothing else in it is read.
+ */
+internal fun incomingWebLink(action: String?, scheme: String?, data: String?): String? {
+    if (action != Intent.ACTION_VIEW) return null
+    val normalized = scheme?.lowercase()
+    if (normalized != "http" && normalized != "https") return null
+    return sameTabUrl(data)
 }
 
 /** The http(s) address of a link, or null for anything else. */

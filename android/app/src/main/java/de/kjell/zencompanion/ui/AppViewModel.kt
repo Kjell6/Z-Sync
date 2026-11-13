@@ -35,6 +35,7 @@ import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.browser.BrowserPages
 import de.kjell.zencompanion.ui.screens.FxAWeb
 import de.kjell.zencompanion.ui.screens.FxAWebLogin
+import de.kjell.zencompanion.ui.screens.sameTabUrl
 import de.kjell.zencompanion.util.FriendlyError
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
@@ -351,6 +352,11 @@ class AppViewModel(
     // consumes it by opening a new tab.
     private val _searchOnOpenPending = MutableStateFlow(false)
     val searchOnOpenPending: StateFlow<Boolean> = _searchOnOpenPending
+
+    // A web link another app handed to Z-Sync. Kept while signed out so it
+    // opens right after sign-in; the spaces screen consumes it once, in-app.
+    private val _incomingLink = MutableStateFlow<String?>(null)
+    val incomingLink: StateFlow<String?> = _incomingLink
 
     private var reloadJob: Job? = null
     /** A reload asked for while one was running; it runs right after. */
@@ -883,6 +889,26 @@ class AppViewModel(
 
     fun consumeSearchOnOpen() {
         _searchOnOpenPending.value = false
+    }
+
+    /**
+     * Takes a web link from another app, to be opened once the spaces screen is
+     * up — before sign-in it simply waits. Only `http`/`https` is kept, so a
+     * crafted intent cannot put anything else in front of the browser.
+     */
+    fun openLinkFromAnotherApp(url: String) {
+        val address = sameTabUrl(url) ?: return
+        _incomingLink.value = address
+    }
+
+    /** The spaces screen took the link: it opens exactly once. */
+    fun consumeIncomingLink() {
+        _incomingLink.value = null
+    }
+
+    /** The reader left without signing in: the link waiting for it is dropped. */
+    fun discardIncomingLink() {
+        _incomingLink.value = null
     }
 
     /** Loads (or retries) the synced browsing history into [activity]. */

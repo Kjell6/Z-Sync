@@ -1,8 +1,10 @@
 package de.kjell.zencompanion
 
 import android.webkit.WebView
+import de.kjell.zencompanion.ui.components.externalHandlerPackage
 import de.kjell.zencompanion.ui.screens.BrowserLinkAction
 import de.kjell.zencompanion.ui.screens.browserLinkAction
+import de.kjell.zencompanion.ui.screens.incomingWebLink
 import de.kjell.zencompanion.ui.screens.isWebScheme
 import de.kjell.zencompanion.ui.screens.loadsInWebView
 import de.kjell.zencompanion.ui.screens.schemeLoadsInWebView
@@ -65,6 +67,24 @@ class BrowserLinkPolicyTests {
         assertEquals(
             BrowserLinkAction.LOAD_IN_WEBVIEW,
             action("https", resolvedPackage = ownPackage),
+        )
+    }
+
+    /** Declaring the browser filter puts Z-Sync in `browserPackages`; that must
+     * change nothing for a link the WebView can load itself. */
+    @Test
+    fun ownPackageInTheBrowserListStillLoadsInTheWebView() {
+        assertEquals(
+            BrowserLinkAction.LOAD_IN_WEBVIEW,
+            browserLinkAction(
+                scheme = "https",
+                isRedirect = false,
+                hasGesture = true,
+                isMainFrame = true,
+                resolvedPackage = ownPackage,
+                browserPackages = browsers + ownPackage,
+                ownPackage = ownPackage,
+            ),
         )
     }
 
@@ -205,5 +225,58 @@ class BrowserLinkPolicyTests {
         assertFalse(loadsInWebView("intent://scan/#Intent;scheme=zxing;end"))
         assertTrue(loadsInWebView("https://example.com/a"))
         assertTrue(loadsInWebView("http://localhost:8765/redirect.html"))
+    }
+
+    // MARK: - Links from other apps
+
+    @Test
+    fun onlyViewIntentsWithWebDataAreAccepted() {
+        val view = "android.intent.action.VIEW"
+        assertEquals(
+            "https://example.com/a?b=1",
+            incomingWebLink(view, "https", "https://example.com/a?b=1"),
+        )
+        assertEquals(
+            "http://localhost:8765/redirect.html",
+            incomingWebLink(view, "http", "http://localhost:8765/redirect.html"),
+        )
+        assertEquals(
+            "scheme matching is case-insensitive",
+            "HTTPS://Example.com",
+            incomingWebLink(view, "HTTPS", "HTTPS://Example.com"),
+        )
+    }
+
+    @Test
+    fun everythingElseInAnIncomingIntentIsIgnored() {
+        val view = "android.intent.action.VIEW"
+        // Other actions, other schemes, and a missing or unusable address.
+        assertEquals(null, incomingWebLink("android.intent.action.MAIN", "https", "https://example.com"))
+        assertEquals(null, incomingWebLink(view, "javascript", "javascript:alert(1)"))
+        assertEquals(null, incomingWebLink(view, "file", "file:///etc/hosts"))
+        assertEquals(null, incomingWebLink(view, "content", "content://com.example/secret"))
+        assertEquals(null, incomingWebLink(view, "intent", "intent://scan/#Intent;scheme=zxing;end"))
+        assertEquals(null, incomingWebLink(view, "mailto", "mailto:nobody@example.com"))
+        assertEquals(null, incomingWebLink(view, "https", null))
+        assertEquals(null, incomingWebLink(view, "https", "   "))
+        assertEquals(null, incomingWebLink(view, null, "https://example.com"))
+    }
+
+    @Test
+    fun externalHandOffNeverChoosesThisApp() {
+        assertEquals(
+            "com.android.chrome",
+            externalHandlerPackage(listOf("com.android.chrome", "org.mozilla.firefox"), ownPackage),
+        )
+        assertEquals(
+            "org.mozilla.firefox",
+            externalHandlerPackage(listOf(ownPackage, "org.mozilla.firefox"), ownPackage),
+        )
+        assertEquals(
+            "nothing else can take the link, so the caller reports it",
+            null,
+            externalHandlerPackage(listOf(ownPackage), ownPackage),
+        )
+        assertEquals(null, externalHandlerPackage(emptyList(), ownPackage))
     }
 }

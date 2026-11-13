@@ -13,6 +13,11 @@ final class SessionModel {
     /// Explains an automatic sign-out on the landing screen (e.g. the Mozilla
     /// account password changed on another device).
     var sessionNotice: String?
+    /// A web link another app handed over. It waits here while signed out —
+    /// the reader chose this app for the link — and the spaces screen takes it
+    /// once, right after sign-in. If that never happens in this launch, the
+    /// app being left ends it with the model.
+    var pendingOpenURL: URL?
 
     private var demoTapCount = 0
     private var lastDemoTap = Date.distantPast
@@ -73,6 +78,24 @@ final class SessionModel {
 
     func clearSaveError() {
         saveError = nil
+    }
+
+    /// Routes a link that arrived through `.onOpenURL`. Any app can hand one
+    /// over, so only `http`/`https` is accepted and nothing else about the
+    /// event is read.
+    func openLinkFromAnotherApp(_ url: URL) {
+        guard BrowserInput.isWebAddress(url) else { return }
+        // iOS hands back what this app just sent out once Z-Sync holds the
+        // browser role. Consuming the record here keeps that arrival from
+        // matching a later link; the URL goes to the in-app browser and is
+        // never handed out again from this path.
+        _ = ExternalBrowser.consumeOwnHandOff(url)
+        pendingOpenURL = url
+    }
+
+    /// The spaces screen opened the pending link: it happens exactly once.
+    func consumePendingOpenURL() {
+        pendingOpenURL = nil
     }
 
     func presentSignIn() {

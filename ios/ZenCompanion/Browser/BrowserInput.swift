@@ -60,6 +60,17 @@ enum BrowserInput {
         return String(text[matched])
     }
 
+    /// True for an `http` or `https` link another app handed to Z-Sync. Only
+    /// these may open: the address then goes through the same input handling
+    /// as a typed one, and no other scheme (file, javascript, data) gets that
+    /// far.
+    static func isWebAddress(_ url: URL) -> Bool {
+        switch url.scheme?.lowercased() {
+        case "http", "https": return true
+        default: return false
+        }
+    }
+
     /// Address-bar display text for a loaded URL (host, or the full string for
     /// schemeless/local URLs).
     static func displayText(for url: URL) -> String {

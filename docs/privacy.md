@@ -139,7 +139,7 @@ The mini-browser can block ads, trackers and cookie banners. The ad and tracker 
 
 ### 5.5 Websites you open, and unsafe-site checks
 
-A page you open in the mini-browser is loaded from that website like in any browser: the site receives the request, your IP address and the cookies it set earlier, under its own privacy policy. Nothing about it goes to the developer.
+A page you open in the mini-browser is loaded from that website like in any browser: the site receives the request, your IP address and the cookies it set earlier, under its own privacy policy. A link another app hands to Z-Sync is opened like any page you open yourself, and the other app learns nothing from Z-Sync about what you do with it. Nothing about any of this goes to the developer.
 
 The system web view that shows the page also checks addresses against a list of known phishing and malware sites. On Android this is Google Safe Browsing, built into the Android System WebView; on iOS it is the fraudulent website warning built into WebKit, which uses Safe Browsing data provided through Apple. These checks are run by the operating system component, not by Z-Sync, and are designed so the full address is normally not sent: the web view compares a short hash prefix of the address against the list. See the [Google Privacy Policy](https://policies.google.com/privacy) and [Apple's Safari and privacy notice](https://www.apple.com/legal/privacy/data/en/safari/).
 

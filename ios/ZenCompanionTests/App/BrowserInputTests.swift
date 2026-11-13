@@ -110,4 +110,22 @@ final class BrowserInputTests: XCTestCase {
             "about:config"
         )
     }
+
+    /// Links from other apps may only be web addresses: anything else would
+    /// reach the browser as script, a file or another app's data.
+    func testOnlyWebAddressesAreAcceptedFromOtherApps() {
+        XCTAssertTrue(BrowserInput.isWebAddress(URL(string: "https://example.com/a?b=1")!))
+        XCTAssertTrue(BrowserInput.isWebAddress(URL(string: "http://localhost:8765/x")!))
+        XCTAssertTrue(BrowserInput.isWebAddress(URL(string: "HTTPS://Example.com")!))
+        for raw in [
+            "file:///etc/hosts",
+            "javascript:alert(1)",
+            "data:text/html,hi",
+            "mailto:nobody@example.com",
+            "tel:+391234567",
+            "about:blank",
+        ] {
+            XCTAssertFalse(BrowserInput.isWebAddress(URL(string: raw)!), raw)
+        }
+    }
 }

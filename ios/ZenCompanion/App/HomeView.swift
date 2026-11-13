@@ -17,13 +17,22 @@ struct HomeView: View {
     var body: some View {
         Group {
             if let snapshot = model.account {
-                SpacesBrowserView(account: snapshot)
+                SpacesBrowserView(
+                    account: snapshot,
+                    incomingLink: model.pendingOpenURL,
+                    onConsumeIncomingLink: { model.consumePendingOpenURL() }
+                )
             } else {
                 SignInLandingView(model: model)
             }
         }
         .onAppear {
             model.load()
+        }
+        // A web link another app hands over. It opens in the in-app browser,
+        // or waits in the model until sign-in finishes.
+        .onOpenURL { url in
+            model.openLinkFromAnotherApp(url)
         }
         .onReceive(NotificationCenter.default.publisher(for: .zenCompanionSignedOut)) { _ in
             model.signedOut()

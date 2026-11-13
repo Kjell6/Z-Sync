@@ -16,6 +16,11 @@ struct BrowserTabSession: Identifiable {
 /// user's `ToolbarPlacement`.
 struct SpacesBrowserView: View {
     let account: AccountSnapshot
+    /// A web link another app handed to Z-Sync before this screen was up,
+    /// waiting through sign-in when it arrived signed out.
+    var incomingLink: URL? = nil
+    /// The link was taken: it opens once, like a tab tapped here.
+    var onConsumeIncomingLink: () -> Void = {}
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.scenePhase) private var scenePhase
@@ -53,8 +58,14 @@ struct SpacesBrowserView: View {
     /// was up; refresh once the last sheet is gone.
     @State private var pendingStaleReload = false
 
-    init(account: AccountSnapshot) {
+    init(
+        account: AccountSnapshot,
+        incomingLink: URL? = nil,
+        onConsumeIncomingLink: @escaping () -> Void = {}
+    ) {
         self.account = account
+        self.incomingLink = incomingLink
+        self.onConsumeIncomingLink = onConsumeIncomingLink
         _model = State(initialValue: BrowserModel(account: account))
         _whatsNew = State(initialValue: WhatsNewStore())
     }
@@ -307,6 +318,13 @@ struct SpacesBrowserView: View {
                 }
         }
         .task { await model.initialLoad() }
+        .task(id: incomingLink) {
+            // A link from another app opens on top of whatever is showing,
+            // like a tab tapped here. A sheet that is up makes way first.
+            guard let url = incomingLink else { return }
+            onConsumeIncomingLink()
+            presentBrowser(url: url, title: nil, space: model.activeSpace)
+        }
         .task(id: ContentBlocker.shared.asked) {
             // Show release notes once per app version, after the first frame
             // has had a moment to settle. Demo mode skips it like the other
@@ -348,7 +366,10 @@ struct SpacesBrowserView: View {
         .onChange(of: model.searchOnOpenPending) { _, pending in
             guard pending else { return }
             // Leave an open browser or settings sheet where the user left it.
-            if activeSheet == nil, browserSession == nil { openNewTab(in: model.activeSpace) }
+            // A link from another app is the page this launch is for.
+            if activeSheet == nil, browserSession == nil, incomingLink == nil {
+                openNewTab(in: model.activeSpace)
+            }
             model.consumeSearchOnOpen()
         }
         .onChange(of: model.reviewPromptPending) { _, pending in

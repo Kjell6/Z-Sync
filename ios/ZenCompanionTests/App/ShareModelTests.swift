@@ -458,6 +458,31 @@ final class ShareModelTests: XCTestCase {
         let url = ZenCompanion.ShareLink.httpURL(from: "https://bücher.example/a" as NSString)
         XCTAssertEqual(url?.path, "/a")
         XCTAssertFalse(url?.host?.isEmpty ?? true)
+
+        let withPort = ZenCompanion.ShareLink.httpURL(from: "https://bücher.example:8080/a" as NSString)
+        XCTAssertEqual(withPort?.path, "/a")
+        XCTAssertEqual(withPort?.port, 8080)
+        XCTAssertFalse(withPort?.host?.isEmpty ?? true)
+    }
+
+    /// A port that is not digits makes the address no link at all.
+    func testSharedLinkWithAnInvalidPortIsSkipped() {
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(
+                from: "https://example.com:bad/a https://valid.example/b" as NSString
+            ),
+            URL(string: "https://valid.example/b")
+        )
+        XCTAssertNil(ZenCompanion.ShareLink.httpURL(from: "https://example.com:bad/a" as NSString))
+    }
+
+    /// A long run of closing brackets is dropped without a recount per mark.
+    func testManyTrailingBracketsAreDropped() {
+        let text = "https://example.com/a" + String(repeating: ")", count: 100_000)
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(from: text as NSString),
+            URL(string: "https://example.com/a")
+        )
     }
 
     func testHeadlineTitlePrefersPageTitleThenHost() {

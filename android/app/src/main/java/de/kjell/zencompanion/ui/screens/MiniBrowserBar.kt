@@ -1059,6 +1059,12 @@ private fun ComposerBar(
     barColor: Color,
 ) {
     val zen = LocalZenColors.current
+    // The composer is composed by the address state, so its field reports
+    // `false` once before the screen's focus request lands. Only a loss after a
+    // real gain ends the edit: tapping the page takes the keyboard away, and
+    // the bar must close the editor the way Cancel does instead of staying an
+    // editor without a keyboard.
+    var hadFocus by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1093,11 +1099,16 @@ private fun ComposerBar(
             modifier = Modifier
                 .weight(1f)
                 .focusRequester(focusRequester)
-                // Only a focus *gain* is reported: the composer is composed by
-                // the address state, so its first attach reports `false` and
-                // would close the field again on the same frame. Closing is
-                // explicit (Cancel, submit, back).
-                .onFocusChanged { if (it.isFocused) onAddressFocusedChange(true) },
+                .onFocusChanged { focus ->
+                    if (focus.isFocused) {
+                        hadFocus = true
+                        onAddressFocusedChange(true)
+                    } else if (hadFocus) {
+                        // Losing the focus ends the edit; a submit that clears
+                        // the focus itself has loaded the address already.
+                        onAddressFocusedChange(false)
+                    }
+                },
             decorationBox = { innerTextField ->
                 Box(contentAlignment = Alignment.CenterStart) {
                     if (addressText.text.isEmpty()) {

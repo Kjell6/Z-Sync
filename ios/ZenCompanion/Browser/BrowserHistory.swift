@@ -48,7 +48,12 @@ final class BrowserHistoryStore {
         self.fileURL = fileURL
         self.saveDelay = saveDelay
         let decoder = JSONDecoder()
-        visits = (try? Data(contentsOf: fileURL)).flatMap { try? decoder.decode([BrowserVisit].self, from: $0) } ?? []
+        let stored = (try? Data(contentsOf: fileURL)).flatMap { try? decoder.decode([BrowserVisit].self, from: $0) } ?? []
+        // Older builds saved the login a page was opened with: the list is
+        // cleaned before it is shown, and the file is written again below so it
+        // no longer holds the logins either.
+        let cleaned = Self.cleanedHistory(stored)
+        visits = cleaned ?? stored
         // The app may be ended while in the background, before the save is due.
         backgroundObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didEnterBackgroundNotification,
@@ -56,6 +61,10 @@ final class BrowserHistoryStore {
             queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.saveNow() }
+        }
+        if let cleaned {
+            // Nothing waits to be saved here: the loaded list is what goes.
+            write(cleaned)
         }
     }
 
@@ -70,6 +79,36 @@ final class BrowserHistoryStore {
         components.user = nil
         components.password = nil
         return components.url?.absoluteString
+    }
+
+    /// Stored history as it should read, or nil when it already does: every
+    /// address goes through `address(of:)`, so a login an older build saved
+    /// goes, a page that is not one goes, and two entries that end up at the
+    /// same page become one. The caller writes a cleaned list back, so the old
+    /// file loses the logins too.
+    nonisolated static func cleanedHistory(_ visits: [BrowserVisit]) -> [BrowserVisit]? {
+        var cleaned: [BrowserVisit] = []
+        for visit in visits {
+            guard let address = address(of: URL(string: visit.url)) else { continue }
+            guard let at = cleaned.firstIndex(where: { $0.url == address }) else {
+                cleaned.append(
+                    BrowserVisit(url: address, title: visit.title, lastVisited: visit.lastVisited, visits: visit.visits)
+                )
+                continue
+            }
+            let kept = cleaned[at]
+            // The newer of the two names the page, unless it arrived without a title.
+            let visitIsNewer = visit.lastVisited >= kept.lastVisited
+            let newer = visitIsNewer ? visit : kept
+            let older = visitIsNewer ? kept : visit
+            cleaned[at] = BrowserVisit(
+                url: address,
+                title: newer.title.isEmpty ? older.title : newer.title,
+                lastVisited: newer.lastVisited,
+                visits: kept.visits + visit.visits
+            )
+        }
+        return cleaned == visits ? nil : cleaned
     }
 
     func record(_ url: URL?, title: String, at date: Date = Date()) {

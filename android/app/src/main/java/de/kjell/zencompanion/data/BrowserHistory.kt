@@ -79,6 +79,35 @@ internal fun withVisit(
     return (listOf(visit) + visits.filter { it.url != address }).take(limit)
 }
 
+/**
+ * Stored history as it should read, or null when it already does: every address
+ * goes through [historyAddress], so a login an older build saved goes, a page
+ * that is not one goes, and two entries that end up at the same page become one.
+ * The caller writes a cleaned list back, so the old file loses the logins too.
+ */
+internal fun cleanedHistory(visits: List<BrowserVisit>): List<BrowserVisit>? {
+    val cleaned = mutableListOf<BrowserVisit>()
+    visits.forEach { visit ->
+        val address = historyAddress(visit.url) ?: return@forEach
+        val at = cleaned.indexOfFirst { it.url == address }
+        if (at < 0) {
+            cleaned += visit.copy(url = address)
+            return@forEach
+        }
+        val kept = cleaned[at]
+        // The newer of the two names the page, unless it arrived without a title.
+        val visitIsNewer = visit.lastVisited >= kept.lastVisited
+        val newer = if (visitIsNewer) visit else kept
+        val older = if (visitIsNewer) kept else visit
+        cleaned[at] = kept.copy(
+            title = newer.title.ifEmpty { older.title },
+            lastVisited = newer.lastVisited,
+            visits = kept.visits + visit.visits,
+        )
+    }
+    return if (cleaned == visits) null else cleaned
+}
+
 /** [visits] with the page at [address] under its real title, once the page has one. */
 internal fun withVisitTitle(visits: List<BrowserVisit>, address: String, title: String): List<BrowserVisit> {
     if (title.isEmpty() || visits.none { it.url == address && it.title != title }) return visits
@@ -167,13 +196,18 @@ object BrowserHistory {
         file = stored
         scope.launch {
             val saved = runCatching { decode(stored.readText()) }.getOrDefault(emptyList())
+            // Older builds saved the login a page was opened with: the list is
+            // cleaned before it is shown, and the file is written again so it no
+            // longer holds the logins either.
+            val cleaned = cleanedHistory(saved)
             // Locked, because a merge into an empty list can't tell that list
             // from one a sign-out has just emptied.
             synchronized(loadLock) {
                 // A sign-out while this was reading must not bring the list back.
                 if (cleared) return@launch
                 // Anything recorded while this was reading stays on top.
-                _visits.update { (it + saved).distinctBy(BrowserVisit::url).take(MAX_HISTORY_ENTRIES) }
+                _visits.update { (it + (cleaned ?: saved)).distinctBy(BrowserVisit::url).take(MAX_HISTORY_ENTRIES) }
+                if (cleaned != null) write()
             }
         }
     }

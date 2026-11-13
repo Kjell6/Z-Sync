@@ -1,6 +1,21 @@
 import Foundation
 import Observation
 
+/// Which settings belong to a signed-in account. Signed out, the rows that
+/// only describe synced spaces and tabs stay hidden; browsing and layout
+/// choices that work without an account stay where they are.
+struct SettingsAccess: Equatable {
+    let isSignedIn: Bool
+
+    /// The account row shows the email; signed out it shows a sign-in row.
+    var showsAccountEmail: Bool { isSignedIn }
+    var showsSignOut: Bool { isSignedIn }
+    /// "Save shared tabs as" writes into a synced space.
+    var showsSaveKind: Bool { isSignedIn }
+    /// Essentials per row shapes the synced start page.
+    var showsEssentialsColumns: Bool { isSignedIn }
+}
+
 /// Preferences state owner for `SettingsSheet`: search engine and
 /// "always open externally" persistence plus the sign-out intent. The view
 /// keeps only presentation state (confirmation dialog visibility).

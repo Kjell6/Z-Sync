@@ -13,14 +13,24 @@ struct BrowserTabSession: Identifiable {
 /// The whole app: swipe between spaces (pinned tabs + folders per space),
 /// space switcher at the bottom and the action bar (activity, search,
 /// settings) above the essentials grid or below the switcher, per the
-/// user's `ToolbarPlacement`.
+/// user's `ToolbarPlacement`. Signed out the same screen stands: the account's
+/// content is a placeholder skeleton and a card offers sign-in.
 struct SpacesBrowserView: View {
-    let account: AccountSnapshot
-    /// A web link another app handed to Z-Sync before this screen was up,
-    /// waiting through sign-in when it arrived signed out.
+    /// The signed-in account, nil while the reader uses the app without one.
+    let account: AccountSnapshot?
+    /// Why the last session ended, shown in the signed-out card.
+    var sessionNotice: String? = nil
+    /// A web link another app handed to Z-Sync before this screen was up. It
+    /// opens at once, signed in or out.
     var incomingLink: URL? = nil
     /// The link was taken: it opens once, like a tab tapped here.
     var onConsumeIncomingLink: () -> Void = {}
+    /// Starts the existing Mozilla sign-in flow from the signed-out card.
+    var onPresentSignIn: () -> Void = {}
+    /// The sign-in help sheet under the card.
+    var onPresentSignInHelp: () -> Void = {}
+    /// The hidden demo unlock behind the card's app mark and title.
+    var onDemoTap: () -> Void = {}
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.scenePhase) private var scenePhase
@@ -59,16 +69,27 @@ struct SpacesBrowserView: View {
     @State private var pendingStaleReload = false
 
     init(
-        account: AccountSnapshot,
+        account: AccountSnapshot?,
+        sessionNotice: String? = nil,
         incomingLink: URL? = nil,
-        onConsumeIncomingLink: @escaping () -> Void = {}
+        onConsumeIncomingLink: @escaping () -> Void = {},
+        onPresentSignIn: @escaping () -> Void = {},
+        onPresentSignInHelp: @escaping () -> Void = {},
+        onDemoTap: @escaping () -> Void = {}
     ) {
         self.account = account
+        self.sessionNotice = sessionNotice
         self.incomingLink = incomingLink
         self.onConsumeIncomingLink = onConsumeIncomingLink
+        self.onPresentSignIn = onPresentSignIn
+        self.onPresentSignInHelp = onPresentSignInHelp
+        self.onDemoTap = onDemoTap
         _model = State(initialValue: BrowserModel(account: account))
         _whatsNew = State(initialValue: WhatsNewStore())
     }
+
+    private var isSignedIn: Bool { account != nil }
+    private var isDemo: Bool { account?.isDemo == true }
 
     private var effectiveScheme: ColorScheme {
         if let isDark = model.currentTheme?.isDarkTheme {
@@ -92,7 +113,7 @@ struct SpacesBrowserView: View {
                 .ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    if account.isDemo {
+                    if isDemo {
                         Text("demo.banner")
                             .zenFont(12, weight: .medium, design: .rounded)
                             .foregroundStyle(Palette.ink(effectiveScheme).opacity(0.7))
@@ -108,7 +129,9 @@ struct SpacesBrowserView: View {
 
                     let placement = model.toolbarPlacement
 
-                    if model.snapshot.spaces.isEmpty {
+                    if !isSignedIn {
+                        signedOutHome(scheme: effectiveScheme, placement: placement)
+                    } else if model.snapshot.spaces.isEmpty {
                         if placement == .top {
                             actionBar(scheme: effectiveScheme, placement: placement)
                         }
@@ -245,7 +268,7 @@ struct SpacesBrowserView: View {
         // Keyboard from the mini-browser sheet must not lift the space switcher.
         .ignoresSafeArea(.keyboard)
         .overlay(alignment: .top) {
-            if model.showShareTip && !model.snapshot.spaces.isEmpty {
+            if isSignedIn, model.showShareTip, !model.snapshot.spaces.isEmpty {
                 ShareExtensionTip(scheme: scheme) {
                     model.dismissShareTip()
                 }
@@ -262,7 +285,8 @@ struct SpacesBrowserView: View {
                     scheme: scheme,
                     normalTabsCapability: model.snapshot.normalTabsCapability,
                     onToolbarPlacementChange: { model.setToolbarPlacement($0) },
-                    onEssentialsColumnsChange: { model.setEssentialsColumns($0) }
+                    onEssentialsColumnsChange: { model.setEssentialsColumns($0) },
+                    onSignIn: { onPresentSignIn() }
                 )
                 // Single detent on purpose: with `[.fraction(0.85), .large]`
                 // the sheet dropped back to the small detent when a page with
@@ -317,7 +341,13 @@ struct SpacesBrowserView: View {
                     }
                 }
         }
-        .task { await model.initialLoad() }
+        .task(id: model.isSignedIn) { await model.initialLoad() }
+        .onChange(of: account?.uid) { _, _ in
+            // The sign-in sheet can replace the session under this screen.
+            // The browser model and the shared page store follow the account.
+            model.accountChanged(isSignedIn: isSignedIn, isDemo: isDemo)
+            openPages.canSave = isSignedIn
+        }
         .task(id: incomingLink) {
             // A link from another app opens on top of whatever is showing,
             // like a tab tapped here. A sheet that is up makes way first.
@@ -334,7 +364,7 @@ struct SpacesBrowserView: View {
             // question comes first; the notes wait for its answer.
             guard ContentBlocker.shared.asked else { return }
             try? await Task.sleep(for: .milliseconds(450))
-            guard !account.isDemo, activeSheet == nil, whatsNew.shouldPresent else { return }
+            guard !isDemo, activeSheet == nil, whatsNew.shouldPresent else { return }
             whatsNew.markPresented()
             activeSheet = .whatsNew
         }
@@ -387,8 +417,12 @@ struct SpacesBrowserView: View {
 
     private func actionBar(scheme: ColorScheme, placement: ToolbarPlacement) -> some View {
         HStack(spacing: 12) {
-            actionCard(systemName: "archivebox", accessibilityKey: "activity.title", scheme: scheme) {
-                activeSheet = .activity
+            // The activity is the account's synced history, so signed out the
+            // row is search and settings only.
+            if isSignedIn {
+                actionCard(systemName: "archivebox", accessibilityKey: "activity.title", scheme: scheme) {
+                    activeSheet = .activity
+                }
             }
 
             searchPill(scheme: scheme)
@@ -468,7 +502,7 @@ struct SpacesBrowserView: View {
             if pageCount > 0 {
                 // Its own target: the rest of the field still starts a search.
                 Button {
-                    openPages.allowsNormalTabs = model.snapshot.normalTabsCapability.allowsNormalTabs
+                    prepareOpenPages()
                     show(BrowserTabSession(space: model.activeSpace, startsInOverview: true))
                 } label: {
                     PageCountBadge(count: pageCount, side: 26)
@@ -484,6 +518,14 @@ struct SpacesBrowserView: View {
 
     private var openPages: OpenPagesStore { .shared }
     private var pageCount: Int { openPages.pages.count }
+
+    /// Brings the shared page store in line with this session before it opens
+    /// a browser: normal saves follow the synced capability, and saving at all
+    /// follows the account.
+    private func prepareOpenPages() {
+        openPages.allowsNormalTabs = model.snapshot.normalTabsCapability.allowsNormalTabs
+        openPages.canSave = isSignedIn
+    }
 
     private func openTab(_ tab: ZenTab, in space: ZenSpace) {
         guard let url = URL(string: tab.url) else { return }
@@ -501,7 +543,7 @@ struct SpacesBrowserView: View {
     /// Opens the browser as a page. A sheet that is already up has to go
     /// first: SwiftUI will not present a full-screen cover over one.
     private func presentBrowser(url: URL?, title: String?, space: ZenSpace, openedFromSpace: Bool = false) {
-        openPages.allowsNormalTabs = model.snapshot.normalTabsCapability.allowsNormalTabs
+        prepareOpenPages()
         openPages.open(url: url, title: title, openedFromSpace: openedFromSpace)
         show(BrowserTabSession(space: space))
     }
@@ -525,6 +567,7 @@ struct SpacesBrowserView: View {
             space: session.space,
             allSpaces: spaces,
             allowsNormalTabs: model.snapshot.normalTabsCapability.allowsNormalTabs,
+            canSave: isSignedIn,
             startsInOverview: session.startsInOverview,
             onDismiss: { browserSession = nil }
         )
@@ -593,6 +636,267 @@ struct SpacesBrowserView: View {
                 .buttonStyle(PressedButtonStyle())
             }
         }
+    }
+
+    // MARK: - Signed out: the same home with the account's content sketched
+
+    /// The signed-in layout, with the account's content as a skeleton and the
+    /// sign-in card where the space's rows would be. The action bar, the
+    /// search pill and settings stay; the activity (synced history), refresh
+    /// and the space switcher cannot work without an account.
+    @ViewBuilder
+    private func signedOutHome(scheme: ColorScheme, placement: ToolbarPlacement) -> some View {
+        if placement == .top {
+            actionBar(scheme: scheme, placement: placement)
+        }
+
+        SignedOutEssentialsSkeleton(
+            columns: model.essentialsColumns.columnCount(forItemCount: 8),
+            scheme: scheme
+        )
+        // The real grid's place on the screen, with its own air.
+        .padding(.top, 4)
+        .padding(.bottom, 6)
+
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 0) {
+                signInCard(scheme: scheme)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 10)
+                    .padding(.bottom, 18)
+
+                SignedOutTabsSkeleton(scheme: scheme)
+            }
+            .padding(.bottom, 10)
+            .frame(maxWidth: .infinity)
+        }
+
+        SignedOutSpaceSwitcher(scheme: scheme)
+            // Bottom placement stacks the action bar under the switcher, so
+            // the switcher only needs air when it is the last row.
+            .padding(.bottom, placement == .top ? 4 : 0)
+
+        if placement == .bottom {
+            actionBar(scheme: scheme, placement: placement)
+        }
+    }
+
+    /// The prompt in the content area, between the skeleton essentials and the
+    /// skeleton tab rows. The skeleton around it stays visible. The app mark
+    /// and the title keep the hidden demo unlock.
+    private func signInCard(scheme: ColorScheme) -> some View {
+        VStack(spacing: 14) {
+            ZenMark(scheme: scheme, size: 48)
+                .contentShape(Rectangle())
+                .onTapGesture { onDemoTap() }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text("demo.logo_hint"))
+                .accessibilityAddTraits(.isButton)
+
+            VStack(spacing: 6) {
+                Text("signedout.title")
+                    .zenFont(20, weight: .semibold, design: .rounded)
+                    .tracking(-0.2)
+                    .foregroundStyle(Palette.ink(scheme))
+                    .contentShape(Rectangle())
+                    .onTapGesture { onDemoTap() }
+                    .accessibilityAddTraits(.isHeader)
+                Text("signedout.message")
+                    .zenFont(15, design: .rounded)
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.6))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let sessionNotice {
+                Text(sessionNotice)
+                    .zenFont(14, weight: .medium, design: .rounded)
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.75))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        Palette.ink(scheme).opacity(0.06),
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    )
+            }
+
+            Button { onPresentSignIn() } label: {
+                Text("home.sign_in")
+                    .zenFont(17, weight: .semibold, design: .rounded)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 15)
+                    .foregroundStyle(Palette.paper(scheme))
+                    .background(Palette.ink(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            .buttonStyle(PressedButtonStyle())
+
+            HStack(spacing: 18) {
+                Button { onPresentSignInHelp() } label: {
+                    Text("signin.help.link")
+                        .zenFont(13, weight: .medium, design: .rounded)
+                        .foregroundStyle(Palette.ink(scheme).opacity(0.55))
+                }
+                .buttonStyle(PressedButtonStyle())
+
+                Link("legal.privacy", destination: Legal.publicPolicyURL)
+                    .zenFont(13, weight: .medium, design: .rounded)
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.45))
+            }
+            .multilineTextAlignment(.center)
+        }
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 22)
+        .frame(maxWidth: 440)
+        .frame(maxWidth: .infinity)
+        .liftCard(scheme)
+        .tint(Palette.coral(scheme))
+    }
+}
+
+// MARK: - Signed-out placeholders
+
+/// Two rows of rounded tiles where the essentials grid is, drawn with the
+/// grid's own metrics. Decoration: hidden from VoiceOver, never tappable.
+private struct SignedOutEssentialsSkeleton: View {
+    let columns: Int
+    let scheme: ColorScheme
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ForEach(0..<2, id: \.self) { _ in
+                HStack(spacing: 10) {
+                    ForEach(0..<max(1, columns), id: \.self) { _ in
+                        RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous)
+                            .fill(Palette.lift(scheme))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 54)
+                            .glassRim(cornerRadius: Palette.liftCornerRadius)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .skeletonShimmer()
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+}
+
+/// Placeholder rows in the shape of pinned tabs: a favicon-sized square and a
+/// title-sized bar, then a folder-shaped row. Decoration only.
+private struct SignedOutTabsSkeleton: View {
+    let scheme: ColorScheme
+
+    var body: some View {
+        VStack(spacing: 0) {
+            tabRow(titleWidth: 168)
+            tabRow(titleWidth: 112)
+            tabRow(titleWidth: 196)
+            folderRow
+        }
+        .skeletonShimmer()
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+
+    private func tabRow(titleWidth: CGFloat) -> some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Palette.lift(scheme))
+                .frame(width: 28, height: 28)
+                .glassRim(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(Palette.ink(scheme).opacity(0.1))
+                .frame(width: titleWidth, height: 11)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 9)
+    }
+
+    private var folderRow: some View {
+        HStack(spacing: 12) {
+            SkeletonFolderIcon(color: Palette.ink(scheme).opacity(0.1))
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(Palette.ink(scheme).opacity(0.1))
+                .frame(width: 136, height: 12)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 9)
+    }
+}
+
+/// The folder silhouette in low ink: a body with a small tab on its top edge.
+private struct SkeletonFolderIcon: View {
+    let color: Color
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 4, style: .continuous)
+            .fill(color)
+            .frame(width: 28, height: 21)
+            .overlay(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(color)
+                    .frame(width: 12, height: 6)
+                    .offset(x: 3, y: -3)
+            }
+            .frame(width: 28, height: 28, alignment: .bottom)
+    }
+}
+
+/// Two pills where the space switcher is, in its fixed band. They are not
+/// buttons: the switcher is a control that needs an account.
+private struct SignedOutSpaceSwitcher: View {
+    let scheme: ColorScheme
+
+    /// The real switcher's row height, so the dock keeps its place.
+    private let rowHeight: CGFloat = 38
+
+    var body: some View {
+        HStack(spacing: 22) {
+            ForEach(0..<2, id: \.self) { _ in
+                Circle()
+                    .fill(Palette.ink(scheme).opacity(0.1))
+                    .frame(width: 26, height: 26)
+                    .frame(width: 40, height: rowHeight)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: rowHeight)
+        .skeletonShimmer()
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+}
+
+/// A very slow breath on the placeholder shapes. Reduce Motion keeps them
+/// still; the skeletons hide themselves from VoiceOver.
+private struct SkeletonShimmer: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var bright = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(reduceMotion ? 1 : (bright ? 1 : 0.72))
+            .animation(
+                reduceMotion ? nil : .easeInOut(duration: 2.8).repeatForever(autoreverses: true),
+                value: bright
+            )
+            .onAppear {
+                guard !reduceMotion else { return }
+                bright = true
+            }
+    }
+}
+
+private extension View {
+    func skeletonShimmer() -> some View {
+        modifier(SkeletonShimmer())
     }
 }
 

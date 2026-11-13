@@ -170,6 +170,12 @@ final class OpenPagesStore: MiniBrowserPageHost {
         didSet { pages.forEach { $0.model.allowsNormalTabs = allowsNormalTabs } }
     }
 
+    /// Whether saving into a space is offered. Follows the signed-in state:
+    /// signed out, every page's pin control is off.
+    @ObservationIgnored var canSave = true {
+        didSet { pages.forEach { $0.model.canSave = canSave } }
+    }
+
     @ObservationIgnored private let directory: URL
     @ObservationIgnored private let preferences: PreferencesStoring
     @ObservationIgnored private let now: () -> Date
@@ -286,6 +292,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
     private func insert(_ page: OpenPage, after opener: OpenPage?) -> OpenPage {
         page.model.host = self
         page.model.allowsNormalTabs = allowsNormalTabs
+        page.model.canSave = canSave
         if let opener, let index = pages.firstIndex(where: { $0.id == opener.id }) {
             pages.insert(page, at: index + 1)
         } else {

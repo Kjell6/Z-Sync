@@ -223,7 +223,7 @@ final class SessionModelTests: XCTestCase {
 
     // MARK: - Links from other apps
 
-    func testIncomingWebLinkWaitsForSignInAndIsTakenOnce() {
+    func testIncomingWebLinkIsReadyToOpenWhileSignedOut() {
         let model = SessionModel(
             accounts: FakeAccountSession(),
             spaces: FakeSessionSpaces(),
@@ -234,9 +234,24 @@ final class SessionModelTests: XCTestCase {
 
         model.openLinkFromAnotherApp(url)
 
-        // Signed out: the link waits, without touching any account's data.
+        // Signed out the home screen takes the link at once: no account or
+        // cached spaces are involved in opening it.
         XCTAssertNil(model.account)
         XCTAssertEqual(model.pendingOpenURL, url)
+
+        model.consumePendingOpenURL()
+        XCTAssertNil(model.pendingOpenURL)
+    }
+
+    func testIncomingWebLinkStaysReadyThroughSignIn() {
+        let model = SessionModel(
+            accounts: FakeAccountSession(),
+            spaces: FakeSessionSpaces(),
+            preferences: FakePreferences(),
+            haptics: FakeSessionHaptics()
+        )
+        let url = URL(string: "https://example.com/from-another-app")!
+        model.openLinkFromAnotherApp(url)
 
         model.completeSignIn(snapshot())
 

@@ -143,15 +143,21 @@ private val quoteMarks = setOf('"', '\'', '“', '”', '‘', '’')
 private val bracketPairs = mapOf(')' to '(', ']' to '[', '}' to '{', '>' to '<')
 
 /**
- * Drops the leading quotes and brackets, then one trailing mark at a time
- * (iOS `ShareLink.trimmingSurroundingMarks`). A closing bracket only goes
- * while it is unbalanced, so a linked `Function_(mathematics)` keeps its own.
+ * Drops the leading quotes and brackets, then the sentence marks that close
+ * the sentence around the link, then the quotes and unbalanced closing
+ * brackets it is wrapped in (iOS `ShareLink.trimmingSurroundingMarks`). A mark
+ * inside that wrapper stays, since an address may end in one: a quoted
+ * `…?q=wow!` keeps its `!`. A closing bracket only goes while it is
+ * unbalanced, so a linked `Function_(mathematics)` keeps its own.
  */
 internal fun trimSurroundingMarks(text: String): String {
     val characters = text.dropWhile { it in leadingMarks }.toMutableList()
+    while (characters.lastOrNull()?.let { it in sentenceMarks } == true) {
+        characters.removeAt(characters.lastIndex)
+    }
     while (true) {
         val last = characters.lastOrNull() ?: break
-        if (last in sentenceMarks || last in quoteMarks) {
+        if (last in quoteMarks) {
             characters.removeAt(characters.lastIndex)
             continue
         }

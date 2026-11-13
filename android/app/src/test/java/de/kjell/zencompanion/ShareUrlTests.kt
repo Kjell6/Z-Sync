@@ -55,6 +55,16 @@ class ShareUrlTests {
         assertEquals("https://example.com/path/", sharedLink("https://example.com/path/"))
     }
 
+    /** A mark the sentence added inside its quotes is the address's own. */
+    @Test
+    fun quotedLinkKeepsItsOwnMark() {
+        assertEquals(
+            "https://example.com/search?q=wow!",
+            sharedLink("he said \"https://example.com/search?q=wow!\""),
+        )
+        assertEquals("https://example.com/search?q=wow!", sharedLink("\"https://example.com/search?q=wow!\""))
+    }
+
     @Test
     fun firstOfSeveralLinksWins() {
         assertEquals(

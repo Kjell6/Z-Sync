@@ -453,7 +453,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
     }
 
     /// Bottom row, trailing edge first for the thumb: Pin sits on the right.
-    /// Left to right: Find, Share, Open, Pin.
+    /// Left to right: Find, Print, Share, Open, Pin.
     private var actionRow: some View {
         HStack(spacing: 8) {
             tile(
@@ -463,6 +463,18 @@ struct MiniBrowserChrome<NavBar: View>: View {
             ) {
                 withAnimation(motion) {
                     model.presentFindOnPage()
+                }
+            }
+            tile(
+                systemName: "printer",
+                title: "browser.print",
+                accessibility: "browser.print",
+                // Nothing to print without a page, under the error panel or
+                // with the reader lifted out of it.
+                enabled: model.canPrint
+            ) {
+                withAnimation(motion) {
+                    model.presentPrint()
                 }
             }
             shareTile

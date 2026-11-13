@@ -207,6 +207,27 @@ final class MiniBrowserModelTests: XCTestCase {
         XCTAssertEqual(UIPasteboard.general.url, url)
     }
 
+    func testPrintNeedsAPageAndNamesTheJobAfterThePage() {
+        let (model, _) = makeModel(initialURL: nil)
+        XCTAssertFalse(model.canPrint)
+        XCTAssertEqual(
+            MiniBrowserModel.printJobName(title: "  ", url: URL(string: "https://example.com/x")!),
+            "example.com"
+        )
+        XCTAssertEqual(
+            MiniBrowserModel.printJobName(title: " Example ", url: URL(string: "https://example.com/x")!),
+            "Example"
+        )
+        XCTAssertEqual(MiniBrowserModel.printJobName(title: "", url: nil), "")
+
+        let page = URL(string: "https://example.com/x")!
+        model.currentURL = page
+        XCTAssertTrue(model.canPrint)
+        // The error panel covers the page: nothing to print.
+        model.loadDidFail(loadError(NSURLErrorCannotFindHost, failing: page))
+        XCTAssertFalse(model.canPrint)
+    }
+
     func testPageHostUsesDisplayText() {
         let (model, _) = makeModel(initialURL: nil)
         XCTAssertEqual(model.pageHost, "")
@@ -579,6 +600,31 @@ final class MiniBrowserModelTests: XCTestCase {
         model.pageDidCommit()
         model.reload()
         XCTAssertEqual(webView.reloads, 1)
+    }
+
+    func testAReloadKeepsTheReadersPlaceButAPullStartsAtTheTop() {
+        let (model, _) = makeModel(initialURL: nil)
+        let webView = FakeWebView(
+            frame: CGRect(x: 0, y: 0, width: 320, height: 600),
+            configuration: WKWebViewConfiguration()
+        )
+        webView.scrollView.contentSize = CGSize(width: 320, height: 4_000)
+        model.webView = webView
+
+        // The bar's reload puts the reader back where they were.
+        webView.scrollView.contentOffset = CGPoint(x: 0, y: 800)
+        model.reload()
+        webView.scrollView.contentOffset = .zero
+        webView.scrollView.contentSize = CGSize(width: 320, height: 4_000)
+        model.restoreScrollAfterReload()
+        XCTAssertEqual(webView.scrollView.contentOffset.y, 800)
+
+        // A pull starts at the top, so there is no place to restore.
+        webView.scrollView.contentOffset = CGPoint(x: 0, y: -60)
+        model.reload(fromTop: true)
+        webView.scrollView.contentOffset = CGPoint(x: 0, y: 250)
+        model.restoreScrollAfterReload()
+        XCTAssertEqual(webView.scrollView.contentOffset.y, 250)
     }
 
     func testCrashKeepsThePageAddressAndReloadsIt() {

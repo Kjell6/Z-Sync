@@ -32,6 +32,8 @@ import de.kjell.zencompanion.sync.SpacesSyncService
 import de.kjell.zencompanion.sync.SyncError
 import de.kjell.zencompanion.sync.SyncedActivityService
 import de.kjell.zencompanion.sync.ZenSpaces
+import de.kjell.zencompanion.ui.browser.BrowserPages
+import de.kjell.zencompanion.ui.screens.FxAWeb
 import de.kjell.zencompanion.ui.screens.FxAWebLogin
 import de.kjell.zencompanion.util.FriendlyError
 import java.util.UUID
@@ -465,6 +467,12 @@ class AppViewModel(
         // Here and not in the Settings button: a session that dies signs out too.
         SitePermissions.clear()
         BrowserHistory.clear()
+        // The open pages go with the sign-in here, as they do on iOS: without
+        // this a dead session would leave them for the next account. Best
+        // effort, so callers without a real app directory stay unaffected.
+        runCatching { BrowserPages.shared(appContext, browserRepository).closeAll() }
+        // The sign-in page's cookies too: the next sign-in must not reuse it.
+        runCatching { FxAWeb.wipeWebSession() }
         preferencesRepository.setSyncSetupHintDismissed(false)
         _browser.value = BrowserState()
         _activity.value = ActivityState()

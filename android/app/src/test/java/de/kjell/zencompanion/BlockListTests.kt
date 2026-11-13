@@ -101,6 +101,8 @@ class BlockListTests {
         assertFalse(BlockList.isSameSite("one.co.uk", "two.co.uk"))
         assertTrue(BlockList.isSameSite("a.example.com.au", "b.example.com.au"))
         assertFalse(BlockList.isSameSite("one.com.au", "two.com.au"))
+        assertTrue(BlockList.isSameSite("a.example.id.au", "b.example.id.au"))
+        assertFalse(BlockList.isSameSite("one.id.au", "two.id.au"))
     }
 
     @Test

@@ -438,6 +438,28 @@ final class ShareModelTests: XCTestCase {
         )
     }
 
+    /// A mark the sentence added inside its quotes is the address's own.
+    func testSharedLinkInQuotesKeepsItsOwnMark() {
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(
+                from: "he said \"https://example.com/search?q=wow!\"" as NSString
+            ),
+            URL(string: "https://example.com/search?q=wow!")
+        )
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(from: "\"https://example.com/search?q=wow!\"" as NSString),
+            URL(string: "https://example.com/search?q=wow!")
+        )
+    }
+
+    /// A Unicode domain has a host, so iOS keeps the link too; Foundation
+    /// stores the domain in its punycode form.
+    func testSharedLinkWithUnicodeDomainIsAccepted() {
+        let url = ZenCompanion.ShareLink.httpURL(from: "https://bücher.example/a" as NSString)
+        XCTAssertEqual(url?.path, "/a")
+        XCTAssertFalse(url?.host?.isEmpty ?? true)
+    }
+
     func testHeadlineTitlePrefersPageTitleThenHost() {
         let url = URL(string: "https://pin.example/page")!
         XCTAssertEqual(ZenCompanion.ShareLink.headlineTitle(pageTitle: "Pinned Page", url: url), "Pinned Page")

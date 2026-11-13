@@ -128,8 +128,21 @@ internal fun sharedLink(text: String): String? {
 internal fun linkCandidate(text: String): String? {
     val bare = trimSurroundingMarks(text.trim())
     if (bare.isEmpty() || !looksLikeHttpUrl(bare)) return null
-    val host = runCatching { java.net.URI(bare).host }.getOrNull()
-    return if (host.isNullOrEmpty()) null else bare
+    return if (hostOf(bare).isNullOrEmpty()) null else bare
+}
+
+/**
+ * The address's host, or null. `java.net.URI` only knows ASCII domain labels,
+ * so a Unicode domain has no host until it is checked in the punycode form
+ * `IDN` makes of it; the address itself is still returned as it was shared
+ * (iOS's Foundation rewrites the domain to punycode on its own).
+ */
+private fun hostOf(text: String): String? {
+    val uri = runCatching { java.net.URI(text) }.getOrNull() ?: return null
+    if (!uri.host.isNullOrEmpty()) return uri.host
+    val authority = uri.rawAuthority ?: return null
+    val host = authority.substringAfterLast('@').substringBeforeLast(':')
+    return runCatching { java.net.IDN.toASCII(host) }.getOrNull()?.takeIf { it.isNotEmpty() }
 }
 
 /** Marks a sentence puts before a link; they never belong to its address. */
@@ -143,15 +156,21 @@ private val quoteMarks = setOf('"', '\'', '“', '”', '‘', '’')
 private val bracketPairs = mapOf(')' to '(', ']' to '[', '}' to '{', '>' to '<')
 
 /**
- * Drops the leading quotes and brackets, then one trailing mark at a time
- * (iOS `ShareLink.trimmingSurroundingMarks`). A closing bracket only goes
- * while it is unbalanced, so a linked `Function_(mathematics)` keeps its own.
+ * Drops the leading quotes and brackets, then the sentence marks that close
+ * the sentence around the link, then the quotes and unbalanced closing
+ * brackets it is wrapped in (iOS `ShareLink.trimmingSurroundingMarks`). A mark
+ * inside that wrapper stays, since an address may end in one: a quoted
+ * `…?q=wow!` keeps its `!`. A closing bracket only goes while it is
+ * unbalanced, so a linked `Function_(mathematics)` keeps its own.
  */
 internal fun trimSurroundingMarks(text: String): String {
     val characters = text.dropWhile { it in leadingMarks }.toMutableList()
+    while (characters.lastOrNull()?.let { it in sentenceMarks } == true) {
+        characters.removeAt(characters.lastIndex)
+    }
     while (true) {
         val last = characters.lastOrNull() ?: break
-        if (last in sentenceMarks || last in quoteMarks) {
+        if (last in quoteMarks) {
             characters.removeAt(characters.lastIndex)
             continue
         }

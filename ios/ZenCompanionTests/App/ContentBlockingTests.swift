@@ -91,6 +91,8 @@ final class BlockListTests: XCTestCase {
         XCTAssertFalse(BlockList.isSameSite("one.co.uk", "two.co.uk"))
         XCTAssertTrue(BlockList.isSameSite("a.example.com.au", "b.example.com.au"))
         XCTAssertFalse(BlockList.isSameSite("one.com.au", "two.com.au"))
+        XCTAssertTrue(BlockList.isSameSite("a.example.id.au", "b.example.id.au"))
+        XCTAssertFalse(BlockList.isSameSite("one.id.au", "two.id.au"))
     }
 
     func testRuleListJSONIsValidAndOrdered() throws {

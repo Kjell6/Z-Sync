@@ -10,13 +10,12 @@ final class SessionModel {
     var saveError: String?
     var showMozilla = false
     var showSignInHelp = false
-    /// Explains an automatic sign-out on the landing screen (e.g. the Mozilla
-    /// account password changed on another device).
+    /// Explains an automatic sign-out in the signed-out home's sign-in card
+    /// (e.g. the Mozilla account password changed on another device).
     var sessionNotice: String?
-    /// A web link another app handed over. It waits here while signed out —
-    /// the reader chose this app for the link — and the spaces screen takes it
-    /// once, right after sign-in. If that never happens in this launch, the
-    /// app being left ends it with the model.
+    /// A web link another app handed over. The home screen takes it once,
+    /// signed in or out, so the link opens even without an account. If that
+    /// never happens in this launch, the app being left ends it with the model.
     var pendingOpenURL: URL?
 
     private var demoTapCount = 0
@@ -56,7 +55,7 @@ final class SessionModel {
     }
 
     /// The stored session was rejected by the server: sign out and explain
-    /// why on the landing screen. Temporary sync failures never come here.
+    /// why in the signed-out card. Temporary sync failures never come here.
     func sessionExpired() {
         guard let account, !account.isDemo else { return }
         signerOut.signOut()

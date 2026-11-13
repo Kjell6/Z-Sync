@@ -10,6 +10,14 @@ struct BrowserTabSession: Identifiable {
     var startsInOverview = false
 }
 
+/// What the incoming-link task waits for: the link itself, and the answer to
+/// the content-blocking question. That question is a full-screen cover of its
+/// own, so the link has to wait for it rather than open behind it.
+private struct IncomingLinkRequest: Equatable {
+    let link: URL?
+    let blockerAsked: Bool
+}
+
 /// The whole app: swipe between spaces (pinned tabs + folders per space),
 /// space switcher at the bottom and the action bar (activity, search,
 /// settings) above the essentials grid or below the switcher, per the
@@ -57,6 +65,9 @@ struct SpacesBrowserView: View {
     /// A pin inside the mini-browser (or a delete from it) fired while a sheet
     /// was up; refresh once the last sheet is gone.
     @State private var pendingStaleReload = false
+    /// The content-blocking question was still up when the link arrived: the
+    /// browser waits for its cover to be gone before it takes the screen.
+    @State private var incomingLinkWaitsForBlocker = false
 
     init(
         account: AccountSnapshot,
@@ -318,12 +329,8 @@ struct SpacesBrowserView: View {
                 }
         }
         .task { await model.initialLoad() }
-        .task(id: incomingLink) {
-            // A link from another app opens on top of whatever is showing,
-            // like a tab tapped here. A sheet that is up makes way first.
-            guard let url = incomingLink else { return }
-            onConsumeIncomingLink()
-            presentBrowser(url: url, title: nil, space: model.activeSpace)
+        .task(id: IncomingLinkRequest(link: incomingLink, blockerAsked: ContentBlocker.shared.asked)) {
+            await takeIncomingLink()
         }
         .task(id: ContentBlocker.shared.asked) {
             // Show release notes once per app version, after the first frame
@@ -498,6 +505,29 @@ struct SpacesBrowserView: View {
         presentBrowser(url: nil, title: nil, space: space)
     }
 
+    /// Opens the link another app handed over, exactly once. The task above
+    /// runs again when the content-blocking question is answered, because that
+    /// question is a full-screen cover: the link waits in the model for its
+    /// answer instead of opening behind it or being lost with it.
+    private func takeIncomingLink() async {
+        guard let url = incomingLink else {
+            incomingLinkWaitsForBlocker = false
+            return
+        }
+        guard ContentBlocker.shared.asked else {
+            incomingLinkWaitsForBlocker = true
+            return
+        }
+        if incomingLinkWaitsForBlocker {
+            incomingLinkWaitsForBlocker = false
+            // The cover has to start going before the browser can take the
+            // screen, like a sheet in `show()`. A newer link cancels this task.
+            do { try await Task.sleep(nanoseconds: 250_000_000) } catch { return }
+        }
+        onConsumeIncomingLink()
+        presentBrowser(url: url, title: nil, space: model.activeSpace)
+    }
+
     /// Opens the browser as a page. A sheet that is already up has to go
     /// first: SwiftUI will not present a full-screen cover over one.
     private func presentBrowser(url: URL?, title: String?, space: ZenSpace, openedFromSpace: Bool = false) {
@@ -528,6 +558,10 @@ struct SpacesBrowserView: View {
             startsInOverview: session.startsInOverview,
             onDismiss: { browserSession = nil }
         )
+        // Keyed by the launch: a link that arrives while the browser is up
+        // starts its own browser, not the last one with its overview or
+        // history still over the new page.
+        .id(session.id)
     }
 
     // MARK: States (shown until the first successful sync)

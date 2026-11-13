@@ -25,8 +25,8 @@ final class WebKeyboardAccessory: UIView {
         bar.clipsToBounds = true
         addSubview(bar)
 
-        let previous = button(systemName: "chevron.up", label: "browser.find_previous", action: #selector(focusPreviousField))
-        let next = button(systemName: "chevron.down", label: "browser.find_next", action: #selector(focusNextField))
+        let previous = button(systemName: "chevron.up", label: "browser.field_previous", action: #selector(focusPreviousField))
+        let next = button(systemName: "chevron.down", label: "browser.field_next", action: #selector(focusNextField))
         let done = button(systemName: "checkmark", label: "common.done", action: #selector(finishEditing))
 
         let spacer = UIView()

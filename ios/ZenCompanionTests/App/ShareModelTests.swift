@@ -370,6 +370,35 @@ final class ShareModelTests: XCTestCase {
         )
     }
 
+    func testSharedTextKeepsALinkInTheMiddle() {
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(from: "look at this https://example.com/a nice" as NSString),
+            URL(string: "https://example.com/a")
+        )
+    }
+
+    func testSharedTextTakesTheFirstOfTwoLinks() {
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(
+                from: "https://first.example/a and https://second.example/b" as NSString
+            ),
+            URL(string: "https://first.example/a")
+        )
+    }
+
+    func testSharedTextWithoutALinkHasNone() {
+        XCTAssertNil(ZenCompanion.ShareLink.httpURL(from: "nothing to see here" as NSString))
+        XCTAssertNil(ZenCompanion.ShareLink.httpURL(from: "write to hi@example.com" as NSString))
+        XCTAssertNil(ZenCompanion.ShareLink.httpURL(from: "file:///tmp/x" as NSString))
+    }
+
+    func testSharedLinkEndingASentenceOrSittingInBrackets() {
+        let fullStop = ZenCompanion.ShareLink.httpURL(from: "read https://example.com/a. now" as NSString)
+        XCTAssertEqual(fullStop?.host, "example.com")
+        let bracket = ZenCompanion.ShareLink.httpURL(from: "read (https://example.com/b) now" as NSString)
+        XCTAssertEqual(bracket, URL(string: "https://example.com/b"))
+    }
+
     func testHeadlineTitlePrefersPageTitleThenHost() {
         let url = URL(string: "https://pin.example/page")!
         XCTAssertEqual(ZenCompanion.ShareLink.headlineTitle(pageTitle: "Pinned Page", url: url), "Pinned Page")

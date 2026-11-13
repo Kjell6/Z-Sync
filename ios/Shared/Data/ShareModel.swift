@@ -87,19 +87,42 @@ enum ShareLink {
 
     static func httpURL(from item: NSSecureCoding?) -> URL? {
         if let url = item as? URL { return httpURL(from: url) }
-        if let text = item as? String,
-           let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)) {
-            return httpURL(from: url)
-        }
-        if let text = item as? NSString,
-           let url = URL(string: (text as String).trimmingCharacters(in: .whitespacesAndNewlines)) {
-            return httpURL(from: url)
-        }
+        if let text = item as? String { return link(in: text) }
+        if let text = item as? NSString { return link(in: text as String) }
         if let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) {
             return httpURL(from: url)
         }
         return nil
     }
+
+    /// Android `ShareActivity.extractShared` checks the whole text first and
+    /// then each word, so a share like "look at this https://…" keeps its
+    /// link. Only a text without inner whitespace can be one address.
+    private static func link(in text: String) -> URL? {
+        if !text.contains(where: { $0.isWhitespace }), let url = candidate(text) {
+            return url
+        }
+        for word in text.split(whereSeparator: { $0.isWhitespace }) {
+            if let url = candidate(String(word)) { return url }
+        }
+        return nil
+    }
+
+    /// One candidate word or the whole text, as it stands and then without
+    /// the quotes or sentence marks around a link, which are never part of
+    /// its address. Only http(s) survives.
+    private static func candidate(_ text: String) -> URL? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let url = URL(string: trimmed), let http = httpURL(from: url) { return http }
+        let bare = trimmed.trimmingCharacters(in: surroundingMarks)
+        guard bare != trimmed, let url = URL(string: bare) else { return nil }
+        return httpURL(from: url)
+    }
+
+    /// Marks a sentence, a quote or a bracket puts around a link.
+    private static let surroundingMarks = CharacterSet(
+        charactersIn: "\"'()[]{}<>.,;:!?…“”‘’"
+    )
 
     static func headlineTitle(pageTitle: String, url: URL?) -> String {
         PageTitle.headline(pageTitle, url: url)

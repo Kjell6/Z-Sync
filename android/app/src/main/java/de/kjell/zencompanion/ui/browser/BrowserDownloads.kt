@@ -44,6 +44,27 @@ internal fun safeDownloadName(suggested: String?, fallback: String = "download")
 internal fun nameWithExtension(name: String, extension: String?): String =
     if (extension.isNullOrEmpty() || name.substringAfterLast('.', "").isNotEmpty()) name else "$name.$extension"
 
+/** The name the system's downloader gives a web file. */
+internal fun webDownloadName(download: BrowserDownload): String = safeDownloadName(
+    URLUtil.guessFileName(download.url, download.contentDisposition, download.mimeType),
+)
+
+/**
+ * The name a download is asked about. A web file is named as the downloader
+ * will name it; a page-local one names itself only once the page reads it, so
+ * its type is the best there is to go on.
+ */
+internal fun announcedDownloadName(download: BrowserDownload): String {
+    if (isWebDownload(download.url)) return webDownloadName(download)
+    val extension = download.mimeType
+        ?.takeIf { it.isNotEmpty() }
+        ?.let { MimeTypeMap.getSingleton().getExtensionFromMimeType(it) }
+    return nameWithExtension(PAGE_LOCAL_NAME, extension)
+}
+
+/** What a page-local file is called until its page gives it a real name. */
+private const val PAGE_LOCAL_NAME = "download"
+
 /** True for addresses only the page itself can read. */
 internal fun isPageLocalDownload(url: String): Boolean {
     val scheme = url.substringBefore(':', "").lowercase()
@@ -108,9 +129,7 @@ private fun probeDownload(url: String, userAgent: String?): Pair<Int, String?> {
  * Blocks on the network; call it off the main thread.
  */
 internal fun enqueueWebDownload(context: Context, download: BrowserDownload): Boolean = runCatching {
-    val name = safeDownloadName(
-        URLUtil.guessFileName(download.url, download.contentDisposition, download.mimeType),
-    )
+    val name = webDownloadName(download)
     val target = resolveDownloadUrl(download.url) { probeDownload(it, download.userAgent) }
     val request = DownloadManager.Request(Uri.parse(target ?: download.url))
         .setTitle(name)

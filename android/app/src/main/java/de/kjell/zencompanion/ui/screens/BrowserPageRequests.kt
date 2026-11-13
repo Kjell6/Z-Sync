@@ -16,7 +16,6 @@ import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.widget.FrameLayout
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.ActivityResult
@@ -57,9 +56,11 @@ import de.kjell.zencompanion.ui.browser.BrowserPrompt
 import de.kjell.zencompanion.ui.browser.PAGE_FILE_BRIDGE
 import de.kjell.zencompanion.ui.browser.PageFileBridge
 import de.kjell.zencompanion.ui.browser.PageSession
+import de.kjell.zencompanion.ui.browser.announcedDownloadName
 import de.kjell.zencompanion.ui.browser.enqueueWebDownload
 import de.kjell.zencompanion.ui.browser.isPageLocalDownload
 import de.kjell.zencompanion.ui.browser.isWebDownload
+import de.kjell.zencompanion.ui.browser.pageAlreadyAsks
 import de.kjell.zencompanion.ui.browser.pageFileScript
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -71,7 +72,10 @@ import kotlinx.coroutines.withContext
 internal interface PageRequests {
     fun askPermission(kinds: List<SitePermission>, host: String, done: (Boolean) -> Unit)
     fun httpLogin(prompt: BrowserPrompt.HttpLogin)
+    /** Saves the file at once: the reader picked it themselves. */
     fun download(view: WebView, download: BrowserDownload)
+    /** Asks the reader first, the way a page's own download does. */
+    fun askDownload(view: WebView, download: BrowserDownload)
     fun installPageFileBridge(view: WebView)
     fun chooseFiles(callback: ValueCallback<Array<Uri>>, params: WebChromeClient.FileChooserParams): Boolean
     fun showFullscreen(view: View, callback: WebChromeClient.CustomViewCallback)
@@ -79,7 +83,7 @@ internal interface PageRequests {
 }
 
 /** The Activity under a Compose context, for the system's own screens. */
-private fun Context.activity(): Activity? = when (this) {
+internal fun Context.activity(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.activity()
     else -> null
@@ -186,7 +190,21 @@ internal class BrowserPageRequests(
         permissions.launch(missing.flatMap { it.systemPermissions }.toTypedArray())
     }
 
-    fun forSession(session: PageSession): PageRequests = object : PageRequests {
+    /**
+     * One page's requests. Kept per page: the page-local file bridge installed
+     * on its WebView must be the one that later hands out the file's token.
+     */
+    private val sessionRequests = HashMap<String, PageRequests>()
+
+    fun forSession(session: PageSession): PageRequests {
+        // A closed page takes its requests with it, and its file bridge too, so
+        // this stays as small as the pages that are open.
+        val open = pages.store.pages.value.mapTo(HashSet()) { it.id }
+        sessionRequests.keys.retainAll(open)
+        return sessionRequests.getOrPut(session.id) { requestsFor(session) }
+    }
+
+    private fun requestsFor(session: PageSession): PageRequests = object : PageRequests {
         private val pageFiles = PageFileBridge(context) { saved ->
             session.webView?.post {
                 session.viewModel.onDownloadFinished(saved)
@@ -250,6 +268,20 @@ internal class BrowserPageRequests(
             save(view, download)
         }
 
+        override fun askDownload(view: WebView, download: BrowserDownload) {
+            // The same file twice while the first question is open asks once.
+            if (pageAlreadyAsks(session.prompts, download.url)) return
+            session.prompts += BrowserPrompt.Download(
+                url = download.url,
+                fileName = announcedDownloadName(download),
+                host = pageHost(view.url.orEmpty()).orEmpty(),
+                // The page is going: the file is dropped along with it.
+                onDismiss = {},
+            ) { confirmed ->
+                if (confirmed) download(view, download) else cancelDownload(view, download)
+            }
+        }
+
         private fun save(view: WebView, download: BrowserDownload) {
             when {
                 isWebDownload(download.url) -> downloads.launch {
@@ -260,7 +292,16 @@ internal class BrowserPageRequests(
                     view.evaluateJavascript(pageFileScript(download.url, pageFiles.expect()), null)
                 else -> return
             }
-            // A link that opened a window only for its file leaves nothing to show.
+            closeFileWindow(view, download)
+        }
+
+        /** The reader said no: nothing is written, and a window opened only for its file still goes. */
+        private fun cancelDownload(view: WebView, download: BrowserDownload) {
+            closeFileWindow(view, download)
+        }
+
+        /** A link that opened a window only for its file leaves nothing to show. */
+        private fun closeFileWindow(view: WebView, download: BrowserDownload) {
             val current = view.url
             val blank = current.isNullOrEmpty() || current == "about:blank"
             if (blank && !view.canGoBack() && pages.canReturnToOpener(session.id) && isWebDownload(download.url)) {
@@ -351,7 +392,6 @@ internal fun rememberBrowserPageRequests(pages: BrowserPages): BrowserPageReques
     val requests = remember(pages) {
         BrowserPageRequests(context, pages, permissions, files).also { holder = it }
     }
-    BackHandler(enabled = requests.isFullscreen) { requests.exitFullscreen() }
     DisposableEffect(requests) {
         onDispose { requests.endFullscreen() }
     }
@@ -365,10 +405,35 @@ internal fun BrowserPromptDialogs(session: PageSession?, requests: BrowserPageRe
     when (prompt) {
         is BrowserPrompt.Permission -> PermissionDialog(prompt) { session.prompts.remove(prompt) }
         is BrowserPrompt.HttpLogin -> HttpLoginDialog(prompt) { session.prompts.remove(prompt) }
+        is BrowserPrompt.Download -> DownloadDialog(prompt) { session.prompts.remove(prompt) }
         null -> requests.systemAccessOff?.let { kinds ->
             SystemAccessOffDialog(kinds) { requests.systemAccessOff = null }
         }
     }
+}
+
+/** A file a page wants to save: the reader names the file before it starts. */
+@Composable
+private fun DownloadDialog(prompt: BrowserPrompt.Download, onClose: () -> Unit) {
+    val site = prompt.host.ifEmpty { stringResource(R.string.browser_dialog_this_page) }
+    AlertDialog(
+        // Tapping outside is no answer: the file waits for a real one.
+        onDismissRequest = {},
+        title = { Text(stringResource(R.string.browser_download_question, prompt.fileName)) },
+        text = { Text(stringResource(R.string.browser_download_from, site)) },
+        confirmButton = {
+            TextButton(onClick = {
+                onClose()
+                prompt.send(true)
+            }) { Text(stringResource(R.string.browser_download_confirm)) }
+        },
+        dismissButton = {
+            TextButton(onClick = {
+                onClose()
+                prompt.send(false)
+            }) { Text(stringResource(R.string.common_cancel)) }
+        },
+    )
 }
 
 @Composable

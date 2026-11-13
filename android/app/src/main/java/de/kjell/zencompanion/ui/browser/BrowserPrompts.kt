@@ -51,7 +51,41 @@ sealed class BrowserPrompt {
             cancel()
         }
     }
+
+    /**
+     * A download a page started: the reader hears what the file is before it
+     * begins. An address already being asked about asks nothing more.
+     */
+    class Download(
+        /** The file's address, so the same file is not asked about twice. */
+        val url: String,
+        /** The name the file would be saved under. */
+        val fileName: String,
+        /** The host of the page that started it, or empty when it has none. */
+        val host: String,
+        /** The page went away: the file is dropped and nothing is left to close. */
+        private val onDismiss: () -> Unit,
+        private val answer: (Boolean) -> Unit,
+    ) : BrowserPrompt() {
+        private var answered = false
+
+        fun send(confirmed: Boolean) {
+            if (answered) return
+            answered = true
+            answer(confirmed)
+        }
+
+        override fun dismiss() {
+            if (answered) return
+            answered = true
+            onDismiss()
+        }
+    }
 }
+
+/** True when this page is still asking about this very file. */
+internal fun pageAlreadyAsks(prompts: List<BrowserPrompt>, url: String): Boolean =
+    prompts.any { it is BrowserPrompt.Download && it.url == url }
 
 /** The site kinds behind a WebView request. Anything else stays refused. */
 fun sitePermissionsFor(resources: Array<String>): List<SitePermission> = buildList {

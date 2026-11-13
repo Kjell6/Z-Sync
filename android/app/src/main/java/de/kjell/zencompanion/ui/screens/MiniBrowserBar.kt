@@ -63,6 +63,7 @@ import androidx.compose.material.icons.outlined.Laptop
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Restore
@@ -262,6 +263,9 @@ internal fun MiniBrowserBar(
     onSubmitAddress: (String) -> Unit,
     /** False while a page error covers the page: there is nothing to pin. */
     canPin: Boolean = true,
+    /** False while no page is showing, or the reader covers it. */
+    canPrint: Boolean,
+    onPrint: () -> Unit,
     onPickSuggestion: (String) -> Unit,
     onPickVisit: (BrowserVisit) -> Unit,
     onBack: () -> Unit,
@@ -334,6 +338,8 @@ internal fun MiniBrowserBar(
                             canKeep = canKeep,
                             onToggleKeep = onToggleKeep,
                             canPin = canPin,
+                            canPrint = canPrint,
+                            onPrint = onPrint,
                             barColor = barColor,
                             onCopyLink = onCopyLink,
                             onFind = onFind,
@@ -1131,6 +1137,8 @@ private fun ExpandedMenu(
     canKeep: Boolean,
     onToggleKeep: () -> Unit,
     canPin: Boolean,
+    canPrint: Boolean,
+    onPrint: () -> Unit,
     barColor: Color,
     onCopyLink: () -> Unit,
     onFind: () -> Unit,
@@ -1291,6 +1299,15 @@ private fun ExpandedMenu(
                 tint = zen.ink,
                 background = barColor,
                 onClick = onFind,
+            )
+            MenuTile(
+                icon = Icons.Outlined.Print,
+                title = stringResource(R.string.browser_print),
+                description = stringResource(R.string.browser_print),
+                tint = if (canPrint) zen.ink else zen.ink.copy(alpha = 0.38f),
+                background = barColor,
+                onClick = onPrint,
+                enabled = canPrint,
             )
             MenuTile(
                 icon = Icons.Outlined.Share,

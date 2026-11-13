@@ -209,6 +209,9 @@
     <string name="browser_keep_page">Keep Page</string>
     <string name="browser_kept">Kept</string>
     <string name="browser_open_in_new_page">Open in New Page</string>
+    <string name="browser_image_save">Save Image</string>
+    <string name="browser_image_open">Open Image in New Page</string>
+    <string name="browser_image_copy">Copy Image Address</string>
     <string name="kept_new_page">New Page</string>
     <string name="kept_close_all">Close All</string>
     <string name="kept_close_all_title">Close all pages?</string>
@@ -234,6 +237,7 @@
     <string name="browser_find_on_page">Find on page</string>
     <string name="browser_find_next">Next</string>
     <string name="browser_find_previous">Previous</string>
+    <string name="browser_print">Print</string>
     <string name="browser_share">Share</string>
     <string name="browser_open_short">Open</string>
     <string name="browser_pin_short">Pin</string>
@@ -297,6 +301,9 @@
     <string name="browser_download_started">Downloading to your Downloads folder</string>
     <string name="browser_download_finished">Saved to your Downloads folder</string>
     <string name="browser_download_failed">The download failed</string>
+    <string name="browser_download_question">Download %1$s?</string>
+    <string name="browser_download_from">From %1$s</string>
+    <string name="browser_download_confirm">Download</string>
     <string name="site_permission_camera">Camera</string>
     <string name="site_permission_microphone">Microphone</string>
     <string name="site_permission_location">Location</string>

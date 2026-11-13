@@ -554,7 +554,11 @@ class MiniBrowserViewModelTests {
     fun aReaderAnswerForThePageOnScreenOpensTheReader() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = newViewModel()
         val payload = CompletableDeferred<String?>()
-        vm.readerPayload = { payload.await() }
+        var requests = 0
+        vm.readerPayload = {
+            requests++
+            payload.await()
+        }
 
         vm.toggleReader()
         assertTrue(vm.state.value.readerLoading)
@@ -562,7 +566,9 @@ class MiniBrowserViewModelTests {
         payload.complete("""{"title":"Old page","blocks":[{"kind":"p","text":"Body"}]}""")
         runCurrent()
 
+        assertEquals(1, requests)
         assertEquals("Old page", vm.state.value.readerArticle?.title)
+        assertEquals("Body", vm.state.value.readerArticle?.blocks?.single()?.text)
         assertFalse(vm.state.value.readerLoading)
     }
 
@@ -570,7 +576,11 @@ class MiniBrowserViewModelTests {
     fun aReaderAnswerForAnOldPageIsDropped() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = newViewModel(initialUrl = "https://start.example/")
         val payload = CompletableDeferred<String?>()
-        vm.readerPayload = { payload.await() }
+        var requests = 0
+        vm.readerPayload = {
+            requests++
+            payload.await()
+        }
 
         vm.toggleReader()
         assertTrue(vm.state.value.readerLoading)
@@ -580,6 +590,7 @@ class MiniBrowserViewModelTests {
         payload.complete("""{"title":"Old page","blocks":[{"kind":"p","text":"Body"}]}""")
         runCurrent()
 
+        assertEquals(1, requests)
         assertNull(vm.state.value.readerArticle)
         assertFalse(vm.state.value.readerLoading)
         // Not even the "no article" notice belongs to a page that is gone.
@@ -590,13 +601,20 @@ class MiniBrowserViewModelTests {
     fun aReaderAnswerAfterTheReaderClosedStaysClosed() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = newViewModel()
         val payload = CompletableDeferred<String?>()
-        vm.readerPayload = { payload.await() }
+        var requests = 0
+        vm.readerPayload = {
+            requests++
+            payload.await()
+        }
 
         vm.toggleReader()
+        assertTrue(vm.state.value.readerLoading)
         vm.closeReader()
+        assertFalse(vm.state.value.readerLoading)
         payload.complete("""{"title":"Old page","blocks":[{"kind":"p","text":"Body"}]}""")
         runCurrent()
 
+        assertEquals(1, requests)
         assertNull(vm.state.value.readerArticle)
         assertFalse(vm.state.value.readerLoading)
         assertNull(vm.state.value.notice)

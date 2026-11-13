@@ -95,12 +95,15 @@ internal fun systemAccessGranted(kind: SitePermission, granted: (String) -> Bool
 /**
  * What a request that waited behind an open dialog may be told once the dialog
  * closes, or null when it has to be asked: true when the system granted it all
- * by now, false when every kind it still misses was part of that question, and
- * null when one of them was never put to the reader.
+ * by now, false when the question that closed covered a kind it still misses,
+ * and null when none of those kinds was put to the reader.
  */
 internal fun waitingAnswer(missing: List<SitePermission>, asked: List<SitePermission>): Boolean? = when {
     missing.isEmpty() -> true
-    missing.all { it in asked } -> false
+    // The request needs all its kinds, so one of them refused in the question
+    // just answered settles it: asking the system again would put the kind the
+    // reader just said no to back on screen.
+    missing.any { it in asked } -> false
     else -> null
 }
 

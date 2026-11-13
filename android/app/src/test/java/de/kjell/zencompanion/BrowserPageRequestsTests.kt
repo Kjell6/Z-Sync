@@ -94,6 +94,15 @@ class BrowserPageRequestsTests {
             false,
             waitingAnswer(listOf(SitePermission.CAMERA), listOf(SitePermission.CAMERA, SitePermission.MICROPHONE)),
         )
+        // The camera was asked and denied, the microphone never was: the request
+        // needs both, so it is refused instead of asking about the camera again.
+        assertEquals(
+            false,
+            waitingAnswer(
+                listOf(SitePermission.CAMERA, SitePermission.MICROPHONE),
+                listOf(SitePermission.CAMERA),
+            ),
+        )
         // The microphone was never put to the reader: the system has to ask.
         assertNull(waitingAnswer(listOf(SitePermission.MICROPHONE), listOf(SitePermission.CAMERA)))
         assertNull(waitingAnswer(listOf(SitePermission.CAMERA), emptyList()))

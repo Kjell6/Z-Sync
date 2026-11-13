@@ -160,9 +160,15 @@ private fun withoutOwnBrowser(context: Context, intent: Intent): Intent? {
     }
 }
 
+/**
+ * Handlers the system would launch, not every filter that matches: an implicit
+ * launch needs `CATEGORY_DEFAULT`, so anything else would fail to start even
+ * though it answered the query.
+ */
 @Suppress("DEPRECATION")
 private fun installedHandlers(packageManager: PackageManager, intent: Intent): List<String> =
-    packageManager.queryIntentActivities(intent, 0).map { it.activityInfo.packageName }
+    packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+        .map { it.activityInfo.packageName }
 
 @Suppress("DEPRECATION")
 private fun resolveHandler(packageManager: PackageManager, intent: Intent): String? =
@@ -175,5 +181,6 @@ private fun resolveHandler(packageManager: PackageManager, intent: Intent): Stri
 private fun browserPackages(packageManager: PackageManager): List<String> {
     val probe = Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com"))
         .addCategory(Intent.CATEGORY_BROWSABLE)
-    return packageManager.queryIntentActivities(probe, 0).map { it.activityInfo.packageName }
+    return packageManager.queryIntentActivities(probe, PackageManager.MATCH_DEFAULT_ONLY)
+        .map { it.activityInfo.packageName }
 }

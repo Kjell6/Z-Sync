@@ -286,6 +286,8 @@ class BrowserPages(
         val (previous, next) = store.neighbours()
         listOfNotNull(previous, next).forEach { page ->
             session(page.id)?.let { session ->
+                // The swipe shows this picture until the woken page paints.
+                loadShot(session)
                 if (session !in live) live.add(session)
                 recent.remove(session)
                 recent.add(0, session)

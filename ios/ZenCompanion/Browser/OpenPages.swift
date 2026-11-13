@@ -326,6 +326,8 @@ final class OpenPagesStore: MiniBrowserPageHost {
     func prepareNeighbours() {
         let around = neighbours
         for page in [around.previous, around.next].compactMap({ $0 }) {
+            // The swipe shows this picture until the woken page paints.
+            Task { await loadShot(of: page) }
             wake(page)
         }
     }

@@ -14,6 +14,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.listSaver
@@ -45,18 +46,39 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import de.kjell.zencompanion.ui.sheets.ZenSheet
 import de.kjell.zencompanion.ui.theme.ZenTheme
+import java.util.UUID
 import kotlinx.coroutines.delay
 
 /** The browser being open. The pages live in [BrowserPages]; [url] reopens one after the process died. */
-private data class BrowserLaunch(val url: String?, val title: String?, val overview: Boolean)
+private data class BrowserLaunch(
+    val url: String?,
+    val title: String?,
+    val overview: Boolean,
+    /**
+     * Tells two launches apart, even when they name the same address: each is
+     * its own browser instead of inheriting the last one's screen.
+     */
+    val id: String = UUID.randomUUID().toString(),
+)
 
 /** Keeps an open browser across configuration changes (theme, font size, locale). */
 private val BrowserLaunchSaver = listSaver<BrowserLaunch?, Any?>(
-    save = { launch -> if (launch == null) emptyList() else listOf(launch.url, launch.title, launch.overview) },
+    save = { launch ->
+        if (launch == null) emptyList() else listOf(launch.url, launch.title, launch.overview, launch.id)
+    },
     restore = { values ->
-        if (values.isEmpty()) null else BrowserLaunch(values[0] as String?, values[1] as String?, values[2] as Boolean)
+        if (values.isEmpty()) null else BrowserLaunch(
+            values[0] as String?,
+            values[1] as String?,
+            values[2] as Boolean,
+            // State saved by a version without launch ids restores as a new one.
+            values.getOrNull(3) as? String ?: UUID.randomUUID().toString(),
+        )
     },
 )
+
+/** A web link another app handed over that has not opened yet. */
+private const val PENDING_LINK_KEY = "pendingIncomingLink"
 
 /**
  * Entry point: the spaces browser, signed in or not (port of `HomeView`).
@@ -71,8 +93,14 @@ class MainActivity : ComponentActivity() {
             .get(AppViewModel::class.java)
         enableEdgeToEdge()
         // A recreation keeps the pending link in the ViewModel instead of
-        // opening it a second time.
-        if (savedInstanceState == null) openIncomingLink(intent)
+        // opening the launch intent a second time. After the process ended the
+        // ViewModel is gone and the saved state carries the link that was
+        // still waiting to open; one that was opened was never saved.
+        if (savedInstanceState == null) {
+            openIncomingLink(intent)
+        } else {
+            savedInstanceState.getString(PENDING_LINK_KEY)?.let(appViewModel::openLinkFromAnotherApp)
+        }
         setContent {
             ZenTheme {
                 val viewModel = appViewModel
@@ -81,6 +109,13 @@ class MainActivity : ComponentActivity() {
                 SpacesBrowserRoot(viewModel = viewModel)
             }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        // Only a link that has not opened yet is kept; consuming it clears the
+        // value, so a restart never reopens the page.
+        outState.putString(PENDING_LINK_KEY, appViewModel.incomingLink.value)
     }
 
     /**
@@ -252,17 +287,22 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
 
         val launch = activeBrowserLaunch
         if (launch != null) {
-            MiniBrowserScreen(
-                pages = pages,
-                signedIn = signedIn,
-                startsInOverview = launch.overview,
-                launchUrl = launch.url,
-                launchTitle = launch.title,
-                currentSpace = currentSpace,
-                allSpaces = spaces,
-                browserRepository = viewModel.browserRepository,
-                onDismiss = { activeBrowserLaunch = null },
-            )
+            // Keyed by launch: a link that arrives while the last browser is
+            // showing (its overview or history up) starts a browser of its own
+            // instead of putting the new page behind the old screen.
+            key(launch.id) {
+                MiniBrowserScreen(
+                    pages = pages,
+                    signedIn = signedIn,
+                    startsInOverview = launch.overview,
+                    launchUrl = launch.url,
+                    launchTitle = launch.title,
+                    currentSpace = currentSpace,
+                    allSpaces = spaces,
+                    browserRepository = viewModel.browserRepository,
+                    onDismiss = { activeBrowserLaunch = null },
+                )
+            }
         }
     }
 

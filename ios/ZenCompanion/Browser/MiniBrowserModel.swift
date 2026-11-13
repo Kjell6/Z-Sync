@@ -331,6 +331,9 @@ final class MiniBrowserModel {
     private(set) var readerArticle: ReaderArticle?
     /// A reader extraction is in flight (the row shows a spinner).
     private(set) var readerLoading = false
+    /// Bumped when the reader closes or the page moves on, so an answer for a
+    /// page the reader has left cannot open it.
+    @ObservationIgnored private var readerRequest = 0
     /// The page scrolled down far enough to tuck the bottom bar away. Fed by
     /// the web view; the view ANDs it with the states that must keep the bar
     /// (editing the address, an open menu, a live toast).
@@ -689,6 +692,7 @@ final class MiniBrowserModel {
     }
 
     func closeReader() {
+        readerRequest += 1
         readerLoading = false
         withAnimation(.easeInOut(duration: 0.2)) {
             readerArticle = nil
@@ -698,10 +702,16 @@ final class MiniBrowserModel {
     private func loadReader() {
         guard let webView, webView.url != nil, !readerLoading else { return }
         readerLoading = true
-        webView.evaluateJavaScript(ReaderExtractor.jsonScript) { [weak self] result, _ in
+        let request = readerRequest
+        Task { @MainActor [weak self] in
             guard let self else { return }
+            let payload = await self.pageScriptAnswer(ReaderExtractor.jsonScript, within: .seconds(5))
+            // The page changed or the reader was closed while this ran, so the
+            // article and the "no article" notice both belong to a page that
+            // is no longer showing.
+            guard request == self.readerRequest else { return }
             self.readerLoading = false
-            guard let article = ReaderExtractor.article(from: result as? String) else {
+            guard let article = ReaderExtractor.article(from: payload) else {
                 self.readerArticle = nil
                 self.showPinNotice(
                     String(localized: "browser.reader_unavailable"),
@@ -902,6 +912,7 @@ final class MiniBrowserModel {
             // A fresh document starts at the top with the bar in place, and
             // ends the reading view.
             scrollHidesBar = false
+            readerRequest += 1
             readerArticle = nil
             readerLoading = false
         }
@@ -1336,24 +1347,31 @@ final class MiniBrowserModel {
         }
     }
 
+    /// Runs one script in the page, or nil when it does not answer within
+    /// `limit`. A web content process that died or a page that slept never
+    /// calls back, and the caller must not wait on it.
+    private func pageScriptAnswer(_ script: String, within limit: Duration) async -> String? {
+        guard let webView else { return nil }
+        let answer = ScriptAnswer()
+        return await withCheckedContinuation { continuation in
+            answer.wait(continuation)
+            webView.evaluateJavaScript(script) { result, _ in
+                let value = result as? String
+                Task { @MainActor in answer.finish(value) }
+            }
+            Task { @MainActor in
+                try? await Task.sleep(for: limit)
+                answer.finish(nil)
+            }
+        }
+    }
+
     /// The page's own `document.title`, or nil when the page does not answer
     /// within a second. A web content process that died or a page that slept
     /// never calls back, and the pin waiting on it must still save with the
     /// title it already has.
     private func liveDocumentTitle(for url: URL) async -> String? {
-        guard let webView else { return nil }
-        let answer = TitleAnswer()
-        let payload: String? = await withCheckedContinuation { continuation in
-            answer.wait(continuation)
-            webView.evaluateJavaScript(PageTitle.documentTitleScript) { result, _ in
-                let title = result as? String
-                Task { @MainActor in answer.finish(title) }
-            }
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(1))
-                answer.finish(nil)
-            }
-        }
+        let payload = await pageScriptAnswer(PageTitle.documentTitleScript, within: .seconds(1))
         return PageTitle.pickDocumentTitle(payload, url: url)
     }
 
@@ -1396,15 +1414,15 @@ final class MiniBrowserModel {
     }
 }
 
-/// Settles one title lookup. The page's answer and the waiting limit can both
+/// Settles one script answer. The page's answer and the waiting limit can both
 /// arrive, and a continuation may only be resumed once, so the first one wins.
-private final class TitleAnswer: @unchecked Sendable {
+private final class ScriptAnswer: @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: CheckedContinuation<String?, Never>?
     private var finished = false
 
     /// Takes the lookup's continuation. A lookup already settled resumes it
-    /// with no title.
+    /// with no answer.
     func wait(_ continuation: CheckedContinuation<String?, Never>) {
         lock.lock()
         if finished {
@@ -1416,8 +1434,8 @@ private final class TitleAnswer: @unchecked Sendable {
         lock.unlock()
     }
 
-    /// The page's title, or nil for the limit. Later answers are dropped.
-    func finish(_ title: String?) {
+    /// The page's answer, or nil for the limit. Later answers are dropped.
+    func finish(_ answer: String?) {
         lock.lock()
         guard !finished else {
             lock.unlock()
@@ -1427,7 +1445,7 @@ private final class TitleAnswer: @unchecked Sendable {
         let waiting = continuation
         continuation = nil
         lock.unlock()
-        waiting?.resume(returning: title)
+        waiting?.resume(returning: answer)
     }
 }
 

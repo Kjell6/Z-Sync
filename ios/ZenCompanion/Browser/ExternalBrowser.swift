@@ -2,6 +2,7 @@ import UIKit
 
 /// Opens a URL with the system default handler (default browser for http(s),
 /// or the app that owns a Universal Link — that's iOS, not us).
+@MainActor
 enum ExternalBrowser {
     /// How long an http(s) address that left the app still counts as this
     /// app's own hand-off when it comes straight back through `onOpenURL`.
@@ -9,8 +10,8 @@ enum ExternalBrowser {
     /// link from another app is a fresh arrival.
     private static let roundTripWindow: TimeInterval = 10
 
-    /// The last web address the app asked the system to open. Main thread only,
-    /// like the UIKit call below.
+    /// The last web address the app asked the system to open. Isolated to the
+    /// main actor, like the UIKit call below, so both share one contract.
     private static var lastHandOff: (url: URL, at: Date)?
 
     /// Hands the URL to its owner. The completion reports whether anything took

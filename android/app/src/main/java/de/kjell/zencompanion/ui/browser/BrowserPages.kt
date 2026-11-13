@@ -329,7 +329,10 @@ class BrowserPages(
     fun toggleKeep(id: String) {
         val session = sessions[id] ?: return
         // Letting go deletes the page's files: what it had there stays in memory.
-        if (store.page(id)?.isKept == true) loadHistory(session)
+        if (store.page(id)?.isKept == true) {
+            loadHistory(session)
+            restoreShot(session)
+        }
         store.toggleKeep(id, failed = session.viewModel.state.value.pageError != null)
         if (store.page(id)?.isKept == true) {
             saveHistory(session)
@@ -524,13 +527,16 @@ class BrowserPages(
     private fun writeShot(id: String, bitmap: Bitmap) {
         val target = store.snapshotFile(id)
         shotWrites[id] = (shotWrites[id] ?: 0) + 1
+        // Whether this write put this very picture on disk. One that fails
+        // leaves the older file behind, so the card keeps the newer picture.
+        var written = false
         writeKept(id, target) {
-            runCatching {
+            written = runCatching {
                 target.parentFile?.mkdirs()
                 val temp = File(target.path + ".tmp")
-                temp.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 72, it) }
-                temp.renameTo(target)
-            }
+                val compressed = temp.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 72, it) }
+                compressed && temp.renameTo(target)
+            }.getOrDefault(false)
         }.invokeOnCompletion {
             launchOnMain {
                 val left = (shotWrites[id] ?: 1) - 1
@@ -539,11 +545,28 @@ class BrowserPages(
                 } else {
                     shotWrites.remove(id)
                     // The card asked to drop its picture during the write and
-                    // nothing else calls it: the disk is up to date now.
-                    sessions[id]?.takeIf { it.shotDropWanted }?.let(::dropShot)
+                    // nothing else calls it: it can go only if the disk now
+                    // holds what the page shows.
+                    if (written) sessions[id]?.takeIf { it.shotDropWanted }?.let(::dropShot)
                 }
             }
         }
+    }
+
+    /**
+     * Reads a kept page's picture back from its file. Letting go of the page
+     * deletes that file, and a card far from the deck's focus has already
+     * dropped the picture, so it must be here before that happens. One small
+     * JPEG, read on the spot for a rare action the reader started.
+     */
+    private fun restoreShot(session: PageSession) {
+        if (session.shot != null) return
+        val file = store.snapshotFile(session.id)
+        if (!file.exists()) return
+        // Pictures are opaque: 565 needs half the memory at the same size.
+        val options = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.RGB_565 }
+        val image = runCatching { BitmapFactory.decodeFile(file.path, options) }.getOrNull() ?: return
+        session.shot = image.asImageBitmap()
     }
 
     /** Loads the stored picture of a page that has none in memory. */

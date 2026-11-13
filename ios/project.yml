@@ -51,6 +51,8 @@ targets:
         NSCameraUsageDescription: Websites you allow in the browser can use your camera.
         NSMicrophoneUsageDescription: Websites you allow in the browser can use your microphone.
         NSLocationWhenInUseUsageDescription: Websites you allow in the browser can use your location.
+        # Asked only when a long press on an image saves it to the photo library.
+        NSPhotoLibraryAddUsageDescription: Images you save from a website go to your photo library.
         # Downloads land in Documents, which Files shows under On My iPhone.
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true

@@ -95,7 +95,7 @@ enum ShareLink {
         return nil
     }
 
-    /// Android `ShareActivity.extractShared` checks the whole text first and
+    /// Android `ShareActivity.sharedLink` checks the whole text first and
     /// then each word, so a share like "look at this https://…" keeps its
     /// link. Only a text without inner whitespace can be one address.
     private static func link(in text: String) -> URL? {
@@ -108,21 +108,48 @@ enum ShareLink {
         return nil
     }
 
-    /// One candidate word or the whole text, as it stands and then without
-    /// the quotes or sentence marks around a link, which are never part of
-    /// its address. Only http(s) survives.
+    /// One candidate word or the whole text, without the marks the sentence
+    /// around it adds. Only an http(s) address with a host is a link.
     private static func candidate(_ text: String) -> URL? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let url = URL(string: trimmed), let http = httpURL(from: url) { return http }
-        let bare = trimmed.trimmingCharacters(in: surroundingMarks)
-        guard bare != trimmed, let url = URL(string: bare) else { return nil }
-        return httpURL(from: url)
+        let bare = trimmingSurroundingMarks(text)
+        guard !bare.isEmpty, let url = URL(string: bare), let http = httpURL(from: url),
+              http.host?.isEmpty == false else { return nil }
+        return http
     }
 
-    /// Marks a sentence, a quote or a bracket puts around a link.
-    private static let surroundingMarks = CharacterSet(
-        charactersIn: "\"'()[]{}<>.,;:!?…“”‘’"
-    )
+    /// Marks a sentence puts before a link; they never belong to its address.
+    private static let leadingMarks: Set<Character> = ["\"", "'", "“", "”", "‘", "’", "(", "[", "{", "<"]
+
+    /// Marks a sentence puts right after a link.
+    private static let sentenceMarks: Set<Character> = [".", ",", ";", ":", "!", "?", "…"]
+    private static let quoteMarks: Set<Character> = ["\"", "'", "“", "”", "‘", "’"]
+    /// Closing bracket → the opening bracket it has to pair with.
+    private static let bracketPairs: [Character: Character] = [")": "(", "]": "[", "}": "{", ">": "<"]
+
+    /// Android `trimSurroundingMarks`: drops the leading quotes and brackets,
+    /// then one trailing mark at a time. A closing bracket only goes while it
+    /// is unbalanced, so a linked `Function_(mathematics)` keeps its own `)`.
+    private static func trimmingSurroundingMarks(_ text: String) -> String {
+        var characters = Array(
+            text.trimmingCharacters(in: .whitespacesAndNewlines)
+                .drop(while: { leadingMarks.contains($0) })
+        )
+        while let last = characters.last {
+            if sentenceMarks.contains(last) || quoteMarks.contains(last) {
+                characters.removeLast()
+                continue
+            }
+            if let opener = bracketPairs[last] {
+                let opens = characters.filter { $0 == opener }.count
+                let closes = characters.filter { $0 == last }.count
+                guard opens < closes else { break }
+                characters.removeLast()
+                continue
+            }
+            break
+        }
+        return String(characters)
+    }
 
     static func headlineTitle(pageTitle: String, url: URL?) -> String {
         PageTitle.headline(pageTitle, url: url)

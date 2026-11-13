@@ -84,9 +84,7 @@ class ShareActivity : ComponentActivity() {
 
         if (intent?.action == Intent.ACTION_SEND) {
             intent.getStringExtra(Intent.EXTRA_TEXT)?.let { text ->
-                val candidate = text.trim().trim('"')
-                if (looksLikeHttpUrl(candidate)) foundUrl = candidate
-                else text.split(Regex("\\s+")).firstOrNull { looksLikeHttpUrl(it.trim()) }?.let { foundUrl = it.trim() }
+                sharedLink(text)?.let { foundUrl = it }
             }
             if (foundUrl == null && intent.getStringExtra(Intent.EXTRA_SUBJECT)?.let { looksLikeHttpUrl(it) } == true) {
                 foundUrl = intent.getStringExtra(Intent.EXTRA_SUBJECT)
@@ -111,4 +109,57 @@ internal fun looksLikeHttpUrl(text: String): Boolean {
     if (text.isEmpty()) return false
     val scheme = runCatching { java.net.URI(text).scheme }.getOrNull()?.lowercase()
     return scheme == "http" || scheme == "https"
+}
+
+/**
+ * The first http(s) link in shared text (iOS `ShareLink.link(in:)`). A text
+ * without inner whitespace is tried as one address first, otherwise each
+ * whitespace-separated word in turn.
+ */
+internal fun sharedLink(text: String): String? {
+    val trimmed = text.trim()
+    if (trimmed.none { it.isWhitespace() }) {
+        linkCandidate(trimmed)?.let { return it }
+    }
+    return trimmed.split(Regex("\\s+")).firstNotNullOfOrNull { linkCandidate(it) }
+}
+
+/** One word or the whole text as an address, or null when it is not a link. */
+internal fun linkCandidate(text: String): String? {
+    val bare = trimSurroundingMarks(text.trim())
+    if (bare.isEmpty() || !looksLikeHttpUrl(bare)) return null
+    val host = runCatching { java.net.URI(bare).host }.getOrNull()
+    return if (host.isNullOrEmpty()) null else bare
+}
+
+/** Marks a sentence puts before a link; they never belong to its address. */
+private val leadingMarks = setOf('"', '\'', '“', '”', '‘', '’', '(', '[', '{', '<')
+
+/** Marks a sentence puts right after a link. */
+private val sentenceMarks = setOf('.', ',', ';', ':', '!', '?', '…')
+private val quoteMarks = setOf('"', '\'', '“', '”', '‘', '’')
+
+/** Closing bracket to the opening bracket it has to pair with. */
+private val bracketPairs = mapOf(')' to '(', ']' to '[', '}' to '{', '>' to '<')
+
+/**
+ * Drops the leading quotes and brackets, then one trailing mark at a time
+ * (iOS `ShareLink.trimmingSurroundingMarks`). A closing bracket only goes
+ * while it is unbalanced, so a linked `Function_(mathematics)` keeps its own.
+ */
+internal fun trimSurroundingMarks(text: String): String {
+    val characters = text.dropWhile { it in leadingMarks }.toMutableList()
+    while (true) {
+        val last = characters.lastOrNull() ?: break
+        if (last in sentenceMarks || last in quoteMarks) {
+            characters.removeAt(characters.lastIndex)
+            continue
+        }
+        val opener = bracketPairs[last] ?: break
+        val opens = characters.count { it == opener }
+        val closes = characters.count { it == last }
+        if (opens >= closes) break
+        characters.removeAt(characters.lastIndex)
+    }
+    return characters.joinToString("")
 }

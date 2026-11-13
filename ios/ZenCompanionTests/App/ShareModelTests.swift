@@ -393,10 +393,49 @@ final class ShareModelTests: XCTestCase {
     }
 
     func testSharedLinkEndingASentenceOrSittingInBrackets() {
-        let fullStop = ZenCompanion.ShareLink.httpURL(from: "read https://example.com/a. now" as NSString)
-        XCTAssertEqual(fullStop?.host, "example.com")
-        let bracket = ZenCompanion.ShareLink.httpURL(from: "read (https://example.com/b) now" as NSString)
-        XCTAssertEqual(bracket, URL(string: "https://example.com/b"))
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(from: "read https://example.com/a. now" as NSString),
+            URL(string: "https://example.com/a")
+        )
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(from: "read (https://example.com/b) now" as NSString),
+            URL(string: "https://example.com/b")
+        )
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(from: "(https://example.com/b)" as NSString),
+            URL(string: "https://example.com/b")
+        )
+        // Only the unmatched bracket goes; the pair inside the path stays.
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(
+                from: "(https://en.wikipedia.org/wiki/Function_(mathematics))" as NSString
+            ),
+            URL(string: "https://en.wikipedia.org/wiki/Function_(mathematics)")
+        )
+    }
+
+    /// A sentence mark right after the address never belongs to it, but a
+    /// query or a trailing slash does.
+    func testSharedLinkKeepsQueryAndTrailingSlash() {
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(from: "see https://example.com/a?b=c." as NSString),
+            URL(string: "https://example.com/a?b=c")
+        )
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(from: "https://example.com/path/" as NSString),
+            URL(string: "https://example.com/path/")
+        )
+    }
+
+    func testSharedLinkInQuotesOrFollowedByPunctuation() {
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(from: "he said \"https://example.com/q\"" as NSString),
+            URL(string: "https://example.com/q")
+        )
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(from: "look (https://example.com/r)." as NSString),
+            URL(string: "https://example.com/r")
+        )
     }
 
     func testHeadlineTitlePrefersPageTitleThenHost() {

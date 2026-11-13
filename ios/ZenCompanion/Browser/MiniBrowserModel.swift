@@ -611,10 +611,17 @@ final class MiniBrowserModel {
         // Keep the reader where they were. WebKit's own restore can land at
         // the end of a long document, and a page with an anchor (`#cite_note…`)
         // jumps to it, which reads as "reload throws me to the bottom". A pull
-        // starts at the top, so there is no place to keep and nothing stale
-        // may be restored.
-        reloadScrollY = fromTop ? nil : webView?.scrollView.contentOffset.y
+        // starts at the top, so it asks for the top: leaving nothing to
+        // restore would let WebKit's own landing place win.
+        reloadScrollY = fromTop ? topScrollY : webView?.scrollView.contentOffset.y
         webView?.reload()
+    }
+
+    /// The page's top edge in the scroll view's offset. A top inset moves it
+    /// below zero, so a literal 0 is not the top.
+    private var topScrollY: CGFloat? {
+        guard let scrollView = webView?.scrollView else { return nil }
+        return -scrollView.adjustedContentInset.top
     }
 
     /// Puts the page back where it was before the reload, once the new
@@ -622,8 +629,11 @@ final class MiniBrowserModel {
     func restoreScrollAfterReload() {
         guard let y = reloadScrollY, let scrollView = webView?.scrollView else { return }
         reloadScrollY = nil
-        let maxY = max(0, scrollView.contentSize.height - scrollView.bounds.height)
-        let target = min(max(0, y), maxY)
+        // Everything above the top edge is out of bounds; the bottom stays
+        // where the content ends.
+        let topY = -scrollView.adjustedContentInset.top
+        let maxY = max(topY, scrollView.contentSize.height - scrollView.bounds.height)
+        let target = min(max(topY, y), maxY)
         guard abs(scrollView.contentOffset.y - target) > 1 else { return }
         scrollView.setContentOffset(
             CGPoint(x: scrollView.contentOffset.x, y: target),

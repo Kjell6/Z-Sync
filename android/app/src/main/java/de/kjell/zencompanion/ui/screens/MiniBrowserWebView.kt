@@ -654,7 +654,8 @@ private const val SCROLL_BRIDGE_NAME = "ZenScroll"
 /**
  * Binds the page's scroll offset and its pull permission to the bridge once
  * per document. A pull is allowed only at the document's own top, with no
- * scrolled scroller under the finger and no overscroll claimed by the page.
+ * scroller under the finger that scrolls or keeps its overscroll, and no
+ * overscroll claimed by the page.
  */
 private const val SCROLL_BINDING_SCRIPT = """
     (function() {
@@ -678,7 +679,11 @@ private const val SCROLL_BINDING_SCRIPT = """
           var style = getComputedStyle(node);
           var scrollable = (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
             node.scrollHeight > node.clientHeight;
-          if (scrollable && node.scrollTop > 0) return false;
+          if (!scrollable) continue;
+          // A panel that keeps its overscroll to itself never hands the pull
+          // to the page, even while it sits at its own top.
+          if (!overscrollAllows(style)) return false;
+          if (node.scrollTop > 0) return false;
         }
         if (!overscrollAllows(getComputedStyle(document.documentElement))) return false;
         if (document.body && !overscrollAllows(getComputedStyle(document.body))) return false;

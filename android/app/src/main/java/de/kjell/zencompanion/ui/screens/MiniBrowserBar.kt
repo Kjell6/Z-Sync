@@ -784,7 +784,11 @@ private fun NavBar(
     }
 }
 
-/** Icon-only glyph for the navigation bar: no chrome of its own. */
+/**
+ * Icon-only glyph for the navigation bar: no chrome of its own. The box is
+ * 48 dp wide for a thumb; the bar is 44 dp tall, which is as much height as
+ * the target can take here. The glyph inside keeps its 18 dp and its place.
+ */
 @Composable
 private fun NavGlyph(
     icon: ImageVector,
@@ -795,7 +799,7 @@ private fun NavGlyph(
     val zen = LocalZenColors.current
     Box(
         modifier = Modifier
-            .size(width = 34.dp, height = BarHeight - 12.dp)
+            .size(width = 48.dp, height = BarHeight)
             .barClickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -1673,9 +1677,11 @@ private fun ZoomStep(
     onClick: () -> Unit,
 ) {
     val zen = LocalZenColors.current
+    // 48 dp wide for a thumb. The capsule around the readout is 32 dp tall, so
+    // the box stops there: a taller one would stretch that capsule with it.
     Box(
         modifier = Modifier
-            .size(32.dp)
+            .size(width = 48.dp, height = 32.dp)
             .barClickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {

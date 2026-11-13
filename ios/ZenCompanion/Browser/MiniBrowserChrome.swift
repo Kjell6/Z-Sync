@@ -1165,6 +1165,9 @@ struct MiniBrowserTopBar: View {
             .font(.system(size: 18, weight: .semibold))
             .foregroundStyle(Palette.ink(scheme).opacity(enabled ? 0.85 : 0.3))
             .frame(width: 32, height: barHeight - 8)
+            // The same 44pt slot the real bar's glyphs take, so the bar that
+            // slides in matches the one it replaces.
+            .frame(minWidth: 44, minHeight: 44)
     }
 
     private var swipeGesture: some Gesture {
@@ -1317,6 +1320,9 @@ struct MiniBrowserTopBar: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(Palette.ink(scheme).opacity(enabled ? 0.85 : 0.3))
                 .frame(width: 32, height: barHeight - 8)
+                // The glyph keeps its slot; the button around it takes the
+                // platform's least touch target, filling the bar's height.
+                .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(GlyphPressStyle())

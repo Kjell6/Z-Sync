@@ -101,6 +101,13 @@ class MainActivity : ComponentActivity() {
 
     /** Only `VIEW` intents with an `http`/`https` data URI carry a web link. */
     private fun openIncomingLink(intent: Intent?) {
+        // Reopening the app from Recents can replay the launch intent that
+        // brought it there, with no saved instance state, so the old link
+        // would open again as a new page. The system marks such a replay; a
+        // link the reader just picked never carries this flag.
+        val launchedFromHistory = intent != null &&
+            (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
+        if (launchedFromHistory) return
         val address = incomingWebLink(intent?.action, intent?.scheme, intent?.dataString) ?: return
         appViewModel.openLinkFromAnotherApp(address)
     }

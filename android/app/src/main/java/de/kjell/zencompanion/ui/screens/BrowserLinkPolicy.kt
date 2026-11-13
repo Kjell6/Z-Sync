@@ -1,7 +1,10 @@
 package de.kjell.zencompanion.ui.screens
 
 import android.content.Intent
+import android.net.Uri
 import android.webkit.WebView
+import de.kjell.zencompanion.ui.browser.isPageLocalDownload
+import de.kjell.zencompanion.ui.browser.isWebDownload
 
 internal enum class BrowserLinkAction {
     LOAD_IN_WEBVIEW,
@@ -162,4 +165,45 @@ internal fun sameTabUrl(raw: String?): String? {
 internal fun tappedLinkUrl(hitType: Int, extra: String?): String? {
     if (hitType != WebView.HitTestResult.SRC_ANCHOR_TYPE) return null
     return sameTabUrl(extra)
+}
+
+/**
+ * What a long press found: the link's actions, then the image's below a
+ * divider. An image link carries both; a plain image only its own address.
+ */
+internal data class BrowserHitMenu(
+    /** The link under the finger, for the three link actions. */
+    val link: String? = null,
+    /** The image's own address, for the image actions. */
+    val image: String? = null,
+) {
+    /** The address the menu names: the link when there is one. */
+    val title: String get() = link ?: image?.let(::menuTitle).orEmpty()
+
+    /** A web image opens as a page of its own. */
+    val canOpenImage: Boolean get() = image?.let(::isWebDownload) == true
+
+    /** A web image downloads as itself; a page-local one is read by its page. */
+    val canSaveImage: Boolean
+        get() = image?.let { isWebDownload(it) || isPageLocalDownload(it) } == true
+
+    /** A page-local address dies with its page: only web ones are worth copying. */
+    val canCopyImage: Boolean get() = image?.let(::isWebDownload) == true
+
+    /** Whether the image block has anything in it at all. */
+    val hasImageActions: Boolean get() = canOpenImage || canSaveImage || canCopyImage
+}
+
+/** An address as a menu names it: a data: image's payload is far too long to show. */
+private fun menuTitle(address: String): String =
+    if (address.length <= MENU_ADDRESS_LIMIT) address else address.take(MENU_ADDRESS_LIMIT - 1) + '…'
+
+private const val MENU_ADDRESS_LIMIT = 300
+
+/** The page's host for blocking and download questions, or null for a blank or non-web page. */
+internal fun pageHost(url: String): String? {
+    val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return null
+    val scheme = uri.scheme?.lowercase()
+    if (scheme != "http" && scheme != "https") return null
+    return uri.host?.takeIf { it.isNotEmpty() }
 }

@@ -825,30 +825,54 @@ private fun PageCardMenu(
     }
 }
 
-/** Long press on a link in a page. */
+/** Long press on a link or an image in a page. */
 @Composable
 internal fun LinkMenu(
-    url: String,
+    menu: BrowserHitMenu,
     onOpenInNewPage: () -> Unit,
     onCopy: () -> Unit,
     onShare: () -> Unit,
+    onSaveImage: () -> Unit,
+    onOpenImageInNewPage: () -> Unit,
+    onCopyImage: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(url, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            Text(menu.title, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
         },
         text = {
             Column(Modifier.fillMaxWidth()) {
-                TextButton(onClick = onOpenInNewPage, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.browser_open_in_new_page), modifier = Modifier.fillMaxWidth())
+                if (menu.link != null) {
+                    TextButton(onClick = onOpenInNewPage, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.browser_open_in_new_page), modifier = Modifier.fillMaxWidth())
+                    }
+                    TextButton(onClick = onCopy, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.kept_copy_link), modifier = Modifier.fillMaxWidth())
+                    }
+                    TextButton(onClick = onShare, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.browser_share), modifier = Modifier.fillMaxWidth())
+                    }
                 }
-                TextButton(onClick = onCopy, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.kept_copy_link), modifier = Modifier.fillMaxWidth())
-                }
-                TextButton(onClick = onShare, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.browser_share), modifier = Modifier.fillMaxWidth())
+                if (menu.hasImageActions) {
+                    // The image's own actions sit below the link's, as two groups.
+                    if (menu.link != null) HorizontalDivider()
+                    if (menu.canSaveImage) {
+                        TextButton(onClick = onSaveImage, modifier = Modifier.fillMaxWidth()) {
+                            Text(stringResource(R.string.browser_image_save), modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                    if (menu.canOpenImage) {
+                        TextButton(onClick = onOpenImageInNewPage, modifier = Modifier.fillMaxWidth()) {
+                            Text(stringResource(R.string.browser_image_open), modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                    if (menu.canCopyImage) {
+                        TextButton(onClick = onCopyImage, modifier = Modifier.fillMaxWidth()) {
+                            Text(stringResource(R.string.browser_image_copy), modifier = Modifier.fillMaxWidth())
+                        }
+                    }
                 }
             }
         },

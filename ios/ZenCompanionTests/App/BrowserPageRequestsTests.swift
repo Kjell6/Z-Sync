@@ -126,6 +126,55 @@ final class BrowserPageRequestsTests: XCTestCase {
 
     // MARK: - Dialog titles
 
+    func testDownloadQuestionNamesTheFileAndTheSite() {
+        var answers: [Bool] = []
+        let answer = DialogAnswer<Bool>(fallback: false) { answers.append($0) }
+        let dialog = BrowserDialog(kind: .download(
+            host: "example.com",
+            fileName: "report.pdf",
+            answer
+        ))
+
+        XCTAssertEqual(dialog.title, "Download report.pdf?")
+        XCTAssertEqual(BrowserDialog.downloadMessage(host: "example.com"), "From example.com")
+        XCTAssertEqual(BrowserDialog.downloadMessage(host: ""), "From This page")
+        answer.send(true)
+        XCTAssertEqual(answers, [true])
+    }
+
+    func testTheSameFileIsAskedOncePerPage() {
+        let page = MiniBrowserModel(initialURL: nil)
+        let other = MiniBrowserModel(initialURL: nil)
+        let file = URL(string: "https://example.com/report.pdf")!
+        let waiting = [BrowserDownloadPolicy.Question(page: ObjectIdentifier(page), address: file)]
+
+        XCTAssertTrue(BrowserDownloadPolicy.isDuplicate(
+            address: file,
+            page: ObjectIdentifier(page),
+            waiting: waiting
+        ))
+        XCTAssertFalse(BrowserDownloadPolicy.isDuplicate(
+            address: file,
+            page: ObjectIdentifier(other),
+            waiting: waiting
+        ))
+        XCTAssertFalse(BrowserDownloadPolicy.isDuplicate(
+            address: URL(string: "https://example.com/notes.pdf")!,
+            page: ObjectIdentifier(page),
+            waiting: waiting
+        ))
+        XCTAssertFalse(BrowserDownloadPolicy.isDuplicate(
+            address: nil,
+            page: ObjectIdentifier(page),
+            waiting: waiting
+        ))
+        XCTAssertFalse(BrowserDownloadPolicy.isDuplicate(
+            address: file,
+            page: ObjectIdentifier(page),
+            waiting: []
+        ))
+    }
+
     func testPermissionTitlesNameTheSite() {
         XCTAssertEqual(
             BrowserDialog.permissionTitle(host: "example.com", kinds: [.camera, .microphone]),

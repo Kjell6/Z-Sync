@@ -320,7 +320,10 @@ class BrowserPages(
     fun toggleKeep(id: String) {
         val session = sessions[id] ?: return
         // Letting go deletes the page's files: what it had there stays in memory.
-        if (store.page(id)?.isKept == true) loadHistory(session)
+        if (store.page(id)?.isKept == true) {
+            loadHistory(session)
+            restoreShot(session)
+        }
         store.toggleKeep(id, failed = session.viewModel.state.value.pageError != null)
         if (store.page(id)?.isKept == true) {
             saveHistory(session)
@@ -539,6 +542,22 @@ class BrowserPages(
                 }
             }
         }
+    }
+
+    /**
+     * Reads a kept page's picture back from its file. Letting go of the page
+     * deletes that file, and a card far from the deck's focus has already
+     * dropped the picture, so it must be here before that happens. One small
+     * JPEG, read on the spot for a rare action the reader started.
+     */
+    private fun restoreShot(session: PageSession) {
+        if (session.shot != null) return
+        val file = store.snapshotFile(session.id)
+        if (!file.exists()) return
+        // Pictures are opaque: 565 needs half the memory at the same size.
+        val options = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.RGB_565 }
+        val image = runCatching { BitmapFactory.decodeFile(file.path, options) }.getOrNull() ?: return
+        session.shot = image.asImageBitmap()
     }
 
     /** Loads the stored picture of a page that has none in memory. */

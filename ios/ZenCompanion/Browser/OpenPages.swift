@@ -460,6 +460,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
     private func release(_ page: OpenPage, byUser: Bool = true) {
         page.keptAt = nil
         if byUser { page.released = true }
+        restoreShot(of: page)
         removeFiles(of: page)
         persist()
     }
@@ -573,6 +574,17 @@ final class OpenPagesStore: MiniBrowserPageHost {
             // What the disk holds, so letting go of it costs nothing.
             page.shotStored = true
         }
+    }
+
+    /// Reads a kept page's picture back from its file. Letting go of the page
+    /// deletes that file, and a card far from the deck's focus has already
+    /// dropped the picture, so it must be here before that happens.
+    private func restoreShot(of page: OpenPage) {
+        guard page.shot == nil else { return }
+        guard let data = try? Data(contentsOf: fileURL(page.id, "jpg")), let image = UIImage(data: data) else { return }
+        page.shot = image
+        // The file goes right after this.
+        page.shotStored = false
     }
 
     /// A card far from the deck's focus lets go of its picture, but only when

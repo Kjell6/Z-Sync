@@ -132,13 +132,22 @@ struct MiniBrowserView: View {
     }
 
     /// The bar tucks away while the page scrolls down and returns on the way
-    /// up. Editing the address, an open menu and a live toast keep it in place.
+    /// up. Anything layered over the page keeps it in place: editing the
+    /// address, the menu, a toast or pin banner, an error panel, the reader, a
+    /// site dialog, and the keyboard. Android's `barVisible` keeps the bar for
+    /// the same overlays (it has no in-page keyboard case: the chrome waits
+    /// behind the keys there).
     private var barCollapsed: Bool {
         guard model.scrollHidesBar,
               !showOverview,
               !addressEditing,
               !model.menuExpanded,
-              model.pinNotice == nil else { return false }
+              model.pinNotice == nil,
+              !model.showPinBanner,
+              model.pageError == nil,
+              model.readerArticle == nil,
+              model.dialogs.isEmpty,
+              keyboardOverlap == 0 else { return false }
         return true
     }
 
@@ -386,6 +395,7 @@ struct MiniBrowserView: View {
                 // dock and springing it back is what made it jump under the
                 // finger while typing.
                 guard !(isAddressFocused && overlap == 0 && keyboardOverlap > 0) else { return }
+                if overlap > 0 || keyboardOverlap > 0 { model.setScrollHidesBar(false) }
                 withAnimation(Self.keyboardAnimation(from: note)) {
                     keyboardOverlap = overlap
                 }

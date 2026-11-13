@@ -619,12 +619,23 @@ final class MiniBrowserModelTests: XCTestCase {
         model.restoreScrollAfterReload()
         XCTAssertEqual(webView.scrollView.contentOffset.y, 800)
 
-        // A pull starts at the top, so there is no place to restore.
+        // A pull asks for the page's top, so WebKit's own landing place (an
+        // anchor, the end of a long document) does not win over it.
         webView.scrollView.contentOffset = CGPoint(x: 0, y: -60)
         model.reload(fromTop: true)
         webView.scrollView.contentOffset = CGPoint(x: 0, y: 250)
+        webView.scrollView.contentSize = CGSize(width: 320, height: 4_000)
         model.restoreScrollAfterReload()
-        XCTAssertEqual(webView.scrollView.contentOffset.y, 250)
+        XCTAssertEqual(webView.scrollView.contentOffset.y, -webView.scrollView.adjustedContentInset.top)
+
+        // The top edge follows the content inset: a top inset moves it below
+        // zero, so a pull must not land on a literal 0.
+        webView.scrollView.contentInset = UIEdgeInsets(top: 24, left: 0, bottom: 0, right: 0)
+        webView.scrollView.contentOffset = CGPoint(x: 0, y: 900)
+        model.reload(fromTop: true)
+        webView.scrollView.contentOffset = CGPoint(x: 0, y: 1_500)
+        model.restoreScrollAfterReload()
+        XCTAssertEqual(webView.scrollView.contentOffset.y, -24)
     }
 
     func testCrashKeepsThePageAddressAndReloadsIt() {

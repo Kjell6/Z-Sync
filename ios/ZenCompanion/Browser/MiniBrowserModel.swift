@@ -1441,12 +1441,21 @@ struct LiveSearchSuggestionClient: SearchSuggestionFetching {
         var request = URLRequest(url: url)
         request.timeoutInterval = 4
         request.setValue("application/json, text/javascript, */*", forHTTPHeaderField: "Accept")
-        let (data, response) = try await SearchSuggestionSession.shared.data(for: request)
+        let (bytes, response) = try await SearchSuggestionSession.shared.bytes(for: request)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             throw URLError(.badServerResponse)
         }
-        guard data.count <= Self.maxBodySize else {
+        // The limit is enforced while the answer arrives, so a huge body is
+        // never held in memory: a known length is refused before the first byte.
+        guard http.expectedContentLength <= Int64(Self.maxBodySize) else {
             throw URLError(.dataLengthExceedsMaximum)
+        }
+        var data = Data(capacity: Self.maxBodySize)
+        for try await byte in bytes {
+            data.append(byte)
+            guard data.count <= Self.maxBodySize else {
+                throw URLError(.dataLengthExceedsMaximum)
+            }
         }
         return data
     }

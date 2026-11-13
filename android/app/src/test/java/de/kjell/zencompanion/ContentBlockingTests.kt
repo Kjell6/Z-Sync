@@ -12,6 +12,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -94,21 +95,26 @@ class ContentBlockingTests {
     @Test
     fun bundledListWinsWhenTheDownloadIsOlder() {
         val bundled = parsedList("202611010000")
-        assertEquals(bundled.version, FilterListUpdates.chooseList(bundled, parsedList("202610242150"))?.version)
-        assertEquals("202611010000", FilterListUpdates.chooseList(bundled, parsedList("202611010000"))?.version)
-        assertEquals("202612010000", FilterListUpdates.chooseList(bundled, parsedList("202612010000"))?.version)
+        val older = parsedList("202610242150")
+        val sameDay = parsedList("202611010000")
+        val newer = parsedList("202612010000")
+        // The instance, not its version: a null choice has no version either.
+        assertSame(bundled, FilterListUpdates.chooseList(bundled, older))
+        assertSame(sameDay, FilterListUpdates.chooseList(bundled, sameDay))
+        assertSame(newer, FilterListUpdates.chooseList(bundled, newer))
     }
 
     @Test
     fun aMissingCopyOrVersionFallsBackToTheOther() {
         val bundled = parsedList("202611010000")
         val downloaded = parsedList("202610242150")
-        assertEquals("202611010000", FilterListUpdates.chooseList(bundled, null)?.version)
-        assertEquals("202610242150", FilterListUpdates.chooseList(null, downloaded)?.version)
+        val withoutVersion = parsedList(null)
+        assertSame(bundled, FilterListUpdates.chooseList(bundled, null))
+        assertSame(downloaded, FilterListUpdates.chooseList(null, downloaded))
         assertNull(FilterListUpdates.chooseList(null, null))
         // Without a version on either side the download is kept, as before.
-        assertEquals("202610242150", FilterListUpdates.chooseList(parsedList(null), downloaded)?.version)
-        assertNull(FilterListUpdates.chooseList(bundled, parsedList(null))?.version)
+        assertSame(downloaded, FilterListUpdates.chooseList(withoutVersion, downloaded))
+        assertSame(withoutVersion, FilterListUpdates.chooseList(bundled, withoutVersion))
     }
 
     @Test

@@ -93,6 +93,14 @@ class BlockListTests {
         assertFalse(BlockList.isSameSite("bbc.co.uk", "itv.co.uk"))
         assertTrue(BlockList.isSameSite("a.example.com", "b.example.com"))
         assertFalse(BlockList.isSameSite("example.com", "example.net"))
+        assertFalse(BlockList.isSameSite("example.com", "example.org"))
+        assertTrue(BlockList.isSameSite("example.com", "cdn.example.com"))
+        // A short site name under a two-letter country domain is one site, not two.
+        assertTrue(BlockList.isSameSite("a.zdf.de", "b.zdf.de"))
+        assertTrue(BlockList.isSameSite("a.example.co.uk", "b.example.co.uk"))
+        assertFalse(BlockList.isSameSite("one.co.uk", "two.co.uk"))
+        assertTrue(BlockList.isSameSite("a.example.com.au", "b.example.com.au"))
+        assertFalse(BlockList.isSameSite("one.com.au", "two.com.au"))
     }
 
     @Test

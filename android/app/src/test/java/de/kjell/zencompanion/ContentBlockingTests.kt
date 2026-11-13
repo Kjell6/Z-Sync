@@ -1,6 +1,7 @@
 package de.kjell.zencompanion
 
 import de.kjell.zencompanion.data.BlockCategory
+import de.kjell.zencompanion.data.BlockList
 import de.kjell.zencompanion.data.ContentBlockingSettings
 import de.kjell.zencompanion.data.FilterListUpdates
 import de.kjell.zencompanion.data.blockingSiteKey
@@ -91,6 +92,26 @@ class ContentBlockingTests {
     }
 
     @Test
+    fun bundledListWinsWhenTheDownloadIsOlder() {
+        val bundled = parsedList("202611010000")
+        assertEquals(bundled.version, FilterListUpdates.chooseList(bundled, parsedList("202610242150"))?.version)
+        assertEquals("202611010000", FilterListUpdates.chooseList(bundled, parsedList("202611010000"))?.version)
+        assertEquals("202612010000", FilterListUpdates.chooseList(bundled, parsedList("202612010000"))?.version)
+    }
+
+    @Test
+    fun aMissingCopyOrVersionFallsBackToTheOther() {
+        val bundled = parsedList("202611010000")
+        val downloaded = parsedList("202610242150")
+        assertEquals("202611010000", FilterListUpdates.chooseList(bundled, null)?.version)
+        assertEquals("202610242150", FilterListUpdates.chooseList(null, downloaded)?.version)
+        assertNull(FilterListUpdates.chooseList(null, null))
+        // Without a version on either side the download is kept, as before.
+        assertEquals("202610242150", FilterListUpdates.chooseList(parsedList(null), downloaded)?.version)
+        assertNull(FilterListUpdates.chooseList(bundled, parsedList(null))?.version)
+    }
+
+    @Test
     fun consentScriptSkipsTheSitesTurnedOff() {
         val script = consentScriptSource("BUNDLE();", setOf("b.example", "a.example", "x\"y"))
         assertTrue(script.contains("""var skip = ["a.example","b.example","xy"];"""))
@@ -102,5 +123,11 @@ class ContentBlockingTests {
     fun captionUsesTheListDate() {
         assertEquals("24 Oct 2026", listDate("24 Oct 2026 21:50 UTC"))
         assertNull(listDate("soon"))
+    }
+
+    /** A minimal list that parses, so the choice tests need no bundled files. */
+    private fun parsedList(version: String?): BlockList {
+        val header = if (version == null) "" else "! Version: $version\n"
+        return BlockList.parse("[Adblock Plus 2.0]\n$header||ads.example^\n")
     }
 }

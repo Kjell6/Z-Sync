@@ -14,6 +14,10 @@ for list in easylist easyprivacy; do
     head -1 "$work/$list.txt" | grep -q '^\[Adblock Plus' || { echo "$list: not a filter list" >&2; exit 1; }
     # The header comments (version, date, licence) and the domain rules.
     awk 'NR == 1 || /^!/ && NR < 40 || /^(@@)?\|\|[A-Za-z0-9._-]+\^/' "$work/$list.txt" > "$work/$list.min.txt"
+    # A short answer that still starts like a list must not replace what ships;
+    # this is the same floor the apps apply to a downloaded list.
+    rules="$(grep -cE '^(@@)?\|\|[A-Za-z0-9._-]+\^' "$work/$list.min.txt" || true)"
+    [ "${rules:-0}" -ge 1000 ] || { echo "$list: only ${rules:-0} rules" >&2; exit 1; }
     for out in "$root/ios/ZenCompanion/Browser/ContentBlocking/$list.txt" \
                "$root/android/app/src/main/assets/content-blocking/$list.txt"; do
         mkdir -p "$(dirname "$out")"

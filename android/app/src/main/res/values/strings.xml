@@ -214,6 +214,7 @@
     <string name="browser_image_copy">Copy Image Address</string>
     <string name="kept_new_page">New Page</string>
     <string name="kept_close_all">Close All</string>
+    <string name="kept_close_all_label">Close all pages</string>
     <string name="kept_close_all_title">Close all pages?</string>
     <string name="kept_close_all_message">They are removed from this phone. Tabs in your spaces stay.</string>
     <string name="kept_empty_title">No open pages</string>

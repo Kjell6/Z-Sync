@@ -116,7 +116,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -921,6 +923,9 @@ internal fun OverviewDock(
                 description = stringResource(R.string.kept_new_page),
                 tint = zen.ink,
                 onLongClick = onPlusLongPress,
+                // The same label the custom action carries: a long press is
+                // invisible to TalkBack, so the action has to be listed.
+                onLongClickLabel = stringResource(R.string.kept_close_all_label),
                 onClick = onNewPage,
             )
             plusMenu()
@@ -937,6 +942,7 @@ private fun DockButton(
     width: androidx.compose.ui.unit.Dp = DockSide,
     height: androidx.compose.ui.unit.Dp = DockSide,
     onLongClick: (() -> Unit)? = null,
+    onLongClickLabel: String? = null,
     onClick: () -> Unit,
 ) {
     val zen = LocalZenColors.current
@@ -948,7 +954,29 @@ private fun DockButton(
             .border(liftBorder(), DockShape)
             .then(
                 if (onLongClick != null) {
-                    Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                    Modifier
+                        .combinedClickable(
+                            onClick = onClick,
+                            onLongClick = onLongClick,
+                            onLongClickLabel = onLongClickLabel,
+                        )
+                        // TalkBack only finds a long press by holding the
+                        // finger down. The same action as its own entry makes
+                        // it reachable from the actions list as well.
+                        .then(
+                            if (onLongClickLabel != null) {
+                                Modifier.semantics {
+                                    customActions = listOf(
+                                        CustomAccessibilityAction(onLongClickLabel) {
+                                            onLongClick()
+                                            true
+                                        },
+                                    )
+                                }
+                            } else {
+                                Modifier
+                            },
+                        )
                 } else {
                     Modifier.barClickable(onClick = onClick)
                 },
@@ -1188,11 +1216,13 @@ private fun ExpandedMenu(
                 RowDivider()
             }
             MenuRow(
-                icon = Icons.Outlined.ContentCopy,
+                // Copied: the glyph turns into the checkmark the iOS menu
+                // shows, beside the label that already says so.
+                icon = if (state.copyConfirmed) Icons.Outlined.Check else Icons.Outlined.ContentCopy,
                 title = stringResource(
                     if (state.copyConfirmed) R.string.browser_copied else R.string.browser_copy_link,
                 ),
-                tint = if (state.copyConfirmed) zen.ink else zen.ink,
+                tint = zen.ink,
                 onClick = onCopyLink,
             )
             RowDivider()

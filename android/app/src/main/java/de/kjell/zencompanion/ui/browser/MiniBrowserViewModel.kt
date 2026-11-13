@@ -21,12 +21,14 @@ import de.kjell.zencompanion.ui.screens.formatBrowserInput
 import de.kjell.zencompanion.util.FriendlyError
 import de.kjell.zencompanion.util.PageTitle
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.net.URI
 import kotlin.math.roundToInt
 
@@ -710,13 +712,19 @@ class MiniBrowserViewModel(
             } catch (_: Exception) {
                 null
             }
-            val article = ReaderExtractor.parse(payload)
+            // Long articles carry a payload of hundreds of kilobytes: the
+            // parse belongs off the main thread.
+            val article = withContext(Dispatchers.Default) { ReaderExtractor.parse(payload) }
             _state.update { it.copy(readerLoading = false, readerArticle = article) }
             if (article == null) showNotice(Notice(R.string.browser_reader_unavailable))
         }
     }
 
-    private fun effectiveUrl(): String = _state.value.currentUrl.ifEmpty { initialUrl ?: "" }
+    private fun effectiveUrl(): String {
+        val state = _state.value
+        return state.failedUrl.takeIf { state.pageError != null && it.isNotEmpty() }
+            ?: state.currentUrl.ifEmpty { initialUrl ?: "" }
+    }
 
     companion object {
         private fun displayHost(url: String?): String {

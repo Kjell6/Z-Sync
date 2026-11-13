@@ -85,6 +85,22 @@ class MiniBrowserViewModelTests {
     }
 
     @Test
+    fun theAddressFieldShowsTheFailedAddressWhileThePanelIsUp() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = newViewModel(initialUrl = "https://start.example/")
+        vm.onPageLoadFailed(BrowserPageError.HOST_NOT_FOUND, "https://bad.example/")
+
+        // Opening the field hands over the address that failed, not the page
+        // underneath it.
+        vm.onAddressFocusChange(true)
+        assertEquals("https://bad.example/", vm.state.value.addressText.text)
+
+        vm.clearPageError()
+        vm.endAddressEdit()
+        vm.onAddressFocusChange(true)
+        assertEquals("https://start.example/", vm.state.value.addressText.text)
+    }
+
+    @Test
     fun revealingThePageUnderneathRestoresItsAddress() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = newViewModel()
         vm.onPageLoadFailed(BrowserPageError.INSECURE, "https://expired.badssl.com/")

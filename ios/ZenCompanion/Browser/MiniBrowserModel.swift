@@ -537,6 +537,9 @@ final class MiniBrowserModel {
     func wake(history: Any? = nil) {
         guard webView == nil else { return }
         let view = MiniBrowserWebDriver.attach(to: self)
+        // A restored page can start without asking the navigation delegate
+        // first, so its lists and scripts go on before the state comes back.
+        if let url = pageURL { prepareBlocking(for: url) }
         if let history {
             view.interactionState = history
         } else if let url = pageURL {
@@ -901,8 +904,10 @@ final class MiniBrowserModel {
         }
         currentURL = url
         if url != nil { host?.pageDidChange(self) }
-        // A single-page site changes its address without loading anything.
-        if !isLoading { recordVisit() }
+        // A single-page site changes its address without loading anything. The
+        // web view is asked too: WebKit publishes its new address and its
+        // loading state together, and the address can arrive first.
+        if !isLoading, webView?.isLoading != true { recordVisit() }
     }
 
     /// Keeps a real document title. URL-shaped WebKit titles are ignored so
@@ -1327,11 +1332,22 @@ final class MiniBrowserModel {
         }
     }
 
+    /// The page's own `document.title`, or nil when the page does not answer
+    /// within a second. A web content process that died or a page that slept
+    /// never calls back, and the pin waiting on it must still save with the
+    /// title it already has.
     private func liveDocumentTitle(for url: URL) async -> String? {
         guard let webView else { return nil }
+        let answer = TitleAnswer()
         let payload: String? = await withCheckedContinuation { continuation in
+            answer.wait(continuation)
             webView.evaluateJavaScript(PageTitle.documentTitleScript) { result, _ in
-                continuation.resume(returning: result as? String)
+                let title = result as? String
+                Task { @MainActor in answer.finish(title) }
+            }
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1))
+                answer.finish(nil)
             }
         }
         return PageTitle.pickDocumentTitle(payload, url: url)
@@ -1376,6 +1392,41 @@ final class MiniBrowserModel {
     }
 }
 
+/// Settles one title lookup. The page's answer and the waiting limit can both
+/// arrive, and a continuation may only be resumed once, so the first one wins.
+private final class TitleAnswer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<String?, Never>?
+    private var finished = false
+
+    /// Takes the lookup's continuation. A lookup already settled resumes it
+    /// with no title.
+    func wait(_ continuation: CheckedContinuation<String?, Never>) {
+        lock.lock()
+        if finished {
+            lock.unlock()
+            continuation.resume(returning: nil)
+            return
+        }
+        self.continuation = continuation
+        lock.unlock()
+    }
+
+    /// The page's title, or nil for the limit. Later answers are dropped.
+    func finish(_ title: String?) {
+        lock.lock()
+        guard !finished else {
+            lock.unlock()
+            return
+        }
+        finished = true
+        let waiting = continuation
+        continuation = nil
+        lock.unlock()
+        waiting?.resume(returning: title)
+    }
+}
+
 /// Loads one suggest response. Failures throw; the model turns them into an empty list.
 protocol SearchSuggestionFetching: Sendable {
     func fetch(_ url: URL) async throws -> Data
@@ -1383,6 +1434,9 @@ protocol SearchSuggestionFetching: Sendable {
 
 /// Ephemeral session: suggest requests do not send or store browser cookies.
 struct LiveSearchSuggestionClient: SearchSuggestionFetching {
+    /// A suggest answer is a short list; anything far bigger is not one.
+    static let maxBodySize = 64 * 1024
+
     func fetch(_ url: URL) async throws -> Data {
         var request = URLRequest(url: url)
         request.timeoutInterval = 4
@@ -1390,6 +1444,9 @@ struct LiveSearchSuggestionClient: SearchSuggestionFetching {
         let (data, response) = try await SearchSuggestionSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             throw URLError(.badServerResponse)
+        }
+        guard data.count <= Self.maxBodySize else {
+            throw URLError(.dataLengthExceedsMaximum)
         }
         return data
     }

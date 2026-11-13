@@ -502,7 +502,8 @@ struct MiniBrowserChrome<NavBar: View>: View {
                     kind: model.pinSaveKind,
                     scheme: scheme,
                     style: .compact,
-                    onOpen: { model.pinMenuWillOpen() }
+                    onOpen: { model.pinMenuWillOpen() },
+                    onMenuDidDismiss: { model.pinMenuDidDismiss() }
                 ) { kind in
                     model.selectPinSaveKind(kind)
                 }
@@ -1257,7 +1258,11 @@ struct MiniBrowserTopBar: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(AddressPressStyle())
-            .accessibilityLabel(Text("browser.search_placeholder"))
+            // The page's own title, so the collapsed bar does not hide where
+            // the reader is; only an empty title falls back to the prompt.
+            .accessibilityLabel(
+                Text(displayTitle.isEmpty ? String(localized: "browser.search_placeholder") : displayTitle)
+            )
 
             iconButton(
                 systemName: model.isLoading ? "xmark" : "arrow.clockwise",

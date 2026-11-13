@@ -93,6 +93,18 @@ internal fun systemAccessGranted(kind: SitePermission, granted: (String) -> Bool
     kind.systemPermissions.any(granted)
 
 /**
+ * What a request that waited behind an open dialog may be told once the dialog
+ * closes, or null when it has to be asked: true when the system granted it all
+ * by now, false when every kind it still misses was part of that question, and
+ * null when one of them was never put to the reader.
+ */
+internal fun waitingAnswer(missing: List<SitePermission>, asked: List<SitePermission>): Boolean? = when {
+    missing.isEmpty() -> true
+    missing.all { it in asked } -> false
+    else -> null
+}
+
+/**
  * The screen's side of page requests: the system's permission and file screens,
  * and the video that takes over the display. The system's question is only
  * raised from here, after the browser's own.
@@ -112,6 +124,8 @@ internal class BrowserPageRequests(
     val isFullscreen: Boolean get() = fullscreen != null
 
     private var permissionAnswer: ((Map<String, Boolean>) -> Unit)? = null
+    /** The kinds of site permission the open system dialog asks about. */
+    private var permissionKinds: List<SitePermission> = emptyList()
     private var fileAnswer: ((ActivityResult) -> Unit)? = null
 
     /** Callers waiting while a system request is open, answered when it closes. */
@@ -119,14 +133,22 @@ internal class BrowserPageRequests(
 
     fun onPermissionResult(result: Map<String, Boolean>) {
         val answer = permissionAnswer
+        val asked = permissionKinds
         permissionAnswer = null
+        permissionKinds = emptyList()
         answer?.invoke(result)
-        // Everyone who asked while the dialog was open has its answer now: what
-        // the system granted, without a second dialog straight after.
+        // Everyone who asked while the dialog was open is answered now, but only
+        // about what that dialog asked: a kind the reader was not shown goes to
+        // the system as its own question instead of being refused unanswered.
         val waiting = permissionWaiters.toList()
         permissionWaiters.clear()
         waiting.forEach { (kinds, done) ->
-            done(kinds.all { kind -> systemAccessGranted(kind) { context.has(it) } })
+            val missing = kinds.filter { kind -> !systemAccessGranted(kind) { context.has(it) } }
+            val allowed = waitingAnswer(missing, asked)
+            // A waiter answered again is handed back to the system, which either
+            // starts the next dialog or lets it wait behind one: it is never
+            // resubmitted a second time for the same closed dialog.
+            if (allowed != null) done(allowed) else requestSystem(kinds, done)
         }
     }
 
@@ -148,6 +170,7 @@ internal class BrowserPageRequests(
             permissionWaiters += kinds to done
             return
         }
+        permissionKinds = kinds
         permissionAnswer = { _ ->
             val refused = kinds.filter { kind -> !systemAccessGranted(kind) { context.has(it) } }
             // After a final no the system shows nothing at all, so say where it changes.
@@ -185,13 +208,14 @@ internal class BrowserPageRequests(
                     // questions have their answer now too, instead of showing
                     // the same dialog once more. Only for kinds just answered:
                     // nothing is remembered that the reader was not asked.
-                    session.prompts
+                    val repeats = session.prompts
                         .filterIsInstance<BrowserPrompt.Permission>()
                         .filter { it.host.equals(host, ignoreCase = true) && kinds.containsAll(it.kinds) }
-                        .forEach { pending ->
-                            session.prompts.remove(pending)
-                            pending.send(allowed)
-                        }
+                    // Taken out first: each answer looks for the next question
+                    // itself, and a list still holding them would nest one call
+                    // per duplicate.
+                    session.prompts.removeAll(repeats)
+                    repeats.forEach { it.send(allowed) }
                 }
             }
         }
@@ -210,6 +234,9 @@ internal class BrowserPageRequests(
                 !context.has(Manifest.permission.WRITE_EXTERNAL_STORAGE)
             ) {
                 if (permissionAnswer != null) return
+                // Storage is no site permission: a request waiting behind this
+                // dialog has not been asked about its own kinds.
+                permissionKinds = emptyList()
                 permissionAnswer = { result ->
                     if (result[Manifest.permission.WRITE_EXTERNAL_STORAGE] == true) {
                         save(view, download)

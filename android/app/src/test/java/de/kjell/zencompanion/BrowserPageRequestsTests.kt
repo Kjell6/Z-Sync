@@ -16,6 +16,7 @@ import de.kjell.zencompanion.ui.browser.resolveDownloadUrl
 import de.kjell.zencompanion.ui.browser.safeDownloadName
 import de.kjell.zencompanion.ui.browser.sitePermissionsFor
 import de.kjell.zencompanion.ui.screens.systemAccessGranted
+import de.kjell.zencompanion.ui.screens.waitingAnswer
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -82,6 +83,20 @@ class BrowserPageRequestsTests {
     fun approximateLocationIsEnough() {
         assertTrue(systemAccessGranted(SitePermission.LOCATION) { it.endsWith("COARSE_LOCATION") })
         assertFalse(systemAccessGranted(SitePermission.CAMERA) { it.endsWith("COARSE_LOCATION") })
+    }
+
+    @Test
+    fun aWaitingRequestIsAnsweredOnlyAboutWhatTheDialogAsked() {
+        // Granted while it waited.
+        assertEquals(true, waitingAnswer(emptyList(), listOf(SitePermission.CAMERA)))
+        // Every missing kind was part of the question just answered.
+        assertEquals(
+            false,
+            waitingAnswer(listOf(SitePermission.CAMERA), listOf(SitePermission.CAMERA, SitePermission.MICROPHONE)),
+        )
+        // The microphone was never put to the reader: the system has to ask.
+        assertNull(waitingAnswer(listOf(SitePermission.MICROPHONE), listOf(SitePermission.CAMERA)))
+        assertNull(waitingAnswer(listOf(SitePermission.CAMERA), emptyList()))
     }
 
     @Test

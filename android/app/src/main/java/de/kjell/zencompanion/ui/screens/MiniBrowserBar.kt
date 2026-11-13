@@ -1708,9 +1708,18 @@ private fun SiteIcon(effectiveUrl: String) {
         effectiveUrl.startsWith("https://") -> Icons.Outlined.Lock
         else -> Icons.Outlined.Language
     }
+    // The padlock is the only sign a page is encrypted, so it has to say so:
+    // the clickable row around it merges its children, and the description is
+    // read with the page's name. A search or a plain address says nothing
+    // about a connection and stays silent.
+    val description = when {
+        effectiveUrl.startsWith("https://") -> stringResource(R.string.browser_connection_secure)
+        effectiveUrl.startsWith("http://") -> stringResource(R.string.browser_connection_insecure)
+        else -> null
+    }
     Icon(
         imageVector = icon,
-        contentDescription = null,
+        contentDescription = description,
         tint = zen.ink.copy(alpha = 0.7f),
         modifier = Modifier.size(18.dp),
     )

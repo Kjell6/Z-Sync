@@ -424,6 +424,9 @@ final class MiniBrowserModel {
     /// Whether this account can write normal tabs at all. Without it the save
     /// row offers pinned only, like the share sheet.
     var allowsNormalTabs: Bool
+    /// Whether saving into a space is offered at all. Signed out there is no
+    /// space to save to, so the pin control and every pin path stay off.
+    var canSave = true
     private let suggestionClient: SearchSuggestionFetching
     let sitePermissions: SitePermissionStore
     private let history: BrowserHistoryStore
@@ -1134,8 +1137,8 @@ final class MiniBrowserModel {
     // MARK: - Pin save state machine
 
     func triggerPinBanner(spaces: [ZenSpace], fallbackSpace: ZenSpace) {
-        // A page that failed to load has nothing worth pinning.
-        guard let url = effectiveURL, pageError == nil else { return }
+        // Signed out there is no account and no space to save into.
+        guard canSave, let url = effectiveURL, pageError == nil else { return }
         guard !spaces.isEmpty else {
             // There is no attached destination, so refuse instead of writing
             // to an unattached workspace id (fallbackSpace is not in sync).
@@ -1290,7 +1293,8 @@ final class MiniBrowserModel {
     }
 
     func commitPendingPinSave() {
-        guard hasPendingPinSave,
+        guard canSave,
+              hasPendingPinSave,
               let pin = pendingPin ?? effectiveURL.map({ (url: $0, title: pageTitle) })
         else {
             return

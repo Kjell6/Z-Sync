@@ -30,6 +30,23 @@ final class SessionModelTests: XCTestCase {
         XCTAssertEqual(accounts.republishCount, 1)
     }
 
+    func testStoredAccountIsSignedInBeforeLoad() {
+        let accounts = FakeAccountSession()
+        accounts.stored = snapshot()
+
+        let model = SessionModel(
+            accounts: accounts,
+            spaces: FakeSessionSpaces(),
+            preferences: FakePreferences(),
+            haptics: FakeSessionHaptics()
+        )
+
+        // The first view is built from this model before any `.onAppear` runs:
+        // a signed-in reader must never start on the signed-out home.
+        XCTAssertEqual(model.account?.uid, "u1")
+        XCTAssertEqual(accounts.republishCount, 0, "creating the model only reads the session")
+    }
+
     func testCompleteSignInPersistsAndEntersSession() {
         let accounts = FakeAccountSession()
         let model = SessionModel(

@@ -42,6 +42,11 @@ final class SessionModel {
         self.haptics = haptics
         self.signerOut = signerOut
         self.now = now
+        // Read the stored session now, not only in `load()`: `HomeView` builds
+        // its first view from this model before any `.onAppear` runs, so a
+        // signed-in reader would otherwise start on the signed-out home (and
+        // its sign-in card) and switch once the account arrived.
+        self.account = accounts.load()
     }
 
     func load() {

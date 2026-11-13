@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import de.kjell.zencompanion.data.BrowserHistory
 import de.kjell.zencompanion.data.BrowserSettings
@@ -42,6 +43,9 @@ import org.json.JSONTokener
 
 private const val TITLE_LOOKUP_MS = 1_000L
 
+/** A long article takes longer to extract than a title to look up. */
+private const val READER_EXTRACTION_MS = 5_000L
+
 /**
  * The live side of one open page: its chrome state, its blocking and, while it
  * is awake, its WebView. Survives the Activity, so a theme change or a rotation
@@ -65,6 +69,8 @@ class PageSession(
     var webView by mutableStateOf<WebView?>(null)
     /** The page as it last looked, for the overview. */
     var shot by mutableStateOf<ImageBitmap?>(null)
+    /** Bumped when [shot] is let go, so a load still under way does not bring it back. */
+    var shotGeneration = 0
     /** Bumped to reload after a blocking change. */
     var blockingReload by mutableIntStateOf(0)
     /** A crashed renderer takes its WebView with it; a new key builds a fresh one. */
@@ -73,6 +79,8 @@ class PageSession(
     var reloadScroll: Int? = null
     /** The back and forward list while the page has no WebView. */
     var history: Bundle? = null
+    /** A kept page's history file has been read into [history], or never needs to be. */
+    var historyLoaded = false
     /** `window.open` waiting for this page's WebView. */
     var pendingPopup: Message? = null
     /** A new page goes straight into the address field, once. */
@@ -109,13 +117,17 @@ class PageSession(
         }
         viewModel.readerPayload = reader@{
             val view = webView ?: return@reader null
-            suspendCancellableCoroutine { continuation ->
-                view.post {
-                    if (!continuation.isActive) return@post
-                    view.evaluateJavascript(ReaderExtractor.jsonScript) { raw ->
-                        if (!continuation.isActive) return@evaluateJavascript
-                        val payload = runCatching { JSONTokener(raw).nextValue() as? String }.getOrNull()
-                        continuation.resume(payload)
+            // Same as the title: a WebView destroyed mid-request never answers,
+            // and the reader must not stay loading for good.
+            withTimeoutOrNull(READER_EXTRACTION_MS) {
+                suspendCancellableCoroutine { continuation ->
+                    view.post {
+                        if (!continuation.isActive) return@post
+                        view.evaluateJavascript(ReaderExtractor.jsonScript) { raw ->
+                            if (!continuation.isActive) return@evaluateJavascript
+                            val payload = runCatching { JSONTokener(raw).nextValue() as? String }.getOrNull()
+                            continuation.resume(payload)
+                        }
                     }
                 }
             }
@@ -190,10 +202,13 @@ class BrowserPages(
         viewModel.onPageChange = { url, title -> store.update(id, url, title) }
         viewModel.onPinStarted = { url -> store.markPinned(id, url) }
         viewModel.onPinFailed = { store.unmarkPinned(id) }
-        viewModel.onPinned = { url -> store.pinned(id, url, PageTitle::sameDocument) }
+        viewModel.onPinned = { url ->
+            store.pinned(id, url, PageTitle::sameDocument)
+            sessions[id]?.let(::holdReleasedShot)
+        }
         val session = PageSession(id, viewModel, page.url)
         if (page.isKept) {
-            session.history = readHistory(store.historyFile(id))
+            // The history file is read once a WebView asks for it ([takeHistory]).
             // Coming back to a page is not visiting it again.
             session.lastVisit = historyAddress(page.url)
         }
@@ -290,15 +305,21 @@ class BrowserPages(
         live.clear()
         recent.clear()
         sessions.clear()
+        // Nothing of the pages stays in memory either, sign-out included.
+        shotBitmaps.clear()
         syncActive()
     }
 
     fun toggleKeep(id: String) {
         val session = sessions[id] ?: return
+        // Letting go deletes the page's files: what it had there stays in memory.
+        if (store.page(id)?.isKept == true) loadHistory(session)
         store.toggleKeep(id, failed = session.viewModel.state.value.pageError != null)
         if (store.page(id)?.isKept == true) {
             saveHistory(session)
             capture(session)
+        } else {
+            holdReleasedShot(session)
         }
     }
 
@@ -390,10 +411,26 @@ class BrowserPages(
 
     // MARK: - History
 
+    /** Reads a kept page's history file, once, if nothing newer is in memory. */
+    private fun loadHistory(session: PageSession) {
+        if (session.historyLoaded) return
+        session.historyLoaded = true
+        if (session.history == null && store.page(session.id)?.isKept == true) {
+            session.history = readHistory(store.historyFile(session.id))
+        }
+    }
+
+    /** The back and forward list a new WebView starts from; the WebView holds it from then on. */
+    fun takeHistory(session: PageSession): Bundle? {
+        loadHistory(session)
+        return session.history.also { session.history = null }
+    }
+
     /** Takes the WebView's back and forward list while it still has one. */
     fun saveHistory(session: PageSession) {
         val view = session.webView
-        // A sleeping page holds what its WebView gave up.
+        // A sleeping page holds what its WebView gave up. One whose history
+        // was never read has nothing here: its file is already current.
         val bundle = if (view != null) {
             Bundle().takeIf { runCatching { view.saveState(it) }.getOrNull() != null }
         } else {
@@ -407,13 +444,12 @@ class BrowserPages(
     }
 
     /** Nothing of a page outlasts its keeping, whichever comes first. */
-    private fun writeKept(id: String, file: File, write: () -> Unit) {
+    private fun writeKept(id: String, file: File, write: () -> Unit) =
         writes.launch {
             if (store.page(id)?.isKept != true) return@launch
             write()
             if (store.page(id)?.isKept != true) file.delete()
         }
-    }
 
     // MARK: - Pictures
 
@@ -437,27 +473,56 @@ class BrowserPages(
         canvas.translate(-view.scrollX.toFloat(), -view.scrollY.toFloat())
         runCatching { view.draw(canvas) }
         session.shot = bitmap.asImageBitmap()
-        shotBitmaps[session.id] = bitmap
-        if (store.page(session.id)?.isKept == true) writeShot(session.id, bitmap)
+        if (store.page(session.id)?.isKept == true) {
+            writeShot(session.id, bitmap)
+            // On its way to disk: the map is for pages that are not kept.
+            shotBitmaps.remove(session.id)
+        } else {
+            shotBitmaps[session.id] = bitmap
+        }
     }
 
-    /** The latest pictures, so a page kept later can still store its own. */
+    /**
+     * The pictures of pages that are not kept, so a page kept later can still
+     * store its own. A kept page's picture leaves as it is queued for writing.
+     */
     private val shotBitmaps = HashMap<String, Bitmap>()
+
+    /** Picture writes queued or running, per page: until done the disk may be behind. */
+    private val shotWrites = HashMap<String, Int>()
 
     private fun keptShotsToDisk() {
         val kept = store.pages.value.filter { it.isKept }.map { it.id }.toSet()
         shotBitmaps.filterKeys { it in kept }.forEach { (id, bitmap) -> writeShot(id, bitmap) }
+        shotBitmaps.keys.removeAll(kept)
         shotBitmaps.keys.retainAll(sessions.keys)
+    }
+
+    /** A page let go of keeping has lost its file: its picture waits here in case it is kept again. */
+    private fun holdReleasedShot(session: PageSession) {
+        if (store.page(session.id)?.isKept == true || session.id in shotBitmaps) return
+        val shot = session.shot ?: return
+        shotBitmaps[session.id] = shot.asAndroidBitmap()
     }
 
     private fun writeShot(id: String, bitmap: Bitmap) {
         val target = store.snapshotFile(id)
+        shotWrites[id] = (shotWrites[id] ?: 0) + 1
         writeKept(id, target) {
             runCatching {
                 target.parentFile?.mkdirs()
                 val temp = File(target.path + ".tmp")
                 temp.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 72, it) }
                 temp.renameTo(target)
+            }
+        }.invokeOnCompletion {
+            launchOnMain {
+                val left = (shotWrites[id] ?: 1) - 1
+                if (left > 0) {
+                    shotWrites[id] = left
+                } else {
+                    shotWrites.remove(id)
+                }
             }
         }
     }
@@ -467,10 +532,32 @@ class BrowserPages(
         if (session.shot != null) return
         val file = store.snapshotFile(session.id)
         if (!file.exists()) return
+        val generation = session.shotGeneration
         io.launch {
-            val image = runCatching { BitmapFactory.decodeFile(file.path) }.getOrNull() ?: return@launch
-            launchOnMain { if (session.shot == null) session.shot = image.asImageBitmap() }
+            // Pictures are opaque: 565 needs half the memory at the same size.
+            val options = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.RGB_565 }
+            val image = runCatching { BitmapFactory.decodeFile(file.path, options) }.getOrNull() ?: return@launch
+            launchOnMain {
+                // Let go again while it loaded: the card is no longer near.
+                if (session.shot == null && session.shotGeneration == generation) session.shot = image.asImageBitmap()
+            }
         }
+    }
+
+    /**
+     * A card far from the deck's focus lets go of its picture, but only when
+     * the disk can give it back: the page is kept, its picture is written and
+     * no newer one is on its way. The page on screen and pages with a WebView
+     * keep theirs.
+     */
+    fun dropShot(session: PageSession) {
+        val id = session.id
+        if (id == store.activeId.value || session.webView != null) return
+        if (store.page(id)?.isKept != true) return
+        if (id in shotBitmaps || id in shotWrites) return
+        if (session.shot != null && !store.snapshotFile(id).exists()) return
+        session.shotGeneration++
+        session.shot = null
     }
 
     private fun launchOnMain(block: () -> Unit) {

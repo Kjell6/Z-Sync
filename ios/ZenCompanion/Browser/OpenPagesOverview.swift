@@ -276,11 +276,12 @@ struct OpenPagesOverview: View {
             .simultaneousGesture(deckGesture(deck))
         }
         .ignoresSafeArea()
-        .onChange(of: pages.pages.map(\.id)) { _, ids in
+        .onChange(of: pages.pages.map(\.id)) { _, _ in
             // A page can go without passing through `close`: a popup that
             // closes itself, a page that expires. The deck must rest on a
-            // card that still exists.
-            let last = CGFloat(max(0, ids.count - 1))
+            // card that still exists: the cards it shows, which leave out the
+            // one the page on screen stands in for.
+            let last = CGFloat(max(0, visiblePages.count - 1))
             if focus > last { focus = last }
         }
         .alert(
@@ -615,6 +616,17 @@ struct OpenPagesOverview: View {
     }
 }
 
+/// Cards this far from the deck's focus hold their picture; the others let go
+/// of it once the disk can give it back. A card ahead is off screen past about
+/// 1.4 cards (`PageDeckGeometry.frame`); cards behind tuck in with a sliver of
+/// at least a few points up to about 5 cards back. One card of margin on top.
+private let pictureCardsAhead: CGFloat = 3
+private let pictureCardsBehind: CGFloat = 6
+/// `focus` jumps to where an animation ends, so a card can still be crossing
+/// the screen after it left the window: it lets go only once the deck's
+/// longest move (0.42 s) is over.
+private let pictureDropDelay: Duration = .milliseconds(600)
+
 /// One page: the whole screen in small, its icon and name above it.
 private struct OpenPageCard<Menu: View>: View {
     let page: OpenPage
@@ -639,6 +651,11 @@ private struct OpenPageCard<Menu: View>: View {
     private let iconGap: CGFloat = 8
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: PageDeckGeometry.cornerRadius, style: .continuous)
+    }
+
+    /// Near enough the deck's focus to hold its picture.
+    private var isNear: Bool {
+        offset > -pictureCardsBehind && offset < pictureCardsAhead
     }
 
     /// Up to the icon of the card lying on top.
@@ -675,6 +692,16 @@ private struct OpenPageCard<Menu: View>: View {
             .accessibilityAction(.default, onOpen)
             .accessibilityAction(named: Text("kept.close_page")) { onClose() }
             .accessibilityHidden(hidesPicture)
+            .task(id: isNear) {
+                if isNear {
+                    await store.loadShot(of: page)
+                } else {
+                    // Cancelled when the card comes back before the deck has settled.
+                    try? await Task.sleep(for: pictureDropDelay)
+                    guard !Task.isCancelled else { return }
+                    store.dropShot(of: page)
+                }
+            }
     }
 
     private var header: some View {
@@ -710,7 +737,8 @@ private struct OpenPageCard<Menu: View>: View {
 }
 
 /// The page as it looked when it was last on screen, on its own color, which
-/// also fills the status bar's strip above it; its favicon until then.
+/// also fills the status bar's strip above it; its favicon until then. The
+/// card loads and lets go of the picture.
 struct OpenPageShot: View {
     let page: OpenPage
     let store: OpenPagesStore
@@ -734,7 +762,6 @@ struct OpenPageShot: View {
                 Favicon(urlString: url.absoluteString, size: 36)
             }
         }
-        .task(id: page.id) { await store.loadShot(of: page) }
     }
 }
 

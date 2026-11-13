@@ -62,8 +62,8 @@ private struct EssentialTile: View {
         Button(action: onOpen) {
             let shape = RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous)
             ZStack {
-                shape
-                    .fill(Palette.lift(scheme))
+                Color.clear
+                    .modifier(DomedFill(shape: shape, scheme: scheme))
                 ZenTabIcon(tab: tab, size: 24, scheme: scheme)
             }
             .frame(maxWidth: .infinity)
@@ -71,7 +71,7 @@ private struct EssentialTile: View {
             .glassRim(cornerRadius: Palette.liftCornerRadius)
             .contentShape(shape)
         }
-        .buttonStyle(SquircleButtonStyle())
+        .buttonStyle(LiquidPressButtonStyle())
         .contextMenu {
             Button {
                 let label = tab.staticLabel?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""

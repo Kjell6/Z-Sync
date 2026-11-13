@@ -83,9 +83,9 @@ private struct SignInLandingView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                     .foregroundStyle(Palette.paper(scheme))
-                    .background(Palette.ink(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .modifier(DomedFill(shape: RoundedRectangle(cornerRadius: 16, style: .continuous), scheme: scheme, fill: Palette.ink(scheme)))
             }
-            .buttonStyle(PressedButtonStyle())
+            .buttonStyle(LiquidPressButtonStyle())
             Button { model.presentSignInHelp() } label: {
                 Text("signin.help.link")
                     .zenFont(13, weight: .medium, design: .rounded)

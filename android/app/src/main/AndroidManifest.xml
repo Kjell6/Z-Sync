@@ -84,6 +84,18 @@
                 <data android:scheme="http" />
                 <data android:scheme="https" />
             </intent-filter>
+
+            <!-- Z-Sync's own links, zsync://open?url=<address>, so a Shortcut
+                 or a link can open a page here before the system offers the
+                 app as a browser. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="zsync"
+                    android:host="open" />
+            </intent-filter>
         </activity>
 
         <!-- Android equivalent of the iOS Share Extension.

@@ -11,6 +11,7 @@ import de.kjell.zencompanion.ui.screens.loadsInWebView
 import de.kjell.zencompanion.ui.screens.schemeLoadsInWebView
 import de.kjell.zencompanion.ui.screens.sameTabUrl
 import de.kjell.zencompanion.ui.screens.tappedLinkUrl
+import de.kjell.zencompanion.ui.screens.zsyncWebLink
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -261,6 +262,71 @@ class BrowserLinkPolicyTests {
         assertEquals(null, incomingWebLink(view, "https", null))
         assertEquals(null, incomingWebLink(view, "https", "   "))
         assertEquals(null, incomingWebLink(view, null, "https://example.com"))
+    }
+
+    // MARK: - zsync:// links
+
+    @Test
+    fun zsyncOpenLinkCarriesItsTargetPage() {
+        assertEquals(
+            "https://example.com/a?b=1&c=2",
+            zsyncWebLink("zsync://open?url=https%3A%2F%2Fexample.com%2Fa%3Fb%3D1%26c%3D2"),
+        )
+        assertEquals(
+            "http://localhost:8765/redirect.html",
+            zsyncWebLink("zsync://open?url=http%3A%2F%2Flocalhost%3A8765%2Fredirect.html"),
+        )
+        // Encoded parameters inside the target survive one decode.
+        assertEquals(
+            "https://example.com/search?q=a%20b&page=2",
+            zsyncWebLink("zsync://open?url=https%3A%2F%2Fexample.com%2Fsearch%3Fq%3Da%2520b%26page%3D2"),
+        )
+        // A `+` is a plus in an address, not a space.
+        assertEquals(
+            "https://example.com/a+b",
+            zsyncWebLink("zsync://open?url=https%3A%2F%2Fexample.com%2Fa+b"),
+        )
+        // Scheme and host match like any URI; a bare slash is the same host.
+        assertEquals(
+            "https://example.com/",
+            zsyncWebLink("ZSYNC://OPEN/?url=https%3A%2F%2Fexample.com%2F"),
+        )
+        // The intent helper accepts the same link from a VIEW intent.
+        assertEquals(
+            "https://example.com/from-a-shortcut",
+            incomingWebLink(
+                "android.intent.action.VIEW",
+                "zsync",
+                "zsync://open?url=https%3A%2F%2Fexample.com%2Ffrom-a-shortcut",
+            ),
+        )
+    }
+
+    @Test
+    fun zsyncOpenLinkRejectsEverythingElse() {
+        // Another host or path, a missing or extra parameter, a plain web URL.
+        assertEquals(null, zsyncWebLink("zsync://other?url=https%3A%2F%2Fexample.com"))
+        assertEquals(null, zsyncWebLink("zsync://open/elsewhere?url=https%3A%2F%2Fexample.com"))
+        assertEquals(null, zsyncWebLink("zsync://open"))
+        assertEquals(null, zsyncWebLink("zsync://open?url="))
+        assertEquals(null, zsyncWebLink("zsync://open?url=https%3A%2F%2Fexample.com&x=1"))
+        assertEquals(null, zsyncWebLink("zsync://open?target=https%3A%2F%2Fexample.com"))
+        assertEquals(null, zsyncWebLink("https://example.com/?url=https%3A%2F%2Fexample.com"))
+        assertEquals(null, zsyncWebLink("zsync:open?url=https%3A%2F%2Fexample.com"))
+        assertEquals(null, zsyncWebLink(null))
+        assertEquals(null, zsyncWebLink("  "))
+        // Targets that are not web pages.
+        for (encoded in listOf(
+            "javascript%3Aalert(1)",
+            "file%3A%2F%2F%2Fetc%2Fhosts",
+            "data%3Atext%2Fhtml%2Chi",
+            "intent%3A%2F%2Fscan%2F%23Intent%3Bscheme%3Dzxing%3Bend",
+            "mailto%3Anobody%40example.com",
+        )) {
+            assertEquals(encoded, null, zsyncWebLink("zsync://open?url=$encoded"))
+        }
+        // A web address without a host.
+        assertEquals(null, zsyncWebLink("zsync://open?url=https%3A%2F%2F"))
     }
 
     @Test

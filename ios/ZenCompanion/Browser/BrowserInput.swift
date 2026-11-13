@@ -71,6 +71,30 @@ enum BrowserInput {
         }
     }
 
+    /// The page an incoming link names, or nil when it is not one. Two forms
+    /// are accepted, nothing else: a plain `http`/`https` address handed over
+    /// by another app, and Z-Sync's own `zsync://open?url=` link.
+    static func incomingWebAddress(_ url: URL) -> URL? {
+        guard url.scheme?.lowercased() == "zsync" else {
+            guard isWebAddress(url), url.host?.isEmpty == false else { return nil }
+            return url
+        }
+        // Another host or path, a missing or extra parameter, or a target that
+        // is not a web address with a host: not this link, so nothing opens.
+        guard url.host?.lowercased() == "open",
+              url.path.isEmpty || url.path == "/",
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let items = components.queryItems,
+              items.count == 1,
+              items[0].name == "url",
+              let value = items[0].value, !value.isEmpty,
+              let target = URL(string: value),
+              isWebAddress(target),
+              target.host?.isEmpty == false
+        else { return nil }
+        return target
+    }
+
     /// Address-bar display text for a loaded URL (host, or the full string for
     /// schemeless/local URLs).
     static func displayText(for url: URL) -> String {

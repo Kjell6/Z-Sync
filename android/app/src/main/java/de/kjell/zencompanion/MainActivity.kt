@@ -99,7 +99,7 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    /** Only `VIEW` intents with an `http`/`https` data URI carry a web link. */
+    /** Only `VIEW` intents with an `http`/`https` or `zsync` data URI carry a web link. */
     private fun openIncomingLink(intent: Intent?) {
         // Reopening the app from Recents can replay the launch intent that
         // brought it there, with no saved instance state, so the old link

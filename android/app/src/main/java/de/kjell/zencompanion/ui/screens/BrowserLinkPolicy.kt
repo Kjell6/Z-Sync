@@ -66,14 +66,85 @@ internal fun browserLinkAction(
 
 /**
  * The address a `VIEW` intent from another app hands to Z-Sync, or null when
- * it is not a web link. Any app on the device can send the intent, so only the
- * data URI counts and only `http`/`https` pass; nothing else in it is read.
+ * it is not a link Z-Sync opens. Any app on the device can send the intent, so
+ * only the data URI counts and nothing else in it is read. Two forms pass:
+ * an `http`/`https` link, and Z-Sync's own `zsync://open?url=` link.
  */
 internal fun incomingWebLink(action: String?, scheme: String?, data: String?): String? {
     if (action != Intent.ACTION_VIEW) return null
     val normalized = scheme?.lowercase()
+    if (normalized == "zsync") return zsyncWebLink(data)
     if (normalized != "http" && normalized != "https") return null
     return sameTabUrl(data)
+}
+
+/**
+ * The page a `zsync://open?url=<percent-encoded address>` link names, or null
+ * when it is anything else: another host or path, a missing or extra
+ * parameter, or a target that is not an `http`/`https` address with a host.
+ * A Shortcut or a link can open a page in Z-Sync this way before the system
+ * offers the app as a browser.
+ *
+ * Parsed as text rather than with `android.net.Uri`, so the query stays raw
+ * until its single value is decoded: an encoded `&` inside the target must not
+ * split it into parameters (and this stays a pure function for the tests).
+ */
+internal fun zsyncWebLink(raw: String?): String? {
+    val link = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    val schemeEnd = link.indexOf(':')
+    if (schemeEnd <= 0) return null
+    if (!link.substring(0, schemeEnd).equals("zsync", ignoreCase = true)) return null
+    val rest = link.substring(schemeEnd + 1)
+    if (!rest.startsWith("//")) return null
+
+    // The authority runs to the first slash, query or fragment.
+    val afterSlashes = rest.substring(2)
+    val authorityEnd = afterSlashes.indexOfFirst { it == '/' || it == '?' || it == '#' }
+    val host = if (authorityEnd < 0) afterSlashes else afterSlashes.substring(0, authorityEnd)
+    if (!host.equals("open", ignoreCase = true)) return null
+    val afterHost = if (authorityEnd < 0) "" else afterSlashes.substring(authorityEnd)
+
+    // The path is either absent or a bare slash; a fragment only counts when
+    // it follows the query.
+    val fragmentStart = afterHost.indexOf('#')
+    val queryStart = afterHost.indexOf('?')
+    val pathEnd = minOf(
+        if (queryStart >= 0) queryStart else afterHost.length,
+        if (fragmentStart >= 0) fragmentStart else afterHost.length,
+    )
+    val path = afterHost.substring(0, pathEnd)
+    if (path.isNotEmpty() && path != "/") return null
+    if (queryStart < 0 || (fragmentStart in 0 until queryStart)) return null
+    val query = afterHost.substring(
+        queryStart + 1,
+        if (fragmentStart > queryStart) fragmentStart else afterHost.length,
+    )
+
+    // Exactly one parameter, named `url`: nothing else is accepted.
+    if (query.isEmpty() || query.contains('&')) return null
+    if (query.substringBefore('=') != "url") return null
+    val encoded = query.substringAfter('=', missingDelimiterValue = "")
+    if (encoded.isEmpty()) return null
+
+    val target = decodeQueryValue(encoded) ?: return null
+    return webAddressWithHost(target)
+}
+
+/**
+ * Percent-decodes one query value. A `+` stays a plus — in an address it is a
+ * space only in form encoding, which this link does not use.
+ */
+private fun decodeQueryValue(raw: String): String? = runCatching {
+    java.net.URLDecoder.decode(raw.replace("+", "%2B"), Charsets.UTF_8.name())
+}.getOrNull()
+
+/** The address when it is `http`/`https` and names a host, or null. */
+private fun webAddressWithHost(raw: String): String? {
+    val address = sameTabUrl(raw) ?: return null
+    val rest = address.substringAfter(':')
+    if (!rest.startsWith("//")) return null
+    val host = rest.substring(2).takeWhile { it != '/' && it != '?' && it != '#' }
+    return address.takeIf { host.isNotEmpty() }
 }
 
 /** The http(s) address of a link, or null for anything else. */

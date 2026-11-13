@@ -29,7 +29,8 @@ struct HomeView: View {
         .onAppear {
             model.load()
         }
-        // A web link another app hands over. It opens in the in-app browser,
+        // A link that opens Z-Sync: a web link from another app, or the app's
+        // own zsync:// link from a Shortcut. It opens in the in-app browser,
         // or waits in the model until sign-in finishes.
         .onOpenURL { url in
             model.openLinkFromAnotherApp(url)

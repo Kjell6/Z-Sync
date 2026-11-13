@@ -63,6 +63,14 @@ URL types has no effect and the app is not offered as a browser. The code for
 receiving a link is already in place, so the remaining work is configuration
 and review.
 
+Z-Sync's own link form works today, without the entitlement:
+`zsync://open?url=<percent-encoded address>`, e.g.
+`zsync://open?url=https%3A%2F%2Fexample.com%2Fpage`. In Shortcuts, use an
+"Open URLs" action whose URL is `zsync://open?url=` followed by the
+URL-encoded address. Nothing else is accepted: another host or path, a missing
+or extra parameter, and any target that is not `http`/`https` with a host are
+ignored silently.
+
 Remaining maintainer steps, in order:
 
 1. Request the entitlement from Apple:
@@ -74,7 +82,8 @@ Remaining maintainer steps, in order:
    run keeps it. Re-issue the provisioning profile afterwards.
 3. Add the `http` and `https` URL schemes to `CFBundleURLTypes` in
    `ios/project.yml` and `ios/ZenCompanion/Info.plist`. `HomeView` already
-   routes `onOpenURL` links into the in-app browser.
+   routes `onOpenURL` links into the in-app browser. The app's own `zsync`
+   scheme is declared in both files already.
 4. Check Apple's requirements for default-browser apps before submitting:
    - **A text field for a URL on launch, or search tools.** Partly met: the
      browser has the address field and the spaces screen's search pill opens it
@@ -92,8 +101,8 @@ Remaining maintainer steps, in order:
 5. Add a Settings row that opens the app's page in the Settings app, where the
    reader can pick the default browser (`UIApplication.openSettingsURLString`).
 
-Until steps 1–3 are done, none of this is visible to readers and Z-Sync is not a
-selectable browser on iOS.
+Until steps 1–3 are done, Z-Sync is not a selectable browser on iOS; only its
+own `zsync://open?url=` links reach it.
 
 ## Related
 

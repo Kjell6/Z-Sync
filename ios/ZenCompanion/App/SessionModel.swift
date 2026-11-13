@@ -81,16 +81,17 @@ final class SessionModel {
     }
 
     /// Routes a link that arrived through `.onOpenURL`. Any app can hand one
-    /// over, so only `http`/`https` is accepted and nothing else about the
+    /// over, so only an accepted address gets through: a plain `http`/`https`
+    /// link, or the app's own `zsync://open?url=` form. Nothing else about the
     /// event is read.
     func openLinkFromAnotherApp(_ url: URL) {
-        guard BrowserInput.isWebAddress(url) else { return }
+        guard let address = BrowserInput.incomingWebAddress(url) else { return }
         // iOS hands back what this app just sent out once Z-Sync holds the
         // browser role. Consuming the record here keeps that arrival from
         // matching a later link; the URL goes to the in-app browser and is
         // never handed out again from this path.
-        _ = ExternalBrowser.consumeOwnHandOff(url)
-        pendingOpenURL = url
+        _ = ExternalBrowser.consumeOwnHandOff(address)
+        pendingOpenURL = address
     }
 
     /// The spaces screen opened the pending link: it happens exactly once.

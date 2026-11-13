@@ -160,6 +160,11 @@ enum BrowserGeolocation {
     /// Weak to the model, which owns the web view holding this handler.
     final class Handler: NSObject, WKScriptMessageHandlerWithReply {
         private weak var model: MiniBrowserModel?
+        /// Replies waiting on the question that is open for a site. A page
+        /// that asks again before the reader answered - a fix and a watch at
+        /// once, or a loop - shares that answer instead of queueing the same
+        /// dialog over and over.
+        private var waitingForAnswer: [String: [@MainActor @Sendable (Any?, String?) -> Void]] = [:]
 
         init(model: MiniBrowserModel) {
             self.model = model
@@ -177,13 +182,21 @@ enum BrowserGeolocation {
             }
             let body = message.body as? [String: Any]
             guard body?["op"] as? String == "fix" else {
-                model.requestPermission([.location], host: origin.host) { granted in
+                let site = origin.host.lowercased()
+                if waitingForAnswer[site] != nil {
+                    waitingForAnswer[site]?.append(replyHandler)
+                    return
+                }
+                waitingForAnswer[site] = [replyHandler]
+                model.requestPermission([.location], host: origin.host) { [weak self] granted in
+                    let replies = self?.waitingForAnswer.removeValue(forKey: site) ?? [replyHandler]
                     guard granted else {
-                        replyHandler(BrowserGeolocation.errorReply(code: 1), nil)
+                        replies.forEach { $0(BrowserGeolocation.errorReply(code: 1), nil) }
                         return
                     }
                     BrowserLocation.shared.authorize { allowed in
-                        replyHandler(allowed ? ["granted": true] : BrowserGeolocation.errorReply(code: 1), nil)
+                        let reply: [String: Any] = allowed ? ["granted": true] : BrowserGeolocation.errorReply(code: 1)
+                        replies.forEach { $0(reply, nil) }
                     }
                 }
                 return

@@ -114,10 +114,20 @@ internal class BrowserPageRequests(
     private var permissionAnswer: ((Map<String, Boolean>) -> Unit)? = null
     private var fileAnswer: ((ActivityResult) -> Unit)? = null
 
+    /** Callers waiting while a system request is open, answered when it closes. */
+    private val permissionWaiters = mutableListOf<Pair<List<SitePermission>, (Boolean) -> Unit>>()
+
     fun onPermissionResult(result: Map<String, Boolean>) {
         val answer = permissionAnswer
         permissionAnswer = null
         answer?.invoke(result)
+        // Everyone who asked while the dialog was open has its answer now: what
+        // the system granted, without a second dialog straight after.
+        val waiting = permissionWaiters.toList()
+        permissionWaiters.clear()
+        waiting.forEach { (kinds, done) ->
+            done(kinds.all { kind -> systemAccessGranted(kind) { context.has(it) } })
+        }
     }
 
     fun onFileResult(result: ActivityResult) {
@@ -133,7 +143,9 @@ internal class BrowserPageRequests(
             return
         }
         if (permissionAnswer != null) {
-            done(false)
+            // One system dialog at a time: wait for the open one instead of
+            // denying a request the reader has already been asked about.
+            permissionWaiters += kinds to done
             return
         }
         permissionAnswer = { _ ->
@@ -169,6 +181,17 @@ internal class BrowserPageRequests(
                         host,
                     )
                     if (allowed) requestSystem(kinds, done) else done(false)
+                    // The page may have asked again before this answer. Those
+                    // questions have their answer now too, instead of showing
+                    // the same dialog once more. Only for kinds just answered:
+                    // nothing is remembered that the reader was not asked.
+                    session.prompts
+                        .filterIsInstance<BrowserPrompt.Permission>()
+                        .filter { it.host.equals(host, ignoreCase = true) && kinds.containsAll(it.kinds) }
+                        .forEach { pending ->
+                            session.prompts.remove(pending)
+                            pending.send(allowed)
+                        }
                 }
             }
         }

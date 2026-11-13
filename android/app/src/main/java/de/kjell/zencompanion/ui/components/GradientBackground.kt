@@ -2,6 +2,7 @@ package de.kjell.zencompanion.ui.components
 
 import android.graphics.Color as AndroidColor
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -9,21 +10,22 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.theme.LocalZenColors
 
 /**
- * Port of `ZenSpaceGradientBackground` (Shared/ZenTheme.swift): base paper,
- * crossfade between themes on space switch, plus the tiled noise overlay.
+ * Port of `ZenSpaceGradientBackground` (Shared/ZenTheme.swift): crossfade
+ * between themes on space switch, plus the tiled noise overlay.
  *
  * The theme layer sits at [calcOpacity] over its paper — matching iOS — so
  * synced dot colours never render at full strength. Dark Mode additionally
@@ -39,55 +41,37 @@ fun ZenSpaceGradientBackground(
     val colors = LocalZenColors.current
     val activeTexture = theme?.texture ?: 0.0
 
-    var currentTheme by remember { mutableStateOf(theme) }
-    var previousTheme by remember { mutableStateOf<ZenSpaces.ZenSpaceTheme?>(null) }
-    val progress = remember { Animatable(1f) }
+    // Every backdrop keeps the darkening it was shown with, so the outgoing
+    // one does not jump when the next space flips between light and dark.
+    val target = ThemeBackdrop(theme, darkenDots)
+    val layers = remember { mutableStateListOf(BackdropLayer(target, Animatable(1f))) }
 
-    LaunchedEffect(theme) {
-        if (currentTheme != theme) {
-            previousTheme = currentTheme
-            currentTheme = theme
-            progress.snapTo(0f)
-            progress.animateTo(1f, tween(durationMillis = 280, easing = FastOutSlowInEasing))
-            previousTheme = null
+    LaunchedEffect(target) {
+        if (layers.last().backdrop != target) {
+            // The incoming backdrop fades in over the opaque outgoing one. A
+            // switch that interrupts a fade leaves the layers below as they
+            // are and fades in on top, so nothing jumps.
+            val layer = BackdropLayer(target, Animatable(0f))
+            layers.add(layer)
+            layer.alpha.animateTo(1f, tween(durationMillis = 280, easing = FastOutSlowInEasing))
+            layers.removeRange(0, layers.indexOf(layer))
         }
     }
 
-    val prev = previousTheme
-    val prevDotColors = remember(prev, darkenDots) { prev?.toDotColors(darkenDots).orEmpty() }
-    val prevGradientAlpha = remember(prev) { calcOpacity(prev) }
-    val curr = currentTheme
-    val currDotColors = remember(curr, darkenDots) { curr?.toDotColors(darkenDots).orEmpty() }
-    val currGradientAlpha = remember(curr) { calcOpacity(curr) }
-
     Box(modifier.fillMaxSize()) {
-        // 1. Base paper canvas (for spaces without a theme or when fading to paper)
-        Box(Modifier.fillMaxSize().background(colors.background))
-
-        // 2. Outgoing snapshot (paper + its theme), fading out...
-        if (prev != null && prevDotColors.isNotEmpty()) {
-            val snapshotAlpha = 1f - progress.value
-            if (snapshotAlpha > 0f) {
+        // Flattened backdrops (paper + theme) stacked bottom to top. The
+        // lowest one is always opaque: fading both sides of a crossfade lets
+        // the bare paper shine through mid-transition, which reads as a flash.
+        for (layer in layers) {
+            key(layer) {
                 ThemeBackgroundSnapshot(
                     paper = colors.paper,
-                    dotColors = prevDotColors,
-                    gradientAlpha = prevGradientAlpha,
-                    modifier = Modifier.fillMaxSize().alpha(snapshotAlpha),
-                )
-            }
-        }
-
-        // 3. ...over the incoming snapshot, fading in. Snapshots are flattened
-        // (paper + theme) like iOS, never translucent gradients over one shared
-        // paper — that filtered the light twice and dipped dark mid-transition.
-        if (curr != null && currDotColors.isNotEmpty()) {
-            val snapshotAlpha = progress.value
-            if (snapshotAlpha > 0f) {
-                ThemeBackgroundSnapshot(
-                    paper = colors.paper,
-                    dotColors = currDotColors,
-                    gradientAlpha = currGradientAlpha,
-                    modifier = Modifier.fillMaxSize().alpha(snapshotAlpha),
+                    background = colors.background,
+                    backdrop = layer.backdrop,
+                    modifier = Modifier.fillMaxSize().graphicsLayer {
+                        alpha = layer.alpha.value
+                        compositingStrategy = CompositingStrategy.Offscreen
+                    },
                 )
             }
         }
@@ -101,17 +85,28 @@ fun ZenSpaceGradientBackground(
     }
 }
 
-/** One finished background: paper with its theme already mixed in (iOS `backgroundSnapshot`). */
+/** A space theme together with the darkening it is drawn with. */
+private data class ThemeBackdrop(val theme: ZenSpaces.ZenSpaceTheme?, val darken: Boolean)
+
+private class BackdropLayer(val backdrop: ThemeBackdrop, val alpha: Animatable<Float, AnimationVector1D>)
+
+/**
+ * One finished background: paper with its theme already mixed in (iOS
+ * `backgroundSnapshot`), or the plain background for a space without a theme.
+ */
 @Composable
 private fun ThemeBackgroundSnapshot(
     paper: Color,
-    dotColors: List<ZenThemeDotColor>,
-    gradientAlpha: Float,
+    background: Color,
+    backdrop: ThemeBackdrop,
     modifier: Modifier = Modifier,
 ) {
+    val dotColors = remember(backdrop) { backdrop.theme?.toDotColors(backdrop.darken).orEmpty() }
+    val gradientAlpha = remember(backdrop) { calcOpacity(backdrop.theme) }
+    val themed = dotColors.isNotEmpty() && gradientAlpha > 0f
     Box(modifier) {
-        Box(Modifier.fillMaxSize().background(paper))
-        if (gradientAlpha > 0f) {
+        Box(Modifier.fillMaxSize().background(if (themed) paper else background))
+        if (themed) {
             Box(
                 Modifier
                     .fillMaxSize()

@@ -28,6 +28,13 @@ final class BrowserHistoryTests: XCTestCase {
         XCTAssertTrue(store.visits.isEmpty)
     }
 
+    func testAnAddressNeverKeepsItsPassword() {
+        let store = makeStore()
+        store.record(url("https://reader:secret@example.com/private"), title: "")
+        XCTAssertEqual(store.visits.map(\.url), ["https://example.com/private"])
+        XCTAssertEqual(store.visits.first?.displayAddress, "example.com/private")
+    }
+
     func testAJumpInsideAPageIsThePage() {
         let store = makeStore()
         store.record(url("https://example.com/a#one"), title: "A")

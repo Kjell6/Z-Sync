@@ -66,6 +66,9 @@ final class BrowserHistoryStore {
               let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
               var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
         components.fragment = nil
+        // `user:pass@` is a login typed into the address, not part of the page.
+        components.user = nil
+        components.password = nil
         return components.url?.absoluteString
     }
 

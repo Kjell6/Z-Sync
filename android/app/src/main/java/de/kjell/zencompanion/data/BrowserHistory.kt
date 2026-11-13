@@ -47,7 +47,17 @@ internal fun historyAddress(url: String?): String? {
     if (url.isNullOrEmpty()) return null
     val scheme = url.substringBefore(':', "").lowercase()
     if (scheme != "http" && scheme != "https") return null
-    return url.substringBefore('#')
+    return withoutCredentials(url.substringBefore('#'))
+}
+
+/** Without `user:pass@`: a login typed into an address does not belong in a history file. */
+private fun withoutCredentials(address: String): String {
+    val authorityStart = address.indexOf("://") + 3
+    if (authorityStart < 3) return address
+    val authorityEnd = address.indexOfAny(charArrayOf('/', '?'), authorityStart).takeIf { it >= 0 } ?: address.length
+    val at = address.lastIndexOf('@', authorityEnd - 1)
+    if (at < authorityStart) return address
+    return address.substring(0, authorityStart) + address.substring(at + 1)
 }
 
 /** [visits] newest first, with the page at the top and the oldest over the limit gone. */

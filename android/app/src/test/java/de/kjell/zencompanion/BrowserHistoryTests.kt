@@ -30,6 +30,13 @@ class BrowserHistoryTests {
     }
 
     @Test
+    fun anAddressNeverKeepsItsPassword() {
+        assertEquals("https://example.com/private", historyAddress("https://reader:secret@example.com/private"))
+        assertEquals("https://example.com/a@b", historyAddress("https://example.com/a@b"))
+        assertEquals("example.com/private", BrowserVisit("https://example.com/private", "", 1L, 1).displayAddress)
+    }
+
+    @Test
     fun aJumpInsideAPageIsThePage() {
         val visits = emptyList<BrowserVisit>().with("https://example.com/a#one").with("https://example.com/a#two")
         assertEquals(listOf("https://example.com/a"), visits.map { it.url })

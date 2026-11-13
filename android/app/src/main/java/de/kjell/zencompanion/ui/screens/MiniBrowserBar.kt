@@ -61,6 +61,7 @@ import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Laptop
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Refresh
@@ -1702,14 +1703,15 @@ private fun SiteIcon(effectiveUrl: String) {
     val zen = LocalZenColors.current
     val icon = when {
         effectiveUrl.isEmpty() -> Icons.Outlined.Search
-        effectiveUrl.startsWith("http://") -> Icons.Outlined.Lock
+        // An insecure page must not wear the padlock a trusted one does.
+        effectiveUrl.startsWith("http://") -> Icons.Outlined.LockOpen
         effectiveUrl.startsWith("https://") -> Icons.Outlined.Lock
         else -> Icons.Outlined.Language
     }
     Icon(
         imageVector = icon,
         contentDescription = null,
-        tint = if (effectiveUrl.startsWith("http://")) zen.ink else zen.ink.copy(alpha = 0.7f),
+        tint = zen.ink.copy(alpha = 0.7f),
         modifier = Modifier.size(18.dp),
     )
 }

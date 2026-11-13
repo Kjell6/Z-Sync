@@ -16,10 +16,12 @@ for list in easylist easyprivacy; do
     awk 'NR == 1 || /^!/ && NR < 40 || /^(@@)?\|\|[A-Za-z0-9._-]+\^/' "$work/$list.txt" > "$work/$list.min.txt"
     # A short answer that still starts like a list must not replace what ships;
     # this is the same floor the apps apply to a downloaded list. Only rules the
-    # apps keep count, each distinct line once: block rules (no `@@`) of the
-    # form `||domain^` with a dotted domain, either without options or with only
-    # options that mean the whole request. Lines limited to some request types,
-    # page-element rules and repeated lines keep nothing.
+    # apps keep count: block rules (no `@@`) of the form `||domain^` with a
+    # dotted domain, either without options or with only options that mean the
+    # whole request. A domain counts once per scope, the way the apps store it:
+    # in `anywhere`, or in `thirdParty` when it is limited to third-party
+    # requests. Lines limited to some request types and page-element rules keep
+    # nothing.
     rules="$(awk '
         {
             line = tolower($0)
@@ -28,17 +30,18 @@ for list in easylist easyprivacy; do
             gsub(/^\.+|\.+$/, "", domain)
             if (domain == "" || index(domain, ".") == 0) next
             rest = substr(line, index(line, "^") + 1)
+            scope = "anywhere"
             if (rest != "") {
                 if (substr(rest, 1, 1) != "$") next
                 count = split(substr(rest, 2), option, ",")
                 for (i = 1; i <= count; i++) {
                     value = option[i]
                     gsub(/^[ \t]+|[ \t]+$/, "", value)
-                    if (value != "third-party" && value != "3p" &&
-                        value != "all" && value != "important") next
+                    if (value == "third-party" || value == "3p") scope = "thirdParty"
+                    else if (value != "all" && value != "important") next
                 }
             }
-            if (!seen[line]++) kept++
+            if (!seen[scope "|" domain]++) kept++
         }
         END { print kept + 0 }
     ' "$work/$list.min.txt")"

@@ -194,8 +194,11 @@ class AppViewModelTests {
     @Test
     fun refreshWaitsForInFlightReloadThenFetchesAgain() = runTest(mainDispatcherRule.testDispatcher) {
         val browser = FakeBrowserRepository()
-        browser.refreshGate = CompletableDeferred()
         val vm = newViewModel(browser = browser)
+        vm.completeSignIn(snapshot())
+        advanceUntilIdle()
+        browser.refreshCalls = 0
+        browser.refreshGate = CompletableDeferred()
 
         vm.reload()
         runCurrent()
@@ -215,8 +218,11 @@ class AppViewModelTests {
     @Test
     fun reloadDuringReloadRunsAgainAfterward() = runTest(mainDispatcherRule.testDispatcher) {
         val browser = FakeBrowserRepository()
-        browser.refreshGate = CompletableDeferred()
         val vm = newViewModel(browser = browser)
+        vm.completeSignIn(snapshot())
+        advanceUntilIdle()
+        browser.refreshCalls = 0
+        browser.refreshGate = CompletableDeferred()
 
         vm.reload()
         runCurrent()
@@ -233,14 +239,32 @@ class AppViewModelTests {
     @Test
     fun interruptedRefreshIsRetriedOnce() = runTest(mainDispatcherRule.testDispatcher) {
         val browser = FakeBrowserRepository()
-        browser.refreshFailures += java.util.concurrent.CancellationException("request interrupted")
         val vm = newViewModel(browser = browser)
+        vm.completeSignIn(snapshot())
+        advanceUntilIdle()
+        browser.refreshCalls = 0
+        browser.refreshFailures += java.util.concurrent.CancellationException("request interrupted")
 
         vm.reload()
         advanceUntilIdle()
 
         assertEquals(2, browser.refreshCalls)
         assertNull(vm.browser.value.loadErrorRes)
+    }
+
+    @Test
+    fun signedOutNeverSyncsSpaces() = runTest(mainDispatcherRule.testDispatcher) {
+        val browser = FakeBrowserRepository(snapshot = snapshotWithPinnedTab())
+        val vm = newViewModel(browser = browser)
+
+        vm.bootstrap()
+        vm.reload()
+        vm.refresh()
+        advanceUntilIdle()
+
+        assertNull(vm.session.value)
+        assertEquals(0, browser.refreshCalls)
+        assertTrue(vm.browser.value.snapshot.spaces.isEmpty())
     }
 
     @Test
@@ -333,13 +357,15 @@ class AppViewModelTests {
     }
 
     @Test
-    fun openIntoSearchSkipsAnOpenWithoutSpaces() = runTest(mainDispatcherRule.testDispatcher) {
-        val vm = newViewModel(browser = oneSpaceBrowser(), preferences = searchPreferences())
+    fun openIntoSearchOpensSignedOut() = runTest(mainDispatcherRule.testDispatcher) {
+        // No account and no spaces: the signed-out home still opens the search
+        // tab, once per trip to the foreground.
+        val vm = newViewModel(preferences = searchPreferences())
 
-        // First launch after sign-in: the screen starts before any spaces load.
         vm.appCameToForeground()
-        vm.completeSignIn(snapshot())
-        advanceUntilIdle()
+        assertEquals(true, vm.searchOnOpenPending.value)
+        vm.consumeSearchOnOpen()
+
         vm.appCameToForeground()
         assertEquals(false, vm.searchOnOpenPending.value)
 
@@ -349,20 +375,38 @@ class AppViewModelTests {
     }
 
     @Test
-    fun incomingLinkWaitsForSignInThenOpensOnce() = runTest(mainDispatcherRule.testDispatcher) {
-        val vm = newViewModel()
-
-        vm.openLinkFromAnotherApp("https://example.com/from-another-app")
-
-        // Signed out: the link waits and no account data is involved.
-        assertNull(vm.session.value)
-        assertEquals("https://example.com/from-another-app", vm.incomingLink.value)
-
+    fun openIntoSearchWaitsForSpacesWhenSignedIn() = runTest(mainDispatcherRule.testDispatcher) {
+        val browser = FakeBrowserRepository()
+        val vm = newViewModel(browser = browser, preferences = searchPreferences())
         vm.completeSignIn(snapshot())
         advanceUntilIdle()
 
-        // Sign-in does not consume it: the spaces screen opens it, once.
+        // First launch after sign-in: the screen starts before any spaces load.
+        vm.appCameToForeground()
+        assertEquals(false, vm.searchOnOpenPending.value)
+
+        browser.snapshot = ZenSpaces.ZenSnapshot(
+            listOf(ZenSpaces.ZenSpace("s1", "One", null, null, null, emptyList())),
+        )
+        vm.reload()
+        advanceUntilIdle()
+        vm.appWentToBackground()
+        vm.appCameToForeground()
+        assertEquals(true, vm.searchOnOpenPending.value)
+    }
+
+    @Test
+    fun incomingLinkOpensWhileSignedOut() = runTest(mainDispatcherRule.testDispatcher) {
+        val browser = FakeBrowserRepository()
+        val vm = newViewModel(browser = browser)
+
+        vm.openLinkFromAnotherApp("https://example.com/from-another-app")
+
+        // No account and no sync: the link is ready for the browser at once,
+        // rather than waiting for a sign-in that may never come.
+        assertNull(vm.session.value)
         assertEquals("https://example.com/from-another-app", vm.incomingLink.value)
+        assertEquals(0, browser.refreshCalls)
 
         vm.consumeIncomingLink()
         assertNull(vm.incomingLink.value)
@@ -383,17 +427,6 @@ class AppViewModelTests {
             vm.openLinkFromAnotherApp(url)
             assertNull(url, vm.incomingLink.value)
         }
-    }
-
-    @Test
-    fun leavingWithoutSigningInDropsThePendingLink() = runTest(mainDispatcherRule.testDispatcher) {
-        val vm = newViewModel()
-        vm.openLinkFromAnotherApp("https://example.com/later")
-
-        vm.discardIncomingLink()
-
-        assertNull(vm.incomingLink.value)
-        assertNull(vm.session.value)
     }
 
     @Test

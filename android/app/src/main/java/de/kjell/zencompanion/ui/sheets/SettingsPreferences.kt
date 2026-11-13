@@ -391,6 +391,7 @@ internal fun SettingsCustomEnginesCard(
 /** "Layout": how the essentials grid and the action bar look. */
 @Composable
 internal fun SettingsLayoutSection(
+    signedIn: Boolean,
     preferences: PreferencesState,
     onSetEssentialsColumns: (EssentialsColumns) -> Unit,
     onSetToolbarPlacement: (ToolbarPlacement) -> Unit,
@@ -405,31 +406,35 @@ internal fun SettingsLayoutSection(
                 val columns = preferences.essentialsColumns
                 val toolbar = preferences.toolbarPlacement
 
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    MenuRow(
-                        title = stringResource(R.string.settings_essentials_columns),
-                        value = columns.label(),
-                        icon = Icons.Outlined.GridView,
-                        onClick = { columnsExpanded = true },
-                    )
-                    DropdownMenu(
-                        expanded = columnsExpanded,
-                        onDismissRequest = { columnsExpanded = false },
-                    ) {
-                        EssentialsColumns.entries.forEach { option ->
-                            DropdownMenuItem(
-                                text = { MenuItemText(option.label(), option == columns) },
-                                trailingIcon = if (option == columns) ({ MenuItemCheck() }) else null,
-                                onClick = {
-                                    onSetEssentialsColumns(option)
-                                    columnsExpanded = false
-                                },
-                            )
+                // The grid only exists with an account; the toolbar placement
+                // shapes the signed-out home too, so that row always stays.
+                if (AccountOnlySettings.showsEssentialsColumns(signedIn)) {
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        MenuRow(
+                            title = stringResource(R.string.settings_essentials_columns),
+                            value = columns.label(),
+                            icon = Icons.Outlined.GridView,
+                            onClick = { columnsExpanded = true },
+                        )
+                        DropdownMenu(
+                            expanded = columnsExpanded,
+                            onDismissRequest = { columnsExpanded = false },
+                        ) {
+                            EssentialsColumns.entries.forEach { option ->
+                                DropdownMenuItem(
+                                    text = { MenuItemText(option.label(), option == columns) },
+                                    trailingIcon = if (option == columns) ({ MenuItemCheck() }) else null,
+                                    onClick = {
+                                        onSetEssentialsColumns(option)
+                                        columnsExpanded = false
+                                    },
+                                )
+                            }
                         }
                     }
-                }
 
-                SettingsDivider()
+                    SettingsDivider()
+                }
 
                 Box(modifier = Modifier.fillMaxWidth()) {
                     MenuRow(

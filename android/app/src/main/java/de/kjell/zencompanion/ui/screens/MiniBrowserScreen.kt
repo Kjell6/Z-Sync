@@ -175,6 +175,8 @@ private val PageGap = 12.dp
 @Composable
 fun MiniBrowserScreen(
     pages: BrowserPages,
+    /** Signed out the browser is the same, without the pin path. */
+    signedIn: Boolean,
     /** Opened from the count on home: the overview first, no page yet. */
     startsInOverview: Boolean,
     /** Set when the app came back without its pages, after the process died. */
@@ -568,7 +570,9 @@ fun MiniBrowserScreen(
         }
     }
 
-    val saveKind = if (browserRepository.cachedSnapshot?.normalTabsCapability == ZenSpaces.NormalTabsCapability.ENABLED) {
+    val saveKind = if (signedIn &&
+        browserRepository.cachedSnapshot?.normalTabsCapability == ZenSpaces.NormalTabsCapability.ENABLED
+    ) {
         browserRepository.saveKind()
     } else {
         SaveKind.PINNED
@@ -615,6 +619,7 @@ fun MiniBrowserScreen(
                     .then(if (showOverview) Modifier.clearAndSetSemantics { } else Modifier),
                 session = session,
                 pages = pages,
+                signedIn = signedIn,
                 pageCount = openPages.size,
                 currentSpace = currentSpace,
                 allSpaces = allSpaces,
@@ -646,6 +651,7 @@ fun MiniBrowserScreen(
                         pages = pages,
                         openPages = openPages,
                         activeId = pages.active?.id.takeIf { excludedCardId == null },
+                        signedIn = signedIn,
                         spaces = allSpaces,
                         saveKind = saveKind,
                         hiddenCardId = hiddenCardId,
@@ -795,6 +801,8 @@ private const val PullCommitPoint = 0.16f
 private fun BrowserPageScreen(
     session: PageSession,
     pages: BrowserPages,
+    /** Signed out the bar has no pin control. */
+    signedIn: Boolean,
     pageCount: Int,
     currentSpace: ZenSpaces.ZenSpace,
     allSpaces: List<ZenSpaces.ZenSpace>,
@@ -1274,6 +1282,7 @@ private fun BrowserPageScreen(
                     MiniBrowserBar(
                         state = state,
                         viewModel = viewModel,
+                        signedIn = signedIn,
                         onClose = onDismiss,
                         pageCount = pageCount,
                         onOpenPages = onOpenOverview,
@@ -1310,7 +1319,7 @@ private fun BrowserPageScreen(
                             finishAddressEdit()
                         },
                         // A page that failed to load has nothing worth pinning.
-                        canPin = allSpaces.isNotEmpty() && state.pageError == null,
+                        canPin = signedIn && allSpaces.isNotEmpty() && state.pageError == null,
                         onBack = { webView?.goBack() },
                         onForward = { webView?.goForward() },
                         onReload = {

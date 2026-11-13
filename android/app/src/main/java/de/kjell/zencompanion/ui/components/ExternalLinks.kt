@@ -67,6 +67,67 @@ private fun startExternally(context: Context, intent: Intent): Boolean {
 }
 
 /**
+ * How a web link leaves Z-Sync without coming straight back: "open
+ * externally" must never hand the link to this app again.
+ */
+internal sealed interface ExternalLinkRoute {
+    /** Start the intent as it came in: Z-Sync cannot take this link itself. */
+    data object StartAsIs : ExternalLinkRoute
+
+    /** Start it for exactly this package, so the system cannot pick Z-Sync. */
+    data class StartWithPackage(val packageName: String) : ExternalLinkRoute
+
+    /** Ask the reader, with Z-Sync left out of the answers. */
+    data object ChooserWithoutUs : ExternalLinkRoute
+
+    /** Nothing else on the device can open the link. */
+    data object NoOtherApp : ExternalLinkRoute
+}
+
+/**
+ * The route for a web link, from what the system knows about it: the packages
+ * that handle the intent, the package the system resolves it to, Z-Sync's
+ * package, and the browser apps the system lists.
+ *
+ * Z-Sync must never be an answer, because the link would land back in this
+ * app. That is decided by the handler set, not by the resolver: when several
+ * apps handle a link and none is the default, `resolveActivity` reports the
+ * system's chooser activity (`com.android.internal.app.ResolverActivity`,
+ * package `android`, or another system package on some devices), not null.
+ */
+internal fun externalLinkRoute(
+    handlerPackages: List<String>,
+    resolvedPackage: String?,
+    ownPackage: String,
+    browserPackages: List<String>,
+): ExternalLinkRoute {
+    // Z-Sync cannot take the link at all: nothing to keep it away from.
+    if (ownPackage !in handlerPackages) return ExternalLinkRoute.StartAsIs
+    val others = handlerPackages.filter { it != ownPackage }.distinct()
+    // The only handler left: handing it out would resolve to us or to nothing.
+    if (others.isEmpty()) return ExternalLinkRoute.NoOtherApp
+
+    // A real default that is not us may take the link as it is. A chooser
+    // activity is not in the handler set, so it never counts as one.
+    if (resolvedPackage != null &&
+        resolvedPackage != ownPackage &&
+        resolvedPackage in handlerPackages
+    ) {
+        return ExternalLinkRoute.StartWithPackage(resolvedPackage)
+    }
+
+    // No usable default: the first browser that handles this very address, so
+    // an http-only browser is not sent an https link.
+    browserPackages.firstOrNull { it in others }?.let {
+        return ExternalLinkRoute.StartWithPackage(it)
+    }
+
+    // A handler the browser probe did not list: leave Z-Sync out of the
+    // chooser instead of offering it as one of the answers.
+    return ExternalLinkRoute.ChooserWithoutUs
+}
+
+/**
  * The intent to start for [intent], never Z-Sync's own browser. Once Z-Sync
  * holds the browser role, a `VIEW http(s)` intent resolves back to this app,
  * so "open externally" would do nothing at all. Web links therefore go to
@@ -79,40 +140,25 @@ private fun withoutOwnBrowser(context: Context, intent: Intent): Intent? {
     if (scheme != "http" && scheme != "https") return intent
 
     val packageManager = context.packageManager
-    val ownPackage = context.packageName
-    val handlers = installedHandlers(packageManager, intent)
-    // Nobody else: handing the link out would resolve to us, or to nothing.
-    if (handlers.none { it != ownPackage }) return null
-
-    val resolved = resolveHandler(packageManager, intent)
-    // A null default with several handlers means the system asks the reader,
-    // and we would be one of the answers. Either way the link must not stay here.
-    val chooserWouldIncludeUs = resolved == null && ownPackage in handlers
-    if (resolved != ownPackage && !chooserWouldIncludeUs) return intent
-
-    // The browser probe lists every browser; keep those that handle this very
-    // address, so http-only handlers are not sent an https link.
-    val browserPackages = otherBrowserPackages(packageManager).filter { it in handlers }
-    val otherBrowser = externalHandlerPackage(browserPackages, ownPackage)
-    if (otherBrowser != null) return Intent(intent).setPackage(otherBrowser)
-
-    // A handler the browser probe did not list: leave Z-Sync out of the
-    // chooser instead of offering it as one of the answers.
-    return Intent.createChooser(Intent(intent), null).apply {
-        putExtra(
-            Intent.EXTRA_EXCLUDE_COMPONENTS,
-            arrayOf(ComponentName(context, MainActivity::class.java)),
+    return when (
+        val route = externalLinkRoute(
+            handlerPackages = installedHandlers(packageManager, intent),
+            resolvedPackage = resolveHandler(packageManager, intent),
+            ownPackage = context.packageName,
+            browserPackages = browserPackages(packageManager),
         )
+    ) {
+        ExternalLinkRoute.StartAsIs -> intent
+        is ExternalLinkRoute.StartWithPackage -> Intent(intent).setPackage(route.packageName)
+        ExternalLinkRoute.ChooserWithoutUs -> Intent.createChooser(Intent(intent), null).apply {
+            putExtra(
+                Intent.EXTRA_EXCLUDE_COMPONENTS,
+                arrayOf(ComponentName(context, MainActivity::class.java)),
+            )
+        }
+        ExternalLinkRoute.NoOtherApp -> null
     }
 }
-
-/**
- * The app a web link may leave through, from the packages that handle it: the
- * first one that is not Z-Sync. Null means Z-Sync is the only handler, so the
- * caller reports that no app can open the link instead of handing it back.
- */
-internal fun externalHandlerPackage(handlerPackages: List<String>, ownPackage: String): String? =
-    handlerPackages.firstOrNull { it != ownPackage }
 
 @Suppress("DEPRECATION")
 private fun installedHandlers(packageManager: PackageManager, intent: Intent): List<String> =
@@ -126,7 +172,7 @@ private fun resolveHandler(packageManager: PackageManager, intent: Intent): Stri
 
 /** Browser apps the system offers for a web link, Z-Sync included. */
 @Suppress("DEPRECATION")
-private fun otherBrowserPackages(packageManager: PackageManager): List<String> {
+private fun browserPackages(packageManager: PackageManager): List<String> {
     val probe = Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com"))
         .addCategory(Intent.CATEGORY_BROWSABLE)
     return packageManager.queryIntentActivities(probe, 0).map { it.activityInfo.packageName }

@@ -1,7 +1,8 @@
 package de.kjell.zencompanion
 
 import android.webkit.WebView
-import de.kjell.zencompanion.ui.components.externalHandlerPackage
+import de.kjell.zencompanion.ui.components.ExternalLinkRoute
+import de.kjell.zencompanion.ui.components.externalLinkRoute
 import de.kjell.zencompanion.ui.screens.BrowserLinkAction
 import de.kjell.zencompanion.ui.screens.browserLinkAction
 import de.kjell.zencompanion.ui.screens.incomingWebLink
@@ -264,19 +265,48 @@ class BrowserLinkPolicyTests {
 
     @Test
     fun externalHandOffNeverChoosesThisApp() {
+        // A real default browser takes the link as it is.
         assertEquals(
-            "com.android.chrome",
-            externalHandlerPackage(listOf("com.android.chrome", "org.mozilla.firefox"), ownPackage),
+            ExternalLinkRoute.StartWithPackage("com.android.chrome"),
+            route(listOf(ownPackage, "com.android.chrome"), resolved = "com.android.chrome"),
         )
+        // No default and several handlers: the resolver reports the system's
+        // chooser activity, not null. Starting the intent unchanged would list
+        // Z-Sync among the browsers the reader can pick.
         assertEquals(
-            "org.mozilla.firefox",
-            externalHandlerPackage(listOf(ownPackage, "org.mozilla.firefox"), ownPackage),
+            ExternalLinkRoute.StartWithPackage("com.android.chrome"),
+            route(listOf(ownPackage, "com.android.chrome"), resolved = "android"),
         )
+        // Z-Sync itself is the default: another browser has to take the link.
         assertEquals(
-            "nothing else can take the link, so the caller reports it",
-            null,
-            externalHandlerPackage(listOf(ownPackage), ownPackage),
+            ExternalLinkRoute.StartWithPackage("org.mozilla.firefox"),
+            route(listOf(ownPackage, "org.mozilla.firefox"), resolved = ownPackage),
         )
-        assertEquals(null, externalHandlerPackage(emptyList(), ownPackage))
+        // The handler is not a known browser: ask the reader, without us.
+        assertEquals(
+            ExternalLinkRoute.ChooserWithoutUs,
+            route(listOf(ownPackage, "com.example.viewer"), resolved = "android"),
+        )
+        // Only Z-Sync handles this address: the caller reports it.
+        assertEquals(
+            ExternalLinkRoute.NoOtherApp,
+            route(listOf(ownPackage), resolved = ownPackage),
+        )
+        // Z-Sync does not handle the link at all: today's behaviour.
+        assertEquals(
+            ExternalLinkRoute.StartAsIs,
+            route(listOf("com.android.chrome"), resolved = "android"),
+        )
+        assertEquals(ExternalLinkRoute.StartAsIs, route(emptyList()))
     }
+
+    private fun route(
+        handlers: List<String>,
+        resolved: String? = null,
+    ): ExternalLinkRoute = externalLinkRoute(
+        handlerPackages = handlers,
+        resolvedPackage = resolved,
+        ownPackage = ownPackage,
+        browserPackages = browsers.toList(),
+    )
 }

@@ -5,12 +5,15 @@ import de.kjell.zencompanion.data.SitePermission
 import de.kjell.zencompanion.data.SitePermissionChoice
 import de.kjell.zencompanion.data.SitePermissionDecision
 import de.kjell.zencompanion.data.sitePermissionDecision
+import de.kjell.zencompanion.ui.browser.BrowserDownload
 import de.kjell.zencompanion.ui.browser.BrowserPrompt
+import de.kjell.zencompanion.ui.browser.announcedDownloadName
 import de.kjell.zencompanion.ui.browser.grantableResources
 import de.kjell.zencompanion.ui.browser.isPageLocalDownload
 import de.kjell.zencompanion.ui.browser.isWebDownload
 import de.kjell.zencompanion.ui.browser.nameWithExtension
 import de.kjell.zencompanion.ui.browser.nextDownloadHop
+import de.kjell.zencompanion.ui.browser.pageAlreadyAsks
 import de.kjell.zencompanion.ui.browser.pageFileScript
 import de.kjell.zencompanion.ui.browser.resolveDownloadUrl
 import de.kjell.zencompanion.ui.browser.safeDownloadName
@@ -196,5 +199,64 @@ class BrowserPageRequestsTests {
         val script = pageFileScript("blob:x\"; alert(1); \"", "token")
         assertFalse(script.contains("blob:x\";"))
         assertTrue(script.contains("blob:x\\\""))
+    }
+
+    @Test
+    fun aPageLocalFileKeepsThePlainNameUntilItsPageNamesIt() {
+        // A blob: or data: file names itself only once the page reads it, so a
+        // download with no type still has a name to ask about.
+        val blob = BrowserDownload(
+            url = "blob:https://example.com/1",
+            userAgent = null,
+            contentDisposition = null,
+            mimeType = null,
+            referer = "https://example.com",
+        )
+        assertEquals("download", announcedDownloadName(blob))
+    }
+
+    @Test
+    fun aDownloadQuestionAnswersOnce() {
+        val answers = mutableListOf<Boolean>()
+        val prompt = BrowserPrompt.Download(
+            url = "https://example.com/a.zip",
+            fileName = "a.zip",
+            host = "example.com",
+            onDismiss = {},
+        ) { answers += it }
+        prompt.send(true)
+        prompt.send(false)
+        prompt.dismiss()
+        assertEquals(listOf(true), answers)
+    }
+
+    @Test
+    fun aDownloadQuestionGoesAwayWithItsPage() {
+        var dismissed = 0
+        var answers = 0
+        val prompt = BrowserPrompt.Download(
+            url = "blob:https://example.com/1",
+            fileName = "download.png",
+            host = "",
+            onDismiss = { dismissed++ },
+        ) { answers++ }
+        prompt.dismiss()
+        prompt.send(true)
+        assertEquals(1, dismissed)
+        assertEquals(0, answers)
+    }
+
+    @Test
+    fun theSameFileIsAskedAboutOnlyOnce() {
+        val download = BrowserPrompt.Download(
+            url = "https://example.com/a.zip",
+            fileName = "a.zip",
+            host = "example.com",
+            onDismiss = {},
+        ) {}
+        val permission = BrowserPrompt.Permission("example.com", listOf(SitePermission.CAMERA), onDismiss = {}) {}
+        assertTrue(pageAlreadyAsks(listOf(download, permission), "https://example.com/a.zip"))
+        assertFalse(pageAlreadyAsks(listOf(download, permission), "https://example.com/b.zip"))
+        assertFalse(pageAlreadyAsks(listOf(permission), "https://example.com/a.zip"))
     }
 }

@@ -31,7 +31,112 @@ final class MiniBrowserWebView: WKWebView {
     /// finger, so the scroll observer has to re-base on it.
     var clearanceDidSettle: (() -> Void)?
 
+    /// The page's pull-to-refresh control, held here so it can leave the
+    /// scroll view while something covers the page and come back after.
+    var refreshControl: UIRefreshControl? {
+        didSet { syncRefreshControl() }
+    }
+
+    /// Whether the chrome allows a pull right now. The reader, the address
+    /// editor and the error panel take it away; the find bar does too.
+    private(set) var pullToRefreshAllowed = true
+
+    /// Watches the find bar while it is up, since it goes away without a
+    /// callback of its own.
+    private var findBarWatcher: Task<Void, Never>?
+    /// When the bar was asked to open. It gets a moment to appear before its
+    /// absence counts, so a slow animation cannot bring the control back.
+    private var findBarOpenedAt: Date?
+
+    /// Runs after a refresh was ended by taking the control away. Ending it
+    /// moves the offset without a finger, like the end of a pull does.
+    var refreshWasEnded: (() -> Void)?
+
     override var inputAccessoryView: UIView? { nil }
+
+    func setPullToRefreshAllowed(_ allowed: Bool) {
+        guard pullToRefreshAllowed != allowed else { return }
+        pullToRefreshAllowed = allowed
+        syncRefreshControl()
+    }
+
+    /// The system find bar was just asked to open. The refresh control leaves
+    /// the top edge with it and comes back once the bar is dismissed.
+    func findNavigatorDidPresent() {
+        guard refreshControl != nil else { return }
+        findBarOpenedAt = Date()
+        if scrollView.refreshControl != nil {
+            endRefresh()
+            scrollView.refreshControl = nil
+        }
+        watchFindBar()
+    }
+
+    /// Puts the refresh control in the scroll view only while the page is
+    /// clear to pull. The find bar sits at the same top edge, so it wins
+    /// while it is visible.
+    func syncRefreshControl() {
+        guard let refreshControl else { return }
+        let findBarIsUp = findBarIsOpening || findInteraction?.isFindNavigatorVisible == true
+        let wanted = pullToRefreshAllowed && !findBarIsUp
+        if wanted {
+            if scrollView.refreshControl !== refreshControl {
+                scrollView.refreshControl = refreshControl
+            }
+            stopWatchingFindBar()
+            return
+        }
+        if scrollView.refreshControl != nil {
+            // Leaving the spinner behind would keep the page's top inset.
+            endRefresh()
+            scrollView.refreshControl = nil
+        }
+        guard findBarIsUp else { return }
+        watchFindBar()
+    }
+
+    /// True while the bar has just been asked to open and may still be on its
+    /// way in.
+    private var findBarIsOpening: Bool {
+        guard let findBarOpenedAt else { return false }
+        return Date().timeIntervalSince(findBarOpenedAt) < 2
+    }
+
+    /// Ends a pull that the chrome took away, and lets the bar re-base on the
+    /// offset move that follows.
+    private func endRefresh() {
+        guard let refreshControl, refreshControl.isRefreshing else { return }
+        refreshControl.endRefreshing()
+        refreshWasEnded?()
+    }
+
+    /// The find interaction has no dismissal callback, so its visibility is
+    /// read until it is gone, then the control comes back.
+    private func watchFindBar() {
+        guard findBarWatcher == nil else { return }
+        findBarWatcher = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(400))
+                guard !Task.isCancelled, let self else { return }
+                if self.findInteraction?.isFindNavigatorVisible == true {
+                    // Seen: from here on only its dismissal matters.
+                    self.findBarOpenedAt = nil
+                    continue
+                }
+                guard !self.findBarIsOpening else { continue }
+                // Done: the next bar starts a watcher of its own.
+                self.findBarWatcher = nil
+                self.syncRefreshControl()
+                return
+            }
+        }
+    }
+
+    private func stopWatchingFindBar() {
+        findBarWatcher?.cancel()
+        findBarWatcher = nil
+        findBarOpenedAt = nil
+    }
 
     /// The page's own bottom edge stays clear of the chrome. Values are
     /// clamped and de-duplicated so a re-layout of the view does not make
@@ -64,6 +169,7 @@ final class MiniBrowserWebView: WKWebView {
         super.didMoveToWindow()
         configureScrollEdgeEffects()
         installKeyboardAccessory()
+        syncRefreshControl()
     }
 
     /// The bar is a floating panel, not a scroll edge: no pocket below it.
@@ -79,6 +185,9 @@ final class MiniBrowserWebView: WKWebView {
     override func layoutSubviews() {
         super.layoutSubviews()
         installKeyboardAccessory()
+        // The find bar can appear and go without a callback; every layout pass
+        // checks whether the refresh control belongs in the scroll view now.
+        syncRefreshControl()
     }
 
     /// WKContentView (not WKWebView) owns the keyboard accessory. It is given

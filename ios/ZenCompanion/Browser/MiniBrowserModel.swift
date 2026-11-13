@@ -607,7 +607,7 @@ final class MiniBrowserModel {
         webView?.load(URLRequest(url: url))
     }
 
-    func reload() {
+    func reload(fromTop: Bool = false) {
         // After a failed load the web view still holds the old page;
         // reloading means trying the failed address again.
         if pageError != nil {
@@ -616,9 +616,18 @@ final class MiniBrowserModel {
         }
         // Keep the reader where they were. WebKit's own restore can land at
         // the end of a long document, and a page with an anchor (`#cite_note…`)
-        // jumps to it, which reads as "reload throws me to the bottom".
-        reloadScrollY = webView?.scrollView.contentOffset.y
+        // jumps to it, which reads as "reload throws me to the bottom". A pull
+        // starts at the top, so it asks for the top: leaving nothing to
+        // restore would let WebKit's own landing place win.
+        reloadScrollY = fromTop ? topScrollY : webView?.scrollView.contentOffset.y
         webView?.reload()
+    }
+
+    /// The page's top edge in the scroll view's offset. A top inset moves it
+    /// below zero, so a literal 0 is not the top.
+    private var topScrollY: CGFloat? {
+        guard let scrollView = webView?.scrollView else { return nil }
+        return -scrollView.adjustedContentInset.top
     }
 
     /// Puts the page back where it was before the reload, once the new
@@ -626,8 +635,11 @@ final class MiniBrowserModel {
     func restoreScrollAfterReload() {
         guard let y = reloadScrollY, let scrollView = webView?.scrollView else { return }
         reloadScrollY = nil
-        let maxY = max(0, scrollView.contentSize.height - scrollView.bounds.height)
-        let target = min(max(0, y), maxY)
+        // Everything above the top edge is out of bounds; the bottom stays
+        // where the content ends.
+        let topY = -scrollView.adjustedContentInset.top
+        let maxY = max(topY, scrollView.contentSize.height - scrollView.bounds.height)
+        let target = min(max(topY, y), maxY)
         guard abs(scrollView.contentOffset.y - target) > 1 else { return }
         scrollView.setContentOffset(
             CGPoint(x: scrollView.contentOffset.x, y: target),
@@ -765,6 +777,40 @@ final class MiniBrowserModel {
         guard let webView else { return }
         webView.isFindInteractionEnabled = true
         webView.findInteraction?.presentFindNavigator(showingReplace: false)
+        // The find bar and the pull-to-refresh control share the top of the
+        // page; the control waits until the bar is gone.
+        (webView as? MiniBrowserWebView)?.findNavigatorDidPresent()
+    }
+
+    /// There is a page to print: it is loaded, nothing covers it, and it is
+    /// not the reader.
+    var canPrint: Bool {
+        guard pageError == nil, readerArticle == nil else { return false }
+        return pageURL != nil || webView?.url != nil
+    }
+
+    /// System print dialog for the page on screen.
+    func presentPrint() {
+        collapseMenu()
+        guard canPrint, let webView else { return }
+        let info = UIPrintInfo(dictionary: nil)
+        info.jobName = Self.printJobName(title: pageTitle, url: pageURL ?? webView.url)
+        info.outputType = .general
+        let controller = UIPrintInteractionController.shared
+        controller.printInfo = info
+        controller.printFormatter = webView.viewPrintFormatter()
+        _ = controller.present(animated: true) { panel, _, _ in
+            // The shared controller must not keep the page alive after printing.
+            panel.printFormatter = nil
+            panel.printInfo = nil
+        }
+    }
+
+    /// What the print dialog calls the job: the page's name, or its host when
+    /// the page has no title.
+    static func printJobName(title: String, url: URL?) -> String {
+        let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? (url?.host ?? "") : name
     }
 
     /// Copies the current page URL. Returns false when there is nothing to copy.

@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.print.PrintManager
 import android.view.inputmethod.InputMethodManager
 import android.webkit.WebView
 import androidx.activity.compose.BackHandler
@@ -126,6 +127,7 @@ import de.kjell.zencompanion.R
 import de.kjell.zencompanion.util.FriendlyError
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.BrowserRepository
+import de.kjell.zencompanion.ui.browser.BrowserDownload
 import de.kjell.zencompanion.ui.browser.BrowserPages
 import de.kjell.zencompanion.ui.browser.MiniBrowserViewModel
 import de.kjell.zencompanion.ui.browser.PageSession
@@ -832,8 +834,10 @@ private fun BrowserPageScreen(
     val shownSession by rememberUpdatedState(session)
     var paneWidth by remember { mutableIntStateOf(0) }
     val pageGapPx = with(LocalDensity.current) { PageGap.toPx() }
-    /** The link a long press is asking about. */
-    var linkMenu by remember { mutableStateOf<String?>(null) }
+    /** The link or image a long press is asking about. */
+    var hitMenu by remember { mutableStateOf<BrowserHitMenu?>(null) }
+    // One set for the screen: a page's file bridge and its download must match.
+    val requests = rememberBrowserPageRequests(pages)
     // Keyed: a collector carried over to another page reads the old page's
     // state for its first frames, and the bar would show that page's colors.
     val state by key(session.id) { viewModel.state.collectAsState() }
@@ -973,6 +977,18 @@ private fun BrowserPageScreen(
         focusManager.clearFocus()
         keyboardController?.hide()
         viewModel.endAddressEdit()
+    }
+
+    /**
+     * Reload the page, remembering where the reader was: the reloaded document
+     * may otherwise land somewhere else. The bar's button and a page pull share
+     * this path, and a fresh load takes the error panel away with it.
+     */
+    fun reloadPage() {
+        webView?.let { view ->
+            session.reloadScroll = view.scrollY
+            view.reload()
+        }
     }
 
     val defaultSurface = MaterialTheme.colorScheme.surface
@@ -1163,6 +1179,7 @@ private fun BrowserPageScreen(
                 PageStack(
                     pages = pages,
                     active = session,
+                    requests = requests,
                     offset = { pageSwipe.value },
                     gap = pageGapPx,
                     offersNewPage = offersNewPage,
@@ -1174,7 +1191,8 @@ private fun BrowserPageScreen(
                         scroll.downRun = 0
                         scroll.lastY = 0
                     },
-                    onLinkLongPress = { linkMenu = it },
+                    onHitLongPress = { hitMenu = it },
+                    onPullRefresh = ::reloadPage,
                 )
 
                 if (state.readerArticle != null) {
@@ -1320,16 +1338,26 @@ private fun BrowserPageScreen(
                         },
                         // A page that failed to load has nothing worth pinning.
                         canPin = signedIn && allSpaces.isNotEmpty() && state.pageError == null,
-                        onBack = { webView?.goBack() },
-                        onForward = { webView?.goForward() },
-                        onReload = {
-                            webView?.let { view ->
-                                // Remember where the reader was: the reloaded
-                                // page may otherwise land somewhere else.
-                                session.reloadScroll = view.scrollY
-                                view.reload()
+                        // A page that is not showing has nothing to print.
+                        canPrint = webView != null &&
+                            effectiveUrl.isNotEmpty() &&
+                            effectiveUrl != "about:blank" &&
+                            state.pageError == null &&
+                            state.readerArticle == null,
+                        onPrint = {
+                            val view = webView
+                            if (view != null) {
+                                // The menu goes for the system's own sheet.
+                                viewModel.collapseMenu()
+                                val jobName = state.currentTitle.takeIf { it.isNotBlank() }
+                                    ?: addressDisplay(effectiveUrl)
+                                context.activity()?.getSystemService(PrintManager::class.java)
+                                    ?.print(jobName, view.createPrintDocumentAdapter(jobName), null)
                             }
                         },
+                        onBack = { webView?.goBack() },
+                        onForward = { webView?.goForward() },
+                        onReload = ::reloadPage,
                         onStop = { webView?.stopLoading() },
                         onCopyLink = {
                             if (effectiveUrl.isNotEmpty()) {
@@ -1400,23 +1428,55 @@ private fun BrowserPageScreen(
         }
     }
 
-    linkMenu?.let { url ->
+    hitMenu?.let { menu ->
         LinkMenu(
-            url = url,
+            menu = menu,
             onOpenInNewPage = {
-                linkMenu = null
-                pages.capture(session)
-                pages.open(url, openerId = session.id)
+                hitMenu = null
+                menu.link?.let { link ->
+                    pages.capture(session)
+                    pages.open(link, openerId = session.id)
+                }
             },
             onCopy = {
-                linkMenu = null
-                copyLink(context, url)
+                hitMenu = null
+                menu.link?.let { copyLink(context, it) }
             },
             onShare = {
-                linkMenu = null
-                shareUrl(context, url, "")
+                hitMenu = null
+                menu.link?.let { shareUrl(context, it, "") }
             },
-            onDismiss = { linkMenu = null },
+            onSaveImage = {
+                hitMenu = null
+                val image = menu.image
+                val view = webView
+                if (image != null && view != null) {
+                    // Chosen by the reader, so it goes straight to Downloads with
+                    // the same notices a page's own download gets.
+                    requests.forSession(session).download(
+                        view,
+                        BrowserDownload(
+                            url = image,
+                            userAgent = view.settings.userAgentString,
+                            contentDisposition = null,
+                            mimeType = null,
+                            referer = effectiveUrl,
+                        ),
+                    )
+                }
+            },
+            onOpenImageInNewPage = {
+                hitMenu = null
+                menu.image?.let { image ->
+                    pages.capture(session)
+                    pages.open(image, openerId = session.id)
+                }
+            },
+            onCopyImage = {
+                hitMenu = null
+                menu.image?.let { copyLink(context, it) }
+            },
+            onDismiss = { hitMenu = null },
         )
     }
 
@@ -1473,6 +1533,8 @@ private fun peekBar(pages: BrowserPages, page: OpenPage): PeekBar {
 private fun PageStack(
     pages: BrowserPages,
     active: PageSession,
+    /** The screen's page requests, shared with the long-press menu outside the stack. */
+    requests: BrowserPageRequests,
     offset: () -> Float,
     gap: Float,
     offersNewPage: Boolean,
@@ -1480,7 +1542,8 @@ private fun PageStack(
     consentBundle: String?,
     onActiveScroll: (Int) -> Unit,
     onActivePageStarted: () -> Unit,
-    onLinkLongPress: (String) -> Unit,
+    onHitLongPress: (BrowserHitMenu) -> Unit,
+    onPullRefresh: () -> Unit,
 ) {
     val openPages by pages.store.pages.collectAsState()
     val switchingOrder by pages.store.switchingOrder.collectAsState()
@@ -1488,8 +1551,10 @@ private fun PageStack(
     val previousId = previous?.id
     val nextId = next?.id
     val currentActive by rememberUpdatedState(active)
-    val requests = rememberBrowserPageRequests(pages)
     BrowserPromptDialogs(active, requests)
+    // A video on the whole display takes Back first. Composed here, inside the
+    // screen's later part, so it outranks the browser's own back handling.
+    BackHandler(enabled = requests.isFullscreen) { requests.exitFullscreen() }
     // A blank page is the bare plate, in the app's paper: the same background
     // the Settings sheet uses, not a darker version of it.
     val surface = MaterialTheme.colorScheme.surface
@@ -1568,8 +1633,16 @@ private fun PageStack(
                             pages.open(null, openerId = session.id, popup = message)
                         },
                         onCloseWindow = { pages.close(session.id) },
-                        onLinkLongPress = onLinkLongPress,
+                        onHitLongPress = onHitLongPress,
                         onPageLoaded = { pages.pageLoaded(session) },
+                        onPullRefresh = onPullRefresh,
+                        // A sheet, the reader, find or an error panel owns the
+                        // gestures over the page, and so does a full-screen video.
+                        pullToRefreshEnabled = !state.isAddressFocused &&
+                            !state.findVisible &&
+                            state.readerArticle == null &&
+                            state.pageError == null &&
+                            !requests.isFullscreen,
                         onLoadingChange = { loading ->
                             viewModel.onLoadingChange(loading)
                             if (!loading) {
@@ -1786,7 +1859,9 @@ private fun MiniBrowserFindBar(
         modifier = Modifier
             .fillMaxWidth()
             .background(zen.background)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            // The step buttons take the platform's 48 dp; half the air above
+            // and below them keeps the strip at the height it had at 36 dp.
+            .padding(horizontal = 16.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -1842,9 +1917,10 @@ private fun FindStep(
     onClick: () -> Unit,
 ) {
     val zen = LocalZenColors.current
+    // The platform's least touch target; the 20 dp glyph stays as it is.
     Box(
         modifier = Modifier
-            .size(36.dp)
+            .size(48.dp)
             .barClickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -1867,12 +1943,4 @@ internal fun shareUrl(context: Context, url: String, title: String) {
         if (title.isNotEmpty()) putExtra(Intent.EXTRA_SUBJECT, title)
     }
     runCatching { context.startActivity(Intent.createChooser(intent, null)) }
-}
-
-/** The page's host for blocking, or null for a blank or non-web page. */
-private fun pageHost(url: String): String? {
-    val uri = runCatching { android.net.Uri.parse(url) }.getOrNull() ?: return null
-    val scheme = uri.scheme?.lowercase()
-    if (scheme != "http" && scheme != "https") return null
-    return uri.host?.takeIf { it.isNotEmpty() }
 }

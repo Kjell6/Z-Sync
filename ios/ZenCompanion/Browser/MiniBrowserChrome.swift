@@ -456,7 +456,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
     }
 
     /// Bottom row, trailing edge first for the thumb: Pin sits on the right.
-    /// Left to right: Find, Share, Open, Pin.
+    /// Left to right: Find, Print, Share, Open, Pin.
     private var actionRow: some View {
         HStack(spacing: 8) {
             tile(
@@ -466,6 +466,18 @@ struct MiniBrowserChrome<NavBar: View>: View {
             ) {
                 withAnimation(motion) {
                     model.presentFindOnPage()
+                }
+            }
+            tile(
+                systemName: "printer",
+                title: "browser.print",
+                accessibility: "browser.print",
+                // Nothing to print without a page, under the error panel or
+                // with the reader lifted out of it.
+                enabled: model.canPrint
+            ) {
+                withAnimation(motion) {
+                    model.presentPrint()
                 }
             }
             shareTile
@@ -1158,6 +1170,9 @@ struct MiniBrowserTopBar: View {
             .font(.system(size: 18, weight: .semibold))
             .foregroundStyle(Palette.ink(scheme).opacity(enabled ? 0.85 : 0.3))
             .frame(width: 32, height: barHeight - 8)
+            // The same 44pt slot the real bar's glyphs take, so the bar that
+            // slides in matches the one it replaces.
+            .frame(minWidth: 44, minHeight: 44)
     }
 
     private var swipeGesture: some Gesture {
@@ -1310,6 +1325,9 @@ struct MiniBrowserTopBar: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(Palette.ink(scheme).opacity(enabled ? 0.85 : 0.3))
                 .frame(width: 32, height: barHeight - 8)
+                // The glyph keeps its slot; the button around it takes the
+                // platform's least touch target, filling the bar's height.
+                .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(GlyphPressStyle())

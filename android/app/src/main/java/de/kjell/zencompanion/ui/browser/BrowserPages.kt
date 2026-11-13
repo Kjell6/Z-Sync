@@ -515,13 +515,16 @@ class BrowserPages(
     private fun writeShot(id: String, bitmap: Bitmap) {
         val target = store.snapshotFile(id)
         shotWrites[id] = (shotWrites[id] ?: 0) + 1
+        // Whether this write put this very picture on disk. One that fails
+        // leaves the older file behind, so the card keeps the newer picture.
+        var written = false
         writeKept(id, target) {
-            runCatching {
+            written = runCatching {
                 target.parentFile?.mkdirs()
                 val temp = File(target.path + ".tmp")
-                temp.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 72, it) }
-                temp.renameTo(target)
-            }
+                val compressed = temp.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 72, it) }
+                compressed && temp.renameTo(target)
+            }.getOrDefault(false)
         }.invokeOnCompletion {
             launchOnMain {
                 val left = (shotWrites[id] ?: 1) - 1
@@ -530,8 +533,9 @@ class BrowserPages(
                 } else {
                     shotWrites.remove(id)
                     // The card asked to drop its picture during the write and
-                    // nothing else calls it: the disk is up to date now.
-                    sessions[id]?.takeIf { it.shotDropWanted }?.let(::dropShot)
+                    // nothing else calls it: it can go only if the disk now
+                    // holds what the page shows.
+                    if (written) sessions[id]?.takeIf { it.shotDropWanted }?.let(::dropShot)
                 }
             }
         }

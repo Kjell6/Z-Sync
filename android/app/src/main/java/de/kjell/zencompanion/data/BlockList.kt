@@ -155,6 +155,7 @@ class BlockList(
          */
         private val genericSecondLevelLabels = setOf(
             "co", "com", "org", "net", "ac", "gov", "edu", "or", "ne", "go", "mil", "gob", "nom", "sch",
+            "id", "asn",
         )
 
         /**

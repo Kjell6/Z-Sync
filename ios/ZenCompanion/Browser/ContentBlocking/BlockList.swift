@@ -195,6 +195,7 @@ struct BlockList: Sendable {
     /// `zdf.de` stays a site of its own.
     private static let genericSecondLevelLabels: Set<String> = [
         "co", "com", "org", "net", "ac", "gov", "edu", "or", "ne", "go", "mil", "gob", "nom", "sch",
+        "id", "asn",
     ]
 
     /// Whether two hosts belong to the same site, for third-party rules.

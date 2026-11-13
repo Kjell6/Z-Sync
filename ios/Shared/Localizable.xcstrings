@@ -502,6 +502,28 @@
         }
       }
     },
+    "browser.field_next": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next field"
+          }
+        }
+      }
+    },
+    "browser.field_previous": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous field"
+          }
+        }
+      }
+    },
     "browser.forward": {
       "localizations": {
         "en": {

@@ -1,6 +1,7 @@
 package de.kjell.zencompanion
 
 import de.kjell.zencompanion.data.BlockCategory
+import de.kjell.zencompanion.data.BlockList
 import de.kjell.zencompanion.data.ContentBlockingSettings
 import de.kjell.zencompanion.data.FilterListUpdates
 import de.kjell.zencompanion.data.blockingSiteKey
@@ -11,6 +12,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -91,6 +93,31 @@ class ContentBlockingTests {
     }
 
     @Test
+    fun bundledListWinsWhenTheDownloadIsOlder() {
+        val bundled = parsedList("202611010000")
+        val older = parsedList("202610242150")
+        val sameDay = parsedList("202611010000")
+        val newer = parsedList("202612010000")
+        // The instance, not its version: a null choice has no version either.
+        assertSame(bundled, FilterListUpdates.chooseList(bundled, older))
+        assertSame(sameDay, FilterListUpdates.chooseList(bundled, sameDay))
+        assertSame(newer, FilterListUpdates.chooseList(bundled, newer))
+    }
+
+    @Test
+    fun aMissingCopyOrVersionFallsBackToTheOther() {
+        val bundled = parsedList("202611010000")
+        val downloaded = parsedList("202610242150")
+        val withoutVersion = parsedList(null)
+        assertSame(bundled, FilterListUpdates.chooseList(bundled, null))
+        assertSame(downloaded, FilterListUpdates.chooseList(null, downloaded))
+        assertNull(FilterListUpdates.chooseList(null, null))
+        // Without a version on either side the download is kept, as before.
+        assertSame(downloaded, FilterListUpdates.chooseList(withoutVersion, downloaded))
+        assertSame(withoutVersion, FilterListUpdates.chooseList(bundled, withoutVersion))
+    }
+
+    @Test
     fun consentScriptSkipsTheSitesTurnedOff() {
         val script = consentScriptSource("BUNDLE();", setOf("b.example", "a.example", "x\"y"))
         assertTrue(script.contains("""var skip = ["a.example","b.example","xy"];"""))
@@ -102,5 +129,11 @@ class ContentBlockingTests {
     fun captionUsesTheListDate() {
         assertEquals("24 Oct 2026", listDate("24 Oct 2026 21:50 UTC"))
         assertNull(listDate("soon"))
+    }
+
+    /** A minimal list that parses, so the choice tests need no bundled files. */
+    private fun parsedList(version: String?): BlockList {
+        val header = if (version == null) "" else "! Version: $version\n"
+        return BlockList.parse("[Adblock Plus 2.0]\n$header||ads.example^\n")
     }
 }

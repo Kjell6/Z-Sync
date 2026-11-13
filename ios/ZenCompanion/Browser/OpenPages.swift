@@ -37,6 +37,8 @@ final class OpenPage: Identifiable {
     var lastUsedAt: Date
     /// The page as it last looked, for the list and the address bar swipe.
     var shot: UIImage?
+    /// Bumped when `shot` is let go, so a load still under way does not bring it back.
+    @ObservationIgnored var shotGeneration = 0
     /// The user stopped keeping this page, so it goes with the browser.
     @ObservationIgnored var released = false
     /// WebKit's history blob while the page has no web view.
@@ -324,6 +326,8 @@ final class OpenPagesStore: MiniBrowserPageHost {
     func prepareNeighbours() {
         let around = neighbours
         for page in [around.previous, around.next].compactMap({ $0 }) {
+            // The swipe shows this picture until the woken page paints.
+            Task { await loadShot(of: page) }
             wake(page)
         }
     }
@@ -557,8 +561,22 @@ final class OpenPagesStore: MiniBrowserPageHost {
     func loadShot(of page: OpenPage) async {
         guard page.shot == nil else { return }
         let file = fileURL(page.id, "jpg")
+        let generation = page.shotGeneration
         let data = await Task.detached(priority: .utility) { try? Data(contentsOf: file) }.value
+        // Let go again while it loaded: the card is no longer near the focus.
+        guard page.shotGeneration == generation else { return }
         if page.shot == nil, let data { page.shot = UIImage(data: data) }
+    }
+
+    /// A card far from the deck's focus lets go of its picture, but only when
+    /// the disk can give it back: the page is kept and its picture is written
+    /// (writes are synchronous here). The page on screen and pages with a web
+    /// view keep theirs.
+    func dropShot(of page: OpenPage) {
+        guard page.id != activeID, page.model.webView == nil, page.isKept else { return }
+        if page.shot != nil, !FileManager.default.fileExists(atPath: fileURL(page.id, "jpg").path) { return }
+        page.shotGeneration += 1
+        page.shot = nil
     }
 
     private static let shotWidth = 240.0

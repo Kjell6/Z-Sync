@@ -83,6 +83,14 @@ final class BlockListTests: XCTestCase {
         XCTAssertFalse(BlockList.isSameSite("bbc.co.uk", "itv.co.uk"))
         XCTAssertTrue(BlockList.isSameSite("a.example.com", "b.example.com"))
         XCTAssertFalse(BlockList.isSameSite("example.com", "example.net"))
+        XCTAssertFalse(BlockList.isSameSite("example.com", "example.org"))
+        XCTAssertTrue(BlockList.isSameSite("example.com", "cdn.example.com"))
+        // A short site name under a two-letter country domain is one site, not two.
+        XCTAssertTrue(BlockList.isSameSite("a.zdf.de", "b.zdf.de"))
+        XCTAssertTrue(BlockList.isSameSite("a.example.co.uk", "b.example.co.uk"))
+        XCTAssertFalse(BlockList.isSameSite("one.co.uk", "two.co.uk"))
+        XCTAssertTrue(BlockList.isSameSite("a.example.com.au", "b.example.com.au"))
+        XCTAssertFalse(BlockList.isSameSite("one.com.au", "two.com.au"))
     }
 
     func testRuleListJSONIsValidAndOrdered() throws {
@@ -209,6 +217,30 @@ final class ContentBlockingTests: XCTestCase {
         XCTAssertNotNil(FilterListUpdates.accept(big))
     }
 
+    func testBundledListWinsWhenTheDownloadIsOlder() {
+        let bundled = parsedList("202611010000")
+        let older = parsedList("202610242150")
+        let sameDay = parsedList("202611010000")
+        let newer = parsedList("202612010000")
+        // The rule the list carries, not its version: a nil choice has no
+        // version either, and a struct has no identity to check.
+        XCTAssertEqual(chosenDomains(bundled: bundled, downloaded: older), bundled.anywhere)
+        XCTAssertEqual(chosenDomains(bundled: bundled, downloaded: sameDay), sameDay.anywhere)
+        XCTAssertEqual(chosenDomains(bundled: bundled, downloaded: newer), newer.anywhere)
+    }
+
+    func testAMissingCopyOrVersionFallsBackToTheOther() {
+        let bundled = parsedList("202611010000")
+        let downloaded = parsedList("202610242150")
+        let withoutVersion = parsedList(nil)
+        XCTAssertEqual(chosenDomains(bundled: bundled, downloaded: nil), bundled.anywhere)
+        XCTAssertEqual(chosenDomains(bundled: nil, downloaded: downloaded), downloaded.anywhere)
+        XCTAssertNil(FilterListUpdates.chooseList(bundled: nil, downloaded: nil))
+        // Without a version on either side the download is kept, as before.
+        XCTAssertEqual(chosenDomains(bundled: withoutVersion, downloaded: downloaded), downloaded.anywhere)
+        XCTAssertEqual(chosenDomains(bundled: bundled, downloaded: withoutVersion), withoutVersion.anywhere)
+    }
+
     func testConsentScriptSkipsTheSitesTurnedOff() {
         let script = consentScriptSource(bundle: "BUNDLE();", skip: ["b.example", "a.example", "x\"y"])
         XCTAssertTrue(script.contains(#"var skip = ["a.example","b.example","xy"];"#))
@@ -226,6 +258,18 @@ final class ContentBlockingTests: XCTestCase {
         let configuration = blocker.configuration(host: "news.example", original: true)
         XCTAssertEqual(configuration.ruleLists, [])
         XCTAssertNil(configuration.consentSkip)
+    }
+
+    /// A minimal list that parses, so the choice tests need no bundled files.
+    /// The version also names the rule, so a test can tell two copies apart.
+    private func parsedList(_ version: String?) -> BlockList {
+        let header = version.map { "! Version: \($0)\n" } ?? ""
+        return BlockList.parse("[Adblock Plus 2.0]\n\(header)||ads\(version ?? "none").example^\n")
+    }
+
+    /// What the chosen list blocks, which says which copy came back.
+    private func chosenDomains(bundled: BlockList?, downloaded: BlockList?) -> Set<String>? {
+        FilterListUpdates.chooseList(bundled: bundled, downloaded: downloaded)?.anywhere
     }
 }
 

@@ -33,6 +33,7 @@ import de.kjell.zencompanion.sync.SyncError
 import de.kjell.zencompanion.sync.SyncedActivityService
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.browser.BrowserPages
+import de.kjell.zencompanion.ui.browser.clearBrowserWebsiteData
 import de.kjell.zencompanion.ui.screens.FxAWeb
 import de.kjell.zencompanion.ui.screens.FxAWebLogin
 import de.kjell.zencompanion.util.FriendlyError
@@ -473,6 +474,8 @@ class AppViewModel(
         runCatching { BrowserPages.shared(appContext, browserRepository).closeAll() }
         // The sign-in page's cookies too: the next sign-in must not reuse it.
         runCatching { FxAWeb.wipeWebSession() }
+        // Every site's storage, not just the sign-in page's, as the policy says.
+        runCatching { clearBrowserWebsiteData(appContext) }
         preferencesRepository.setSyncSetupHintDismissed(false)
         _browser.value = BrowserState()
         _activity.value = ActivityState()

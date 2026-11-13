@@ -122,7 +122,10 @@ final class BrowserDownloads: NSObject, WKDownloadDelegate {
             page: ObjectIdentifier(model),
             waiting: waiting
         ) else {
-            decline(download, completionHandler)
+            // The page's first question about this address is still the
+            // reader's to answer, so a duplicate goes without closing a
+            // window that opened only for its file.
+            decline(download, completionHandler, closingPage: false)
             return
         }
 
@@ -163,10 +166,13 @@ final class BrowserDownloads: NSObject, WKDownloadDelegate {
 
     /// Answers WebKit with no destination, which cancels the download. The
     /// entry stays a moment so the cancellation it reports is not read as a
-    /// failed download.
+    /// failed download. A window opened only for its file closes with the
+    /// answer, unless this copy was only a duplicate of one already being
+    /// asked about: then its page still has a question to show.
     private func decline(
         _ download: WKDownload,
-        _ completionHandler: @escaping @MainActor @Sendable (URL?) -> Void
+        _ completionHandler: @escaping @MainActor @Sendable (URL?) -> Void,
+        closingPage: Bool = true
     ) {
         let id = ObjectIdentifier(download)
         running[id]?.isAsking = false
@@ -174,7 +180,7 @@ final class BrowserDownloads: NSObject, WKDownloadDelegate {
         // The name is free again: nothing was written.
         running[id]?.fileName = ""
         completionHandler(nil)
-        closeFileWindow(id)
+        if closingPage { closeFileWindow(id) }
         // WebKit reports the cancellation through `didFail`; this is only a
         // backstop for a report that never comes.
         Task { @MainActor [weak self] in

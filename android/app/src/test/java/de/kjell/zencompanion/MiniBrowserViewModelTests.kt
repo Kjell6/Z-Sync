@@ -14,6 +14,8 @@ import de.kjell.zencompanion.ui.browser.MiniBrowserZoom
 import de.kjell.zencompanion.ui.browser.SearchSuggestionClient
 import de.kjell.zencompanion.ui.components.PinDestination
 import de.kjell.zencompanion.ui.screens.BrowserPageError
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -52,6 +54,7 @@ class MiniBrowserViewModelTests {
         spaces: List<ZenSpaces.ZenSpace> = listOf(testSpace("s1"), testSpace("s2")),
         suggestionClient: SearchSuggestionClient = ForbiddenSuggestionClient(),
         suggestionDebounceMs: Long = 200,
+        readerParseDispatcher: CoroutineDispatcher = mainDispatcherRule.testDispatcher,
     ) = MiniBrowserViewModel(
         repository = repository,
         initialUrl = initialUrl,
@@ -60,6 +63,7 @@ class MiniBrowserViewModelTests {
         currentSpaceId = "s1",
         suggestionClient = suggestionClient,
         suggestionDebounceMs = suggestionDebounceMs,
+        readerParseDispatcher = readerParseDispatcher,
     )
 
     @Test
@@ -544,6 +548,58 @@ class MiniBrowserViewModelTests {
         vm.resetPageZoom()
         assertEquals(MiniBrowserZoom.default, vm.state.value.pageZoom, 0.001f)
         assertFalse(MiniBrowserZoom.canReset(vm.state.value.pageZoom))
+    }
+
+    @Test
+    fun aReaderAnswerForThePageOnScreenOpensTheReader() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = newViewModel()
+        val payload = CompletableDeferred<String?>()
+        vm.readerPayload = { payload.await() }
+
+        vm.toggleReader()
+        assertTrue(vm.state.value.readerLoading)
+
+        payload.complete("""{"title":"Old page","blocks":[{"kind":"p","text":"Body"}]}""")
+        runCurrent()
+
+        assertEquals("Old page", vm.state.value.readerArticle?.title)
+        assertFalse(vm.state.value.readerLoading)
+    }
+
+    @Test
+    fun aReaderAnswerForAnOldPageIsDropped() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = newViewModel(initialUrl = "https://start.example/")
+        val payload = CompletableDeferred<String?>()
+        vm.readerPayload = { payload.await() }
+
+        vm.toggleReader()
+        assertTrue(vm.state.value.readerLoading)
+
+        // The page moves on while the extraction is still under way.
+        vm.onCurrentUrlChange("https://next.example/")
+        payload.complete("""{"title":"Old page","blocks":[{"kind":"p","text":"Body"}]}""")
+        runCurrent()
+
+        assertNull(vm.state.value.readerArticle)
+        assertFalse(vm.state.value.readerLoading)
+        // Not even the "no article" notice belongs to a page that is gone.
+        assertNull(vm.state.value.notice)
+    }
+
+    @Test
+    fun aReaderAnswerAfterTheReaderClosedStaysClosed() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = newViewModel()
+        val payload = CompletableDeferred<String?>()
+        vm.readerPayload = { payload.await() }
+
+        vm.toggleReader()
+        vm.closeReader()
+        payload.complete("""{"title":"Old page","blocks":[{"kind":"p","text":"Body"}]}""")
+        runCurrent()
+
+        assertNull(vm.state.value.readerArticle)
+        assertFalse(vm.state.value.readerLoading)
+        assertNull(vm.state.value.notice)
     }
 }
 

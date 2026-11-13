@@ -71,6 +71,11 @@ class PageSession(
     var shot by mutableStateOf<ImageBitmap?>(null)
     /** Bumped when [shot] is let go, so a load still under way does not bring it back. */
     var shotGeneration = 0
+    /**
+     * A card out of range asked for its picture to go while the picture was
+     * still in memory or on its way to disk. Main thread only.
+     */
+    var shotDropWanted = false
     /** Bumped to reload after a blocking change. */
     var blockingReload by mutableIntStateOf(0)
     /** A crashed renderer takes its WebView with it; a new key builds a fresh one. */
@@ -524,6 +529,9 @@ class BrowserPages(
                     shotWrites[id] = left
                 } else {
                     shotWrites.remove(id)
+                    // The card asked to drop its picture during the write and
+                    // nothing else calls it: the disk is up to date now.
+                    sessions[id]?.takeIf { it.shotDropWanted }?.let(::dropShot)
                 }
             }
         }
@@ -531,6 +539,8 @@ class BrowserPages(
 
     /** Loads the stored picture of a page that has none in memory. */
     fun loadShot(session: PageSession) {
+        // Back in range: a drop wanted earlier is no longer wanted.
+        session.shotDropWanted = false
         if (session.shot != null) return
         val file = store.snapshotFile(session.id)
         if (!file.exists()) return
@@ -554,9 +564,23 @@ class BrowserPages(
      */
     fun dropShot(session: PageSession) {
         val id = session.id
-        if (id == store.activeId.value || session.webView != null) return
-        if (store.page(id)?.isKept != true) return
-        if (id in shotBitmaps || id in shotWrites) return
+        // Nothing to drop: the card keeps its picture on purpose, or has none
+        // on disk to load again later.
+        if (id == store.activeId.value || session.webView != null) {
+            session.shotDropWanted = false
+            return
+        }
+        if (store.page(id)?.isKept != true) {
+            session.shotDropWanted = false
+            return
+        }
+        // Still in memory or on its way to disk. Nothing calls this again when
+        // the write ends, so remember the wish and finish it there.
+        if (id in shotBitmaps || id in shotWrites) {
+            session.shotDropWanted = true
+            return
+        }
+        session.shotDropWanted = false
         if (session.shot != null && !store.snapshotFile(id).exists()) return
         session.shotGeneration++
         session.shot = null

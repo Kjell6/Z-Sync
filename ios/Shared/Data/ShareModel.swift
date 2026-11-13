@@ -127,15 +127,21 @@ enum ShareLink {
     private static let bracketPairs: [Character: Character] = [")": "(", "]": "[", "}": "{", ">": "<"]
 
     /// Android `trimSurroundingMarks`: drops the leading quotes and brackets,
-    /// then one trailing mark at a time. A closing bracket only goes while it
-    /// is unbalanced, so a linked `Function_(mathematics)` keeps its own `)`.
+    /// then the sentence marks that close the sentence around the link, then
+    /// the quotes and unbalanced closing brackets it is wrapped in. A mark
+    /// inside that wrapper stays, since an address may end in one: a quoted
+    /// `…?q=wow!` keeps its `!`. A closing bracket only goes while it is
+    /// unbalanced, so a linked `Function_(mathematics)` keeps its own `)`.
     private static func trimmingSurroundingMarks(_ text: String) -> String {
         var characters = Array(
             text.trimmingCharacters(in: .whitespacesAndNewlines)
                 .drop(while: { leadingMarks.contains($0) })
         )
+        while let last = characters.last, sentenceMarks.contains(last) {
+            characters.removeLast()
+        }
         while let last = characters.last {
-            if sentenceMarks.contains(last) || quoteMarks.contains(last) {
+            if quoteMarks.contains(last) {
                 characters.removeLast()
                 continue
             }

@@ -277,6 +277,63 @@ final class BrowserModelTests: XCTestCase {
         XCTAssertTrue(model.snapshot.spaces.isEmpty)
     }
 
+    // MARK: - Signed out
+
+    func testSignedOutNeverReadsOrRefreshesTheAccount() async {
+        let repo = FakeSpacesRepository()
+        repo.cached = snapshot(["a"])
+        repo.refreshResult = .success(snapshot(["a"]))
+        let favicons = FakeFaviconPrefetcher()
+        let model = BrowserModel(
+            account: nil,
+            repository: repo,
+            preferences: FakePreferences(),
+            favicons: favicons
+        )
+
+        await model.initialLoad()
+        await model.manualRefresh()
+        await model.sceneBecameActive()
+
+        XCTAssertFalse(model.isSignedIn)
+        XCTAssertTrue(model.snapshot.spaces.isEmpty)
+        XCTAssertEqual(repo.refreshCount, 0, "a signed-out screen must not fetch the account's spaces")
+        XCTAssertTrue(favicons.prefetchedSnapshots.isEmpty)
+    }
+
+    func testSignedOutOpenIntoSearchStillAsksForANewTab() async {
+        let model = BrowserModel(
+            account: nil,
+            repository: FakeSpacesRepository(),
+            preferences: searchPreferences(),
+            favicons: FakeFaviconPrefetcher()
+        )
+
+        await model.initialLoad()
+
+        XCTAssertTrue(model.searchOnOpenPending, "Open into search applies without an account")
+    }
+
+    func testSigningOutDropsTheSpacesOnScreen() async {
+        let repo = FakeSpacesRepository()
+        repo.cached = snapshot(["a"])
+        repo.refreshResult = .success(snapshot(["a"]))
+        let model = BrowserModel(
+            account: account(),
+            repository: repo,
+            preferences: FakePreferences(),
+            favicons: FakeFaviconPrefetcher()
+        )
+        await model.initialLoad()
+        XCTAssertEqual(model.snapshot.spaces.map(\.id), ["a"])
+
+        model.accountChanged(isSignedIn: false, isDemo: false)
+
+        XCTAssertFalse(model.isSignedIn)
+        XCTAssertTrue(model.snapshot.spaces.isEmpty)
+        XCTAssertNil(model.loadError)
+    }
+
     // MARK: - In-app review
 
     private func snapshotWithPinnedTab() -> ZenCompanion.ZenSnapshot {

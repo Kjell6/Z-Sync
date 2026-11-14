@@ -14,6 +14,7 @@ struct MiniBrowserView: View {
     let pages: OpenPagesStore
     let space: ZenSpace
     let allSpaces: [ZenSpace]
+    let websiteDataStoreID: UUID?
     /// Whether a save here may write a normal tab. Comes from the synced
     /// browser's capability, like the share sheet.
     var allowsNormalTabs = false
@@ -91,6 +92,7 @@ struct MiniBrowserView: View {
         pages: OpenPagesStore,
         space: ZenSpace,
         allSpaces: [ZenSpace],
+        websiteDataStoreID: UUID? = nil,
         allowsNormalTabs: Bool = false,
         startsInOverview: Bool = false,
         onDismiss: @escaping () -> Void
@@ -98,6 +100,7 @@ struct MiniBrowserView: View {
         self.pages = pages
         self.space = space
         self.allSpaces = allSpaces
+        self.websiteDataStoreID = websiteDataStoreID
         self.allowsNormalTabs = allowsNormalTabs
         self.onDismiss = onDismiss
         _startsInSearch = State(initialValue: pages.active?.model.opensWithSearch ?? false)
@@ -900,7 +903,7 @@ private extension MiniBrowserView {
             active.model.loadVisit(visit)
             page = active
         } else {
-            page = pages.open(url: url)
+            page = pages.open(url: url, websiteDataStoreID: websiteDataStoreID)
         }
         guard showOverview else { return }
         // The sheet has already closed; the deck goes with it.
@@ -946,7 +949,7 @@ private extension MiniBrowserView {
         // The deck stays as it was while it goes: no card joins it on the way out.
         overviewHoldsCards = true
         holdsNewPageSearch = !reduceMotion
-        pages.open(url: nil)
+        pages.open(url: nil, websiteDataStoreID: pages.active == nil ? websiteDataStoreID : model.websiteDataStoreID)
         guard !reduceMotion, let start = newPageStartPose() else {
             // No flight follows: the page change starts the search as usual.
             holdsNewPageSearch = false
@@ -1045,7 +1048,7 @@ private extension MiniBrowserView {
             withTransaction(transaction) {
                 switch end.target {
                 case .page(let id): pages.activate(id)
-                case .newPage: pages.open(url: nil)
+                case .newPage: pages.open(url: nil, websiteDataStoreID: pages.active == nil ? websiteDataStoreID : model.websiteDataStoreID)
                 case .stay: break
                 }
                 peeking = false

@@ -189,6 +189,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
         self.makeModel = makeModel
         pages = Self.read(from: directory).map { saved in
             let model = makeModel(saved.url)
+            model.websiteDataStoreID = saved.websiteDataStoreID
             model.restore(title: saved.title)
             model.markAddressAsVisited()
             let page = OpenPage(id: saved.id, model: model, keptAt: saved.keptAt, lastUsedAt: saved.lastUsedAt)
@@ -275,8 +276,11 @@ final class OpenPagesStore: MiniBrowserPageHost {
 
     /// Opens a new page and puts it on screen.
     @discardableResult
-    func open(url: URL?, title: String? = nil, openedFromSpace: Bool = false) -> OpenPage {
+    func open(
+        url: URL?, title: String? = nil, openedFromSpace: Bool = false, websiteDataStoreID: UUID? = nil
+    ) -> OpenPage {
         let model = makeModel(url)
+        model.websiteDataStoreID = websiteDataStoreID
         if let title { model.restore(title: title) }
         return insert(OpenPage(model: model, openedFromSpace: openedFromSpace, lastUsedAt: now()), after: nil)
     }
@@ -478,6 +482,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
     func openPopup(from model: MiniBrowserModel, url: URL?, configuration: WKWebViewConfiguration) -> WKWebView? {
         let opener = pages.first { $0.model === model }
         let popup = makeModel(url ?? URL(string: "about:blank"))
+        popup.websiteDataStoreID = model.websiteDataStoreID
         let webView = MiniBrowserWebDriver.attach(to: popup, configuration: configuration)
         let page = OpenPage(model: popup, openerID: opener?.id, lastUsedAt: now())
         _ = insert(page, after: opener)
@@ -486,7 +491,9 @@ final class OpenPagesStore: MiniBrowserPageHost {
 
     func openInNewPage(_ url: URL, from model: MiniBrowserModel) {
         let opener = pages.first { $0.model === model }
-        let page = OpenPage(model: makeModel(url), openerID: opener?.id, lastUsedAt: now())
+        let newModel = makeModel(url)
+        newModel.websiteDataStoreID = model.websiteDataStoreID
+        let page = OpenPage(model: newModel, openerID: opener?.id, lastUsedAt: now())
         _ = insert(page, after: opener)
     }
 
@@ -645,7 +652,10 @@ final class OpenPagesStore: MiniBrowserPageHost {
     private func persist() {
         let saved = pages.compactMap { page -> SavedPage? in
             guard let keptAt = page.keptAt, let url = page.url else { return nil }
-            return SavedPage(id: page.id, url: url, title: page.model.pageTitle, keptAt: keptAt, lastUsedAt: page.lastUsedAt)
+            return SavedPage(
+                id: page.id, url: url, title: page.model.pageTitle, keptAt: keptAt, lastUsedAt: page.lastUsedAt,
+                websiteDataStoreID: page.model.websiteDataStoreID
+            )
         }
         ensureDirectory()
         guard let data = try? JSONEncoder().encode(saved) else { return }
@@ -659,6 +669,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
         let title: String
         let keptAt: Date
         let lastUsedAt: Date
+        let websiteDataStoreID: UUID?
     }
 
     private static let fileName = "pages.json"

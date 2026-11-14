@@ -481,7 +481,10 @@ struct SpacesBrowserView: View {
     /// first: SwiftUI will not present a full-screen cover over one.
     private func presentBrowser(url: URL?, title: String?, space: ZenSpace, openedFromSpace: Bool = false) {
         openPages.allowsNormalTabs = model.snapshot.normalTabsCapability.allowsNormalTabs
-        openPages.open(url: url, title: title, openedFromSpace: openedFromSpace)
+        openPages.open(
+            url: url, title: title, openedFromSpace: openedFromSpace,
+            websiteDataStoreID: BrowserWebsiteData.storeID(accountID: account.uid, container: space.containerGuid)
+        )
         show(BrowserTabSession(space: space))
     }
 
@@ -503,6 +506,7 @@ struct SpacesBrowserView: View {
             pages: openPages,
             space: session.space,
             allSpaces: spaces,
+            websiteDataStoreID: BrowserWebsiteData.storeID(accountID: account.uid, container: session.space.containerGuid),
             allowsNormalTabs: model.snapshot.normalTabsCapability.allowsNormalTabs,
             startsInOverview: session.startsInOverview,
             onDismiss: { browserSession = nil }

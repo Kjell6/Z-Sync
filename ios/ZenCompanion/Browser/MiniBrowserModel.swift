@@ -427,6 +427,7 @@ final class MiniBrowserModel {
     private let suggestionClient: SearchSuggestionFetching
     let sitePermissions: SitePermissionStore
     private let history: BrowserHistoryStore
+    var websiteDataStoreID: UUID?
     /// The address last put in the history.
     @ObservationIgnored private var lastRecordedVisit: String?
     private let suggestionDebounce: Duration

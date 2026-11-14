@@ -50,7 +50,7 @@ Reviewers cannot sign in with a Mozilla account that holds Zen data, so the app
 has a hidden sample-data mode. iOS and Android work the same way:
 
 1. Open the app while signed out. Below the grey placeholder tiles and rows
-   there is a line of bold text, **"Your Zen spaces appear here"**, with a dark
+   there is a line of bold text, **"Your Zen spaces appear here"**, with the
    "Sign in with Mozilla" button under it.
 2. Tap exactly on the words "Your Zen spaces appear here" five times in a row,
    with less than two seconds between taps. Taps anywhere else (the button, the

@@ -53,8 +53,6 @@ struct MiniBrowserView: View {
     @State private var pagePose = PageCardPose.identity
     /// The page is above the deck, moving with the finger or landing on its card.
     @State private var pageFloats = false
-    /// The chrome is part of the card while the page is pulled up.
-    @State private var chromeRides = false
     @State private var chromeFade: CGFloat = 1
     /// The pull has let go for the overview; the bar takes no new one.
     @State private var committingPull = false
@@ -238,9 +236,8 @@ struct MiniBrowserView: View {
             .animation(.spring(response: 0.24, dampingFraction: 0.82), value: overviewControls)
             .frame(maxWidth: .infinity)
             .offset(y: barCollapsed ? 220 : 0)
-            // While the page is pulled the chrome is part of it.
-            .scaleEffect(chromeRides ? pagePose.scale : 1, anchor: .bottom)
-            .offset(x: chromeRides ? pagePose.x : 0, y: chromeRides ? pagePose.y : 0)
+            // The bar stays where it is while the page is pulled: the overview's
+            // controls are separate buttons, so they only fade, never ride.
             // With nothing left to show, the cover is on its way out.
             .opacity(barCollapsed || (pages.active == nil && !showOverview) ? 0 : Double(chromeFade))
             .allowsHitTesting(!committingPull)
@@ -688,7 +685,6 @@ private extension MiniBrowserView {
         // changes where the page meets the screen's edge.
         if let card = cardPose() { pagePose.corner = card.corner }
         pageFloats = true
-        chromeRides = true
         showOverview = true
         Task { @MainActor in
             await pages.capture(page)
@@ -766,7 +762,6 @@ private extension MiniBrowserView {
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
-                chromeRides = false
                 overviewControls = true
             }
             withAnimation(.easeOut(duration: 0.2)) { chromeFade = 1 }
@@ -782,7 +777,6 @@ private extension MiniBrowserView {
             pageFloats = false
             pagePose = .identity
             committingPull = false
-            chromeRides = false
             chromeFade = 1
             overviewReveal = 1
             aheadReveal = 1
@@ -806,7 +800,6 @@ private extension MiniBrowserView {
                 pagePose = .identity
                 showOverview = false
                 pageFloats = false
-                chromeRides = false
                 hiddenCardID = nil
                 aheadReveal = 1
             }
@@ -977,7 +970,6 @@ private extension MiniBrowserView {
         withTransaction(placed) {
             pagePose = start
             pageFloats = true
-            chromeRides = false
         }
         Task { @MainActor in
             // On screen where it starts, before it moves.

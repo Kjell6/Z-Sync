@@ -1851,7 +1851,9 @@ private fun MiniBrowserFindBar(
         modifier = Modifier
             .fillMaxWidth()
             .background(zen.background)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            // The step buttons take the platform's 48 dp; half the air above
+            // and below them keeps the strip at the height it had at 36 dp.
+            .padding(horizontal = 16.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -1907,9 +1909,10 @@ private fun FindStep(
     onClick: () -> Unit,
 ) {
     val zen = LocalZenColors.current
+    // The platform's least touch target; the 20 dp glyph stays as it is.
     Box(
         modifier = Modifier
-            .size(36.dp)
+            .size(48.dp)
             .barClickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {

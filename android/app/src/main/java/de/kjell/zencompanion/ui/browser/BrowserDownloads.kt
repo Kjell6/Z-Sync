@@ -18,6 +18,7 @@ import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
@@ -375,6 +376,9 @@ internal object BrowserDownloadCentre {
     fun startWebDownload(context: Context, download: BrowserDownload, destination: Uri, id: Long) {
         val app = context.applicationContext
         val name = webDownloadName(download)
+        // The copy into the reader's document reads this between chunks: a
+        // cancel while it runs must stop it, not just wait for it.
+        val stopped = AtomicBoolean(false)
         markDownloading(id)
         scope.launch {
             val queued = withContext(Dispatchers.IO) {
@@ -387,6 +391,7 @@ internal object BrowserDownloadCentre {
                 return@launch
             }
             setCancel(id) {
+                stopped.set(true)
                 app.getSystemService(DownloadManager::class.java).remove(queued.id)
                 queued.file.delete()
                 // Stopped before it was complete: the reader's document is empty.
@@ -398,7 +403,7 @@ internal object BrowserDownloadCentre {
                 synchronized(cancels) { cancels.remove(id) }?.invoke()
                 return@launch
             }
-            watch(app, queued, destination, id)
+            watch(app, queued, destination, id, stopped::get)
         }
     }
 
@@ -406,7 +411,13 @@ internal object BrowserDownloadCentre {
 
     fun pageFileFailed(id: Long, reason: DownloadFailure?) = fail(id, reason)
 
-    private suspend fun watch(context: Context, queued: QueuedDownload, destination: Uri, id: Long) {
+    private suspend fun watch(
+        context: Context,
+        queued: QueuedDownload,
+        destination: Uri,
+        id: Long,
+        stopped: () -> Boolean,
+    ) {
         val manager = context.getSystemService(DownloadManager::class.java)
         while (true) {
             delay(DOWNLOAD_POLL_MS)
@@ -423,11 +434,16 @@ internal object BrowserDownloadCentre {
 
                 DownloadManager.STATUS_SUCCESSFUL -> {
                     val copied = withContext(Dispatchers.IO) {
-                        copyToDocument(context, queued.file, destination)
+                        copyToDocument(context, queued.file, destination, stopped)
                     }
                     queued.file.parentFile?.delete()
                     queued.file.delete()
-                    if (copied) saved(id) else fail(id, DownloadFailure.SAVE)
+                    when (copied) {
+                        CopyResult.SAVED -> saved(id)
+                        // The reader stopped it, so the capsule says nothing more.
+                        CopyResult.CANCELLED -> remove(id)
+                        CopyResult.FAILED -> fail(id, DownloadFailure.SAVE)
+                    }
                     return
                 }
 
@@ -545,21 +561,53 @@ internal fun enqueueWebDownload(
     QueuedDownload(id, file)
 }.getOrNull()
 
-/** Copies a finished file into the document the reader chose. */
-internal fun copyToDocument(context: Context, file: File, destination: Uri): Boolean {
+/** How copying a finished file into the reader's document ended. */
+internal enum class CopyResult { SAVED, FAILED, CANCELLED }
+
+/** How much of a file is written between two looks at the cancel flag. */
+private const val COPY_BUFFER_BYTES = 64 * 1024
+
+/**
+ * Copies a finished file into the document the reader chose. The copy stops
+ * between two chunks once [cancelled] says so: a long file must not outlast the
+ * reader's cancel.
+ */
+internal fun copyToDocument(
+    context: Context,
+    file: File,
+    destination: Uri,
+    cancelled: () -> Boolean = { false },
+): CopyResult {
     val output = runCatching { context.contentResolver.openOutputStream(destination) }.getOrNull()
     if (output == null) {
         // A document nobody could open holds nothing: it goes too.
         discardDocument(context, destination)
-        return false
+        return CopyResult.FAILED
     }
-    val copied = runCatching {
-        output.use { out -> file.inputStream().use { input -> input.copyTo(out) } }
-        true
-    }.getOrDefault(false)
+    val result = try {
+        file.inputStream().use { input ->
+            output.use { out ->
+                val buffer = ByteArray(COPY_BUFFER_BYTES)
+                var result = CopyResult.SAVED
+                while (true) {
+                    if (cancelled()) {
+                        result = CopyResult.CANCELLED
+                        break
+                    }
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    out.write(buffer, 0, read)
+                }
+                out.flush()
+                result
+            }
+        }
+    } catch (_: Exception) {
+        if (cancelled()) CopyResult.CANCELLED else CopyResult.FAILED
+    }
     // A half-written file is worse than none: drop the document on failure.
-    if (!copied) discardDocument(context, destination)
-    return copied
+    if (result != CopyResult.SAVED) discardDocument(context, destination)
+    return result
 }
 
 /** Deletes the document the reader chose, for a file that never completed. */

@@ -58,6 +58,81 @@ final class BrowserPageRequestsTests: XCTestCase {
         XCTAssertNil(SitePermissionStore(fileURL: file).choice(for: .location, host: "example.com"))
     }
 
+    func testWWWFoldsIntoTheBareHost() {
+        let store = makeStore()
+        store.set(.allow, for: [.location], host: "www.google.com")
+        XCTAssertEqual(store.decision(for: [.location], host: "google.com"), .grant)
+        XCTAssertEqual(store.decision(for: [.location], host: "WWW.GOOGLE.COM"), .grant)
+        // The rest of the host still counts, so Maps keeps its own answer.
+        store.set(.block, for: [.location], host: "maps.google.com")
+        XCTAssertEqual(store.decision(for: [.location], host: "google.com"), .grant)
+        XCTAssertEqual(store.decision(for: [.location], host: "maps.google.com"), .deny)
+    }
+
+    func testAnAnswerSavedUnderWWWStillCounts() throws {
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathComponent("permissions.json")
+        addTeardownBlock { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+        try FileManager.default.createDirectory(
+            at: file.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let saved = ["www.google.com|location": SitePermissionChoice.block]
+        try JSONEncoder().encode(saved).write(to: file)
+
+        let store = SitePermissionStore(fileURL: file)
+        XCTAssertEqual(store.decision(for: [.location], host: "google.com"), .deny)
+        XCTAssertEqual(store.decision(for: [.location], host: "www.google.com"), .deny)
+        // Moved onto the bare host, so a later change replaces it instead of
+        // leaving the old key to answer for it.
+        XCTAssertEqual(store.choices.keys.sorted(), ["google.com|location"])
+    }
+
+    func testAnUnansweredQuestionIsANoUntilTheAppRestarts() {
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathComponent("permissions.json")
+        addTeardownBlock { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+        let store = SitePermissionStore(fileURL: file)
+        let model = MiniBrowserModel(initialURL: nil, sitePermissions: store)
+        var answers: [Bool] = []
+        model.requestPermission([.location], host: "www.gone.example") { answers.append($0) }
+        model.dismissDialog(model.dialogs[0])
+        XCTAssertEqual(answers, [false])
+
+        // The same site asking again hears no without a new question, `www.`
+        // or not, and the next launch asks again because nothing was saved.
+        XCTAssertEqual(store.decision(for: [.location], host: "gone.example"), .deny)
+        model.requestPermission([.location], host: "gone.example") { answers.append($0) }
+        XCTAssertEqual(answers, [false, false])
+        XCTAssertTrue(model.dialogs.isEmpty)
+        XCTAssertNil(SitePermissionStore(fileURL: file).choice(for: .location, host: "gone.example"))
+    }
+
+    func testARealAnswerReplacesTheUnansweredNo() {
+        let store = makeStore()
+        let model = MiniBrowserModel(initialURL: nil, sitePermissions: store)
+        model.requestPermission([.location], host: "gone.example") { _ in }
+        model.dismissDialog(model.dialogs[0])
+
+        // A change in Site Settings lets the question come back.
+        store.set(nil, for: [.location], host: "gone.example")
+        XCTAssertEqual(store.decision(for: [.location], host: "gone.example"), .ask)
+        store.set(.allow, for: [.location], host: "gone.example")
+        XCTAssertEqual(store.decision(for: [.location], host: "gone.example"), .grant)
+    }
+
+    func testTheSystemExplanationIsShownOncePerSite() {
+        let store = makeStore()
+        XCTAssertTrue(store.shouldExplainSystemAccess(host: "google.com"))
+        XCTAssertFalse(store.shouldExplainSystemAccess(host: "www.google.com"))
+        // A different site, and the next launch, explain again.
+        XCTAssertTrue(store.shouldExplainSystemAccess(host: "maps.google.com"))
+        store.removeAll()
+        XCTAssertTrue(store.shouldExplainSystemAccess(host: "google.com"))
+    }
+
     func testPermissionFileStaysOutOfBackups() throws {
         let file = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)

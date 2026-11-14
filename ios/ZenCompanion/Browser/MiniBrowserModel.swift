@@ -1361,17 +1361,19 @@ final class MiniBrowserModel {
         let store = sitePermissions
         switch store.decision(for: kinds, host: host) {
         case .grant:
-            completion(allowedBySystem(kinds))
+            completion(allowedBySystem(kinds, host: host))
         case .deny:
             completion(false)
         case .ask:
             let answer = DialogAnswer<Bool?>(fallback: nil) { [weak self] allowed in
                 guard let allowed else {
+                    // Nobody answered: the site hears no for the rest of this run.
+                    store.markUnanswered(for: kinds, host: host)
                     completion(false)
                     return
                 }
                 store.set(allowed ? .allow : .block, for: kinds, host: host)
-                completion(allowed && (self?.allowedBySystem(kinds) ?? false))
+                completion(allowed && (self?.allowedBySystem(kinds, host: host) ?? false))
             }
             present(.permission(host: host, kinds: kinds, answer))
         }
@@ -1379,7 +1381,7 @@ final class MiniBrowserModel {
 
     /// True while the system may still say yes. When it already said no it
     /// shows nothing more, so the browser explains where to change that.
-    private func allowedBySystem(_ kinds: [SitePermission]) -> Bool {
+    private func allowedBySystem(_ kinds: [SitePermission], host: String) -> Bool {
         let off = kinds.filter { kind in
             switch kind {
             case .camera: Self.isCaptureOff(.video)
@@ -1388,7 +1390,10 @@ final class MiniBrowserModel {
             }
         }
         guard !off.isEmpty else { return true }
-        present(.systemAccessOff(kinds: off))
+        // Explained once per site per run: asking again just hears the refusal.
+        if sitePermissions.shouldExplainSystemAccess(host: host) {
+            present(.systemAccessOff(kinds: off))
+        }
         return false
     }
 

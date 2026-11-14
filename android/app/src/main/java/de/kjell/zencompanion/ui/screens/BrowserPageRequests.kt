@@ -136,7 +136,14 @@ internal class BrowserPageRequests(
     private var fileAnswer: ((ActivityResult) -> Unit)? = null
 
     /** Callers waiting while a system request is open, answered when it closes. */
-    private val permissionWaiters = mutableListOf<Pair<List<SitePermission>, (Boolean) -> Unit>>()
+    private val permissionWaiters = mutableListOf<WaitingRequest>()
+
+    /** A request waiting behind an open system dialog, and the site it is for. */
+    private class WaitingRequest(
+        val kinds: List<SitePermission>,
+        val host: String,
+        val done: (Boolean) -> Unit,
+    )
 
     fun onPermissionResult(result: Map<String, Boolean>) {
         val answer = permissionAnswer
@@ -149,13 +156,13 @@ internal class BrowserPageRequests(
         // the system as its own question instead of being refused unanswered.
         val waiting = permissionWaiters.toList()
         permissionWaiters.clear()
-        waiting.forEach { (kinds, done) ->
-            val missing = kinds.filter { kind -> !systemAccessGranted(kind) { context.has(it) } }
+        waiting.forEach { request ->
+            val missing = request.kinds.filter { kind -> !systemAccessGranted(kind) { context.has(it) } }
             val allowed = waitingAnswer(missing, asked)
             // A waiter answered again is handed back to the system, which either
             // starts the next dialog or lets it wait behind one: it is never
             // resubmitted a second time for the same closed dialog.
-            if (allowed != null) done(allowed) else requestSystem(kinds, done)
+            if (allowed != null) request.done(allowed) else requestSystem(request.kinds, request.host, request.done)
         }
     }
 
@@ -165,7 +172,7 @@ internal class BrowserPageRequests(
         answer?.invoke(result)
     }
 
-    private fun requestSystem(kinds: List<SitePermission>, done: (Boolean) -> Unit) {
+    private fun requestSystem(kinds: List<SitePermission>, host: String, done: (Boolean) -> Unit) {
         val missing = kinds.filter { kind -> !systemAccessGranted(kind) { context.has(it) } }
         if (missing.isEmpty()) {
             done(true)
@@ -174,17 +181,19 @@ internal class BrowserPageRequests(
         if (permissionAnswer != null) {
             // One system dialog at a time: wait for the open one instead of
             // denying a request the reader has already been asked about.
-            permissionWaiters += kinds to done
+            permissionWaiters += WaitingRequest(kinds, host, done)
             return
         }
         permissionKinds = kinds
         permissionAnswer = { _ ->
             val refused = kinds.filter { kind -> !systemAccessGranted(kind) { context.has(it) } }
-            // After a final no the system shows nothing at all, so say where it changes.
+            // After a final no the system shows nothing at all, so say where it
+            // changes: once per site, since asking again just hears the refusal.
             val activity = context.activity()
             if (refused.isNotEmpty() && activity != null && refused.none { kind ->
                     kind.systemPermissions.any { ActivityCompat.shouldShowRequestPermissionRationale(activity, it) }
-                }
+                } &&
+                SitePermissions.shouldExplainSystemAccess(host)
             ) {
                 systemAccessOff = refused
             }
@@ -216,15 +225,23 @@ internal class BrowserPageRequests(
 
         override fun askPermission(kinds: List<SitePermission>, host: String, done: (Boolean) -> Unit) {
             when (SitePermissions.decision(kinds, host)) {
-                SitePermissionDecision.GRANT -> requestSystem(kinds, done)
+                SitePermissionDecision.GRANT -> requestSystem(kinds, host, done)
                 SitePermissionDecision.DENY -> done(false)
-                SitePermissionDecision.ASK -> session.prompts += BrowserPrompt.Permission(host, kinds, onDismiss = { done(false) }) { allowed ->
+                SitePermissionDecision.ASK -> session.prompts += BrowserPrompt.Permission(
+                    host,
+                    kinds,
+                    onDismiss = {
+                        // Nobody answered: the site hears no for the rest of this run.
+                        SitePermissions.markUnanswered(kinds, host)
+                        done(false)
+                    },
+                ) { allowed ->
                     SitePermissions.set(
                         if (allowed) SitePermissionChoice.ALLOW else SitePermissionChoice.BLOCK,
                         kinds,
                         host,
                     )
-                    if (allowed) requestSystem(kinds, done) else done(false)
+                    if (allowed) requestSystem(kinds, host, done) else done(false)
                     // The page may have asked again before this answer. Those
                     // questions have their answer now too, instead of showing
                     // the same dialog once more. Only for kinds just answered:

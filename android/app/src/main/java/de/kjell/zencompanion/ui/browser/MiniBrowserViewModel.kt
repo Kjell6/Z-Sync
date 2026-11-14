@@ -54,6 +54,24 @@ object MiniBrowserZoom {
 }
 
 /**
+ * One row of the address list: a page from the history, or a search phrase.
+ * [id] is the row's own content, so a row that stays in the list keeps its
+ * identity when the rows around it change.
+ */
+data class AddressSuggestion(
+    val text: String,
+    /** The page the row opens, or null for a search phrase. */
+    val visit: BrowserVisit? = null,
+) {
+    val id: String get() = visit?.let { "history:${it.url}" } ?: "search:$text"
+
+    companion object {
+        /** A page prints its name, or its host when it has none. */
+        fun page(visit: BrowserVisit) = AddressSuggestion(visit.title.ifEmpty { visit.host }, visit)
+    }
+}
+
+/**
  * Chrome and deferred-pin state for the mini browser (port of the state
  * machine that used to live inline in `MiniBrowserScreen`).
  */
@@ -116,6 +134,8 @@ class MiniBrowserViewModel(
         /** Pages from the history for the same text, above the suggestions. */
         val historySuggestions: List<BrowserVisit> = emptyList(),
         val suggestions: List<String> = emptyList(),
+        /** What the panel draws: the history first, then the phrases. */
+        val suggestionRows: List<AddressSuggestion> = emptyList(),
         /** Ads and trackers blocked on the current page. */
         val blockedCount: Int = 0,
         /** The page was reloaded once with nothing blocked. */
@@ -219,7 +239,12 @@ class MiniBrowserViewModel(
                 ),
             )
         }
-        if (focused) refreshSuggestions() else suggestionJob?.cancel()
+        if (focused) {
+            refreshSuggestions()
+        } else {
+            suggestionJob?.cancel()
+            publishSuggestionRows()
+        }
     }
 
     /**
@@ -366,6 +391,7 @@ class MiniBrowserViewModel(
         suggestionsSuspended = true
         suggestionJob?.cancel()
         _state.update { it.copy(suggestions = emptyList(), historySuggestions = emptyList()) }
+        publishSuggestionRows()
         return formatBrowserInput(input)
     }
 
@@ -383,6 +409,7 @@ class MiniBrowserViewModel(
                 addressText = TextFieldValue(suggestion),
             )
         }
+        publishSuggestionRows()
         return SearchSuggestions.target(suggestion, SearchEngines.current)
     }
 
@@ -391,6 +418,7 @@ class MiniBrowserViewModel(
         suggestionsSuspended = true
         suggestionJob?.cancel()
         _state.update { it.copy(suggestions = emptyList(), historySuggestions = emptyList()) }
+        publishSuggestionRows()
         return visit.url
     }
 
@@ -403,14 +431,17 @@ class MiniBrowserViewModel(
         suggestionJob?.cancel()
         if (suggestionsSuspended || !_state.value.isAddressFocused) {
             _state.update { it.copy(suggestions = emptyList(), historySuggestions = emptyList()) }
+            publishSuggestionRows()
             return
         }
         val raw = _state.value.addressText.text
         // Local, so it answers right away and also for a typed address.
         _state.update { it.copy(historySuggestions = BrowserHistory.suggestions(raw, it.currentUrl)) }
+        publishSuggestionRows()
         val url = SearchSuggestions.requestUrl(raw, SearchEngines.current)
         if (url == null) {
             _state.update { it.copy(suggestions = emptyList()) }
+            publishSuggestionRows()
             return
         }
         suggestionJob = viewModelScope.launch {
@@ -424,10 +455,34 @@ class MiniBrowserViewModel(
             }
             if (body == null) {
                 _state.update { it.copy(suggestions = emptyList()) }
+                publishSuggestionRows()
                 return@launch
             }
             if (_state.value.addressText.text != raw || !_state.value.isAddressFocused) return@launch
             _state.update { it.copy(suggestions = SearchSuggestions.parse(body)) }
+            publishSuggestionRows()
+        }
+    }
+
+    /**
+     * Rebuilds the one list the panel draws: the history first, then the
+     * engine's phrases the history does not already name. The cap counts the
+     * history rows first, so the phrases are what gets cut, never a page the
+     * reader already visited, and an answer that arrives late can only add rows.
+     */
+    private fun publishSuggestionRows() {
+        _state.update { state ->
+            val rows = state.historySuggestions.map { AddressSuggestion.page(it) }.toMutableList()
+            // The history row already prints the page's name and address, so a
+            // phrase that repeats either one is the same row twice.
+            val named = HashSet<String>()
+            state.historySuggestions.forEach {
+                named += it.title.lowercase()
+                named += it.displayAddress.lowercase()
+            }
+            val unseen = state.suggestions.filter { named.add(it.lowercase()) }
+            rows += SearchSuggestions.fitting(unseen, rows.size).map { AddressSuggestion(it) }
+            state.copy(suggestionRows = rows)
         }
     }
 

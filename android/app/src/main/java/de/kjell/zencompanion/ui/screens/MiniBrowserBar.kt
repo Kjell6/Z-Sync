@@ -1,12 +1,18 @@
 package de.kjell.zencompanion.ui.screens
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -78,6 +84,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -137,7 +144,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.BrowserVisit
-import de.kjell.zencompanion.data.SearchSuggestions
 import de.kjell.zencompanion.data.SitePermission
 import de.kjell.zencompanion.data.SitePermissionChoice
 import de.kjell.zencompanion.data.SitePermissions
@@ -145,9 +151,11 @@ import de.kjell.zencompanion.data.BlockCategory
 import de.kjell.zencompanion.data.ContentBlockingSettings
 import de.kjell.zencompanion.data.SaveKind
 import de.kjell.zencompanion.data.blockingSiteKey
+import de.kjell.zencompanion.ui.browser.AddressSuggestion
 import de.kjell.zencompanion.ui.browser.BlockingCard
 import de.kjell.zencompanion.ui.browser.MiniBrowserViewModel
 import de.kjell.zencompanion.ui.browser.MiniBrowserZoom
+import de.kjell.zencompanion.ui.motion.rememberReducedMotion
 import de.kjell.zencompanion.ui.sheets.icon
 import de.kjell.zencompanion.ui.sheets.title
 import de.kjell.zencompanion.ui.theme.LocalZenColors
@@ -207,6 +215,8 @@ private val RowGap = 8.dp
 
 /** The bar turning into the composer, and the dock fading as it does. */
 internal const val BarMorphMs = 160
+/** How long the suggestion list takes to grow, shrink or fade a row in. */
+private const val SuggestionMs = 260
 /** How far the dock drops into the gesture area: the safe area is not touched,
  * only the slack above it is used up. */
 private val BottomLift = 15.dp
@@ -360,11 +370,25 @@ internal fun MiniBrowserBar(
         }
 
         // Part of the address editing state: the list sits in the space
-        // above the composer, on the same plate, and goes away with it.
-        if (state.isAddressFocused && (state.suggestions.isNotEmpty() || state.historySuggestions.isNotEmpty())) {
+        // above the composer, on the same plate, and goes away with it. It
+        // grows out of the bar and keeps each row's identity, so an answer
+        // that arrives only adds rows to what is already on screen.
+        val suggestionMs = if (rememberReducedMotion()) 0 else SuggestionMs
+        AnimatedVisibility(
+            visible = state.isAddressFocused && state.suggestionRows.isNotEmpty(),
+            enter = expandVertically(
+                animationSpec = tween(suggestionMs, easing = FastOutSlowInEasing),
+                expandFrom = Alignment.Bottom,
+            ) + fadeIn(animationSpec = tween(suggestionMs, easing = FastOutSlowInEasing)),
+            exit = shrinkVertically(
+                animationSpec = tween(suggestionMs, easing = FastOutSlowInEasing),
+                shrinkTowards = Alignment.Bottom,
+            ) + fadeOut(animationSpec = tween(suggestionMs, easing = FastOutSlowInEasing)),
+            label = "suggestions",
+        ) {
             SuggestionPanel(
-                visits = state.historySuggestions,
-                suggestions = SearchSuggestions.fitting(state.suggestions, state.historySuggestions.size),
+                rows = state.suggestionRows,
+                motionMs = suggestionMs,
                 onSelectVisit = onPickVisit,
                 onSelect = onPickSuggestion,
             )
@@ -1004,11 +1028,15 @@ private fun DockButton(
  * Same rows as the iOS list, on the hard surface this chrome uses. The panel
  * grows above the composer row, so the list reads as part of typing an
  * address rather than as a layer over the page.
+ *
+ * One list, keyed by what each row says: the model puts the pages from the
+ * history first and appends the engine's phrases, so a row that stays is not
+ * rebuilt when an answer changes the rows around it.
  */
 @Composable
 private fun SuggestionPanel(
-    visits: List<BrowserVisit>,
-    suggestions: List<String>,
+    rows: List<AddressSuggestion>,
+    motionMs: Int,
     onSelectVisit: (BrowserVisit) -> Unit,
     onSelect: (String) -> Unit,
 ) {
@@ -1016,72 +1044,107 @@ private fun SuggestionPanel(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .pane(DockShape, zen.lift),
+            .pane(DockShape, zen.lift)
+            // The panel's own height, plate and all, follows the row count
+            // instead of jumping when an answer brings a longer list.
+            .animateContentSize(animationSpec = tween(motionMs)),
     ) {
-        visits.forEachIndexed { index, visit ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = RowHeight)
-                    .barClickable { onSelectVisit(visit) }
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Schedule,
-                    contentDescription = null,
-                    tint = zen.ink.copy(alpha = 0.45f),
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = visit.title.ifEmpty { visit.host },
-                        style = ZenType.rounded(16, FontWeight.Medium),
-                        color = zen.ink,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = visit.displayAddress,
-                        style = ZenType.rounded(13, FontWeight.Normal),
-                        color = zen.ink.copy(alpha = 0.6f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+        rows.forEachIndexed { index, row ->
+            key(row.id) {
+                SuggestionRowFade(tween(motionMs, easing = FastOutSlowInEasing)) {
+                    SuggestionRow(
+                        row = row,
+                        last = index == rows.lastIndex,
+                        onSelectVisit = onSelectVisit,
+                        onSelect = onSelect,
                     )
                 }
             }
-            if (index < visits.lastIndex || suggestions.isNotEmpty()) RowDivider()
         }
-        suggestions.forEachIndexed { index, suggestion ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(RowHeight)
-                    .barClickable { onSelect(suggestion) }
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Search,
-                    contentDescription = null,
-                    // Same quiet ink as the composer's glyph.
-                    tint = zen.ink.copy(alpha = 0.45f),
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(Modifier.width(10.dp))
+    }
+}
+
+/** A row fades in on its own, so a longer answer does not pop a row in whole. */
+@Composable
+private fun SuggestionRowFade(motion: FiniteAnimationSpec<Float>, content: @Composable () -> Unit) {
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { shown = true }
+    AnimatedVisibility(visible = shown, enter = fadeIn(animationSpec = motion)) {
+        content()
+    }
+}
+
+/** A page prints its name over its address, a search phrase prints alone. */
+@Composable
+private fun SuggestionRow(
+    row: AddressSuggestion,
+    last: Boolean,
+    onSelectVisit: (BrowserVisit) -> Unit,
+    onSelect: (String) -> Unit,
+) {
+    val zen = LocalZenColors.current
+    val visit = row.visit
+    if (visit == null) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(RowHeight)
+                .barClickable { onSelect(row.text) }
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Search,
+                contentDescription = null,
+                // Same quiet ink as the composer's glyph.
+                tint = zen.ink.copy(alpha = 0.45f),
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = row.text,
+                style = ZenType.rounded(16, FontWeight.Medium),
+                color = zen.ink,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    } else {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = RowHeight)
+                .barClickable { onSelectVisit(visit) }
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Schedule,
+                contentDescription = null,
+                tint = zen.ink.copy(alpha = 0.45f),
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
                 Text(
-                    text = suggestion,
+                    text = row.text,
                     style = ZenType.rounded(16, FontWeight.Medium),
                     color = zen.ink,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = visit.displayAddress,
+                    style = ZenType.rounded(13, FontWeight.Normal),
+                    color = zen.ink.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (index < suggestions.lastIndex) RowDivider()
         }
     }
+    if (!last) RowDivider()
 }
 
 // MARK: - Composer

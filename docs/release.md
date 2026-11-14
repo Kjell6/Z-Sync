@@ -44,6 +44,20 @@ The script archives, exports, uploads, waits for Apple's processing to reach
 first (or pass `--dirty` only when the maintainer explicitly wants the working
 state on a device).
 
+## Demo access for App Review and Play
+
+Reviewers cannot sign in with a Mozilla account that holds Zen data, so the app
+has a hidden sample-data mode. On the signed-out home, tap the title **"Your
+Zen spaces appear here"** five times quickly (at most two seconds between taps).
+A haptic confirms it and the home fills with sample spaces under the banner
+"Sample data — not connected to a Mozilla account". Settings has "Exit sample
+data" to leave it. iOS and Android work the same way.
+
+Before each store submission, check that the review notes in App Store Connect
+(App Review Information → Notes) and the Play Console app-access instructions
+still describe this. Notes written before the signed-out home was redesigned
+may point at the old sign-in card and its app mark, which no longer exist.
+
 ## Checking what is actually live
 
 ```sh

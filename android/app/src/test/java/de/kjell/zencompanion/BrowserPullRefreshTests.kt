@@ -63,6 +63,14 @@ class MiniBrowserBarTests {
     }
 
     @Test
+    fun anOffsetOutsideAReaderGestureGoesBackToTheBaseline() {
+        // A page that scrolls itself, as `scrollTo` does, leaves the bar alone.
+        val step = barScrollStep(delta = 200, scrollY = 500, downRun = 40, userDriven = false)
+        assertEquals(BarScrollDecision.KEEP, step.decision)
+        assertEquals(0, step.downRun)
+    }
+
+    @Test
     fun aDownwardDragTucksTheBarAwayOnceItHasRun() {
         val jitter = barScrollStep(delta = 8, scrollY = 100, downRun = 0, userDriven = true)
         assertEquals(BarScrollDecision.KEEP, jitter.decision)

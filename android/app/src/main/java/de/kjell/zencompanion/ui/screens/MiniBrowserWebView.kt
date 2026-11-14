@@ -663,9 +663,10 @@ private class ScrollBridge(
     fun update(scrollY: Int) = onScroll(scrollY, true)
 
     /**
-     * The first touch on a document. It only says where the reader took hold:
-     * a back or forward navigation has already put the page at its old offset
-     * without a finger, and that offset is the baseline from here on.
+     * An offset the reader's own scrolling did not move: a back or a forward
+     * puts the previous page at its old offset before any finger is on it, and
+     * a page's own `scrollTo` is not the reader either. Those offsets are the
+     * baseline from here on.
      */
     @JavascriptInterface
     fun sync(scrollY: Int) = onScroll(scrollY, false)
@@ -737,13 +738,26 @@ private const val SCROLL_BINDING_SCRIPT = """
     (function() {
       if (window.__zenScrollBound) return;
       window.__zenScrollBound = true;
-      // A back or forward puts the previous page back at its old offset before
-      // any finger is on it. Until a touch starts, the page reports nothing;
-      // that first touch only sets where the reader took hold.
-      var touched = false;
+      // Only the reader's own gesture may hide the bar. A back or a forward
+      // puts the previous page back at its old offset without a finger, and so
+      // does a page's own `scrollTo`: those offsets are the baseline instead.
+      var active = false;
+      var idle = 0;
+      // Momentum keeps the page scrolling after the finger lifts. That is still
+      // the reader, until the page has been quiet for a moment.
+      function keepActive() {
+        active = true;
+        clearTimeout(idle);
+        idle = setTimeout(function() { active = false; }, 150);
+      }
       window.addEventListener('scroll', function() {
-        if (!touched) return;
-        try { ZenScroll.update(Math.round(window.scrollY)); } catch (e) {}
+        var y = Math.round(window.scrollY);
+        if (active) {
+          keepActive();
+          try { ZenScroll.update(y); } catch (e) {}
+        } else {
+          try { ZenScroll.sync(y); } catch (e) {}
+        }
       }, { passive: true });
 
       function overscrollAllows(style) {
@@ -773,12 +787,24 @@ private const val SCROLL_BINDING_SCRIPT = """
 
       document.addEventListener('touchstart', function(event) {
         try {
-          if (!touched) {
-            touched = true;
-            ZenScroll.sync(Math.round(window.scrollY));
-          }
+          keepActive();
+          ZenScroll.sync(Math.round(window.scrollY));
           ZenScroll.pull(mayPull(event.target));
         } catch (e) {}
+      }, { passive: true, capture: true });
+
+      document.addEventListener('touchmove', function() {
+        try { keepActive(); } catch (e) {}
+      }, { passive: true, capture: true });
+
+      document.addEventListener('touchend', function() {
+        // The lift itself may start a momentum scroll: it stays the reader's
+        // until that goes quiet.
+        if (active) keepActive();
+      }, { passive: true, capture: true });
+
+      document.addEventListener('touchcancel', function() {
+        if (active) keepActive();
       }, { passive: true, capture: true });
     })()
 """

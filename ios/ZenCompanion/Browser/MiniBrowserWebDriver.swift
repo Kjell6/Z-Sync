@@ -615,7 +615,10 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
         // A committed document is on screen: the chrome starts over for it,
-        // even when it is the previous page coming back.
+        // even when it is the previous page coming back. Every commit counts
+        // as a new document for the colour, so a reload of the same address
+        // cannot take the previous document's late answer.
+        pageGeneration += 1
         startOver(for: webView.url)
         DispatchQueue.main.async {
             self.model?.pageDidCommit()

@@ -191,6 +191,8 @@ internal fun MiniBrowserWebView(
                 webViewClient = object : WebViewClient() {
                     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                         super.onPageStarted(view, url, favicon)
+                        // A new document cannot still be reading the old one's file.
+                        requests.closePageFiles()
                         // Back and forward can skip the main-frame request.
                         url?.let { blocker.pageStarted(it, isReload = false) }
                         // Leaving the page shown as the original: this document

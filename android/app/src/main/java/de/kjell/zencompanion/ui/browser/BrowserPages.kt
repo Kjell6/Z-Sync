@@ -180,6 +180,9 @@ class BrowserPages(
     /** Whether the app has an account right now: no pin path runs without one. */
     private var signedIn: Boolean = true
 
+    /** Told when a page's WebView goes, so the files it was reading end too. */
+    var onPageLeft: ((String) -> Unit)? = null
+
     init {
         store.onPageRemoved = { id ->
             live.removeAll { it.id == id }
@@ -356,6 +359,8 @@ class BrowserPages(
             session.dismissPrompts()
             saveHistory(session)
             session.webView = null
+            // A file the page was still reading has nowhere to land now.
+            onPageLeft?.invoke(session.id)
         }
     }
 

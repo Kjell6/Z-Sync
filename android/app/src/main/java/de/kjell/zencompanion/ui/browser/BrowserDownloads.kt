@@ -729,6 +729,16 @@ internal class PageFileBridge(
         close(token, saved = false, tell = false)
     }
 
+    /**
+     * The page left its document or its WebView: nothing it was still reading
+     * is saved, and the capsule hears about each file.
+     */
+    fun closeAll() {
+        val (waiting, writing) = synchronized(this) { expected.keys.toList() to open.keys.toList() }
+        waiting.forEach(::fail)
+        writing.forEach { close(it, saved = false) }
+    }
+
     private fun close(token: String, saved: Boolean, tell: Boolean = true) {
         val current = synchronized(this) { open.remove(token) } ?: return
         val kept = current.first.finish(saved)

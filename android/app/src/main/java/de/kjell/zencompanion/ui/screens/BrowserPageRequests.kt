@@ -80,6 +80,8 @@ internal interface PageRequests {
     /** Asks the reader first, the way a page's own download does. */
     fun askDownload(view: WebView, download: BrowserDownload)
     fun installPageFileBridge(view: WebView)
+    /** The page left its document or its WebView: its unfinished files end. */
+    fun closePageFiles()
     fun chooseFiles(callback: ValueCallback<Array<Uri>>, params: WebChromeClient.FileChooserParams): Boolean
     fun showFullscreen(view: View, callback: WebChromeClient.CustomViewCallback)
     fun hideFullscreen()
@@ -271,6 +273,11 @@ internal class BrowserPageRequests(
         return sessionRequests.getOrPut(session.id) { requestsFor(session) }
     }
 
+    /** A page's WebView went: the files it was still reading end with it. */
+    fun pageLeft(id: String) {
+        sessionRequests[id]?.closePageFiles()
+    }
+
     private fun requestsFor(session: PageSession): PageRequests = object : PageRequests {
         private val pageFiles = PageFileBridge(context, downloads) { taskId, saved, reason ->
             if (saved) {
@@ -325,6 +332,8 @@ internal class BrowserPageRequests(
         override fun installPageFileBridge(view: WebView) {
             view.addJavascriptInterface(pageFiles, PAGE_FILE_BRIDGE)
         }
+
+        override fun closePageFiles() = pageFiles.closeAll()
 
         override fun download(view: WebView, download: BrowserDownload) {
             if (!isWebDownload(download.url) && !isPageLocalDownload(download.url)) return
@@ -467,7 +476,12 @@ internal fun rememberBrowserPageRequests(pages: BrowserPages): BrowserPageReques
         BrowserPageRequests(context, pages, permissions, files, saveTo).also { holder = it }
     }
     DisposableEffect(requests) {
-        onDispose { requests.endFullscreen() }
+        // A page's WebView going takes its unfinished files with it.
+        pages.onPageLeft = { requests.pageLeft(it) }
+        onDispose {
+            pages.onPageLeft = null
+            requests.endFullscreen()
+        }
     }
     return requests
 }

@@ -180,6 +180,8 @@ final class BrowserPageRequestsTests: XCTestCase {
         XCTAssertEqual(BrowserDownloadPolicy.safeFileName("../../etc/passwd"), "_.._etc_passwd")
         XCTAssertEqual(BrowserDownloadPolicy.safeFileName("..."), "download")
         XCTAssertEqual(BrowserDownloadPolicy.safeFileName("report.pdf"), "report.pdf")
+        XCTAssertEqual(BrowserDownloadPolicy.safeFileName("a\nb\u{7}.pdf"), "a_b_.pdf")
+        XCTAssertEqual(BrowserDownloadPolicy.safeFileName("Family 👨‍👩‍👧.pdf"), "Family 👨‍👩‍👧.pdf")
     }
 
     func testATakenNameIsNumbered() {

@@ -20,12 +20,82 @@ final class BrowserHistoryTests: XCTestCase {
 
     private func url(_ text: String) -> URL { URL(string: text)! }
 
+    private func date(_ seconds: TimeInterval) -> Date { Date(timeIntervalSince1970: seconds) }
+
     func testOnlyWebPagesAreKept() {
         let store = makeStore()
         store.record(url("about:blank"), title: "")
         store.record(url("blob:https://example.com/1"), title: "")
         store.record(nil, title: "")
         XCTAssertTrue(store.visits.isEmpty)
+    }
+
+    func testAnAddressNeverKeepsItsPassword() {
+        let store = makeStore()
+        store.record(url("https://reader:secret@example.com/private"), title: "")
+        XCTAssertEqual(store.visits.map(\.url), ["https://example.com/private"])
+        XCTAssertEqual(store.visits.first?.displayAddress, "example.com/private")
+    }
+
+    func testAStoredEntryNeverKeepsItsPassword() {
+        let stored = [
+            BrowserVisit(url: "https://reader:secret@example.com/private", title: "Private", lastVisited: date(2), visits: 1),
+            BrowserVisit(url: "about:blank", title: "", lastVisited: date(3), visits: 1),
+        ]
+        XCTAssertEqual(
+            BrowserHistoryStore.cleanedHistory(stored),
+            [BrowserVisit(url: "https://example.com/private", title: "Private", lastVisited: date(2), visits: 1)]
+        )
+    }
+
+    func testTwoStoredEntriesOfOnePageBecomeOne() {
+        let stored = [
+            BrowserVisit(url: "https://reader:secret@example.com/a", title: "Old", lastVisited: date(1), visits: 2),
+            BrowserVisit(url: "https://b.example", title: "B", lastVisited: date(2), visits: 1),
+            BrowserVisit(url: "https://example.com/a", title: "", lastVisited: date(5), visits: 3),
+        ]
+        XCTAssertEqual(
+            BrowserHistoryStore.cleanedHistory(stored),
+            [
+                BrowserVisit(url: "https://example.com/a", title: "Old", lastVisited: date(5), visits: 5),
+                BrowserVisit(url: "https://b.example", title: "B", lastVisited: date(2), visits: 1),
+            ]
+        )
+    }
+
+    func testACleanListNeedsNoRewrite() {
+        let clean = [BrowserVisit(url: "https://example.com/a", title: "A", lastVisited: date(1), visits: 1)]
+        XCTAssertNil(BrowserHistoryStore.cleanedHistory(clean))
+    }
+
+    func testAnOlderFileLosesTheLoginsItSaved() throws {
+        let file = makeFile()
+        try FileManager.default.createDirectory(
+            at: file.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let stored = [
+            BrowserVisit(url: "https://reader:secret@example.com/private", title: "Private", lastVisited: date(1), visits: 1)
+        ]
+        try JSONEncoder().encode(stored).write(to: file)
+        let store = makeStore(file: file)
+        XCTAssertEqual(store.visits.map(\.url), ["https://example.com/private"])
+        XCTAssertFalse(try String(contentsOf: file, encoding: .utf8).contains("secret"))
+    }
+
+    func testACleanFileIsNotWrittenAgain() throws {
+        let file = makeFile()
+        try FileManager.default.createDirectory(
+            at: file.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let clean = [BrowserVisit(url: "https://example.com/a", title: "A", lastVisited: date(1), visits: 1)]
+        try JSONEncoder().encode(clean).write(to: file)
+        let written = try FileManager.default.attributesOfItem(atPath: file.path)[.modificationDate] as? Date
+        let store = makeStore(file: file)
+        XCTAssertEqual(store.visits.map(\.title), ["A"])
+        let left = try FileManager.default.attributesOfItem(atPath: file.path)[.modificationDate] as? Date
+        XCTAssertEqual(left, written)
     }
 
     func testAJumpInsideAPageIsThePage() {

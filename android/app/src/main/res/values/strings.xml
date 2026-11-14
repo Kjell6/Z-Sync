@@ -197,6 +197,8 @@
     <string name="browser_reload">Reload</string>
     <string name="browser_stop">Stop</string>
     <string name="browser_clear_search">Clear search</string>
+    <string name="browser_connection_secure">Secure connection</string>
+    <string name="browser_connection_insecure">Connection is not secure</string>
 
     <string name="browser_more">More</string>
     <string name="browser_close_menu">Close menu</string>

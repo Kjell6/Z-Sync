@@ -39,6 +39,8 @@
 	<string>Websites you allow in the browser can use your location.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Websites you allow in the browser can use your microphone.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Images you save from a website go to your photo library.</string>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>UILaunchScreen</key>

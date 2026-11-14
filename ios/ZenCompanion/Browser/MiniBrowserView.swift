@@ -72,6 +72,9 @@ struct MiniBrowserView: View {
     /// The browser's own history is up. It belongs to the browser, not to a
     /// page: the overview has no page behind it when it is opened from home.
     @State private var historyShown = false
+    /// The browser's downloads: it belongs to the browser, not to a page, so
+    /// the capsule shows on whichever page is in front.
+    @State private var downloads = BrowserDownloads.shared
     /// The card the live page stands in for; it shows once the page lands.
     @State private var hiddenCardID: String?
     /// The overview is on its way out for a new page and shows no changes.
@@ -146,6 +149,7 @@ struct MiniBrowserView: View {
               !addressEditing,
               !model.menuExpanded,
               model.pinNotice == nil,
+              downloads.tasks.isEmpty,
               !model.showPinBanner,
               model.pageError == nil,
               model.readerArticle == nil,
@@ -351,6 +355,15 @@ struct MiniBrowserView: View {
                         .zIndex(5)
                 }
 
+                if let capsule = BrowserDownloadCapsule.content(for: downloads.tasks) {
+                    downloadCapsule(capsule)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, model.pinNotice == nil ? 132 : 196)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                        .environment(\.colorScheme, barScheme)
+                        .zIndex(5)
+                }
+
                 chrome
                     .zIndex(6)
             }
@@ -409,6 +422,7 @@ struct MiniBrowserView: View {
             )
             .animation(barMotion, value: barCollapsed)
             .animation(.spring(response: 0.38, dampingFraction: 0.86), value: model.pinNotice != nil)
+            .animation(.spring(response: 0.38, dampingFraction: 0.86), value: downloads.tasks.isEmpty)
             .animation(.easeInOut(duration: 0.25), value: model.themeColor)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)
@@ -1189,6 +1203,109 @@ private extension MiniBrowserView {
             insertion: .move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.95)),
             removal: .move(edge: .bottom).combined(with: .opacity)
         ))
+    }
+
+    // MARK: - Download Capsule
+
+    /// A file arriving, waiting for its folder, or the answer to either: the
+    /// same glass as the browser's other toasts, with the bar's colour so it
+    /// reads on any page.
+    private func downloadCapsule(_ capsule: BrowserDownloadCapsule.Content) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Text(downloadTitle(capsule))
+                        .zenFont(15, weight: .semibold, design: .rounded)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    if capsule.kind == .fetching, let fraction = capsule.fraction {
+                        Text(BrowserDownloadCapsule.percentLabel(fraction))
+                            .zenFont(13, weight: .medium, design: .rounded)
+                            .foregroundStyle(.primary.opacity(0.6))
+                            .monospacedDigit()
+                    }
+                }
+
+                switch capsule.kind {
+                case .fetching:
+                    downloadProgressBar(capsule.fraction)
+                case .failed:
+                    if let reason = capsule.reason {
+                        Text(reason)
+                            .zenFont(12, weight: .regular, design: .rounded)
+                            .foregroundStyle(.primary.opacity(0.6))
+                            .lineLimit(2)
+                    }
+                case .choosingFolder, .saved:
+                    EmptyView()
+                }
+            }
+
+            if capsule.kind == .fetching {
+                Button {
+                    BrowserDownloads.shared.cancel(taskIDs: capsule.taskIDs)
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.primary.opacity(0.6))
+                        .frame(width: 26, height: 26)
+                        .background(Circle().fill(.primary.opacity(0.1)))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("browser.download.cancel"))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(minHeight: 48)
+        .liquidGlassCapsule(interactive: true)
+        .floatingGlassShadow(scheme: scheme)
+        .transition(.asymmetric(
+            insertion: .move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.95)),
+            removal: .move(edge: .bottom).combined(with: .opacity)
+        ))
+    }
+
+    /// A thin bar that fills as the bytes arrive; a file whose size the server
+    /// never named spins instead, because the bar would be a guess.
+    @ViewBuilder
+    private func downloadProgressBar(_ fraction: Double?) -> some View {
+        if let fraction {
+            GeometryReader { space in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.primary.opacity(0.12))
+                    Capsule()
+                        .fill(.primary.opacity(0.75))
+                        .frame(width: max(2, space.size.width * fraction))
+                }
+            }
+            .frame(width: 148, height: 3)
+        } else {
+            ProgressView()
+                .controlSize(.mini)
+        }
+    }
+
+    private func downloadTitle(_ capsule: BrowserDownloadCapsule.Content) -> String {
+        switch capsule.kind {
+        case .fetching:
+            return capsule.count == 1
+                ? String(localized: "browser.download.started \(capsule.fileName)")
+                : String(localized: "browser.download.started_many \(capsule.count)")
+        case .choosingFolder:
+            return capsule.count == 1
+                ? String(localized: "browser.download.choose_folder \(capsule.fileName)")
+                : String(localized: "browser.download.choose_folder_many \(capsule.count)")
+        case .saved:
+            return capsule.count == 1
+                ? String(localized: "browser.download.finished \(capsule.fileName)")
+                : String(localized: "browser.download.saved_many \(capsule.count)")
+        case .failed:
+            return capsule.count == 1
+                ? String(localized: "browser.download.failed_name \(capsule.fileName)")
+                : String(localized: "browser.download.failed_many \(capsule.count)")
+        }
     }
 }
 

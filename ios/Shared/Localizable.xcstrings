@@ -329,6 +329,36 @@
         }
       }
     },
+    "browser.download.cancel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel download"
+          }
+        }
+      }
+    },
+    "browser.download.choose_folder %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose where to save %@"
+          }
+        }
+      }
+    },
+    "browser.download.choose_folder_many %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose where to save %lld files"
+          }
+        }
+      }
+    },
     "browser.download.confirm": {
       "localizations": {
         "en": {
@@ -349,12 +379,32 @@
         }
       }
     },
+    "browser.download.failed_many %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't download %lld files"
+          }
+        }
+      }
+    },
+    "browser.download.failed_name %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't download %@"
+          }
+        }
+      }
+    },
     "browser.download.finished %@": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ saved to Files › Z-Sync"
+            "value": "Saved %@"
           }
         }
       }
@@ -369,6 +419,26 @@
         }
       }
     },
+    "browser.download.page_asleep": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The page was asleep"
+          }
+        }
+      }
+    },
+    "browser.download.percent %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld%%"
+          }
+        }
+      }
+    },
     "browser.download.question %@": {
       "localizations": {
         "en": {
@@ -379,12 +449,62 @@
         }
       }
     },
+    "browser.download.reason.network": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The connection was lost"
+          }
+        }
+      }
+    },
+    "browser.download.reason.save": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file couldn't be saved"
+          }
+        }
+      }
+    },
+    "browser.download.reason.server": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server didn't send the file"
+          }
+        }
+      }
+    },
+    "browser.download.saved_many %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved %lld files"
+          }
+        }
+      }
+    },
     "browser.download.started %@": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Downloading %@"
+          }
+        }
+      }
+    },
+    "browser.download.started_many %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading %lld files"
           }
         }
       }

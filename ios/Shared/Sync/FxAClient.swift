@@ -37,6 +37,9 @@ actor FxAClient {
             if let syncError = error as? SyncError, case .totpRequired = syncError {
                 throw error
             }
+            // A cancelled fetch is not a failed sign-in: pass it on as it is,
+            // so the caller can tell it apart and try again.
+            if Self.isCancellation(error) { throw error }
             primaryError = error
             last = error.localizedDescription
         }
@@ -47,6 +50,7 @@ actor FxAClient {
             )
             return try await tokenServerCreds(authorization: "BrowserID \(assertion)", kB: kB, keysChangedAt: 0)
         } catch {
+            if Self.isCancellation(error) { throw error }
             // Keep the "session is dead" verdict from either path: if the
             // auth server rejected the session token, retrying the login is
             // the only fix even though we wrap the message below.
@@ -102,6 +106,7 @@ actor FxAClient {
                 if let access = obj["access_token"] as? String { return access }
                 last = "OAuth response without access_token"
             } catch {
+                if Self.isCancellation(error) { throw error }
                 if let syncError = error as? SyncError, syncError.isSessionInvalid {
                     sessionInvalid = true
                 }
@@ -292,6 +297,12 @@ actor FxAClient {
         guard case .auth(let message, _) = error else { return error }
         guard status == 401, body["errno"] as? Int == 110 else { return error }
         return .auth(message, sessionInvalid: true)
+    }
+
+    private static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        let ns = error as NSError
+        return ns.domain == NSURLErrorDomain && ns.code == NSURLErrorCancelled
     }
 
     private static func isSessionInvalid(_ error: Error?) -> Bool {

@@ -280,13 +280,21 @@ final class BrowserModel {
     /// Manual pull-to-refresh. Unlike a background reload this must always hit
     /// the network: if a reload is already in flight, wait for it and fetch
     /// again instead of silently doing nothing.
+    ///
+    /// The fetch runs in its own task. SwiftUI cancels the task of
+    /// `.refreshable` when the list under it is rebuilt, and a fetch inside
+    /// it would end as "cancelled" and show as a failed refresh, with a retry
+    /// that the same cancelled task cannot run either.
     func manualRefresh() async {
-        var waited: Duration = .zero
-        while reloading, waited < .seconds(15) {
-            try? await Task.sleep(for: .milliseconds(100))
-            waited += .milliseconds(100)
-        }
-        await reload()
+        await Task { [weak self] in
+            guard let self else { return }
+            var waited: Duration = .zero
+            while reloading, waited < .seconds(15) {
+                try? await Task.sleep(for: .milliseconds(100))
+                waited += .milliseconds(100)
+            }
+            await reload()
+        }.value
     }
 
     func reload(retryAttempted: Bool = false) async {

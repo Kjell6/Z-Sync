@@ -1575,22 +1575,34 @@ final class MiniBrowserModel {
         )
     }
 
+    /// The page's colour, from its own answer when that is one this app reads,
+    /// else from WebKit's, else none. A colour named in words, as a
+    /// `theme-color` tag may be, is not one the parser reads.
     func updateThemeColor(from string: String?, nativeColor: UIColor?) {
-        if let native = nativeColor {
-            setThemeColor(Color(uiColor: native))
+        if let color = Self.parsedThemeColor(string) {
+            setThemeColor(color)
             return
         }
-        guard let string = string?.trimmingCharacters(in: .whitespacesAndNewlines), !string.isEmpty else {
+        guard let nativeColor else {
             setThemeColor(nil)
             return
+        }
+        setThemeColor(Color(uiColor: nativeColor))
+    }
+
+    /// A colour named in the page's answer, or nil for one it does not name in
+    /// a form this app reads.
+    private static func parsedThemeColor(_ string: String?) -> Color? {
+        guard let string = string?.trimmingCharacters(in: .whitespacesAndNewlines), !string.isEmpty else {
+            return nil
         }
         if string.starts(with: "#") {
-            setThemeColor(Color(hex: string))
-        } else if string.starts(with: "rgb") {
-            setThemeColor(Color(cssRGB: string))
-        } else {
-            setThemeColor(nil)
+            return Color(hex: string)
         }
+        if string.starts(with: "rgb") {
+            return Color(cssRGB: string)
+        }
+        return nil
     }
 }
 

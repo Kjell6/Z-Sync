@@ -577,18 +577,30 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
                       PageTitle.sameDocument(url, self.webView?.url) else { return }
                 // The page's answer first: WebKit's own `themeColor` can still
                 // hold the previous page's tag for a moment after a step back.
-                let answer = result as? String
-                let native = (answer?.isEmpty ?? true) ? self.webView?.themeColor : nil
-                self.model?.updateThemeColor(from: answer, nativeColor: native)
+                // When the answer names a colour the parser cannot read, that
+                // tag is still better than clearing the colour.
+                self.model?.updateThemeColor(
+                    from: result as? String,
+                    nativeColor: self.webView?.themeColor
+                )
             }
         }
     }
 
     /// `<meta name="theme-color">`, else the body's background, else the
-    /// document's own.
+    /// document's own. A tag with a `media` query only counts for the window it
+    /// matches, so the first tag that applies is the one used.
     private static let pageColorScript = """
     (function() {
-        var meta = document.querySelector('meta[name="theme-color"]');
+        var metas = document.querySelectorAll('meta[name="theme-color"]');
+        var meta = null;
+        for (var i = 0; i < metas.length; i++) {
+            var media = metas[i].getAttribute('media');
+            if (!media || !media.trim() || window.matchMedia(media).matches) {
+                meta = metas[i];
+                break;
+            }
+        }
         if (meta && meta.content) return meta.content;
         var bg = window.getComputedStyle(document.body).backgroundColor;
         if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;

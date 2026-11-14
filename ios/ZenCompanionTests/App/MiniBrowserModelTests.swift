@@ -334,6 +334,19 @@ final class MiniBrowserModelTests: XCTestCase {
         XCTAssertNil(model.themeColor)
     }
 
+    func testAColourNamedInWordsFallsBackToWebKitsOwn() {
+        let (model, _) = makeModel(initialURL: URL(string: "https://example.com"))
+
+        // "black" is a colour the page names in words, which this app cannot
+        // read: WebKit's own answer still counts instead of no colour at all.
+        model.updateThemeColor(from: "black", nativeColor: .red)
+        XCTAssertNotNil(model.themeColor)
+
+        // With nothing of WebKit's either, the previous page's colour goes.
+        model.updateThemeColor(from: "black", nativeColor: nil)
+        XCTAssertNil(model.themeColor)
+    }
+
     func testTheSpinnerContrastsWithThePageBehindIt() {
         XCTAssertGreaterThan(
             whiteLevel(MiniBrowserRefresh.spinnerTint(pageIsDark: true)),

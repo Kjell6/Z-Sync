@@ -113,6 +113,8 @@ class BlockListTests {
         assertFalse(BlockList.isSameSite("a.id.au", "b.id.au"))
         assertFalse(BlockList.isSameSite("a.asn.au", "b.asn.au"))
         val ownSite = BlockList.parse("||cdn.id.de^\$third-party")
+        // The rule itself fires, so the next line proves the same-site exception.
+        assertTrue("a resource on another site", ownSite.blocks("cdn.id.de", "other.example"))
         assertFalse("a resource on the page's own site", ownSite.blocks("cdn.id.de", "id.de"))
     }
 

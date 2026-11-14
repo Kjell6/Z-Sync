@@ -102,6 +102,8 @@ final class BlockListTests: XCTestCase {
         XCTAssertFalse(BlockList.isSameSite("a.id.au", "b.id.au"))
         XCTAssertFalse(BlockList.isSameSite("a.asn.au", "b.asn.au"))
         let ownSite = BlockList.parse("||cdn.id.de^$third-party")
+        // The rule itself fires, so the next line proves the same-site exception.
+        XCTAssertTrue(ownSite.blocks(requestHost: "cdn.id.de", pageHost: "other.example"))
         XCTAssertFalse(ownSite.blocks(requestHost: "cdn.id.de", pageHost: "id.de"))
     }
 

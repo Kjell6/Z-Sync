@@ -176,7 +176,11 @@ internal fun enqueueWebDownload(context: Context, download: BrowserDownload): Bo
     download.mimeType?.takeIf { it.isNotEmpty() }?.let(request::setMimeType)
     target?.let(CookieManager.getInstance()::getCookie)?.let { request.addRequestHeader("Cookie", it) }
     download.userAgent?.takeIf { it.isNotEmpty() }?.let { request.addRequestHeader("User-Agent", it) }
-    download.referer?.takeIf(::isWebDownload)?.let { request.addRequestHeader("Referer", it) }
+    // The policy again for where the file really comes from: a same-site
+    // address that redirects to another host must not carry the page's path.
+    downloadReferrer(download.referer, target ?: download.url)
+        ?.takeIf(::isWebDownload)
+        ?.let { request.addRequestHeader("Referer", it) }
     context.getSystemService(DownloadManager::class.java).enqueue(request)
 }.isSuccess
 

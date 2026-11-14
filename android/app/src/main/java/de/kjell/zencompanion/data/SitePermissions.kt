@@ -76,6 +76,10 @@ fun sitePermissionDecision(
  */
 object SitePermissions {
     private const val PREFS = "site_permissions"
+
+    /** Set once the old `www.` keys are folded, so a later launch leaves them alone. */
+    private const val FOLDED_KEYS = "keys_folded"
+
     private var prefs: SharedPreferences? = null
 
     private val _choices = MutableStateFlow<Map<String, SitePermissionChoice>>(emptyMap())
@@ -93,12 +97,15 @@ object SitePermissions {
         val saved = stored.all.entries.mapNotNull { (key, value) ->
             SitePermissionChoice.entries.firstOrNull { it.storageValue == value }?.let { key to it }
         }.toMap()
-        val folded = foldedSitePermissionKeys(saved)
-        if (folded != saved) {
-            // Answers saved under a leading `www.` move over once, so a later
-            // change and a read agree on the same key.
-            val editor = stored.edit().clear()
+        // Folding is a one-time move: run again on the next launch, it would
+        // strip the second `www.` its own write left behind.
+        val alreadyFolded = stored.getBoolean(FOLDED_KEYS, false)
+        val folded = if (alreadyFolded) saved else foldedSitePermissionKeys(saved)
+        if (!alreadyFolded) {
+            val editor = stored.edit()
+            if (folded != saved) editor.clear()
             folded.forEach { (key, choice) -> editor.putString(key, choice.storageValue) }
+            editor.putBoolean(FOLDED_KEYS, true)
             editor.apply()
         }
         _choices.value = folded
@@ -150,7 +157,8 @@ object SitePermissions {
         _choices.value = emptyMap()
         unanswered.clear()
         explainedSystemAccess.clear()
-        prefs?.edit()?.clear()?.apply()
+        // A new answer is already folded, so nothing to move over later.
+        prefs?.edit()?.clear()?.putBoolean(FOLDED_KEYS, true)?.apply()
     }
 
     private fun key(kind: SitePermission, host: String) = "${foldedSiteHost(host)}|${kind.storageValue}"

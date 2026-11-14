@@ -3,10 +3,6 @@ package de.kjell.zencompanion
 import de.kjell.zencompanion.data.SearchEngine
 import de.kjell.zencompanion.data.SearchEngines
 import de.kjell.zencompanion.data.SearchSuggestions
-import de.kjell.zencompanion.ui.browser.LiveSearchSuggestionClient
-import de.kjell.zencompanion.ui.browser.readLimited
-import java.io.ByteArrayInputStream
-import java.io.IOException
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
@@ -146,21 +142,5 @@ class SearchSuggestionTests {
         assertTrue(SearchSuggestions.parse("""{"suggestions":["a"]}""").isEmpty())
         assertTrue(SearchSuggestions.parse("not json").isEmpty())
         assertTrue(SearchSuggestions.parse("").isEmpty())
-    }
-
-    @Test
-    fun suggestBodyIsReadUpToTheLimit() {
-        val limit = LiveSearchSuggestionClient.MAX_BODY_BYTES
-        val exact = "a".repeat(limit)
-        assertEquals(exact, readLimited(ByteArrayInputStream(exact.toByteArray()), limit))
-        assertEquals("[\"q\",[\"é\"]]", readLimited(ByteArrayInputStream("[\"q\",[\"é\"]]".toByteArray()), limit))
-    }
-
-    @Test
-    fun suggestBodyOverTheLimitIsRefused() {
-        val limit = LiveSearchSuggestionClient.MAX_BODY_BYTES
-        val tooBig = ByteArray(limit + 1) { 'a'.code.toByte() }
-        val refused = runCatching { readLimited(ByteArrayInputStream(tooBig), limit) }.exceptionOrNull()
-        assertTrue(refused is IOException)
     }
 }

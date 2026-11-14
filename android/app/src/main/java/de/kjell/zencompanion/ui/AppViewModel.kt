@@ -6,8 +6,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import de.kjell.zencompanion.BuildConfig
-import de.kjell.zencompanion.data.BrowserHistory
-import de.kjell.zencompanion.data.SitePermissions
 import de.kjell.zencompanion.data.AccountStore
 import de.kjell.zencompanion.data.AppEvents
 import de.kjell.zencompanion.data.AndroidWhatsNewRepository
@@ -32,8 +30,6 @@ import de.kjell.zencompanion.sync.SpacesSyncService
 import de.kjell.zencompanion.sync.SyncError
 import de.kjell.zencompanion.sync.SyncedActivityService
 import de.kjell.zencompanion.sync.ZenSpaces
-import de.kjell.zencompanion.ui.browser.BrowserPages
-import de.kjell.zencompanion.ui.browser.clearBrowserWebsiteData
 import de.kjell.zencompanion.ui.screens.FxAWeb
 import de.kjell.zencompanion.ui.screens.FxAWebLogin
 import de.kjell.zencompanion.ui.screens.sameTabUrl
@@ -473,17 +469,12 @@ class AppViewModel(
         SnapshotCache.deleteCachedSnapshot(appContext)
         SnapshotCache.invalidateMemory()
         FaviconLoader.clear()
-        // Here and not in the Settings button: a session that dies signs out too.
-        SitePermissions.clear()
-        BrowserHistory.clear()
-        // The open pages go with the sign-in here, as they do on iOS: without
-        // this a dead session would leave them for the next account. Best
-        // effort, so callers without a real app directory stay unaffected.
-        runCatching { BrowserPages.shared(appContext, browserRepository).closeAll() }
-        // The sign-in page's cookies too: the next sign-in must not reuse it.
+        // Only the account goes. The mini-browser belongs to this phone, so its
+        // open pages, history, website data and site permissions all stay, and
+        // signing out of Mozilla leaves the websites' own logins alone. The one
+        // web session that has to go is the sign-in page's own: the next
+        // sign-in must not reuse it.
         runCatching { FxAWeb.wipeWebSession() }
-        // Every site's storage, not just the sign-in page's, as the policy says.
-        runCatching { clearBrowserWebsiteData(appContext) }
         preferencesRepository.setSyncSetupHintDismissed(false)
         _browser.value = BrowserState()
         _activity.value = ActivityState()

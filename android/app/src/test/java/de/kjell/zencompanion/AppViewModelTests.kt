@@ -1,9 +1,11 @@
 package de.kjell.zencompanion
 
+import android.content.Context
 import android.content.ContextWrapper
 import android.content.SharedPreferences
 import de.kjell.zencompanion.data.AccountStore
 import de.kjell.zencompanion.data.AppEvents
+import de.kjell.zencompanion.data.BrowserHistory
 import de.kjell.zencompanion.data.DemoCatalog
 import de.kjell.zencompanion.data.EssentialsColumns
 import de.kjell.zencompanion.data.KeptPageLifetime
@@ -20,6 +22,7 @@ import de.kjell.zencompanion.ui.ActivityRepository
 import de.kjell.zencompanion.ui.AndroidPreferencesRepository
 import de.kjell.zencompanion.ui.AppViewModel
 import de.kjell.zencompanion.ui.BrowserRepository
+import de.kjell.zencompanion.ui.browser.BrowserPages
 import de.kjell.zencompanion.ui.LoginCompleter
 import de.kjell.zencompanion.ui.PreferencesRepository
 import de.kjell.zencompanion.ui.PreferencesState
@@ -177,6 +180,32 @@ class AppViewModelTests {
         assertNull(vm.session.value)
         assertEquals(R.string.session_expired, vm.sessionNotice.value)
         assertFalse(AccountStore.isSignedIn(context))
+    }
+
+    /**
+     * The mini-browser belongs to the phone, not to the account: signing out
+     * keeps its open pages (kept ones included) and its history.
+     */
+    @Test
+    fun signOutKeepsTheBrowsersHistoryAndOpenPages() = runTest(mainDispatcherRule.testDispatcher) {
+        val repository = FakeBrowserRepository()
+        val vm = newViewModel(browser = repository)
+        vm.completeSignIn(snapshot())
+        val pages = BrowserPages.shared(context, repository)
+        val address = "https://sign-out-keeps.example/page"
+        val page = pages.open(address, "Kept")
+        pages.toggleKeep(page.id)
+        BrowserHistory.record(address, "Kept")
+
+        try {
+            vm.signOut()
+
+            assertTrue(BrowserHistory.visits.value.any { it.url == address })
+            assertEquals(listOf(page.id), pages.store.pages.value.map { it.id })
+        } finally {
+            pages.closeAll()
+            BrowserHistory.clear()
+        }
     }
 
     @Test
@@ -928,6 +957,8 @@ private class FakeActivityRepository : ActivityRepository {
 private class FakeAppContext : ContextWrapper(null) {
     private val prefs = mutableMapOf<String, String>()
     private val files = File(System.getProperty("java.io.tmpdir"), "zen-appvm-${System.nanoTime()}")
+
+    override fun getApplicationContext(): Context = this
 
     override fun getFilesDir(): File = files
 

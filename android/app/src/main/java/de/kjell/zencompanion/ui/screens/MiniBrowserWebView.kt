@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.viewinterop.AndroidView
@@ -72,6 +73,8 @@ internal fun MiniBrowserWebView(
     desktopSite: Boolean,
     /** 1.0 = 100%. Page zoom for the page's document. */
     pageZoom: Float,
+    /** The page's own colour: the pull indicator has to sit on it and contrast. */
+    pageThemeColor: Color?,
     /** The back and forward list to come back to, if the page has one. */
     savedHistory: () -> Bundle?,
     /** The `window.open` this WebView answers, if it is a popup's page. */
@@ -88,6 +91,8 @@ internal fun MiniBrowserWebView(
     onLoadingChange: (Boolean) -> Unit,
     /** The document finished loading. */
     onPageLoaded: () -> Unit,
+    /** The WebView drew the new page for the first time. */
+    onPageDrawn: () -> Unit = {},
     /** The reader pulled the page down: reload it as the bar's button does. */
     onPullRefresh: () -> Unit,
     /** False while something over the page owns the gestures. */
@@ -107,7 +112,8 @@ internal fun MiniBrowserWebView(
     onLinkUnavailable: () -> Unit,
     /** What the page asks of the reader or the system. */
     requests: PageRequests,
-    onScrollChange: (scrollY: Int) -> Unit,
+    /** The page's scroll offset, and whether the reader's own scrolling moved it. */
+    onScrollChange: (scrollY: Int, userDriven: Boolean) -> Unit,
     onFindResult: (active: Int, total: Int) -> Unit,
     /** Decides which requests get an empty answer, and counts them. */
     blocker: PageBlocker,
@@ -252,6 +258,7 @@ internal fun MiniBrowserWebView(
                     // cookie banner and page zoom then run once the page is visible.
                     override fun onPageCommitVisible(view: WebView?, url: String?) {
                         super.onPageCommitVisible(view, url)
+                        onPageDrawn()
                         if (!consent.atDocumentStart) consent.current?.let { view?.evaluateJavascript(it, null) }
                         if (!pageZoomSlot.atDocumentStart) view?.let(pageZoomSlot::applyNow)
                     }
@@ -473,7 +480,9 @@ internal fun MiniBrowserWebView(
                 // also says whether this touch may pull the page down.
                 addJavascriptInterface(
                     ScrollBridge(
-                        onScroll = { scrollY -> post { onScrollChange(scrollY) } },
+                        onScroll = { scrollY, userDriven ->
+                            post { onScrollChange(scrollY, userDriven) }
+                        },
                         onPull = { allowed -> post { page.pageAllowsPull = allowed } },
                     ),
                     SCROLL_BRIDGE_NAME,
@@ -505,7 +514,12 @@ internal fun MiniBrowserWebView(
             val view = page.webView
             // With a sheet or a panel over the page, a pull belongs to that.
             page.isEnabled = pullToRefreshEnabled
-            page.setRefreshColors(circle = zen.background.toArgb(), arrow = zen.ink.toArgb())
+            // The indicator sits on the page: its tint follows the page's own
+            // colour instead of the app's, so it stays visible on white.
+            page.setRefreshColors(
+                circle = (pageThemeColor ?: zen.background).toArgb(),
+                arrow = pullRefreshTint(pageThemeColor).toArgb(),
+            )
             pageZoomSlot.sync(view, pageZoom)
             consent.sync(view, blocker, consentBundle, runNow = false)
             if (blockingReload != consent.handledReload) {
@@ -640,14 +654,73 @@ internal fun childCanScrollUp(
 
 /** Receives the page's scroll offset and pull permission. Called on a WebView thread. */
 private class ScrollBridge(
-    private val onScroll: (Int) -> Unit,
+    private val onScroll: (scrollY: Int, userDriven: Boolean) -> Unit,
     private val onPull: (Boolean) -> Unit,
 ) {
     @JavascriptInterface
-    fun update(scrollY: Int) = onScroll(scrollY)
+    fun update(scrollY: Int) = onScroll(scrollY, true)
+
+    /**
+     * The first touch on a document. It only says where the reader took hold:
+     * a back or forward navigation has already put the page at its old offset
+     * without a finger, and that offset is the baseline from here on.
+     */
+    @JavascriptInterface
+    fun sync(scrollY: Int) = onScroll(scrollY, false)
 
     @JavascriptInterface
     fun pull(allowed: Boolean) = onPull(allowed)
+}
+
+/** What one scroll event does to the browser bar. */
+internal enum class BarScrollDecision { KEEP, SHOW, HIDE }
+
+/** A bar decision, with the downward travel to carry into the next event. */
+internal data class BarScrollStep(val decision: BarScrollDecision, val downRun: Int)
+
+/**
+ * The bar's hide-on-scroll rule.
+ *
+ * Only the reader's own scrolling may tuck the bar away: a back or a forward
+ * puts the previous page back at its old offset without a finger, and that
+ * move must leave the bar alone. A move without a finger only becomes the new
+ * baseline.
+ *
+ * iOS port: `MiniBrowserBarScroll.decision` in `Browser/MiniBrowserModel.swift`.
+ */
+internal fun barScrollStep(
+    delta: Int,
+    scrollY: Int,
+    downRun: Int,
+    userDriven: Boolean,
+): BarScrollStep {
+    if (!userDriven) return BarScrollStep(BarScrollDecision.KEEP, 0)
+    // A short page, or the top of a long one, always keeps the bar.
+    if (scrollY <= 40) return BarScrollStep(BarScrollDecision.SHOW, 0)
+    if (delta > 0) {
+        val run = downRun + delta
+        return if (run > 24 && scrollY > 80) {
+            BarScrollStep(BarScrollDecision.HIDE, run)
+        } else {
+            BarScrollStep(BarScrollDecision.KEEP, run)
+        }
+    }
+    if (delta < -2) return BarScrollStep(BarScrollDecision.SHOW, 0)
+    return BarScrollStep(BarScrollDecision.KEEP, downRun)
+}
+
+/**
+ * The pull-to-refresh spinner's tint over a page of [pageColor]: dark on a
+ * light page, light on a dark one, and a mid grey when the page's own colour
+ * is not known, so it stays visible on white and on black.
+ *
+ * iOS port: `MiniBrowserRefresh.spinnerTint(pageIsDark:)` in
+ * `Browser/MiniBrowserModel.swift`.
+ */
+internal fun pullRefreshTint(pageColor: Color?): Color = when {
+    pageColor == null -> Color(0.55f, 0.55f, 0.55f)
+    pageColor.luminance() < 0.5f -> Color(0.92f, 0.92f, 0.92f)
+    else -> Color(0.22f, 0.22f, 0.22f)
 }
 
 private const val SCROLL_BRIDGE_NAME = "ZenScroll"
@@ -662,7 +735,12 @@ private const val SCROLL_BINDING_SCRIPT = """
     (function() {
       if (window.__zenScrollBound) return;
       window.__zenScrollBound = true;
+      // A back or forward puts the previous page back at its old offset before
+      // any finger is on it. Until a touch starts, the page reports nothing;
+      // that first touch only sets where the reader took hold.
+      var touched = false;
       window.addEventListener('scroll', function() {
+        if (!touched) return;
         try { ZenScroll.update(Math.round(window.scrollY)); } catch (e) {}
       }, { passive: true });
 
@@ -692,7 +770,13 @@ private const val SCROLL_BINDING_SCRIPT = """
       }
 
       document.addEventListener('touchstart', function(event) {
-        try { ZenScroll.pull(mayPull(event.target)); } catch (e) {}
+        try {
+          if (!touched) {
+            touched = true;
+            ZenScroll.sync(Math.round(window.scrollY));
+          }
+          ZenScroll.pull(mayPull(event.target));
+        } catch (e) {}
       }, { passive: true, capture: true });
     })()
 """

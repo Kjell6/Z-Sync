@@ -4,6 +4,9 @@ import android.webkit.PermissionRequest
 import de.kjell.zencompanion.data.SitePermission
 import de.kjell.zencompanion.data.SitePermissionChoice
 import de.kjell.zencompanion.data.SitePermissionDecision
+import de.kjell.zencompanion.data.SitePermissions
+import de.kjell.zencompanion.data.foldedSiteHost
+import de.kjell.zencompanion.data.foldedSitePermissionKeys
 import de.kjell.zencompanion.data.sitePermissionDecision
 import de.kjell.zencompanion.ui.browser.BrowserDownload
 import de.kjell.zencompanion.ui.browser.BrowserPrompt
@@ -25,11 +28,17 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 class BrowserPageRequestsTests {
     private fun decision(vararg answers: Pair<SitePermission, SitePermissionChoice?>) =
         sitePermissionDecision(answers.map { it.first }) { kind -> answers.first { it.first == kind }.second }
+
+    @Before
+    fun forgetSavedPermissions() {
+        SitePermissions.clear()
+    }
 
     @Test
     fun anUnknownSiteIsAsked() {
@@ -65,6 +74,76 @@ class BrowserPageRequestsTests {
     @Test
     fun anEmptyRequestIsNeverGranted() {
         assertEquals(SitePermissionDecision.ASK, sitePermissionDecision(emptyList()) { null })
+    }
+
+    @Test
+    fun wwwFoldsIntoTheBareHost() {
+        SitePermissions.set(SitePermissionChoice.ALLOW, listOf(SitePermission.LOCATION), "www.google.com")
+        assertEquals(
+            SitePermissionDecision.GRANT,
+            SitePermissions.decision(listOf(SitePermission.LOCATION), "google.com"),
+        )
+        assertEquals(
+            SitePermissionDecision.GRANT,
+            SitePermissions.decision(listOf(SitePermission.LOCATION), "WWW.GOOGLE.COM"),
+        )
+        // The rest of the host still counts, so Maps keeps its own answer.
+        SitePermissions.set(SitePermissionChoice.BLOCK, listOf(SitePermission.LOCATION), "maps.google.com")
+        assertEquals(
+            SitePermissionDecision.GRANT,
+            SitePermissions.decision(listOf(SitePermission.LOCATION), "google.com"),
+        )
+        assertEquals(
+            SitePermissionDecision.DENY,
+            SitePermissions.decision(listOf(SitePermission.LOCATION), "maps.google.com"),
+        )
+    }
+
+    @Test
+    fun anAnswerSavedUnderWWWStillCounts() {
+        assertEquals(
+            mapOf("google.com|location" to SitePermissionChoice.BLOCK),
+            foldedSitePermissionKeys(mapOf("www.google.com|location" to SitePermissionChoice.BLOCK)),
+        )
+        assertEquals("google.com", foldedSiteHost("www.Google.com"))
+        assertEquals("maps.google.com", foldedSiteHost("maps.google.com"))
+        // An answer already stored for the bare host wins over the old one.
+        assertEquals(
+            mapOf("google.com|location" to SitePermissionChoice.ALLOW),
+            foldedSitePermissionKeys(
+                mapOf(
+                    "www.google.com|location" to SitePermissionChoice.BLOCK,
+                    "google.com|location" to SitePermissionChoice.ALLOW,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun anUnansweredQuestionIsANoUntilTheAppRestarts() {
+        SitePermissions.markUnanswered(listOf(SitePermission.LOCATION), "www.gone.example")
+        assertEquals(
+            SitePermissionDecision.DENY,
+            SitePermissions.decision(listOf(SitePermission.LOCATION), "gone.example"),
+        )
+        // Nothing was saved, so the next launch asks again.
+        assertNull(SitePermissions.choice(SitePermission.LOCATION, "gone.example"))
+        // Ask in Site Settings lets the site's question come back.
+        SitePermissions.set(null, listOf(SitePermission.LOCATION), "gone.example")
+        assertEquals(
+            SitePermissionDecision.ASK,
+            SitePermissions.decision(listOf(SitePermission.LOCATION), "gone.example"),
+        )
+    }
+
+    @Test
+    fun theSystemExplanationIsShownOncePerSite() {
+        assertTrue(SitePermissions.shouldExplainSystemAccess("google.com"))
+        assertFalse(SitePermissions.shouldExplainSystemAccess("www.google.com"))
+        // A different site, and the next launch, explain again.
+        assertTrue(SitePermissions.shouldExplainSystemAccess("maps.google.com"))
+        SitePermissions.clear()
+        assertTrue(SitePermissions.shouldExplainSystemAccess("google.com"))
     }
 
     @Test

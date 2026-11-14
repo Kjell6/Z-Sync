@@ -37,6 +37,71 @@ enum MiniBrowserTools {
 
 }
 
+/// The bottom bar's hide-on-scroll rule.
+///
+/// Only the reader's own scrolling may tuck the bar away. A back or forward
+/// restore, a layout change, the chrome's own clearance or a page's script
+/// moves the offset without a finger; none of those may hide the bar, they
+/// only become the new baseline.
+///
+/// Android port: `barScrollStep` in `ui/screens/MiniBrowserWebView.kt`.
+enum MiniBrowserBarScroll {
+    /// What one offset change does to the bar.
+    enum Decision: Equatable {
+        case keep
+        case show
+        case hide
+    }
+
+    /// The decision for one offset change, with the downward travel to carry
+    /// into the next event.
+    static func decision(
+        delta: CGFloat,
+        scrollY: CGFloat,
+        viewportHeight: CGFloat,
+        contentHeight: CGFloat,
+        downRun: CGFloat,
+        isUserDriven: Bool
+    ) -> (decision: Decision, downRun: CGFloat) {
+        // A navigation's restored offset is not the reader scrolling.
+        guard isUserDriven else { return (.keep, 0) }
+        // A short page, or the very top of a long one, always keeps the bar.
+        guard contentHeight - viewportHeight > 60, scrollY > 40 else { return (.show, 0) }
+        if delta > 0.5 {
+            let run = downRun + delta
+            return (run > 24 && scrollY > 80 ? .hide : .keep, run)
+        }
+        if delta < -2 { return (.show, 0) }
+        return (.keep, downRun)
+    }
+
+    /// Whether a scroll view's offset move comes from the reader: a drag, or
+    /// the deceleration that follows one.
+    static func isReaderScroll(isDragging: Bool, isDecelerating: Bool) -> Bool {
+        isDragging || isDecelerating
+    }
+}
+
+/// The pull-to-refresh spinner's contrast.
+///
+/// The spinner sits on the page, not on the app's chrome, so its tint follows
+/// the page's own colour: a dark spinner on a light page, a light one on a
+/// dark page. A page with no known colour gets a mid grey that reads on both
+/// white and black.
+///
+/// Android port: `pullRefreshTint` in `ui/screens/MiniBrowserWebView.kt`.
+enum MiniBrowserRefresh {
+    /// The spinner's tint over a page of the given brightness; nil means the
+    /// page has no colour the spinner could follow.
+    static func spinnerTint(pageIsDark: Bool?) -> UIColor {
+        switch pageIsDark {
+        case .some(true): return UIColor(white: 0.92, alpha: 1)
+        case .some(false): return UIColor(white: 0.22, alpha: 1)
+        case .none: return UIColor(white: 0.55, alpha: 1)
+        }
+    }
+}
+
 /// Page zoom inside a loaded document.
 ///
 /// A browser's page zoom reflows the page: the layout viewport narrows, text
@@ -308,6 +373,26 @@ enum ReaderExtractor {
     }
 }
 
+/// One row of the address field's list: a page from the history, or a phrase
+/// the engine suggests. The id is the row's own content, so a row that stays
+/// in the list keeps its identity when the rows around it change.
+struct AddressSuggestion: Identifiable, Equatable {
+    /// The page the row opens, or nil for a search phrase.
+    let visit: BrowserVisit?
+    /// What the row prints: the page's name, or the phrase itself.
+    let text: String
+
+    var id: String { visit.map { "history:\($0.url)" } ?? "search:\(text)" }
+
+    static func page(_ visit: BrowserVisit) -> AddressSuggestion {
+        AddressSuggestion(visit: visit, text: visit.title.isEmpty ? visit.host : visit.title)
+    }
+
+    static func phrase(_ text: String) -> AddressSuggestion {
+        AddressSuggestion(visit: nil, text: text)
+    }
+}
+
 /// State owner for the mini-browser: web-view progress/URL state fed by KVO,
 /// the address field text, URL/search resolution and the pin-save banner state
 /// machine. Replaces the former `MiniBrowserState` + view state in
@@ -362,6 +447,21 @@ final class MiniBrowserModel {
     var suggestions: [String] = []
     /// Pages from the history for the same text, above the suggestions.
     var historySuggestions: [BrowserVisit] = []
+    /// What the panel draws, as one ordered array: the history matches first,
+    /// then the engine's phrases the history does not already name. Worked out
+    /// from both parts every time it is read, so an answer that arrives late
+    /// can only add rows: it can never take the pages on screen away.
+    var suggestionRows: [AddressSuggestion] {
+        let rows = historySuggestions.map(AddressSuggestion.page)
+        // The history row already prints the page's name and address, so a
+        // phrase that repeats either one is the same row twice.
+        var named = Set(historySuggestions.flatMap {
+            [$0.title.lowercased(), $0.displayAddress.lowercased()]
+        })
+        let unseen = suggestions.filter { named.insert($0.lowercased()).inserted }
+        return rows + SearchSuggestions.fitting(unseen, beside: rows.count).map(AddressSuggestion.phrase)
+    }
+
     /// Set while a suggestion was just chosen or the field was submitted, so
     /// the text change that follows does not send another suggest request.
     @ObservationIgnored private var suggestionsSuspended = false
@@ -536,6 +636,8 @@ final class MiniBrowserModel {
         self.webView = webView
         self.driver = driver
         applyWebpagePreferences()
+        // A woken page brings its colour along: the new control starts on it.
+        updateRefreshTint()
     }
 
     /// Gives the page a web view again: from [history] when there is one, at
@@ -789,21 +891,32 @@ final class MiniBrowserModel {
         return pageURL != nil || webView?.url != nil
     }
 
-    /// System print dialog for the page on screen.
-    func presentPrint() {
-        collapseMenu()
-        guard canPrint, let webView else { return }
-        let info = UIPrintInfo(dictionary: nil)
-        info.jobName = Self.printJobName(title: pageTitle, url: pageURL ?? webView.url)
-        info.outputType = .general
-        let controller = UIPrintInteractionController.shared
-        controller.printInfo = info
-        controller.printFormatter = webView.viewPrintFormatter()
-        _ = controller.present(animated: true) { panel, _, _ in
-            // The shared controller must not keep the page alive after printing.
-            panel.printFormatter = nil
-            panel.printInfo = nil
+    /// The system share sheet for the page. A printable page also hands its
+    /// print formatter and job name over, so the sheet offers Print the way
+    /// Safari's does.
+    func presentShare() {
+        guard let url = effectiveURL else { return }
+        var items: [Any] = [url]
+        if canPrint, let webView {
+            let info = UIPrintInfo(dictionary: nil)
+            info.jobName = Self.printJobName(title: pageTitle, url: pageURL ?? webView.url)
+            info.outputType = .general
+            items += [info, webView.viewPrintFormatter()]
         }
+        guard let presenter = BrowserDownloads.topViewController() else { return }
+        let sheet = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        // iPad shows the sheet as a popover; it points at the bottom bar.
+        if let popover = sheet.popoverPresentationController {
+            popover.sourceView = presenter.view
+            popover.sourceRect = CGRect(
+                x: presenter.view.bounds.midX,
+                y: presenter.view.bounds.maxY - 80,
+                width: 1,
+                height: 1
+            )
+            popover.permittedArrowDirections = .down
+        }
+        presenter.present(sheet, animated: true)
     }
 
     /// What the print dialog calls the job: the page's name, or its host when
@@ -927,10 +1040,11 @@ final class MiniBrowserModel {
     /// has to be one transaction for the whole screen: the column grows
     /// upwards as the list comes, and animated only from inside, its new
     /// place is taken at once and the address field jumps up and springs back.
+    /// Short and ease-out, so a row never kicks the bar.
     private func animateSuggestions(_ change: () -> Void) {
         let motion: Animation = UIAccessibility.isReduceMotionEnabled
             ? .easeOut(duration: 0.12)
-            : .spring(response: 0.24, dampingFraction: 0.82)
+            : .easeOut(duration: 0.26)
         withAnimation(motion, change)
     }
 
@@ -1132,6 +1246,7 @@ final class MiniBrowserModel {
         blocker.apply(configuration, to: controller)
         // `apply` clears every user script, this one included.
         BrowserGeolocation.addScript(to: controller)
+        BrowserPageShow.addScript(to: controller)
         controller.addUserScript(WKUserScript(
             source: BlockedResourceReport.script,
             injectionTime: .atDocumentStart,
@@ -1257,17 +1372,19 @@ final class MiniBrowserModel {
         let store = sitePermissions
         switch store.decision(for: kinds, host: host) {
         case .grant:
-            completion(allowedBySystem(kinds))
+            completion(allowedBySystem(kinds, host: host))
         case .deny:
             completion(false)
         case .ask:
             let answer = DialogAnswer<Bool?>(fallback: nil) { [weak self] allowed in
                 guard let allowed else {
+                    // Nobody answered: the site hears no for the rest of this run.
+                    store.markUnanswered(for: kinds, host: host)
                     completion(false)
                     return
                 }
                 store.set(allowed ? .allow : .block, for: kinds, host: host)
-                completion(allowed && (self?.allowedBySystem(kinds) ?? false))
+                completion(allowed && (self?.allowedBySystem(kinds, host: host) ?? false))
             }
             present(.permission(host: host, kinds: kinds, answer))
         }
@@ -1275,7 +1392,7 @@ final class MiniBrowserModel {
 
     /// True while the system may still say yes. When it already said no it
     /// shows nothing more, so the browser explains where to change that.
-    private func allowedBySystem(_ kinds: [SitePermission]) -> Bool {
+    private func allowedBySystem(_ kinds: [SitePermission], host: String) -> Bool {
         let off = kinds.filter { kind in
             switch kind {
             case .camera: Self.isCaptureOff(.video)
@@ -1284,7 +1401,10 @@ final class MiniBrowserModel {
             }
         }
         guard !off.isEmpty else { return true }
-        present(.systemAccessOff(kinds: off))
+        // Explained once per site per run: asking again just hears the refusal.
+        if sitePermissions.shouldExplainSystemAccess(host: host) {
+            present(.systemAccessOff(kinds: off))
+        }
         return false
     }
 
@@ -1441,21 +1561,35 @@ final class MiniBrowserModel {
 
     // MARK: - Theme color
 
+    /// The page's colour, as the top area and the bar use it. The
+    /// pull-to-refresh spinner follows it as well: it has to contrast with the
+    /// page behind it, not with the app's own theme.
+    func setThemeColor(_ color: Color?) {
+        themeColor = color
+        updateRefreshTint()
+    }
+
+    private func updateRefreshTint() {
+        (webView as? MiniBrowserWebView)?.refreshControl?.tintColor = MiniBrowserRefresh.spinnerTint(
+            pageIsDark: themeColor.map(\.isDarkBackground)
+        )
+    }
+
     func updateThemeColor(from string: String?, nativeColor: UIColor?) {
         if let native = nativeColor {
-            self.themeColor = Color(uiColor: native)
+            setThemeColor(Color(uiColor: native))
             return
         }
         guard let string = string?.trimmingCharacters(in: .whitespacesAndNewlines), !string.isEmpty else {
-            self.themeColor = nil
+            setThemeColor(nil)
             return
         }
         if string.starts(with: "#") {
-            self.themeColor = Color(hex: string)
+            setThemeColor(Color(hex: string))
         } else if string.starts(with: "rgb") {
-            self.themeColor = Color(cssRGB: string)
+            setThemeColor(Color(cssRGB: string))
         } else {
-            self.themeColor = nil
+            setThemeColor(nil)
         }
     }
 }

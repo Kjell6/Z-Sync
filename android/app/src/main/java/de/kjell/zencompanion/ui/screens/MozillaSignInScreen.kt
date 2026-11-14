@@ -270,19 +270,28 @@ object FxAWeb {
             "try { window.__zenHidePasskeys && window.__zenHidePasskeys(); } catch (e) {}"
 
     /**
-     * Port of `wipeWebSession`: cookies and local storage outlive sign-out —
-     * without this purge the next sign-in would silently reuse the previous
-     * web session.
+     * Signs the sign-in page out for good: its cookies and its local storage
+     * outlive the sheet, and without this the next sign-in would silently
+     * reuse the previous Mozilla web session.
+     *
+     * Only the sign-in page's own web data goes. Android's cookie jar is
+     * process-wide and shared with the mini-browser, so the jar is not
+     * cleared: every cookie and site login of every other site stays exactly
+     * where it is.
      */
     fun wipeWebSession() {
-        // The Android cookie jar is process-wide, so the full cookie wipe is
-        // the only reliable FxA session purge.
-        CookieManager.getInstance().apply {
-            removeAllCookies(null)
-            removeSessionCookies(null)
-            flush()
+        val cookies = CookieManager.getInstance()
+        // Read what the sign-in page would send, then expire exactly those
+        // cookies by name. A domain cookie (`.firefox.com`) needs the
+        // `Domain` attribute again to be reached; one set without it — a
+        // `__Host-` cookie included — is only matched without it.
+        signInCookieURLs.forEach { url ->
+            expiringCookieLines(cookies.getCookie(url), signInCookieDomains).forEach { line ->
+                cookies.setCookie(url, line)
+            }
         }
-        WebStorage.getInstance().deleteOrigin("https://accounts.firefox.com")
+        cookies.flush()
+        signInOrigins.forEach { WebStorage.getInstance().deleteOrigin(it) }
         lastWebView?.let { web ->
             Handler(Looper.getMainLooper()).post {
                 web.clearCache(true)
@@ -294,8 +303,43 @@ object FxAWeb {
         }
     }
 
+    /** The URLs the sign-in page runs on. Cookies are read and expired there. */
+    private val signInCookieURLs = listOf("https://accounts.firefox.com/")
+
+    /** Parent domains whose cookies the sign-in page also reads and sets. */
+    private val signInCookieDomains = listOf(".firefox.com")
+
+    /** The origins whose local storage belongs to the sign-in page. */
+    private val signInOrigins = listOf("https://accounts.firefox.com")
+
     @Volatile
     internal var lastWebView: WebView? = null
+}
+
+/**
+ * The `Set-Cookie` lines that expire every cookie named in a `Cookie` header:
+ * one for the origin itself, and one per [domains] entry for the cookies the
+ * page also sets on a parent domain. Both carry `Secure` because the origins
+ * are https and a `__Host-`/`__Secure-` prefixed cookie is refused without
+ * it; `Domain` is left off the origin line for the same reason (`__Host-`
+ * cookies reject any `Domain`).
+ *
+ * Names only: a cookie's value is never read back out or written anywhere.
+ */
+internal fun expiringCookieLines(
+    cookieHeader: String?,
+    domains: List<String> = emptyList(),
+): List<String> {
+    val names = cookieHeader.orEmpty()
+        .split(';')
+        .mapNotNull { part -> part.substringBefore('=').trim().ifEmpty { null } }
+        .distinct()
+    return names.flatMap { name ->
+        buildList {
+            add("$name=; Max-Age=0; Path=/; Secure")
+            domains.forEach { domain -> add("$name=; Max-Age=0; Path=/; Secure; Domain=$domain") }
+        }
+    }
 }
 
 /** Parses one bridge message exactly like the Swift Coordinator did. */

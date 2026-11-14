@@ -355,7 +355,8 @@ struct SpacesBrowserView: View {
         .task(id: model.isSignedIn) { await model.initialLoad() }
         .onChange(of: account?.uid) { _, _ in
             // The sign-in sheet can replace the session under this screen.
-            // The browser model and the shared page store follow the account.
+            // The browser model follows the account; the open pages do not go
+            // anywhere, they just cannot be saved into a space without one.
             model.accountChanged(isSignedIn: isSignedIn, isDemo: isDemo)
             openPages.canSave = isSignedIn
         }
@@ -424,13 +425,14 @@ struct SpacesBrowserView: View {
 
     private func actionBar(scheme: ColorScheme, placement: ToolbarPlacement) -> some View {
         HStack(spacing: 12) {
-            // The activity is the account's synced history, so signed out the
-            // row is search and settings only.
-            if isSignedIn {
-                actionCard(systemName: "archivebox", accessibilityKey: "activity.title", scheme: scheme) {
-                    activeSheet = .activity
-                }
+            // The activity is the account's synced history. Signed out the
+            // button keeps its place, dimmed, so the row does not change shape
+            // with the sign-in.
+            actionCard(systemName: "archivebox", accessibilityKey: "activity.title", scheme: scheme) {
+                activeSheet = .activity
             }
+            .disabled(!isSignedIn)
+            .opacity(isSignedIn ? 1 : 0.4)
 
             searchPill(scheme: scheme)
 
@@ -674,10 +676,11 @@ struct SpacesBrowserView: View {
 
     // MARK: - Signed out: the same home with the account's content sketched
 
-    /// The signed-in layout, with the account's content as a skeleton and the
-    /// sign-in card where the space's rows would be. The action bar, the
-    /// search pill and settings stay; the activity (synced history), refresh
-    /// and the space switcher cannot work without an account.
+    /// The signed-in layout with the account's content as a skeleton: six
+    /// essentials and four tab rows, then the sign-in prompt where the rest
+    /// of the space would be. The action bar keeps its shape; the activity
+    /// (synced history) is dimmed and the space switcher is left out, since
+    /// neither works without an account.
     @ViewBuilder
     private func signedOutHome(scheme: ColorScheme, placement: ToolbarPlacement) -> some View {
         if placement == .top {
@@ -685,7 +688,7 @@ struct SpacesBrowserView: View {
         }
 
         SignedOutEssentialsSkeleton(
-            columns: model.essentialsColumns.columnCount(forItemCount: 8),
+            columns: model.essentialsColumns.columnCount(forItemCount: SignedOutEssentialsSkeleton.tileCount),
             scheme: scheme
         )
         // The real grid's place on the screen, with its own air.
@@ -694,116 +697,94 @@ struct SpacesBrowserView: View {
 
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 0) {
-                signInCard(scheme: scheme)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 10)
-                    .padding(.bottom, 18)
-
                 SignedOutTabsSkeleton(scheme: scheme)
+
+                signInPrompt(scheme: scheme)
+                    .padding(.top, 28)
+                    .padding(.bottom, 18)
             }
-            .padding(.bottom, 10)
             .frame(maxWidth: .infinity)
         }
-
-        SignedOutSpaceSwitcher(scheme: scheme)
-            // Bottom placement stacks the action bar under the switcher, so
-            // the switcher only needs air when it is the last row.
-            .padding(.bottom, placement == .top ? 4 : 0)
 
         if placement == .bottom {
             actionBar(scheme: scheme, placement: placement)
         }
     }
 
-    /// The prompt in the content area, between the skeleton essentials and the
-    /// skeleton tab rows. The skeleton around it stays visible. The app mark
-    /// and the title keep the hidden demo unlock.
-    private func signInCard(scheme: ColorScheme) -> some View {
-        VStack(spacing: 14) {
-            ZenMark(scheme: scheme, size: 48)
+    /// The prompt under the skeleton rows: one line of title, a short pill
+    /// button and the help link, centred and each narrower than the last, so
+    /// the three read as one quiet step down instead of three equal blocks.
+    /// The title keeps the hidden demo unlock.
+    private func signInPrompt(scheme: ColorScheme) -> some View {
+        VStack(spacing: 0) {
+            Text("signedout.title")
+                .zenFont(17, weight: .semibold, design: .rounded)
+                .tracking(-0.2)
+                .foregroundStyle(Palette.ink(scheme))
+                .fixedSize(horizontal: false, vertical: true)
                 .contentShape(Rectangle())
                 .onTapGesture { onDemoTap() }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(Text("demo.logo_hint"))
-                .accessibilityAddTraits(.isButton)
-
-            VStack(spacing: 6) {
-                Text("signedout.title")
-                    .zenFont(20, weight: .semibold, design: .rounded)
-                    .tracking(-0.2)
-                    .foregroundStyle(Palette.ink(scheme))
-                    .contentShape(Rectangle())
-                    .onTapGesture { onDemoTap() }
-                    .accessibilityAddTraits(.isHeader)
-                Text("signedout.message")
-                    .zenFont(15, design: .rounded)
-                    .foregroundStyle(Palette.ink(scheme).opacity(0.6))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+                .accessibilityAddTraits(.isHeader)
 
             if let sessionNotice {
                 Text(sessionNotice)
-                    .zenFont(14, weight: .medium, design: .rounded)
-                    .foregroundStyle(Palette.ink(scheme).opacity(0.75))
+                    .zenFont(13, weight: .medium, design: .rounded)
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.6))
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        Palette.ink(scheme).opacity(0.06),
-                        in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    )
+                    .padding(.top, 6)
             }
 
             Button { onPresentSignIn() } label: {
-                Text("home.sign_in")
-                    .zenFont(17, weight: .semibold, design: .rounded)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 15)
+                Text("signedout.sign_in")
+                    .zenFont(15, weight: .semibold, design: .rounded)
+                    .lineLimit(1)
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, 11)
                     .foregroundStyle(Palette.paper(scheme))
-                    .background(Palette.ink(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .background(Palette.ink(scheme), in: Capsule())
+                    .contentShape(Capsule())
             }
             .buttonStyle(PressedButtonStyle())
+            .padding(.top, 16)
 
-            HStack(spacing: 18) {
-                Button { onPresentSignInHelp() } label: {
-                    Text("signin.help.link")
-                        .zenFont(13, weight: .medium, design: .rounded)
-                        .foregroundStyle(Palette.ink(scheme).opacity(0.55))
-                }
-                .buttonStyle(PressedButtonStyle())
-
-                Link("legal.privacy", destination: Legal.publicPolicyURL)
+            Button { onPresentSignInHelp() } label: {
+                Text("signin.help.link")
                     .zenFont(13, weight: .medium, design: .rounded)
-                    .foregroundStyle(Palette.ink(scheme).opacity(0.45))
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.5))
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 12)
+                    .contentShape(Rectangle())
             }
-            .multilineTextAlignment(.center)
+            .buttonStyle(PressedButtonStyle())
+            .padding(.top, 4)
         }
         .multilineTextAlignment(.center)
         .padding(.horizontal, 20)
-        .padding(.vertical, 22)
-        .frame(maxWidth: 440)
         .frame(maxWidth: .infinity)
-        .liftCard(scheme)
-        .tint(Palette.coral(scheme))
     }
 }
 
 // MARK: - Signed-out placeholders
 
-/// Two rows of rounded tiles where the essentials grid is, drawn with the
-/// grid's own metrics. Decoration: hidden from VoiceOver, never tappable.
+/// Six rounded tiles where the essentials grid is, drawn with the grid's own
+/// metrics. Decoration: hidden from VoiceOver, never tappable.
 private struct SignedOutEssentialsSkeleton: View {
+    static let tileCount = 6
+
     let columns: Int
     let scheme: ColorScheme
 
+    private var rows: Int {
+        let perRow = max(1, columns)
+        return (Self.tileCount + perRow - 1) / perRow
+    }
+
     var body: some View {
         VStack(spacing: 10) {
-            ForEach(0..<2, id: \.self) { _ in
+            ForEach(0..<rows, id: \.self) { row in
                 HStack(spacing: 10) {
-                    ForEach(0..<max(1, columns), id: \.self) { _ in
+                    // A short last row stretches, like the real grid's.
+                    ForEach(0..<min(max(1, columns), Self.tileCount - row * max(1, columns)), id: \.self) { _ in
                         RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous)
                             .fill(Palette.lift(scheme))
                             .frame(maxWidth: .infinity)
@@ -880,31 +861,6 @@ private struct SkeletonFolderIcon: View {
                     .offset(x: 3, y: -3)
             }
             .frame(width: 28, height: 28, alignment: .bottom)
-    }
-}
-
-/// Two pills where the space switcher is, in its fixed band. They are not
-/// buttons: the switcher is a control that needs an account.
-private struct SignedOutSpaceSwitcher: View {
-    let scheme: ColorScheme
-
-    /// The real switcher's row height, so the dock keeps its place.
-    private let rowHeight: CGFloat = 38
-
-    var body: some View {
-        HStack(spacing: 22) {
-            ForEach(0..<2, id: \.self) { _ in
-                Circle()
-                    .fill(Palette.ink(scheme).opacity(0.1))
-                    .frame(width: 26, height: 26)
-                    .frame(width: 40, height: rowHeight)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: rowHeight)
-        .skeletonShimmer()
-        .accessibilityHidden(true)
-        .allowsHitTesting(false)
     }
 }
 

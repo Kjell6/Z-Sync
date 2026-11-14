@@ -30,6 +30,23 @@ final class SessionModelTests: XCTestCase {
         XCTAssertEqual(accounts.republishCount, 1)
     }
 
+    func testStoredAccountIsSignedInBeforeLoad() {
+        let accounts = FakeAccountSession()
+        accounts.stored = snapshot()
+
+        let model = SessionModel(
+            accounts: accounts,
+            spaces: FakeSessionSpaces(),
+            preferences: FakePreferences(),
+            haptics: FakeSessionHaptics()
+        )
+
+        // The first view is built from this model before any `.onAppear` runs:
+        // a signed-in reader must never start on the signed-out home.
+        XCTAssertEqual(model.account?.uid, "u1")
+        XCTAssertEqual(accounts.republishCount, 0, "creating the model only reads the session")
+    }
+
     func testCompleteSignInPersistsAndEntersSession() {
         let accounts = FakeAccountSession()
         let model = SessionModel(
@@ -223,7 +240,7 @@ final class SessionModelTests: XCTestCase {
 
     // MARK: - Links from other apps
 
-    func testIncomingWebLinkWaitsForSignInAndIsTakenOnce() {
+    func testIncomingWebLinkIsReadyToOpenWhileSignedOut() {
         let model = SessionModel(
             accounts: FakeAccountSession(),
             spaces: FakeSessionSpaces(),
@@ -234,9 +251,24 @@ final class SessionModelTests: XCTestCase {
 
         model.openLinkFromAnotherApp(url)
 
-        // Signed out: the link waits, without touching any account's data.
+        // Signed out the home screen takes the link at once: no account or
+        // cached spaces are involved in opening it.
         XCTAssertNil(model.account)
         XCTAssertEqual(model.pendingOpenURL, url)
+
+        model.consumePendingOpenURL()
+        XCTAssertNil(model.pendingOpenURL)
+    }
+
+    func testIncomingWebLinkStaysReadyThroughSignIn() {
+        let model = SessionModel(
+            accounts: FakeAccountSession(),
+            spaces: FakeSessionSpaces(),
+            preferences: FakePreferences(),
+            haptics: FakeSessionHaptics()
+        )
+        let url = URL(string: "https://example.com/from-another-app")!
+        model.openLinkFromAnotherApp(url)
 
         model.completeSignIn(snapshot())
 

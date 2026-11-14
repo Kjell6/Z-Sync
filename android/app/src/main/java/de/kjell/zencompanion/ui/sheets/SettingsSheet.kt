@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ExitToApp
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
@@ -63,6 +64,18 @@ import de.kjell.zencompanion.ui.theme.LiftCard
 import de.kjell.zencompanion.ui.theme.LocalZenColors
 
 /**
+ * Settings rows that only make sense with a Mozilla account. Signed out they
+ * are gone rather than disabled: they would have nothing to change.
+ */
+internal object AccountOnlySettings {
+    /** Saves a shared link as pinned or normal: needs a space to save into. */
+    fun showsSaveKind(signedIn: Boolean): Boolean = signedIn
+
+    /** Essentials per row shapes the grid only an account fills. */
+    fun showsEssentialsColumns(signedIn: Boolean): Boolean = signedIn
+}
+
+/**
  * Native Material 3 Settings Bottom Sheet.
  *
  * Rows are grouped (account, save kind, browsing, layout, feedback, about) and
@@ -74,10 +87,13 @@ import de.kjell.zencompanion.ui.theme.LocalZenColors
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsSheet(
-    email: String,
+    /** Signed out the account card offers sign-in instead of email and sign-out. */
+    signedIn: Boolean,
+    email: String?,
     isDemo: Boolean,
     preferences: PreferencesState,
     normalTabsCapability: ZenSpaces.NormalTabsCapability,
+    onSignIn: () -> Unit,
     onSetSearchEngine: (SearchEngine) -> Unit,
     onAddSearchEngine: (String, String) -> SearchEngineValidation?,
     onDeleteSearchEngine: (String) -> Unit,
@@ -191,12 +207,16 @@ fun SettingsSheet(
             SettingsSheetHeader(onDone = onDone)
 
             SettingsAccountCard(
+                signedIn = signedIn,
                 email = email,
                 isDemo = isDemo,
+                onSignIn = onSignIn,
                 onSignOut = { showSignOutDialog = true },
             )
 
-            if (normalTabsCapability != ZenSpaces.NormalTabsCapability.ABSENT) {
+            if (AccountOnlySettings.showsSaveKind(signedIn) &&
+                normalTabsCapability != ZenSpaces.NormalTabsCapability.ABSENT
+            ) {
                 SettingsSaveKindCard(
                     saveKind = preferences.saveKind,
                     normalTabsCapability = normalTabsCapability,
@@ -224,6 +244,7 @@ fun SettingsSheet(
             }
 
             SettingsLayoutSection(
+                signedIn = signedIn,
                 preferences = preferences,
                 onSetEssentialsColumns = onSetEssentialsColumns,
                 onSetToolbarPlacement = onSetToolbarPlacement,
@@ -265,13 +286,54 @@ private fun SettingsSheetHeader(onDone: () -> Unit) {
 
 /**
  * Email on the left, the destructive action as a compact card beside it.
+ * Signed out, one row that starts the sign-in flow in their place.
  */
 @Composable
 private fun SettingsAccountCard(
-    email: String,
+    signedIn: Boolean,
+    email: String?,
     isDemo: Boolean,
+    onSignIn: () -> Unit,
     onSignOut: () -> Unit,
 ) {
+    if (!signedIn) {
+        LiftCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onSignIn),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 56.dp)
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Person,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp),
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = stringResource(R.string.home_sign_in),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+        return
+    }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -301,7 +363,7 @@ private fun SettingsAccountCard(
                         text = if (isDemo) {
                             stringResource(R.string.demo_account_name)
                         } else {
-                            email
+                            email.orEmpty()
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,

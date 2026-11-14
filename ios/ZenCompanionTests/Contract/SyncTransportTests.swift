@@ -621,6 +621,22 @@ final class SyncTransportTests: XCTestCase {
         XCTAssertEqual(server.tokenServerCalls, 2, "the dropped credentials must not be reused")
     }
 
+    /// The app republishes its session for the share extension at launch,
+    /// while the first refresh may already be in flight. That refresh, and
+    /// the credentials it fetched, must survive: the account did not change.
+    func testRepublishingTheSessionKeepsARunningFetchAndItsCredentials() async throws {
+        let server = FxAAndSyncServer(kB: accountKB, storageKeys: defaultKeys)
+        server.onTokenServer = { AccountStore.republishForShareExtension() }
+        try installAccount(transport: server)
+        defer { restoreAccountStore() }
+
+        _ = try await AccountStore.connect()
+        server.onTokenServer = nil
+        AccountStore.republishForShareExtension()
+        _ = try await AccountStore.connect()
+        XCTAssertEqual(server.tokenServerCalls, 1, "the credentials stay cached across a republish")
+    }
+
     // MARK: - Helpers
 
     private let accountKB = Data(repeating: 0xAB, count: 32)

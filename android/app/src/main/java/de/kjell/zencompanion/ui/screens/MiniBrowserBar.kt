@@ -240,6 +240,8 @@ private val DockInset = 7.dp
 internal fun MiniBrowserBar(
     state: MiniBrowserViewModel.State,
     viewModel: MiniBrowserViewModel,
+    /** Signed out there is no pin control and no save confirmation. */
+    signedIn: Boolean,
     onClose: () -> Unit,
     /** Open pages on this phone; the dock's button shows the count. */
     pageCount: Int,
@@ -335,6 +337,7 @@ internal fun MiniBrowserBar(
                         ExpandedMenu(
                             state = state,
                             viewModel = viewModel,
+                            signedIn = signedIn,
                             showsKeep = showsKeep,
                             isKept = isKept,
                             canKeep = canKeep,
@@ -1178,6 +1181,7 @@ private fun ComposerBar(
 private fun ExpandedMenu(
     state: MiniBrowserViewModel.State,
     viewModel: MiniBrowserViewModel,
+    signedIn: Boolean,
     showsKeep: Boolean,
     isKept: Boolean,
     canKeep: Boolean,
@@ -1374,21 +1378,24 @@ private fun ExpandedMenu(
                 onClick = onOpenExternal,
             )
             // Without the capability the save lands as a pin, whatever the
-            // setting says.
-            val effectiveKind = if (viewModel.allowsNormalTabs) state.saveKind else SaveKind.PINNED
-            MenuTile(
-                icon = Icons.Outlined.PushPin,
-                title = stringResource(
-                    if (effectiveKind == SaveKind.NORMAL) R.string.browser_save_short else R.string.browser_pin_short,
-                ),
-                description = stringResource(
-                    if (effectiveKind == SaveKind.NORMAL) R.string.browser_save_to_space else R.string.browser_pin_to_space,
-                ),
-                tint = if (canPin) zen.ink else zen.ink.copy(alpha = 0.38f),
-                background = barColor,
-                onClick = onPin,
-                enabled = canPin,
-            )
+            // setting says. Signed out there is no space to save into, so the
+            // tile is gone and the row's three others share the width.
+            if (signedIn) {
+                val effectiveKind = if (viewModel.allowsNormalTabs) state.saveKind else SaveKind.PINNED
+                MenuTile(
+                    icon = Icons.Outlined.PushPin,
+                    title = stringResource(
+                        if (effectiveKind == SaveKind.NORMAL) R.string.browser_save_short else R.string.browser_pin_short,
+                    ),
+                    description = stringResource(
+                        if (effectiveKind == SaveKind.NORMAL) R.string.browser_save_to_space else R.string.browser_pin_to_space,
+                    ),
+                    tint = if (canPin) zen.ink else zen.ink.copy(alpha = 0.38f),
+                    background = barColor,
+                    onClick = onPin,
+                    enabled = canPin,
+                )
+            }
         }
     }
 }

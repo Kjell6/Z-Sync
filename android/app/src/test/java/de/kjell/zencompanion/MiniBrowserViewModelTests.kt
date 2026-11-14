@@ -55,6 +55,7 @@ class MiniBrowserViewModelTests {
         suggestionClient: SearchSuggestionClient = ForbiddenSuggestionClient(),
         suggestionDebounceMs: Long = 200,
         readerParseDispatcher: CoroutineDispatcher = mainDispatcherRule.testDispatcher,
+        isSignedIn: () -> Boolean = { true },
     ) = MiniBrowserViewModel(
         repository = repository,
         initialUrl = initialUrl,
@@ -64,7 +65,23 @@ class MiniBrowserViewModelTests {
         suggestionClient = suggestionClient,
         suggestionDebounceMs = suggestionDebounceMs,
         readerParseDispatcher = readerParseDispatcher,
+        isSignedIn = isSignedIn,
     )
+
+    @Test
+    fun signedOutNeverOpensThePinBanner() = runTest(mainDispatcherRule.testDispatcher) {
+        val repository = FakeMiniBrowserRepository()
+        val vm = newViewModel(repository = repository, isSignedIn = { false })
+
+        vm.triggerPinBanner()
+
+        assertFalse(vm.state.value.showPinBanner)
+        assertFalse(vm.allowsNormalTabs)
+        vm.commitPendingPinSave()
+        advanceTimeBy(10_000)
+        runCurrent()
+        assertTrue(repository.added.isEmpty())
+    }
 
     @Test
     fun aFailedLoadShowsThePanelForTheFailedAddress() = runTest(mainDispatcherRule.testDispatcher) {

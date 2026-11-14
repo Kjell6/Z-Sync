@@ -67,6 +67,8 @@ class MiniBrowserViewModel(
     private val suggestionDebounceMs: Long = SearchSuggestions.DEBOUNCE_MS,
     /** Where the reader parse runs; tests hand in their own dispatcher. */
     private val readerParseDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /** Whether an account can take a save; asked each time, so a sign-out lands. */
+    private val isSignedIn: () -> Boolean = { true },
 ) : ViewModel() {
 
     private var initialUrl: String? = initialUrl
@@ -181,9 +183,11 @@ class MiniBrowserViewModel(
     private var pendingPin: Pair<String, String>? = null
 
     /** Whether this account can write normal tabs at all. Without it the save
-     *  banner offers pinned only, like the share sheet. */
+     *  banner offers pinned only, like the share sheet. Signed out there is no
+     *  account data to read at all. */
     val allowsNormalTabs: Boolean
-        get() = repository.cachedSnapshot?.normalTabsCapability == ZenSpaces.NormalTabsCapability.ENABLED
+        get() = isSignedIn() &&
+            repository.cachedSnapshot?.normalTabsCapability == ZenSpaces.NormalTabsCapability.ENABLED
 
     /** The spaces a pin can go to changed while the page was asleep. */
     fun updateSpaces(spaces: List<ZenSpaces.ZenSpace>, currentSpaceId: String) {
@@ -461,6 +465,8 @@ class MiniBrowserViewModel(
     // MARK: - Deferred pin banner
 
     fun triggerPinBanner() {
+        // Signed out there is no space and no account: never ask where to save.
+        if (!isSignedIn()) return
         val urlToPin = effectiveUrl()
         // No spaces to attach the pin to: never open a banner that would save
         // an unattached record. A failed page is not worth pinning either.
@@ -549,6 +555,11 @@ class MiniBrowserViewModel(
     fun commitPendingPinSave() {
         if (!hasPendingPinSave) return
         hasPendingPinSave = false
+        // A save started before a sign-out never lands anywhere afterwards.
+        if (!isSignedIn()) {
+            pendingPin = null
+            return
+        }
         // No spaces to attach the pin to: refuse rather than write an
         // unattached record.
         if (spaces.isEmpty()) return

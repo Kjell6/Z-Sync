@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -33,7 +34,6 @@ import de.kjell.zencompanion.ui.browser.BrowserPages
 import de.kjell.zencompanion.ui.components.openURLExternally
 import de.kjell.zencompanion.ui.screens.MiniBrowserScreen
 import de.kjell.zencompanion.ui.screens.MozillaSignInScreen
-import de.kjell.zencompanion.ui.screens.SignInLandingView
 import de.kjell.zencompanion.ui.screens.SpacesBrowserScreen
 import de.kjell.zencompanion.ui.screens.incomingWebLink
 import de.kjell.zencompanion.ui.sheets.SettingsSheet
@@ -77,11 +77,11 @@ private val BrowserLaunchSaver = listSaver<BrowserLaunch?, Any?>(
     },
 )
 
-/** A web link another app handed over that is still waiting for sign-in. */
+/** A web link another app handed over that has not opened yet. */
 private const val PENDING_LINK_KEY = "pendingIncomingLink"
 
 /**
- * Entry point: sign-in landing or the spaces browser (port of `HomeView`).
+ * Entry point: the spaces browser, signed in or not (port of `HomeView`).
  */
 class MainActivity : ComponentActivity() {
     /** One instance for the activity's lifetime, shared with the composition. */
@@ -95,7 +95,7 @@ class MainActivity : ComponentActivity() {
         // A recreation keeps the pending link in the ViewModel instead of
         // opening the launch intent a second time. After the process ended the
         // ViewModel is gone and the saved state carries the link that was
-        // still waiting for sign-in; one that was opened was never saved.
+        // still waiting to open; one that was opened was never saved.
         if (savedInstanceState == null) {
             openIncomingLink(intent)
         } else {
@@ -106,7 +106,7 @@ class MainActivity : ComponentActivity() {
                 val viewModel = appViewModel
                 LaunchedEffect(Unit) { viewModel.bootstrap() }
 
-                HomeContent(viewModel)
+                SpacesBrowserRoot(viewModel = viewModel)
             }
         }
     }
@@ -128,12 +128,6 @@ class MainActivity : ComponentActivity() {
         openIncomingLink(intent)
     }
 
-    override fun onDestroy() {
-        // Leaving the app before signing in drops a link that was kept for it.
-        if (isFinishing) appViewModel.discardIncomingLink()
-        super.onDestroy()
-    }
-
     /** Only `VIEW` intents with an `http`/`https` or `zsync` data URI carry a web link. */
     private fun openIncomingLink(intent: Intent?) {
         // Reopening the app from Recents can replay the launch intent that
@@ -149,61 +143,6 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun HomeContent(viewModel: AppViewModel) {
-    val session by viewModel.session.collectAsState()
-
-    if (session != null) {
-        SpacesBrowserRoot(viewModel = viewModel)
-    } else {
-        LandingRoot(viewModel = viewModel)
-    }
-}
-
-@Composable
-private fun LandingRoot(viewModel: AppViewModel) {
-    val context = LocalContext.current
-    var showSignIn by remember { mutableStateOf(false) }
-    var showSignInHelp by remember { mutableStateOf(false) }
-    val sessionNotice by viewModel.sessionNotice.collectAsState()
-
-    SignInLandingView(
-        onOpenSignIn = { showSignIn = true },
-        onOpenHelp = { showSignInHelp = true },
-        onEnterDemo = { viewModel.enterDemo() },
-        sessionNotice = sessionNotice,
-    )
-
-    if (showSignIn) {
-        // Modal sheet with #FBFBFC background matching the Mozilla sign-in page
-        ZenSheet(
-            onDismiss = { showSignIn = false },
-            skipPartiallyExpanded = true,
-            containerColor = Color(0xFFFBFBFC),
-        ) {
-            MozillaSignInScreen(
-                onFinishLogin = { login ->
-                    // Completes FxA + persists the session; failures rethrow so
-                    // the sign-in sheet keeps its error bubble and stays open.
-                    viewModel.completeWebLogin(login)
-                    showSignIn = false
-                },
-                onCancel = { showSignIn = false },
-            )
-        }
-    }
-
-    if (showSignInHelp) {
-        SignInHelpSheet(
-            onOpenMozilla = {
-                showSignInHelp = false
-                openURLExternally(context, "https://accounts.firefox.com")
-            },
-            onDone = { showSignInHelp = false },
-        )
-    }
-}
-
-@Composable
 private fun SpacesBrowserRoot(viewModel: AppViewModel) {
     val browser by viewModel.browser.collectAsState()
     val session by viewModel.session.collectAsState()
@@ -211,14 +150,21 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
     val activityState by viewModel.activity.collectAsState()
     val whatsNewVisible by viewModel.whatsNewVisible.collectAsState()
     val blockingAsked by ContentBlocking.asked.collectAsState()
-    val account = session ?: return
+    val signedIn = session != null
 
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    var showSignIn by remember { mutableStateOf(false) }
+    var showSignInHelp by remember { mutableStateOf(false) }
     var activeBrowserLaunch by rememberSaveable(stateSaver = BrowserLaunchSaver) { mutableStateOf<BrowserLaunch?>(null) }
     var showActivity by rememberSaveable { mutableStateOf(false) }
+    val sessionNotice by viewModel.sessionNotice.collectAsState()
     val context = LocalContext.current
     val pages = remember { BrowserPages.shared(context, viewModel.browserRepository) }
     val openPages by pages.store.pages.collectAsState()
+
+    // The browser's pin path follows the account, including a sign-out that
+    // happened while a page stayed open.
+    SideEffect { pages.setSignedIn(signedIn) }
 
     LaunchedEffect(Unit) {
         viewModel.reviewRequests.collect {
@@ -302,8 +248,8 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
     }
 
     // A web link from another app: the reader chose Z-Sync for it, so it opens
-    // on top of the spaces screen. Consumed first, so recomposition cannot
-    // open it twice; before sign-in it waits in the ViewModel.
+    // on top of the spaces screen — signed out included. Consumed first, so
+    // recomposition cannot open it twice.
     LaunchedEffect(incomingLink) {
         val url = incomingLink ?: return@LaunchedEffect
         viewModel.consumeIncomingLink()
@@ -315,10 +261,15 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
 
     Box(Modifier.fillMaxSize()) {
         SpacesBrowserScreen(
-            isDemo = account.isDemo,
+            signedIn = signedIn,
+            isDemo = session?.isDemo == true,
             state = browser,
             essentialsColumns = preferences.essentialsColumns,
             toolbarPlacement = preferences.toolbarPlacement,
+            sessionNotice = sessionNotice,
+            onSignIn = { showSignIn = true },
+            onOpenSignInHelp = { showSignInHelp = true },
+            onEnterDemo = { viewModel.enterDemo() },
             onSelectSpace = { viewModel.selectSpace(it) },
             onRefresh = { viewModel.refresh() },
             onDeleteTab = { id -> viewModel.deleteTab(id) },
@@ -342,6 +293,7 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
             key(launch.id) {
                 MiniBrowserScreen(
                     pages = pages,
+                    signedIn = signedIn,
                     startsInOverview = launch.overview,
                     launchUrl = launch.url,
                     launchTitle = launch.title,
@@ -354,7 +306,7 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
         }
     }
 
-    if (showActivity) {
+    if (showActivity && signedIn) {
         SyncedActivitySheet(
             state = activityState,
             onLoad = { viewModel.loadActivity() },
@@ -368,10 +320,15 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
 
     if (showSettings) {
         SettingsSheet(
-            email = account.email,
-            isDemo = account.isDemo,
+            signedIn = signedIn,
+            email = session?.email,
+            isDemo = session?.isDemo == true,
             preferences = preferences,
             normalTabsCapability = browser.snapshot.normalTabsCapability,
+            onSignIn = {
+                showSettings = false
+                showSignIn = true
+            },
             onSetSearchEngine = { viewModel.setSearchEngine(it) },
             onAddSearchEngine = { name, template -> viewModel.addSearchEngine(name, template) },
             onDeleteSearchEngine = { viewModel.deleteSearchEngine(it) },
@@ -398,11 +355,40 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
         )
     }
 
+    if (showSignIn) {
+        // Modal sheet with #FBFBFC background matching the Mozilla sign-in page
+        ZenSheet(
+            onDismiss = { showSignIn = false },
+            skipPartiallyExpanded = true,
+            containerColor = Color(0xFFFBFBFC),
+        ) {
+            MozillaSignInScreen(
+                onFinishLogin = { login ->
+                    // Completes FxA + persists the session; failures rethrow so
+                    // the sign-in sheet keeps its error bubble and stays open.
+                    viewModel.completeWebLogin(login)
+                    showSignIn = false
+                },
+                onCancel = { showSignIn = false },
+            )
+        }
+    }
+
+    if (showSignInHelp) {
+        SignInHelpSheet(
+            onOpenMozilla = {
+                showSignInHelp = false
+                openURLExternally(context, "https://accounts.firefox.com")
+            },
+            onDone = { showSignInHelp = false },
+        )
+    }
+
     if (whatsNewVisible) {
         WhatsNewSheet(onDismiss = { viewModel.dismissWhatsNew() })
     }
 
-    // Asked once, right after sign-in or on the first launch that has it.
+    // Asked once, on the first launch that has it — signed in or not.
     // Back does nothing: Continue is the answer.
     if (!blockingAsked) {
         Dialog(

@@ -315,6 +315,22 @@ final class MiniBrowserModelTests: XCTestCase {
         XCTAssertTrue(writer.saved.isEmpty)
     }
 
+    func testPinIsOffWhenSavingNeedsAnAccount() async {
+        let (model, writer) = makeModel(initialURL: URL(string: "https://pin.example/page")!)
+        model.canSave = false
+
+        model.triggerPinBanner(spaces: [space("a")], fallbackSpace: space("a"))
+
+        XCTAssertFalse(model.showPinBanner)
+        XCTAssertFalse(model.hasPendingPinSave)
+        XCTAssertNil(model.pinNotice, "a hidden control refuses silently")
+
+        model.commitPendingPinSave()
+        await model.waitForPinSave()
+
+        XCTAssertTrue(writer.saved.isEmpty)
+    }
+
     func testPinRefusedWithoutSpacesClearsStalePendingSave() async {
         let (model, writer) = makeModel(initialURL: URL(string: "https://pin.example/page")!)
 

@@ -175,6 +175,9 @@ class BrowserPages(
     private var spaces: List<ZenSpaces.ZenSpace> = emptyList()
     private var currentSpaceId: String = ""
 
+    /** Whether the app has an account right now: no pin path runs without one. */
+    private var signedIn: Boolean = true
+
     init {
         store.onPageRemoved = { id ->
             live.removeAll { it.id == id }
@@ -182,6 +185,11 @@ class BrowserPages(
             sessions.remove(id)
             shotBitmaps.remove(id)
         }
+    }
+
+    /** The account came or went; every page's pin path follows it. */
+    fun setSignedIn(signedIn: Boolean) {
+        this.signedIn = signedIn
     }
 
     /** The spaces a pin can go to, as the browser opens. */
@@ -204,6 +212,7 @@ class BrowserPages(
             initialTitle = page.title,
             spaces = spaces,
             currentSpaceId = currentSpaceId,
+            isSignedIn = { signedIn },
         )
         val id = page.id
         viewModel.onPageChange = { url, title -> store.update(id, url, title) }

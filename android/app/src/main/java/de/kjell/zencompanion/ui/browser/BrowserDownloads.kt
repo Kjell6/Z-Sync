@@ -241,8 +241,8 @@ internal enum class DownloadFailure {
  * mockable framework whose constants all read 0, and these are the values
  * `DownloadManager.COLUMN_REASON` carries on a device.
  */
-private const val REASON_INSUFFICIENT_SPACE = 198
-private const val REASON_DEVICE_NOT_FOUND = 199
+private const val REASON_INSUFFICIENT_SPACE = 1006
+private const val REASON_DEVICE_NOT_FOUND = 1007
 
 /**
  * The downloader's errors about the way to the file: ERROR_UNHANDLED_HTTP_CODE,
@@ -250,7 +250,7 @@ private const val REASON_DEVICE_NOT_FOUND = 199
  * Its remaining codes (ERROR_UNKNOWN, ERROR_FILE_ERROR, ERROR_FILE_ALREADY_EXISTS)
  * are about writing, which reads as a save that failed.
  */
-private val REASON_NETWORK_ERRORS = setOf(1002, 1004, 1005, 1006)
+private val REASON_NETWORK_ERRORS = setOf(1002, 1004, 1005, 1008)
 
 /** The downloader's own reason code, as one of our short lines. */
 internal fun downloadFailure(reasonCode: Int): DownloadFailure = when {

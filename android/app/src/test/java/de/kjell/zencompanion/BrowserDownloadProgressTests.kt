@@ -118,9 +118,11 @@ class BrowserDownloadProgressTests {
     @Test
     fun aFailureReasonComesFromTheDownloader() {
         // DownloadManager's own error codes, as COLUMN_REASON carries them.
-        assertEquals(DownloadFailure.STORAGE, downloadFailure(198)) // ERROR_INSUFFICIENT_SPACE
+        assertEquals(DownloadFailure.STORAGE, downloadFailure(1006)) // ERROR_INSUFFICIENT_SPACE
+        assertEquals(DownloadFailure.STORAGE, downloadFailure(1007)) // ERROR_DEVICE_NOT_FOUND
         assertEquals(DownloadFailure.NETWORK, downloadFailure(404)) // an HTTP status
-        assertEquals(DownloadFailure.NETWORK, downloadFailure(1006)) // ERROR_CANNOT_RESUME
+        assertEquals(DownloadFailure.NETWORK, downloadFailure(1008)) // ERROR_CANNOT_RESUME
+        assertEquals(DownloadFailure.NETWORK, downloadFailure(1004)) // ERROR_HTTP_DATA_ERROR
         assertEquals(DownloadFailure.SAVE, downloadFailure(1001)) // ERROR_FILE_ERROR
     }
 

@@ -381,12 +381,16 @@ internal object BrowserDownloadCentre {
                 enqueueWebDownload(app, download, id, name)
             }
             if (queued == null) {
+                // No file was fetched, so the document the reader picked goes too.
+                discardDocument(app, destination)
                 fail(id, DownloadFailure.NETWORK)
                 return@launch
             }
             setCancel(id) {
                 app.getSystemService(DownloadManager::class.java).remove(queued.id)
                 queued.file.delete()
+                // Stopped before it was complete: the reader's document is empty.
+                discardDocument(app, destination)
             }
             // The reader may have cancelled while the file was being queued.
             // Both run on the main thread, so this sees every cancel so far.
@@ -408,7 +412,7 @@ internal object BrowserDownloadCentre {
             delay(DOWNLOAD_POLL_MS)
             val row = withContext(Dispatchers.IO) { readDownload(manager, queued.id) }
             if (row == null) {
-                finishFailed(queued, id, DownloadFailure.SAVE)
+                finishFailed(context, queued, destination, id, DownloadFailure.SAVE)
                 return
             }
             when (row.status) {
@@ -428,16 +432,24 @@ internal object BrowserDownloadCentre {
                 }
 
                 else -> {
-                    finishFailed(queued, id, downloadFailure(row.reason))
+                    finishFailed(context, queued, destination, id, downloadFailure(row.reason))
                     return
                 }
             }
         }
     }
 
-    private fun finishFailed(queued: QueuedDownload, id: Long, reason: DownloadFailure) {
+    /** The file did not arrive: the staged copy goes, and so does the empty document. */
+    private fun finishFailed(
+        context: Context,
+        queued: QueuedDownload,
+        destination: Uri,
+        id: Long,
+        reason: DownloadFailure,
+    ) {
         queued.file.delete()
         queued.file.parentFile?.delete()
+        discardDocument(context, destination)
         fail(id, reason)
     }
 
@@ -535,8 +547,13 @@ internal fun enqueueWebDownload(
 
 /** Copies a finished file into the document the reader chose. */
 internal fun copyToDocument(context: Context, file: File, destination: Uri): Boolean {
+    val output = runCatching { context.contentResolver.openOutputStream(destination) }.getOrNull()
+    if (output == null) {
+        // A document nobody could open holds nothing: it goes too.
+        discardDocument(context, destination)
+        return false
+    }
     val copied = runCatching {
-        val output = context.contentResolver.openOutputStream(destination) ?: return false
         output.use { out -> file.inputStream().use { input -> input.copyTo(out) } }
         true
     }.getOrDefault(false)

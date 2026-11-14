@@ -962,6 +962,8 @@ private class FakeAppContext : ContextWrapper(null) {
 
     override fun getFilesDir(): File = files
 
+    override fun getNoBackupFilesDir(): File = files
+
     override fun getSharedPreferences(name: String?, mode: Int): SharedPreferences =
         FakePrefsSharedPreferences(prefs)
 }

@@ -434,6 +434,8 @@ struct MiniBrowserChrome<NavBar: View>: View {
                 rowDivider
                 readerRow
                 rowDivider
+                printRow
+                rowDivider
                 desktopRow
                 rowDivider
                 zoomRow
@@ -456,7 +458,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
     }
 
     /// Bottom row, trailing edge first for the thumb: Pin sits on the right.
-    /// Left to right: Find, Print, Share, Open, Pin.
+    /// Left to right: Find, Share, Open, Pin.
     private var actionRow: some View {
         HStack(spacing: 8) {
             tile(
@@ -466,18 +468,6 @@ struct MiniBrowserChrome<NavBar: View>: View {
             ) {
                 withAnimation(motion) {
                     model.presentFindOnPage()
-                }
-            }
-            tile(
-                systemName: "printer",
-                title: "browser.print",
-                accessibility: "browser.print",
-                // Nothing to print without a page, under the error panel or
-                // with the reader lifted out of it.
-                enabled: model.canPrint
-            ) {
-                withAnimation(motion) {
-                    model.presentPrint()
                 }
             }
             shareTile
@@ -695,6 +685,34 @@ struct MiniBrowserChrome<NavBar: View>: View {
         }
         .buttonStyle(CardPressStyle())
         .disabled(model.effectiveURL == nil || model.readerLoading)
+    }
+
+    /// Same shape as the other rows. Printing closes the menu first: the
+    /// system panel sits over the page it prints.
+    private var printRow: some View {
+        Button {
+            withAnimation(motion) {
+                model.presentPrint()
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "printer")
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: 24)
+                    .foregroundStyle(Color.primary)
+                Text("browser.print")
+                    .zenFont(16, weight: .medium, design: .rounded)
+                    .foregroundStyle(Color.primary)
+                Spacer(minLength: 8)
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(CardPressStyle())
+        // Nothing to print without a page, under the error panel or with the
+        // reader lifted out of it.
+        .disabled(!model.canPrint)
+        .accessibilityLabel(Text("browser.print"))
     }
 
     private var desktopRow: some View {

@@ -1257,6 +1257,15 @@ private fun ExpandedMenu(
             )
             RowDivider()
             MenuRow(
+                icon = Icons.Outlined.Print,
+                title = stringResource(R.string.browser_print),
+                // Nothing to print without a page, under the error panel or
+                // with the reader lifted out of it.
+                tint = if (canPrint) zen.ink else zen.ink.copy(alpha = 0.38f),
+                onClick = onPrint.takeIf { canPrint },
+            )
+            RowDivider()
+            MenuRow(
                 icon = Icons.Outlined.Laptop,
                 title = stringResource(R.string.browser_desktop_site),
                 tint = zen.ink,
@@ -1351,15 +1360,6 @@ private fun ExpandedMenu(
                 tint = zen.ink,
                 background = barColor,
                 onClick = onFind,
-            )
-            MenuTile(
-                icon = Icons.Outlined.Print,
-                title = stringResource(R.string.browser_print),
-                description = stringResource(R.string.browser_print),
-                tint = if (canPrint) zen.ink else zen.ink.copy(alpha = 0.38f),
-                background = barColor,
-                onClick = onPrint,
-                enabled = canPrint,
             )
             MenuTile(
                 icon = Icons.Outlined.Share,

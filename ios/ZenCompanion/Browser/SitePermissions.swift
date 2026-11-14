@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Observation
 import WebKit
@@ -110,12 +111,29 @@ final class SitePermissionStore {
 /// What the browser keeps for websites. Open pages and history are the
 /// reader's own and stay.
 enum BrowserWebsiteData {
+    /// The same container shares cookies across spaces within one Mozilla account.
+    /// Keep the identifier stable when a space is renamed or a page is restored.
+    static func storeID(accountID: String, container: String?) -> UUID? {
+        guard let container, !container.isEmpty else { return nil }
+        var bytes = Array(SHA256.hash(data: Data("z-sync.web-store:\(accountID):\(container)".utf8)).prefix(16))
+        bytes[6] = (bytes[6] & 0x0f) | 0x80
+        bytes[8] = (bytes[8] & 0x3f) | 0x80
+        return UUID(uuid: (
+            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+            bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]
+        ))
+    }
+
     @MainActor
     static func clearAll() {
-        WKWebsiteDataStore.default().removeData(
-            ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
-            modifiedSince: Date.distantPast
-        ) {}
+        let dataTypes = WKWebsiteDataStore.allWebsiteDataTypes()
+        WKWebsiteDataStore.default().removeData(ofTypes: dataTypes, modifiedSince: .distantPast) {}
+        WKWebsiteDataStore.fetchAllDataStoreIdentifiers { identifiers in
+            for identifier in identifiers {
+                WKWebsiteDataStore(forIdentifier: identifier)
+                    .removeData(ofTypes: dataTypes, modifiedSince: .distantPast) {}
+            }
+        }
         SitePermissionStore.shared.removeAll()
     }
 }

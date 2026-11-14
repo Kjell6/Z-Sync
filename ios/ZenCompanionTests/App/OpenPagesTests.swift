@@ -1,3 +1,4 @@
+import WebKit
 import XCTest
 
 @testable import ZenCompanion
@@ -31,6 +32,31 @@ final class OpenPagesTests: XCTestCase {
         let preferences = FakePreferences()
         preferences.setBool(true, PreferenceKeys.keepOnlyChosenPages, scope: .standard)
         return preferences
+    }
+
+    func testContainerPagesKeepTheirStoreAfterOpeningLinksAndRestoring() throws {
+        let directory = tempDirectory()
+        let pages = store(directory: directory)
+        let accountID = UUID().uuidString
+        let id = try XCTUnwrap(BrowserWebsiteData.storeID(accountID: accountID, container: "work"))
+        XCTAssertEqual(id, BrowserWebsiteData.storeID(accountID: accountID, container: "work"))
+        XCTAssertNotEqual(id, BrowserWebsiteData.storeID(accountID: accountID, container: "other"))
+        XCTAssertNil(BrowserWebsiteData.storeID(accountID: "account", container: nil))
+
+        let opener = pages.open(url: a, websiteDataStoreID: id)
+        let openerStore = try XCTUnwrap(opener.model.webView?.configuration.websiteDataStore)
+        XCTAssertEqual(openerStore.identifier, id)
+        pages.openInNewPage(b, from: opener.model)
+        let linked = try XCTUnwrap(pages.active)
+        XCTAssertEqual(linked.model.webView?.configuration.websiteDataStore.identifier, id)
+        pages.toggleKeep(linked.id)
+
+        let regular = pages.open(url: a)
+        XCTAssertNil(regular.model.webView?.configuration.websiteDataStore.identifier)
+
+        let restored = store(directory: directory)
+        restored.activate(linked.id)
+        XCTAssertEqual(restored.active?.model.webView?.configuration.websiteDataStore.identifier, id)
     }
 
     // MARK: - Like any browser

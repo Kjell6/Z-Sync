@@ -32,7 +32,11 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// WebKit's own configuration, which ties the window to its opener.
     @MainActor
     @discardableResult
-    static func attach(to model: MiniBrowserModel, configuration: WKWebViewConfiguration = WKWebViewConfiguration()) -> WKWebView {
+    static func attach(to model: MiniBrowserModel, configuration popupConfiguration: WKWebViewConfiguration? = nil) -> WKWebView {
+        let configuration = popupConfiguration ?? WKWebViewConfiguration()
+        if popupConfiguration == nil, let id = model.websiteDataStoreID {
+            configuration.websiteDataStore = WKWebsiteDataStore(forIdentifier: id)
+        }
         // A popup's configuration carries the opener's content controller. The
         // lists and scripts are swapped per site, so each page needs its own.
         configuration.userContentController = WKUserContentController()

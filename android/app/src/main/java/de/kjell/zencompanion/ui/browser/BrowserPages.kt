@@ -76,6 +76,8 @@ class PageSession(
      * still in memory or on its way to disk. Main thread only.
      */
     var shotDropWanted = false
+    /** True when [shot] is the picture on disk, so letting go of it loses nothing. */
+    var shotStored = false
     /** Bumped to reload after a blocking change. */
     var blockingReload by mutableIntStateOf(0)
     /** A crashed renderer takes its WebView with it; a new key builds a fresh one. */
@@ -483,6 +485,7 @@ class BrowserPages(
         canvas.translate(-view.scrollX.toFloat(), -view.scrollY.toFloat())
         runCatching { view.draw(canvas) }
         session.shot = bitmap.asImageBitmap()
+        session.shotStored = false
         if (store.page(session.id)?.isKept == true) {
             writeShot(session.id, bitmap)
             // On its way to disk: the map is for pages that are not kept.
@@ -513,6 +516,8 @@ class BrowserPages(
         if (store.page(session.id)?.isKept == true || session.id in shotBitmaps) return
         val shot = session.shot ?: return
         shotBitmaps[session.id] = shot.asAndroidBitmap()
+        // The file goes with the release, so the picture in memory is no disk copy.
+        session.shotStored = false
     }
 
     private fun writeShot(id: String, bitmap: Bitmap) {
@@ -535,6 +540,7 @@ class BrowserPages(
                     shotWrites[id] = left
                 } else {
                     shotWrites.remove(id)
+                    sessions[id]?.shotStored = written
                     // The card asked to drop its picture during the write and
                     // nothing else calls it: it can go only if the disk now
                     // holds what the page shows.
@@ -558,6 +564,7 @@ class BrowserPages(
         val options = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.RGB_565 }
         val image = runCatching { BitmapFactory.decodeFile(file.path, options) }.getOrNull() ?: return
         session.shot = image.asImageBitmap()
+        session.shotStored = false
     }
 
     /** Loads the stored picture of a page that has none in memory. */
@@ -574,7 +581,10 @@ class BrowserPages(
             val image = runCatching { BitmapFactory.decodeFile(file.path, options) }.getOrNull() ?: return@launch
             launchOnMain {
                 // Let go again while it loaded: the card is no longer near.
-                if (session.shot == null && session.shotGeneration == generation) session.shot = image.asImageBitmap()
+                if (session.shot == null && session.shotGeneration == generation) {
+                    session.shot = image.asImageBitmap()
+                    session.shotStored = true
+                }
             }
         }
     }
@@ -604,9 +614,10 @@ class BrowserPages(
             return
         }
         session.shotDropWanted = false
-        if (session.shot != null && !store.snapshotFile(id).exists()) return
+        if (session.shot != null && !(session.shotStored && store.snapshotFile(id).exists())) return
         session.shotGeneration++
         session.shot = null
+        session.shotStored = false
     }
 
     private fun launchOnMain(block: () -> Unit) {

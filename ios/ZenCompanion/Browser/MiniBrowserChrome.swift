@@ -1256,6 +1256,9 @@ struct MiniBrowserTopBar: View {
                 }
                 .contentShape(Rectangle())
             }
+            // The icon is the only sign of an encrypted page, so VoiceOver
+            // hears it too (Android's padlock says the same to TalkBack).
+            .accessibilityValue(Text(connectionLabel ?? ""))
             .buttonStyle(AddressPressStyle())
             .accessibilityLabel(Text("browser.search_placeholder"))
 
@@ -1276,9 +1279,24 @@ struct MiniBrowserTopBar: View {
         return host.isEmpty ? String(localized: "browser.search_placeholder") : host
     }
 
+    /// Whether the page came over an encrypted connection, for VoiceOver.
+    private var connectionLabel: String? {
+        switch model.effectiveURL?.scheme?.lowercased() {
+        case "https": return String(localized: "browser.connection_secure")
+        case "http": return String(localized: "browser.connection_insecure")
+        default: return nil
+        }
+    }
+
     private var siteIcon: some View {
         Group {
-            if let url = model.effectiveURL, url.scheme == "http" || url.scheme == "https" {
+            if let url = model.effectiveURL, url.scheme?.lowercased() == "http" {
+                // An unencrypted page must not look like a trusted one: an
+                // open padlock instead of its icon, as on Android.
+                Image(systemName: "lock.open")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.85))
+            } else if let url = model.effectiveURL, url.scheme == "https" {
                 Favicon(urlString: url.absoluteString, size: 16)
             } else {
                 Image(systemName: "magnifyingglass")

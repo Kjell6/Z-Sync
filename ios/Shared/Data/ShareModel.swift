@@ -140,16 +140,21 @@ enum ShareLink {
         while let last = characters.last, sentenceMarks.contains(last) {
             characters.removeLast()
         }
+        // Each character is counted once, so a long run of closing brackets
+        // costs one step per removed mark instead of a recount of the whole
+        // array.
+        var counts = characters.reduce(into: [Character: Int]()) { $0[$1, default: 0] += 1 }
         while let last = characters.last {
             if quoteMarks.contains(last) {
                 characters.removeLast()
                 continue
             }
             if let opener = bracketPairs[last] {
-                let opens = characters.filter { $0 == opener }.count
-                let closes = characters.filter { $0 == last }.count
+                let opens = counts[opener] ?? 0
+                let closes = counts[last] ?? 0
                 guard opens < closes else { break }
                 characters.removeLast()
+                counts[last] = closes - 1
                 continue
             }
             break

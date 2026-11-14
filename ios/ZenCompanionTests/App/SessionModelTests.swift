@@ -167,6 +167,27 @@ final class SessionModelTests: XCTestCase {
         XCTAssertEqual(model.account?.isDemo, true)
     }
 
+    /// The mini-browser belongs to the phone, not to the account: signing out
+    /// keeps its open pages (kept ones included) and its history.
+    func testSigningOutKeepsTheBrowsersPagesAndHistory() {
+        let pages = OpenPagesStore.shared
+        let history = BrowserHistoryStore.shared
+        let address = URL(string: "https://sign-out-keeps.example/kept")!
+        let page = pages.open(url: address, title: "Kept")
+        pages.toggleKeep(page.id)
+        history.record(address, title: "Kept")
+        defer {
+            pages.close(page.id)
+            history.remove(BrowserVisit(url: address.absoluteString, title: "Kept", lastVisited: Date(), visits: 1))
+        }
+
+        LiveSessionSigningOut().signOut()
+
+        XCTAssertEqual(pages.page(page.id)?.url, address)
+        XCTAssertEqual(pages.page(page.id)?.isKept, true)
+        XCTAssertTrue(history.visits.contains { $0.url == address.absoluteString })
+    }
+
     func testFiveDemoTapsWithinWindowEnterDemo() {
         let accounts = FakeAccountSession()
         let spaces = FakeSessionSpaces()

@@ -223,9 +223,13 @@ struct LiveSessionSigningOut: SessionSigningOut {
     nonisolated init() {}
 
     func signOut() {
-        // Sign-in runs in an ephemeral (nonPersistent) store and the mini
-        // browser in the default store. Both are emptied at sign-out, so the
-        // next sign-in starts without the previous one's website logins.
+        // Sign-in runs in its own ephemeral (nonPersistent) store, so its
+        // website data is emptied here: the next sign-in starts without the
+        // previous one's Mozilla login. The mini-browser's store is left alone:
+        // it belongs to this phone, not to the account, so its open pages,
+        // history, website data and site permissions all stay. Signing out
+        // removes the account: its stored credentials, its cached spaces and
+        // the icons loaded for them.
         WKWebsiteDataStore.nonPersistent().removeData(
             ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
             modifiedSince: Date.distantPast
@@ -238,15 +242,6 @@ struct LiveSessionSigningOut: SessionSigningOut {
         }
         AccountStore.clear()
         FaviconLoader.shared.removeAll()
-        OpenPagesStore.shared.closeAll()
-        // Cleared only after the pages are asleep, so no live web view writes
-        // its cookies and storage back into the default store.
-        WKWebsiteDataStore.default().removeData(
-            ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
-            modifiedSince: Date.distantPast
-        ) {}
-        SitePermissionStore.shared.removeAll()
-        BrowserHistoryStore.shared.removeAll()
         SpacesSyncService.deleteCachedSnapshot()
         NotificationCenter.default.post(name: .zenCompanionSignedOut, object: nil)
     }

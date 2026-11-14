@@ -220,7 +220,9 @@ final class BrowserModel {
 
     /// The account changed under the screen. Signing in starts the account's
     /// load; signing out drops everything the account brought on screen. The
-    /// view reloads on `isSignedIn`, so this only moves the state.
+    /// mini-browser is not part of that: its pages and history stay, only
+    /// saving into a space needs an account again. The view reloads on
+    /// `isSignedIn`, so this only moves the state.
     func accountChanged(isSignedIn: Bool, isDemo: Bool) {
         self.isDemo = isDemo
         guard isSignedIn != self.isSignedIn else { return }
@@ -230,8 +232,9 @@ final class BrowserModel {
         }
     }
 
-    /// Sign-out already cleared the cache, the pages and the keychain. The
-    /// model only has to stop showing what it held.
+    /// Sign-out already cleared the account's data: its cache, its icons and
+    /// the keychain. The model only has to stop showing what the account
+    /// brought; the reader's open pages and history are not the account's.
     private func resetForSignedOut() {
         snapshot = .empty
         selectedIndex = 0

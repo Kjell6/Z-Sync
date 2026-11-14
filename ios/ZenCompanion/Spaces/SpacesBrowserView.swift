@@ -355,7 +355,8 @@ struct SpacesBrowserView: View {
         .task(id: model.isSignedIn) { await model.initialLoad() }
         .onChange(of: account?.uid) { _, _ in
             // The sign-in sheet can replace the session under this screen.
-            // The browser model and the shared page store follow the account.
+            // The browser model follows the account; the open pages do not go
+            // anywhere, they just cannot be saved into a space without one.
             model.accountChanged(isSignedIn: isSignedIn, isDemo: isDemo)
             openPages.canSave = isSignedIn
         }

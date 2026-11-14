@@ -323,7 +323,8 @@ class BrowserPages(
         live.clear()
         recent.clear()
         sessions.clear()
-        // Nothing of the pages stays in memory either, sign-out included.
+        // Nothing of the pages stays in memory either: this is the reader
+        // closing every page, not a sign-out.
         shotBitmaps.clear()
         syncActive()
     }

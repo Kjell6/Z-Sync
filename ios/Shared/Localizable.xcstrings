@@ -247,6 +247,28 @@
         }
       }
     },
+    "browser.connection_insecure": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection is not secure"
+          }
+        }
+      }
+    },
+    "browser.connection_secure": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Secure connection"
+          }
+        }
+      }
+    },
     "browser.dialog.login_failed": {
       "localizations": {
         "en": {

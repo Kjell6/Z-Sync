@@ -47,16 +47,29 @@ state on a device).
 ## Demo access for App Review and Play
 
 Reviewers cannot sign in with a Mozilla account that holds Zen data, so the app
-has a hidden sample-data mode. On the signed-out home, tap the title **"Your
-Zen spaces appear here"** five times quickly (at most two seconds between taps).
-A haptic confirms it and the home fills with sample spaces under the banner
-"Sample data — not connected to a Mozilla account". Settings has "Exit sample
-data" to leave it. iOS and Android work the same way.
+has a hidden sample-data mode. iOS and Android work the same way:
+
+1. Open the app while signed out. Below the grey placeholder tiles and rows
+   there is a line of bold text, **"Your Zen spaces appear here"**, with a dark
+   "Sign in with Mozilla" button under it.
+2. Tap exactly on the words "Your Zen spaces appear here" five times in a row,
+   with less than two seconds between taps. Taps anywhere else (the button, the
+   placeholders, empty space around the text) do not count.
+3. The phone vibrates briefly and the home fills with sample spaces under the
+   banner "Sample data — not connected to a Mozilla account".
+4. To leave, open Settings and tap "Exit sample data".
 
 Before each store submission, check that the review notes in App Store Connect
 (App Review Information → Notes) and the Play Console app-access instructions
-still describe this. Notes written before the signed-out home was redesigned
-may point at the old sign-in card and its app mark, which no longer exist.
+still say this. Notes written before the signed-out home was redesigned may
+point at the old sign-in card and its app mark, which no longer exist. Text to
+paste:
+
+> Z-Sync shows the Zen browser data of a Mozilla account. For review without
+> an account, there is a sample-data mode: on the first screen, tap the bold
+> text "Your Zen spaces appear here" (above the "Sign in with Mozilla" button)
+> five times quickly. Sample spaces then appear. To leave it, open Settings
+> and tap "Exit sample data".
 
 ## Checking what is actually live
 

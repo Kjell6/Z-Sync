@@ -51,6 +51,8 @@ final class SitePermissionStore {
 
     private(set) var choices: [String: SitePermissionChoice]
     @ObservationIgnored private let fileURL: URL
+    /// Beside the answers: notes that the old keys were folded, once.
+    @ObservationIgnored private let migrationMarkerURL: URL
     /// Kinds whose question went unanswered this run: no until the app restarts.
     @ObservationIgnored private var unanswered: Set<String> = []
     /// Sites whose closed system access was already explained this run.
@@ -58,12 +60,19 @@ final class SitePermissionStore {
 
     init(fileURL: URL = SitePermissionStore.defaultFileURL) {
         self.fileURL = fileURL
+        migrationMarkerURL = fileURL.appendingPathExtension(Self.keysFoldedExtension)
         let saved = (try? Data(contentsOf: fileURL))
             .flatMap { try? JSONDecoder().decode([String: SitePermissionChoice].self, from: $0) }
-        choices = Self.foldingLegacyKeys(saved ?? [:])
         // Answers saved under a leading `www.` move over once, so a later
-        // change and a read agree on the same key.
+        // change and a read agree on the same key. The marker keeps the fold
+        // to the first launch: folding again would eat a second `www.`.
+        guard !FileManager.default.fileExists(atPath: migrationMarkerURL.path) else {
+            choices = saved ?? [:]
+            return
+        }
+        choices = Self.foldingLegacyKeys(saved ?? [:])
         if let saved, choices != saved { save() }
+        markKeysFolded()
     }
 
     /// One blocked kind blocks the whole request, and every kind must be
@@ -127,6 +136,15 @@ final class SitePermissionStore {
         try? url.setResourceValues(values)
     }
 
+    /// The fold has happened: a launch from now on reads the keys as they are.
+    private func markKeysFolded() {
+        try? FileManager.default.createDirectory(
+            at: migrationMarkerURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try? Data().write(to: migrationMarkerURL, options: .atomic)
+    }
+
     /// A leading `www.` is the same site as the bare host: one answer covers
     /// both. Only that one prefix is folded, so maps.google.com keeps its own.
     private static func foldedHost(_ host: String) -> String {
@@ -155,6 +173,8 @@ final class SitePermissionStore {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("site-permissions.json")
     }
+
+    private static let keysFoldedExtension = "keysFolded"
 }
 
 /// What the browser keeps for websites. Open pages and history are the

@@ -89,6 +89,21 @@ final class BrowserPageRequestsTests: XCTestCase {
         XCTAssertEqual(store.choices.keys.sorted(), ["google.com|location"])
     }
 
+    func testTheOldKeysAreFoldedOnlyOnce() {
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathComponent("permissions.json")
+        addTeardownBlock { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+        SitePermissionStore(fileURL: file).set(.allow, for: [.location], host: "www.www.example.com")
+
+        // A restart reads the stored key as it is: the fold already happened,
+        // so the second `www.` is part of the site and stays. The bare host is
+        // a different site and hears nothing of it.
+        let restarted = SitePermissionStore(fileURL: file)
+        XCTAssertEqual(restarted.choice(for: .location, host: "www.www.example.com"), .allow)
+        XCTAssertNil(restarted.choice(for: .location, host: "example.com"))
+    }
+
     func testAnUnansweredQuestionIsANoUntilTheAppRestarts() {
         let file = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)

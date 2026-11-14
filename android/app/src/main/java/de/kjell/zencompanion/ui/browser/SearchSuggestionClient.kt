@@ -1,5 +1,8 @@
 package de.kjell.zencompanion.ui.browser
 
+import java.io.ByteArrayOutputStream
+import java.io.IOException
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URI
 import kotlin.coroutines.resume
@@ -32,7 +35,14 @@ class LiveSearchSuggestionClient : SearchSuggestionClient {
                     continuation.resumeWithException(IllegalStateException("suggest http $code"))
                     return@suspendCancellableCoroutine
                 }
-                val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                // A suggest answer is a few hundred bytes. Like iOS, a known
+                // length over the limit is refused before reading, and an
+                // unknown one stops once it passes the limit.
+                if (connection.contentLengthLong > MAX_BODY_BYTES) {
+                    continuation.resumeWithException(IOException("suggest body too large"))
+                    return@suspendCancellableCoroutine
+                }
+                val body = connection.inputStream.use { readLimited(it, MAX_BODY_BYTES) }
                 if (continuation.isActive) continuation.resume(body)
             } catch (thrown: Throwable) {
                 if (continuation.isActive) continuation.resumeWithException(thrown)
@@ -41,4 +51,25 @@ class LiveSearchSuggestionClient : SearchSuggestionClient {
             }
         }
     }
+
+    companion object {
+        /** The same 64 KiB ceiling as iOS's suggestion client. */
+        const val MAX_BODY_BYTES = 64 * 1024
+    }
+}
+
+/**
+ * Reads [input] as UTF-8, throwing as soon as more than [limit] bytes arrive,
+ * so a huge answer is never held in memory.
+ */
+internal fun readLimited(input: InputStream, limit: Int): String {
+    val out = ByteArrayOutputStream()
+    val buffer = ByteArray(8 * 1024)
+    while (true) {
+        val read = input.read(buffer)
+        if (read < 0) break
+        if (out.size() + read > limit) throw IOException("suggest body too large")
+        out.write(buffer, 0, read)
+    }
+    return out.toString(Charsets.UTF_8.name())
 }

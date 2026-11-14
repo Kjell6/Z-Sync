@@ -315,4 +315,162 @@ final class BrowserPageRequestsTests: XCTestCase {
         XCTAssertEqual(unique("report.pdf"), "report 3.pdf")
         XCTAssertEqual(unique("notes"), "notes 2")
     }
+
+    // MARK: - The download capsule
+
+    func testAFileStartsAsAnUnknownBar() {
+        var ledger = BrowserDownloadLedger()
+        let task = ledger.start(fileName: "report.pdf")
+
+        XCTAssertEqual(ledger.tasks.map(\.fileName), ["report.pdf"])
+        XCTAssertEqual(task.stage, .fetching)
+        XCTAssertNil(task.fraction, "A size the server has not named yet is not a guess")
+
+        let content = BrowserDownloadCapsule.content(for: ledger.tasks)
+        XCTAssertEqual(content?.kind, .fetching)
+        XCTAssertEqual(content?.fileName, "report.pdf")
+        XCTAssertNil(content?.fraction)
+    }
+
+    func testBytesFillTheBarUntilTheWholeFileIsThere() {
+        var ledger = BrowserDownloadLedger()
+        let task = ledger.start(fileName: "report.pdf")
+
+        ledger.update(id: task.id, bytesReceived: 500, totalBytes: 1_000)
+        XCTAssertEqual(ledger.tasks[0].fraction, 0.5)
+
+        // More bytes than the server promised still reads as done, not passed.
+        ledger.update(id: task.id, bytesReceived: 1_200, totalBytes: 1_000)
+        XCTAssertEqual(ledger.tasks[0].fraction, 1)
+    }
+
+    func testTwoFilesOfTheSameNameAreToldApart() {
+        var ledger = BrowserDownloadLedger()
+        let first = ledger.start(fileName: "report.pdf")
+        let second = ledger.start(fileName: "report.pdf")
+
+        XCTAssertEqual(first.fileName, "report.pdf")
+        XCTAssertEqual(second.fileName, "report 2.pdf")
+    }
+
+    func testTheSaveScreenTakesOverOnceTheFileArrived() {
+        var ledger = BrowserDownloadLedger()
+        let task = ledger.start(fileName: "report.pdf")
+        ledger.update(id: task.id, bytesReceived: 10, totalBytes: 10)
+        ledger.chooseFolder(id: task.id)
+
+        let content = BrowserDownloadCapsule.content(for: ledger.tasks)
+        XCTAssertEqual(content?.kind, .choosingFolder)
+        XCTAssertEqual(content?.fileName, "report.pdf")
+        XCTAssertEqual(content?.taskIDs, [task.id])
+    }
+
+    func testASaveKeepsTheNameTheReaderChose() {
+        var ledger = BrowserDownloadLedger()
+        let task = ledger.start(fileName: "report.pdf")
+
+        ledger.saved(id: task.id, name: "taxes 2026.pdf")
+        XCTAssertEqual(ledger.tasks[0].stage, .saved)
+        XCTAssertEqual(ledger.tasks[0].fileName, "taxes 2026.pdf")
+
+        // A save screen that names nothing leaves the file's own name.
+        ledger.saved(id: task.id, name: nil)
+        XCTAssertEqual(ledger.tasks[0].fileName, "taxes 2026.pdf")
+    }
+
+    func testCancellingTakesTheFileOffTheScreenAtOnce() {
+        var ledger = BrowserDownloadLedger()
+        let first = ledger.start(fileName: "a.pdf")
+        let second = ledger.start(fileName: "b.pdf")
+
+        ledger.remove(id: first.id)
+        XCTAssertEqual(ledger.tasks.map(\.id), [second.id])
+        XCTAssertNil(BrowserDownloadCapsule.content(for: []), "Nothing left means nothing shown")
+    }
+
+    func testWorkInFlightWinsOverAResultThatIsFading() {
+        var ledger = BrowserDownloadLedger()
+        let done = ledger.start(fileName: "done.pdf")
+        ledger.saved(id: done.id, name: nil)
+        let running = ledger.start(fileName: "running.pdf")
+
+        let content = BrowserDownloadCapsule.content(for: ledger.tasks)
+        XCTAssertEqual(content?.kind, .fetching)
+        XCTAssertEqual(content?.taskIDs, [running.id])
+    }
+
+    func testTheSaveScreenWinsOverAFailure() {
+        var ledger = BrowserDownloadLedger()
+        let failed = ledger.fail(name: "failed.pdf", reason: "The connection was lost")
+        let waiting = ledger.start(fileName: "waiting.pdf")
+        ledger.chooseFolder(id: waiting.id)
+
+        let content = BrowserDownloadCapsule.content(for: ledger.tasks)
+        XCTAssertEqual(content?.kind, .choosingFolder)
+        XCTAssertEqual(content?.fileName, "waiting.pdf")
+        _ = failed
+    }
+
+    func testCombinedProgressWeighsEveryFile() {
+        func task(_ received: Int64, _ total: Int64) -> BrowserDownloadTask {
+            BrowserDownloadTask(
+                id: UUID(),
+                fileName: "f",
+                stage: .fetching,
+                bytesReceived: received,
+                totalBytes: total
+            )
+        }
+        XCTAssertEqual(
+            BrowserDownloadCapsule.combinedFraction([task(1, 4), task(2, 4)]),
+            3.0 / 8.0
+        )
+        XCTAssertEqual(BrowserDownloadCapsule.combinedFraction([task(1, 2)]), 0.5)
+        XCTAssertNil(BrowserDownloadCapsule.combinedFraction([]))
+    }
+
+    func testOneUnknownSizeLeavesTheWholeLineUnknown() {
+        let tasks = [
+            BrowserDownloadTask(id: UUID(), fileName: "a", stage: .fetching, bytesReceived: 3, totalBytes: 10),
+            BrowserDownloadTask(id: UUID(), fileName: "b", stage: .fetching, bytesReceived: 1, totalBytes: -1),
+        ]
+        XCTAssertNil(BrowserDownloadCapsule.combinedFraction(tasks))
+    }
+
+    func testThePercentageIsRounded() {
+        XCTAssertEqual(BrowserDownloadCapsule.percentLabel(0), "0%")
+        XCTAssertEqual(BrowserDownloadCapsule.percentLabel(0.426), "43%")
+        XCTAssertEqual(BrowserDownloadCapsule.percentLabel(1), "100%")
+        // A report that overshoots never says more than all of it.
+        XCTAssertEqual(BrowserDownloadCapsule.percentLabel(1.4), "100%")
+    }
+
+    func testAFailureSaysWhy() {
+        XCTAssertEqual(
+            BrowserDownloadPolicy.failureReason(URLError(.notConnectedToInternet)),
+            "The connection was lost"
+        )
+        XCTAssertEqual(
+            BrowserDownloadPolicy.failureReason(URLError(.badServerResponse)),
+            "The server didn't send the file"
+        )
+        XCTAssertEqual(
+            BrowserDownloadPolicy.failureReason(URLError(.cancelled)),
+            "The download failed"
+        )
+    }
+
+    func testAFailureThatNeverStartedStillShows() {
+        var ledger = BrowserDownloadLedger()
+        let id = ledger.fail(name: "report.pdf", reason: "The page was asleep")
+
+        let content = BrowserDownloadCapsule.content(for: ledger.tasks)
+        XCTAssertEqual(content?.kind, .failed)
+        XCTAssertEqual(content?.fileName, "report.pdf")
+        XCTAssertEqual(content?.reason, "The page was asleep")
+        XCTAssertEqual(content?.count, 1)
+
+        ledger.remove(id: id)
+        XCTAssertTrue(ledger.tasks.isEmpty)
+    }
 }

@@ -15,6 +15,8 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateDpAsState
@@ -1322,6 +1324,26 @@ private fun BrowserPageScreen(
             }
 
                 Spacer(Modifier.height(reservedBottom))
+            }
+
+            // The open menu owns the screen, as on iOS: the page behind it takes
+            // no touches, and a touch anywhere outside the bar closes the menu.
+            if (state.menuExpanded) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false).consume()
+                                viewModel.collapseMenu()
+                                // The rest of this touch goes nowhere either.
+                                do {
+                                    val event = awaitPointerEvent()
+                                    event.changes.forEach { it.consume() }
+                                } while (event.changes.any { it.pressed })
+                            }
+                        },
+                )
             }
 
             AnimatedVisibility(

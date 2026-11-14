@@ -48,6 +48,7 @@ import de.kjell.zencompanion.data.SitePermission
 import de.kjell.zencompanion.data.SitePermissionChoice
 import de.kjell.zencompanion.data.SitePermissionDecision
 import de.kjell.zencompanion.data.SitePermissions
+import de.kjell.zencompanion.data.foldedSiteHost
 import de.kjell.zencompanion.ui.browser.BrowserDownload
 import de.kjell.zencompanion.ui.browser.BrowserDownloadCentre
 import de.kjell.zencompanion.ui.browser.BrowserPages
@@ -304,7 +305,10 @@ internal class BrowserPageRequests(
                     // nothing is remembered that the reader was not asked.
                     val repeats = session.prompts
                         .filterIsInstance<BrowserPrompt.Permission>()
-                        .filter { it.host.equals(host, ignoreCase = true) && kinds.containsAll(it.kinds) }
+                        .filter {
+                            foldedSiteHost(it.host).equals(foldedSiteHost(host), ignoreCase = true) &&
+                                kinds.containsAll(it.kinds)
+                        }
                     // Taken out first: each answer looks for the next question
                     // itself, and a list still holding them would nest one call
                     // per duplicate.

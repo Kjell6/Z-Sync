@@ -132,6 +132,7 @@ import de.kjell.zencompanion.ui.browser.BrowserPages
 import de.kjell.zencompanion.ui.browser.MiniBrowserViewModel
 import de.kjell.zencompanion.ui.browser.PageSession
 import de.kjell.zencompanion.ui.browser.BlockingCard
+import de.kjell.zencompanion.ui.browser.downloadReferrer
 import de.kjell.zencompanion.data.BrowserVisit
 import de.kjell.zencompanion.data.ContentBlocking
 import de.kjell.zencompanion.data.ContentBlockingSettings
@@ -1451,7 +1452,7 @@ private fun BrowserPageScreen(
                             userAgent = view.settings.userAgentString,
                             contentDisposition = null,
                             mimeType = null,
-                            referer = effectiveUrl,
+                            referer = downloadReferrer(effectiveUrl, image),
                         ),
                     )
                 }

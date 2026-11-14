@@ -1683,16 +1683,6 @@
         }
       }
     },
-    "signedout.message": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your Zen spaces and tabs from your Mozilla account appear here. The browser works without an account."
-          }
-        }
-      }
-    },
     "signedout.title": {
       "localizations": {
         "en": {

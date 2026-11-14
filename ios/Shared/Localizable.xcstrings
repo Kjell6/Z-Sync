@@ -1683,12 +1683,22 @@
         }
       }
     },
+    "signedout.sign_in": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in with Mozilla"
+          }
+        }
+      }
+    },
     "signedout.title": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sign in to see your spaces"
+            "value": "Your Zen spaces appear here"
           }
         }
       }

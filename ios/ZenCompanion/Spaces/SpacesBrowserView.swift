@@ -699,8 +699,7 @@ struct SpacesBrowserView: View {
                 SignedOutTabsSkeleton(scheme: scheme)
 
                 signInPrompt(scheme: scheme)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 30)
+                    .padding(.top, 28)
                     .padding(.bottom, 18)
             }
             .frame(maxWidth: .infinity)
@@ -711,13 +710,15 @@ struct SpacesBrowserView: View {
         }
     }
 
-    /// The prompt under the skeleton rows: a title, the button and the help
-    /// link, set straight on the page. The title keeps the hidden demo unlock.
+    /// The prompt under the skeleton rows: one line of title, a short pill
+    /// button and the help link, centred and each narrower than the last, so
+    /// the three read as one quiet step down instead of three equal blocks.
+    /// The title keeps the hidden demo unlock.
     private func signInPrompt(scheme: ColorScheme) -> some View {
         VStack(spacing: 0) {
             Text("signedout.title")
-                .zenFont(24, weight: .semibold, design: .rounded)
-                .tracking(-0.4)
+                .zenFont(17, weight: .semibold, design: .rounded)
+                .tracking(-0.2)
                 .foregroundStyle(Palette.ink(scheme))
                 .fixedSize(horizontal: false, vertical: true)
                 .contentShape(Rectangle())
@@ -726,38 +727,38 @@ struct SpacesBrowserView: View {
 
             if let sessionNotice {
                 Text(sessionNotice)
-                    .zenFont(14, weight: .medium, design: .rounded)
+                    .zenFont(13, weight: .medium, design: .rounded)
                     .foregroundStyle(Palette.ink(scheme).opacity(0.6))
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 8)
+                    .padding(.top, 6)
             }
 
             Button { onPresentSignIn() } label: {
-                Text("home.sign_in")
-                    .zenFont(17, weight: .semibold, design: .rounded)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 15)
+                Text("signedout.sign_in")
+                    .zenFont(15, weight: .semibold, design: .rounded)
+                    .lineLimit(1)
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, 11)
                     .foregroundStyle(Palette.paper(scheme))
-                    .background(Palette.ink(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .background(Palette.ink(scheme), in: Capsule())
+                    .contentShape(Capsule())
             }
             .buttonStyle(PressedButtonStyle())
-            .padding(.top, 20)
+            .padding(.top, 16)
 
             Button { onPresentSignInHelp() } label: {
                 Text("signin.help.link")
-                    .zenFont(14, weight: .medium, design: .rounded)
+                    .zenFont(13, weight: .medium, design: .rounded)
                     .foregroundStyle(Palette.ink(scheme).opacity(0.5))
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 10)
                     .padding(.horizontal, 12)
                     .contentShape(Rectangle())
             }
             .buttonStyle(PressedButtonStyle())
-            .padding(.top, 8)
+            .padding(.top, 4)
         }
         .multilineTextAlignment(.center)
-        .frame(maxWidth: 440)
+        .padding(.horizontal, 20)
         .frame(maxWidth: .infinity)
     }
 }

@@ -536,17 +536,18 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         pageGeneration += 1
         lastScrollY = webView?.scrollView.contentOffset.y ?? 0
         scrollDownRun = 0
-        // The previous page's colour is not this one's: until this page
-        // answers, the top area shows the default.
-        model?.updateThemeColor(from: nil, nativeColor: nil)
         model?.setScrollHidesBar(false)
+        // The answer replaces the previous page's colour, with the default
+        // when this page has none. Not cleared first: a page that keeps its
+        // address (a script changing the URL) would flash the default.
         readPageColor()
     }
 
-    /// A page reported its own `pageshow`: a restore from the back/forward
-    /// cache shows a page with its address already known, so the reset is
-    /// taken even though nothing about the document changed.
-    func pageShownAgain() {
+    /// A page came back from the back/forward cache: its address is already
+    /// known, so the reset is taken even though the URL did not change. A
+    /// first show is left to the load callbacks.
+    func pageShownAgain(persisted: Bool) {
+        guard persisted else { return }
         currentDocumentURL = nil
         startOver(for: webView?.url)
     }
@@ -701,8 +702,9 @@ enum BrowserPageShow {
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             guard message.frameInfo.isMainFrame else { return }
+            let persisted = (message.body as? [String: Any])?["persisted"] as? Bool ?? false
             MainActor.assumeIsolated {
-                driver?.pageShownAgain()
+                driver?.pageShownAgain(persisted: persisted)
             }
         }
     }

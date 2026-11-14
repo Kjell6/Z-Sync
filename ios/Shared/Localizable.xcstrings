@@ -2313,6 +2313,17 @@
         }
       }
     },
+    "browser.clear_search": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear search"
+          }
+        }
+      }
+    },
     "browser.close": {
       "extractionState": "manual",
       "localizations": {

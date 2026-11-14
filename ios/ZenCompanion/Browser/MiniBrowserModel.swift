@@ -373,6 +373,26 @@ enum ReaderExtractor {
     }
 }
 
+/// One row of the address field's list: a page from the history, or a phrase
+/// the engine suggests. The id is the row's own content, so a row that stays
+/// in the list keeps its identity when the rows around it change.
+struct AddressSuggestion: Identifiable, Equatable {
+    /// The page the row opens, or nil for a search phrase.
+    let visit: BrowserVisit?
+    /// What the row prints: the page's name, or the phrase itself.
+    let text: String
+
+    var id: String { visit.map { "history:\($0.url)" } ?? "search:\(text)" }
+
+    static func page(_ visit: BrowserVisit) -> AddressSuggestion {
+        AddressSuggestion(visit: visit, text: visit.title.isEmpty ? visit.host : visit.title)
+    }
+
+    static func phrase(_ text: String) -> AddressSuggestion {
+        AddressSuggestion(visit: nil, text: text)
+    }
+}
+
 /// State owner for the mini-browser: web-view progress/URL state fed by KVO,
 /// the address field text, URL/search resolution and the pin-save banner state
 /// machine. Replaces the former `MiniBrowserState` + view state in
@@ -427,6 +447,21 @@ final class MiniBrowserModel {
     var suggestions: [String] = []
     /// Pages from the history for the same text, above the suggestions.
     var historySuggestions: [BrowserVisit] = []
+    /// What the panel draws, as one ordered array: the history matches first,
+    /// then the engine's phrases the history does not already name. Worked out
+    /// from both parts every time it is read, so an answer that arrives late
+    /// can only add rows: it can never take the pages on screen away.
+    var suggestionRows: [AddressSuggestion] {
+        let rows = historySuggestions.map(AddressSuggestion.page)
+        // The history row already prints the page's name and address, so a
+        // phrase that repeats either one is the same row twice.
+        var named = Set(historySuggestions.flatMap {
+            [$0.title.lowercased(), $0.displayAddress.lowercased()]
+        })
+        let unseen = suggestions.filter { named.insert($0.lowercased()).inserted }
+        return rows + SearchSuggestions.fitting(unseen, beside: rows.count).map(AddressSuggestion.phrase)
+    }
+
     /// Set while a suggestion was just chosen or the field was submitted, so
     /// the text change that follows does not send another suggest request.
     @ObservationIgnored private var suggestionsSuspended = false
@@ -994,10 +1029,11 @@ final class MiniBrowserModel {
     /// has to be one transaction for the whole screen: the column grows
     /// upwards as the list comes, and animated only from inside, its new
     /// place is taken at once and the address field jumps up and springs back.
+    /// Short and ease-out, so a row never kicks the bar.
     private func animateSuggestions(_ change: () -> Void) {
         let motion: Animation = UIAccessibility.isReduceMotionEnabled
             ? .easeOut(duration: 0.12)
-            : .spring(response: 0.24, dampingFraction: 0.82)
+            : .easeOut(duration: 0.26)
         withAnimation(motion, change)
     }
 

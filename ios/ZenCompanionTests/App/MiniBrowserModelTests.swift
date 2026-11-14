@@ -876,6 +876,33 @@ final class MiniBrowserModelTests: XCTestCase {
         XCTAssertEqual(model.suggestions, ["zen browser", "zen browser download"])
     }
 
+    func testTheAnswerAddsToTheHistoryInsteadOfReplacingIt() async {
+        let history = makeHistoryStore()
+        history.record(URL(string: "https://news.ycombinator.com"), title: "Hacker News")
+        let client = RecordingSuggestionClient()
+        // The engine names the page the history already has: one row, not two.
+        client.body = Data(#"["news",["news today","hacker news","news live"]]"#.utf8)
+        let (model, _) = makeModel(initialURL: nil, suggestions: client, history: history)
+
+        model.addressText = "news"
+        model.refreshSuggestions(isEditing: true)
+        XCTAssertEqual(model.suggestionRows.map(\.id), ["history:https://news.ycombinator.com"])
+
+        await model.waitForSuggestions()
+        XCTAssertEqual(
+            model.suggestionRows.map(\.text),
+            ["Hacker News", "news today", "news live"],
+            "the page from the history stays on top, and the answer that names it is left out"
+        )
+        XCTAssertEqual(model.suggestionRows.first?.visit?.url, "https://news.ycombinator.com")
+
+        // The next keystroke's answer must not push the page out either.
+        model.addressText = "news y"
+        model.refreshSuggestions(isEditing: true)
+        await model.waitForSuggestions()
+        XCTAssertEqual(model.suggestionRows.first?.visit?.url, "https://news.ycombinator.com")
+    }
+
     func testChangingToAURLCancelsThePendingQuery() async {
         let client = RecordingSuggestionClient()
         let (model, _) = makeModel(initialURL: nil, suggestions: client, suggestionDebounce: .zero)

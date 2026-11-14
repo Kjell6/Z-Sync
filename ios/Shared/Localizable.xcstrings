@@ -2566,16 +2566,6 @@
         }
       }
     },
-    "browser.print": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Print"
-          }
-        }
-      }
-    },
     "browser.reader": {
       "localizations": {
         "en": {

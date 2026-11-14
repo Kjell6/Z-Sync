@@ -891,21 +891,32 @@ final class MiniBrowserModel {
         return pageURL != nil || webView?.url != nil
     }
 
-    /// System print dialog for the page on screen.
-    func presentPrint() {
-        collapseMenu()
-        guard canPrint, let webView else { return }
-        let info = UIPrintInfo(dictionary: nil)
-        info.jobName = Self.printJobName(title: pageTitle, url: pageURL ?? webView.url)
-        info.outputType = .general
-        let controller = UIPrintInteractionController.shared
-        controller.printInfo = info
-        controller.printFormatter = webView.viewPrintFormatter()
-        _ = controller.present(animated: true) { panel, _, _ in
-            // The shared controller must not keep the page alive after printing.
-            panel.printFormatter = nil
-            panel.printInfo = nil
+    /// The system share sheet for the page. A printable page also hands its
+    /// print formatter and job name over, so the sheet offers Print the way
+    /// Safari's does.
+    func presentShare() {
+        guard let url = effectiveURL else { return }
+        var items: [Any] = [url]
+        if canPrint, let webView {
+            let info = UIPrintInfo(dictionary: nil)
+            info.jobName = Self.printJobName(title: pageTitle, url: pageURL ?? webView.url)
+            info.outputType = .general
+            items += [info, webView.viewPrintFormatter()]
         }
+        guard let presenter = BrowserDownloads.topViewController() else { return }
+        let sheet = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        // iPad shows the sheet as a popover; it points at the bottom bar.
+        if let popover = sheet.popoverPresentationController {
+            popover.sourceView = presenter.view
+            popover.sourceRect = CGRect(
+                x: presenter.view.bounds.midX,
+                y: presenter.view.bounds.maxY - 80,
+                width: 1,
+                height: 1
+            )
+            popover.permittedArrowDirections = .down
+        }
+        presenter.present(sheet, animated: true)
     }
 
     /// What the print dialog calls the job: the page's name, or its host when

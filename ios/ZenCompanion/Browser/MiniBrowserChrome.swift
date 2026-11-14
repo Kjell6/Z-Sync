@@ -429,8 +429,6 @@ struct MiniBrowserChrome<NavBar: View>: View {
                 rowDivider
                 readerRow
                 rowDivider
-                printRow
-                rowDivider
                 desktopRow
                 rowDivider
                 zoomRow
@@ -543,9 +541,13 @@ struct MiniBrowserChrome<NavBar: View>: View {
     }
 
     @ViewBuilder
+    /// The system share sheet, which also carries Print for the page, as in
+    /// Safari: the menu keeps no print row of its own.
     private var shareTile: some View {
-        if let url = model.effectiveURL {
-            SwiftUI.ShareLink(item: url) {
+        if model.effectiveURL != nil {
+            Button {
+                model.presentShare()
+            } label: {
                 tileLabel(systemName: "square.and.arrow.up", title: "browser.share")
             }
             .buttonStyle(CardPressStyle())
@@ -680,34 +682,6 @@ struct MiniBrowserChrome<NavBar: View>: View {
         }
         .buttonStyle(CardPressStyle())
         .disabled(model.effectiveURL == nil || model.readerLoading)
-    }
-
-    /// Same shape as the other rows. Printing closes the menu first: the
-    /// system panel sits over the page it prints.
-    private var printRow: some View {
-        Button {
-            withAnimation(motion) {
-                model.presentPrint()
-            }
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "printer")
-                    .font(.system(size: 16, weight: .semibold))
-                    .frame(width: 24)
-                    .foregroundStyle(Color.primary)
-                Text("browser.print")
-                    .zenFont(16, weight: .medium, design: .rounded)
-                    .foregroundStyle(Color.primary)
-                Spacer(minLength: 8)
-            }
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(CardPressStyle())
-        // Nothing to print without a page, under the error panel or with the
-        // reader lifted out of it.
-        .disabled(!model.canPrint)
-        .accessibilityLabel(Text("browser.print"))
     }
 
     private var desktopRow: some View {

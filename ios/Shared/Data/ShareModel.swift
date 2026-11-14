@@ -87,18 +87,79 @@ enum ShareLink {
 
     static func httpURL(from item: NSSecureCoding?) -> URL? {
         if let url = item as? URL { return httpURL(from: url) }
-        if let text = item as? String,
-           let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)) {
-            return httpURL(from: url)
-        }
-        if let text = item as? NSString,
-           let url = URL(string: (text as String).trimmingCharacters(in: .whitespacesAndNewlines)) {
-            return httpURL(from: url)
-        }
+        if let text = item as? String { return link(in: text) }
+        if let text = item as? NSString { return link(in: text as String) }
         if let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) {
             return httpURL(from: url)
         }
         return nil
+    }
+
+    /// Android `ShareActivity.sharedLink` checks the whole text first and
+    /// then each word, so a share like "look at this https://…" keeps its
+    /// link. Only a text without inner whitespace can be one address.
+    private static func link(in text: String) -> URL? {
+        if !text.contains(where: { $0.isWhitespace }), let url = candidate(text) {
+            return url
+        }
+        for word in text.split(whereSeparator: { $0.isWhitespace }) {
+            if let url = candidate(String(word)) { return url }
+        }
+        return nil
+    }
+
+    /// One candidate word or the whole text, without the marks the sentence
+    /// around it adds. Only an http(s) address with a host is a link.
+    private static func candidate(_ text: String) -> URL? {
+        let bare = trimmingSurroundingMarks(text)
+        guard !bare.isEmpty, let url = URL(string: bare), let http = httpURL(from: url),
+              http.host?.isEmpty == false else { return nil }
+        return http
+    }
+
+    /// Marks a sentence puts before a link; they never belong to its address.
+    private static let leadingMarks: Set<Character> = ["\"", "'", "“", "”", "‘", "’", "(", "[", "{", "<"]
+
+    /// Marks a sentence puts right after a link.
+    private static let sentenceMarks: Set<Character> = [".", ",", ";", ":", "!", "?", "…"]
+    private static let quoteMarks: Set<Character> = ["\"", "'", "“", "”", "‘", "’"]
+    /// Closing bracket → the opening bracket it has to pair with.
+    private static let bracketPairs: [Character: Character] = [")": "(", "]": "[", "}": "{", ">": "<"]
+
+    /// Android `trimSurroundingMarks`: drops the leading quotes and brackets,
+    /// then the sentence marks that close the sentence around the link, then
+    /// the quotes and unbalanced closing brackets it is wrapped in. A mark
+    /// inside that wrapper stays, since an address may end in one: a quoted
+    /// `…?q=wow!` keeps its `!`. A closing bracket only goes while it is
+    /// unbalanced, so a linked `Function_(mathematics)` keeps its own `)`.
+    private static func trimmingSurroundingMarks(_ text: String) -> String {
+        var characters = Array(
+            text.trimmingCharacters(in: .whitespacesAndNewlines)
+                .drop(while: { leadingMarks.contains($0) })
+        )
+        while let last = characters.last, sentenceMarks.contains(last) {
+            characters.removeLast()
+        }
+        // Each character is counted once, so a long run of closing brackets
+        // costs one step per removed mark instead of a recount of the whole
+        // array.
+        var counts = characters.reduce(into: [Character: Int]()) { $0[$1, default: 0] += 1 }
+        while let last = characters.last {
+            if quoteMarks.contains(last) {
+                characters.removeLast()
+                continue
+            }
+            if let opener = bracketPairs[last] {
+                let opens = counts[opener] ?? 0
+                let closes = counts[last] ?? 0
+                guard opens < closes else { break }
+                characters.removeLast()
+                counts[last] = closes - 1
+                continue
+            }
+            break
+        }
+        return String(characters)
     }
 
     static func headlineTitle(pageTitle: String, url: URL?) -> String {

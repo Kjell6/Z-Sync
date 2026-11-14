@@ -57,4 +57,8 @@ Copyright (c) 2026 Kjell Behrends. [MIT License](LICENSE).
 
 Icons from Zen Browser are [MPL 2.0](https://www.mozilla.org/MPL/2.0/).
 
+The bundled ad and tracker lists are [EasyList](https://easylist.to) and EasyPrivacy, dual-licensed under [GPLv3](https://www.gnu.org/licenses/gpl-3.0.html) and [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/); they are filtered by `scripts/content-blocking/update-blocklists.sh`, which keeps the lists' own headers and their domain rules.
+
+Cookie banner handling uses DuckDuckGo's [autoconsent](https://github.com/duckduckgo/autoconsent), [MPL 2.0](https://www.mozilla.org/MPL/2.0/), built by `scripts/content-blocking/build-autoconsent.sh`.
+
 [Privacy](docs/privacy.md)

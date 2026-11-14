@@ -3,7 +3,6 @@ package de.kjell.zencompanion.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
@@ -33,12 +33,12 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -54,10 +54,10 @@ import de.kjell.zencompanion.data.BrowserVisit
 import de.kjell.zencompanion.data.searchVisits
 import de.kjell.zencompanion.ui.components.Favicon
 import de.kjell.zencompanion.ui.sheets.ZenSheet
-import de.kjell.zencompanion.ui.theme.LiftCard
 import de.kjell.zencompanion.ui.theme.LocalZenColors
 import de.kjell.zencompanion.ui.theme.ZenType
 import de.kjell.zencompanion.ui.theme.liftBorder
+import de.kjell.zencompanion.ui.theme.liftRim
 import java.text.DateFormat
 import java.util.Calendar
 import java.util.Date
@@ -86,7 +86,11 @@ internal fun BrowserHistoryScreen(
     val visits by BrowserHistory.visits.collectAsState()
     var query by remember { mutableStateOf("") }
     val found = remember(visits, query) { searchVisits(visits, query) }
-    val days = remember(found) { found.groupBy { dayOf(it.lastVisited) }.toList() }
+    val days = remember(found) {
+        // One calendar for the whole grouping: `dayOf` resets it on every call.
+        val calendar = Calendar.getInstance()
+        found.groupBy { dayOf(it.lastVisited, calendar) }.toList()
+    }
     val dayFormat = remember { DateFormat.getDateInstance(DateFormat.FULL) }
     val timeFormat = remember { DateFormat.getTimeInstance(DateFormat.SHORT) }
 
@@ -169,15 +173,24 @@ internal fun BrowserHistoryScreen(
                         top = 6.dp,
                         bottom = 32.dp,
                     ),
-                    verticalArrangement = Arrangement.spacedBy(22.dp),
                 ) {
-                    days.forEach { (day, group) ->
-                        item(key = day) {
-                            DaySection(
+                    days.forEachIndexed { dayIndex, (day, group) ->
+                        // One item per label and one per row: a day of history
+                        // only composes as far as it is scrolled to.
+                        item(key = DAY_KEY + day) {
+                            DayLabel(
                                 label = dayFormat.format(Date(day)),
-                                visits = group,
-                                timeFormat = timeFormat,
-                                onOpen = onOpen,
+                                spaced = dayIndex > 0,
+                            )
+                        }
+                        itemsIndexed(group, key = { _, visit -> visit.url }) { index, visit ->
+                            DayRow(
+                                visit = visit,
+                                time = timeFormat.format(Date(visit.lastVisited)),
+                                first = index == 0,
+                                last = index == group.lastIndex,
+                                onOpen = { onOpen(visit) },
+                                onDelete = { BrowserHistory.remove(visit) },
                             )
                         }
                     }
@@ -187,43 +200,65 @@ internal fun BrowserHistoryScreen(
     }
 }
 
-/** One day: its label, then its pages in one card. */
+/** Day headers are keyed by their day value, which no URL can equal. */
+private const val DAY_KEY = "history-day-"
+
+/** One day's label above its card; [spaced] keeps the gap between days. */
 @Composable
-private fun DaySection(
-    label: String,
-    visits: List<BrowserVisit>,
-    timeFormat: DateFormat,
-    onOpen: (BrowserVisit) -> Unit,
+private fun DayLabel(label: String, spaced: Boolean) {
+    val zen = LocalZenColors.current
+    Text(
+        text = label,
+        style = ZenType.rounded(12, FontWeight.SemiBold).copy(letterSpacing = 0.8.sp),
+        color = zen.ink.copy(alpha = 0.4f),
+        modifier = Modifier.padding(
+            start = 4.dp,
+            top = if (spaced) 22.dp else 0.dp,
+            bottom = 8.dp,
+        ),
+    )
+}
+
+/**
+ * One page in a day's card. The card's own round corners sit on the day's
+ * first and last row, so separate items still read as one card. Its own key
+ * is the URL, so a deleted entry doesn't hand its swipe state to the row that
+ * takes its place.
+ */
+@Composable
+private fun DayRow(
+    visit: BrowserVisit,
+    time: String,
+    first: Boolean,
+    last: Boolean,
+    onOpen: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     val zen = LocalZenColors.current
-    Column {
-        Text(
-            text = label,
-            style = ZenType.rounded(12, FontWeight.SemiBold).copy(letterSpacing = 0.8.sp),
-            color = zen.ink.copy(alpha = 0.4f),
-            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+    val shape = RoundedCornerShape(
+        topStart = if (first) 16.dp else 0.dp,
+        topEnd = if (first) 16.dp else 0.dp,
+        bottomStart = if (last) 16.dp else 0.dp,
+        bottomEnd = if (last) 16.dp else 0.dp,
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(zen.lift)
+            .liftRim(shape),
+    ) {
+        VisitRow(
+            visit = visit,
+            time = time,
+            onOpen = onOpen,
+            onDelete = onDelete,
         )
-        LiftCard(modifier = Modifier.fillMaxWidth()) {
-            Column {
-                visits.forEachIndexed { index, visit ->
-                    // Keyed: a deleted entry must not hand its swipe state to
-                    // the row that takes its place.
-                    key(visit.url) {
-                        VisitRow(
-                            visit = visit,
-                            time = timeFormat.format(Date(visit.lastVisited)),
-                            onOpen = { onOpen(visit) },
-                            onDelete = { BrowserHistory.remove(visit) },
-                        )
-                        if (index < visits.size - 1) {
-                            HorizontalDivider(
-                                color = zen.ink.copy(alpha = 0.08f),
-                                modifier = Modifier.padding(start = 54.dp),
-                            )
-                        }
-                    }
-                }
-            }
+        if (!last) {
+            HorizontalDivider(
+                color = zen.ink.copy(alpha = 0.08f),
+                modifier = Modifier.padding(start = 54.dp),
+            )
         }
     }
 }

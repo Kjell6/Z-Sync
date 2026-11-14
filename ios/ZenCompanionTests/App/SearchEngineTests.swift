@@ -199,6 +199,11 @@ final class SearchEngineTests: XCTestCase {
             "example.com",
             "192.168.0.1:8080",
             "mailto:support@kjell.cc",
+            // Submitting these opens http://localhost, so nothing may be sent.
+            "localhost",
+            "LocalHost",
+            "localhost:3000",
+            "localhost/status",
             "   \n\t",
             "",
         ]
@@ -254,6 +259,25 @@ final class SearchEngineTests: XCTestCase {
     func testPlusInQueryIsEncoded() {
         let url = SearchSuggestions.requestURL(for: "c++", engine: .google)
         XCTAssertTrue(url?.absoluteString.contains("q=c%2B%2B") == true, url?.absoluteString ?? "nil")
+    }
+
+    /// The suggest query is encoded the same way as the search query: "&" and
+    /// "=" must not end the parameter, and "+" must not read as a space.
+    func testSuggestQueryEscapesTheParameterSeparators() {
+        let url = SearchSuggestions.requestURL(for: "AT&T c++ a=b", engine: .duckDuckGo)
+        XCTAssertNotNil(url)
+        XCTAssertTrue(
+            url?.absoluteString.hasSuffix("q=AT%26T%20c%2B%2B%20a%3Db&type=list") == true,
+            url?.absoluteString ?? "nil"
+        )
+        let items = URLComponents(url: url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        XCTAssertEqual(
+            items,
+            [
+                URLQueryItem(name: "q", value: "AT&T c++ a=b"),
+                URLQueryItem(name: "type", value: "list"),
+            ]
+        )
     }
 
     func testDotWithSpaceStillSuggests() {

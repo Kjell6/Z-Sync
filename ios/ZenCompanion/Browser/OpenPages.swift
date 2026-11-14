@@ -37,6 +37,10 @@ final class OpenPage: Identifiable {
     var lastUsedAt: Date
     /// The page as it last looked, for the list and the address bar swipe.
     var shot: UIImage?
+    /// Bumped when `shot` is let go, so a load still under way does not bring it back.
+    @ObservationIgnored var shotGeneration = 0
+    /// True when `shot` is the picture on disk, so letting go of it loses nothing.
+    @ObservationIgnored var shotStored = false
     /// The user stopped keeping this page, so it goes with the browser.
     @ObservationIgnored var released = false
     /// WebKit's history blob while the page has no web view.
@@ -324,6 +328,8 @@ final class OpenPagesStore: MiniBrowserPageHost {
     func prepareNeighbours() {
         let around = neighbours
         for page in [around.previous, around.next].compactMap({ $0 }) {
+            // The swipe shows this picture until the woken page paints.
+            Task { await loadShot(of: page) }
             wake(page)
         }
     }
@@ -454,6 +460,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
     private func release(_ page: OpenPage, byUser: Bool = true) {
         page.keptAt = nil
         if byUser { page.released = true }
+        restoreShot(of: page)
         removeFiles(of: page)
         persist()
     }
@@ -541,6 +548,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
         guard let image = try? await webView.takeSnapshot(configuration: WKSnapshotConfiguration()) else { return nil }
         let small = Self.shrunk(image)
         page.shot = small
+        page.shotStored = false
         // The page may have been closed while the snapshot was on its way.
         if page.isKept, self.page(page.id) != nil { writeShot(small, of: page) }
         return image
@@ -557,8 +565,41 @@ final class OpenPagesStore: MiniBrowserPageHost {
     func loadShot(of page: OpenPage) async {
         guard page.shot == nil else { return }
         let file = fileURL(page.id, "jpg")
+        let generation = page.shotGeneration
         let data = await Task.detached(priority: .utility) { try? Data(contentsOf: file) }.value
-        if page.shot == nil, let data { page.shot = UIImage(data: data) }
+        // Let go again while it loaded: the card is no longer near the focus.
+        guard page.shotGeneration == generation else { return }
+        if page.shot == nil, let data, let image = UIImage(data: data) {
+            page.shot = image
+            // What the disk holds, so letting go of it costs nothing.
+            page.shotStored = true
+        }
+    }
+
+    /// Reads a kept page's picture back from its file. Letting go of the page
+    /// deletes that file, and a card far from the deck's focus has already
+    /// dropped the picture, so it must be here before that happens.
+    private func restoreShot(of page: OpenPage) {
+        guard page.shot == nil else { return }
+        guard let data = try? Data(contentsOf: fileURL(page.id, "jpg")), let image = UIImage(data: data) else { return }
+        page.shot = image
+        // The file goes right after this.
+        page.shotStored = false
+    }
+
+    /// A card far from the deck's focus lets go of its picture, but only when
+    /// the disk can give it back: the page is kept and the picture it holds is
+    /// the one on disk (writes are synchronous here, so a write that failed
+    /// left an older file behind). The page on screen and pages with a web view
+    /// keep theirs.
+    func dropShot(of page: OpenPage) {
+        guard page.id != activeID, page.model.webView == nil, page.isKept else { return }
+        if page.shot != nil {
+            guard page.shotStored, FileManager.default.fileExists(atPath: fileURL(page.id, "jpg").path) else { return }
+        }
+        page.shotGeneration += 1
+        page.shot = nil
+        page.shotStored = false
     }
 
     private static let shotWidth = 240.0
@@ -567,8 +608,9 @@ final class OpenPagesStore: MiniBrowserPageHost {
         guard let data = image.jpegData(compressionQuality: 0.72) else { return }
         ensureDirectory()
         // On the main actor, like the removal: a write still under way could
-        // otherwise bring back the file of a page that just went.
-        try? data.write(to: fileURL(page.id, "jpg"), options: .atomic)
+        // otherwise bring back the file of a page that just went. A failed
+        // write leaves the older file, so the page keeps the newer picture.
+        page.shotStored = (try? data.write(to: fileURL(page.id, "jpg"), options: .atomic)) != nil
     }
 
     // MARK: - History

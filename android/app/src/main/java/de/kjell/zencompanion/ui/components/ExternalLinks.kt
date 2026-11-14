@@ -16,7 +16,9 @@ fun openURLExternally(context: Context, uri: Uri): Boolean {
 
 private fun parseExternalIntent(uri: Uri): Intent? {
     if (!uri.scheme.equals("intent", ignoreCase = true)) {
-        return Intent(Intent.ACTION_VIEW, uri)
+        // Browsable is what marks a handler as reachable from a browser, so a
+        // page link can never start an activity that never declared it.
+        return Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE)
     }
     val intent = runCatching { Intent.parseUri(uri.toString(), Intent.URI_INTENT_SCHEME) }.getOrNull()
         ?: return null
@@ -54,7 +56,9 @@ private fun startExternally(context: Context, intent: Intent): Boolean {
         val scheme = fallback.scheme?.lowercase()
         if (scheme != "http" && scheme != "https") return false
         runCatching {
-            context.startActivity(Intent(Intent.ACTION_VIEW, fallback))
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW, fallback).addCategory(Intent.CATEGORY_BROWSABLE),
+            )
         }.isSuccess
     }
 }

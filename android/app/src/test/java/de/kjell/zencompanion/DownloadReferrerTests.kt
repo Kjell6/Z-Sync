@@ -67,4 +67,14 @@ class DownloadReferrerTests {
     fun aTargetThatIsNoAddressGivesNothing() {
         assertNull(downloadReferrer(page, "not an address"))
     }
+
+    @Test
+    fun aRedirectToAnotherSiteKeepsOnlyTheOrigin() {
+        // What enqueueWebDownload does after resolving redirects: the policy
+        // runs again on the referrer chosen for the first address.
+        val first = downloadReferrer(page, image)
+        assertEquals("https://example.com/", downloadReferrer(first, "https://cdn.example.net/full.jpg"))
+        assertNull(downloadReferrer(first, "http://cdn.example.net/full.jpg"))
+        assertEquals("https://example.com/album/photo?id=42", downloadReferrer(first, image))
+    }
 }

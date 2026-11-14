@@ -97,7 +97,7 @@ fun SpacesBrowserScreen(
             pageCount = pageCount,
             onOpenPages = onOpenPages,
             // The synced history needs an account: no card signed out.
-            showsActivity = signedIn,
+            activityEnabled = signedIn,
             // Toward the screen edge when the bar is the last row: the
             // navigation-bar inset is the only gap, so no extra padding.
             bottomPadding = if (toolbarPlacement == ToolbarPlacement.BOTTOM) 0.dp else 6.dp,

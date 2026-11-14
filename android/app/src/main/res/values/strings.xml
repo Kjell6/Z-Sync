@@ -3,8 +3,8 @@
     <string name="app_name">Z-Sync</string>
 
     <string name="home_sign_in">Sign in with Mozilla account</string>
-    <string name="signed_out_title">Sign in to see your spaces</string>
-    <string name="signed_out_message">Your Zen spaces and tabs from your Mozilla account appear here. The browser works without an account.</string>
+    <string name="signed_out_title">Your Zen spaces appear here</string>
+    <string name="signed_out_sign_in">Sign in with Mozilla</string>
     <string name="home_sign_out">Sign out</string>
     <string name="home_disclaimer">Not affiliated with Mozilla or Zen Browser.</string>
 

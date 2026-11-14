@@ -277,7 +277,8 @@ object FxAWeb {
      * Only the sign-in page's own web data goes. Android's cookie jar is
      * process-wide and shared with the mini-browser, so the jar is not
      * cleared: every cookie and site login of every other site stays exactly
-     * where it is.
+     * where it is. The WebView's cache and form data are application-wide as
+     * well, so they stay too.
      */
     fun wipeWebSession() {
         val cookies = CookieManager.getInstance()
@@ -294,8 +295,6 @@ object FxAWeb {
         signInOrigins.forEach { WebStorage.getInstance().deleteOrigin(it) }
         lastWebView?.let { web ->
             Handler(Looper.getMainLooper()).post {
-                web.clearCache(true)
-                web.clearFormData()
                 web.clearHistory()
                 web.clearSslPreferences()
                 lastWebView = null

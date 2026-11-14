@@ -459,6 +459,14 @@ final class BrowserDownloads: NSObject, WKDownloadDelegate, UIDocumentPickerDele
         try? FileManager.default.removeItem(at: folder)
     }
 
+    /// One file's entry and its staging folder go together. Every ending may
+    /// report the same file, so only the one that still finds its entry here
+    /// removes anything: a later finish or fail finds nothing left to clean.
+    private func release(_ id: ObjectIdentifier) {
+        guard let entry = running.removeValue(forKey: id) else { return }
+        removeTemporaryFolder(entry.temporaryFolder)
+    }
+
     /// WebKit reports bytes on its own thread; the capsule is main-actor state.
     private func observeProgress(_ download: WKDownload, task: UUID) {
         let progress = download.progress
@@ -589,6 +597,8 @@ final class BrowserDownloads: NSObject, WKDownloadDelegate, UIDocumentPickerDele
 
     /// The capsule's cancel: the files shown stop arriving and nothing is
     /// saved. WebKit reports the cancellation; it is not a failed download.
+    /// WebKit does not report one for a cancel it was asked for, so the entry
+    /// and its staging folder are let go here.
     func cancel(taskIDs: [UUID]) {
         for task in taskIDs {
             ledger.remove(id: task)
@@ -598,7 +608,11 @@ final class BrowserDownloads: NSObject, WKDownloadDelegate, UIDocumentPickerDele
                   let entry = running[id] else { continue }
             running[id]?.cancelled = true
             running[id]?.progressObservations = []
-            entry.download.cancel { _ in }
+            entry.download.cancel { [weak self] _ in
+                Task { @MainActor in
+                    self?.release(id)
+                }
+            }
         }
     }
 

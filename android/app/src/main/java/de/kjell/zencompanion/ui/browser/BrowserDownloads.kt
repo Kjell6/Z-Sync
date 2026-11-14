@@ -80,9 +80,6 @@ internal fun isWebDownload(url: String): Boolean {
 /** The port a scheme uses when the address names none. */
 private fun defaultPort(scheme: String): Int = if (scheme == "https") 443 else 80
 
-/** The port an address really reaches, defaulted from its scheme. */
-private fun effectivePort(uri: URI): Int = uri.port.takeIf { it != -1 } ?: defaultPort(uri.scheme.lowercase())
-
 /** True for an http or https address that names a host. */
 private fun isWebUri(uri: URI): Boolean {
     val scheme = uri.scheme?.lowercase() ?: return false
@@ -90,11 +87,12 @@ private fun isWebUri(uri: URI): Boolean {
 }
 
 /**
- * The `Referer` a download may carry, following the browser default
- * `strict-origin-when-cross-origin`: the page's own address within its site,
- * only the site's address elsewhere, and nothing on the way down to plain
- * http. A page's private query, or the part of the page the reader was on,
- * then stays on that page instead of reaching a third-party file host.
+ * The `Referer` a download may carry: only the page's origin, never its path,
+ * query or fragment, and nothing on the way down to plain http (the
+ * `strict-origin` policy). The downloader follows redirects on its own, and a
+ * redirect seen while probing can differ from the one the download gets, so a
+ * page's private query must not be in the header at all. Hotlink checks only
+ * look at the site, which the origin still names.
  */
 internal fun downloadReferrer(pageUrl: String?, targetUrl: String): String? {
     // Parsed without android.net.Uri, so the policy itself is plain Java and
@@ -105,12 +103,7 @@ internal fun downloadReferrer(pageUrl: String?, targetUrl: String): String? {
     val targetScheme = target.scheme?.lowercase() ?: return null
     if (pageScheme == "https" && targetScheme == "http") return null
     val port = page.port
-    val sameOrigin = pageScheme == targetScheme &&
-        page.host.equals(target.host, ignoreCase = true) &&
-        effectivePort(page) == effectivePort(target)
-    if (sameOrigin) return pageUrl.substringBefore('#')
-    val host = page.host.lowercase()
-    val origin = "$pageScheme://$host"
+    val origin = "$pageScheme://${page.host.lowercase()}"
     return if (port == -1 || port == defaultPort(pageScheme)) "$origin/" else "$origin:$port/"
 }
 
@@ -176,8 +169,8 @@ internal fun enqueueWebDownload(context: Context, download: BrowserDownload): Bo
     download.mimeType?.takeIf { it.isNotEmpty() }?.let(request::setMimeType)
     target?.let(CookieManager.getInstance()::getCookie)?.let { request.addRequestHeader("Cookie", it) }
     download.userAgent?.takeIf { it.isNotEmpty() }?.let { request.addRequestHeader("User-Agent", it) }
-    // The policy again for where the file really comes from: a same-site
-    // address that redirects to another host must not carry the page's path.
+    // The policy again for where the file really comes from, so a secure page
+    // whose file redirects to plain http sends no Referer at all.
     downloadReferrer(download.referer, target ?: download.url)
         ?.takeIf(::isWebDownload)
         ?.let { request.addRequestHeader("Referer", it) }

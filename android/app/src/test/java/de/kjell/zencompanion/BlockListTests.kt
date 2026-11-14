@@ -106,6 +106,17 @@ class BlockListTests {
     }
 
     @Test
+    fun shortLabelsAreOnlySuffixUnderTheirOwnCountryDomain() {
+        // `id` and `asn` are site names under most country domains, so only the
+        // complete suffixes `id.au` and `asn.au` keep three labels.
+        assertTrue(BlockList.isSameSite("cdn.id.de", "id.de"))
+        assertFalse(BlockList.isSameSite("a.id.au", "b.id.au"))
+        assertFalse(BlockList.isSameSite("a.asn.au", "b.asn.au"))
+        val ownSite = BlockList.parse("||cdn.id.de^\$third-party")
+        assertFalse("a resource on the page's own site", ownSite.blocks("cdn.id.de", "id.de"))
+    }
+
+    @Test
     fun bundledListsParse() {
         for (name in listOf("easylist", "easyprivacy")) {
             val file = File("src/main/assets/content-blocking/$name.txt")

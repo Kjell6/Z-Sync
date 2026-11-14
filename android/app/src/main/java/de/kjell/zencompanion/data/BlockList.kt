@@ -155,19 +155,28 @@ class BlockList(
          */
         private val genericSecondLevelLabels = setOf(
             "co", "com", "org", "net", "ac", "gov", "edu", "or", "ne", "go", "mil", "gob", "nom", "sch",
-            "id", "asn",
         )
+
+        /**
+         * Complete suffixes whose second-level label is part of the suffix
+         * only under that exact country domain: `id.au`, `asn.au`. The same
+         * label is a normal site name under every other country domain, so
+         * `cdn.id.de` stays a part of `id.de`.
+         */
+        private val countrySecondLevelSuffixes = setOf("id.au", "asn.au")
 
         /**
          * Whether two hosts belong to the same site, for third-party rules.
          *
          * shortcut: compares the last two labels, or three when the last
          * label is a two-letter country domain and the one before it is a
-         * generic second-level label such as `co` in `co.uk`, instead of
-         * reading the Public Suffix List. Both hosts of one site share their
-         * last two labels, so the rule never splits a site in two; two sites
-         * under a public suffix that isn't listed here count as one, which
-         * only makes a rule not fire. Upgrade if that misses real trackers.
+         * generic second-level label such as `co` in `co.uk`, or when the
+         * last two labels are one of the complete suffixes listed separately
+         * such as `id.au`, instead of reading the Public Suffix List. Both
+         * hosts of one site share their last two labels, so the rule never
+         * splits a site in two; two sites under a public suffix that isn't
+         * listed here count as one, which only makes a rule not fire. Upgrade
+         * if that misses real trackers.
          */
         internal fun isSameSite(a: String, b: String): Boolean = siteOf(a) == siteOf(b)
 
@@ -176,7 +185,8 @@ class BlockList(
             if (labels.size <= 2) return host
             val countryDomain = labels.last().length == 2
             val genericSecondLevel = labels[labels.size - 2] in genericSecondLevelLabels
-            val keep = if (countryDomain && genericSecondLevel) 3 else 2
+            val completeSuffix = labels.takeLast(2).joinToString(".") in countrySecondLevelSuffixes
+            val keep = if ((countryDomain && genericSecondLevel) || completeSuffix) 3 else 2
             return labels.takeLast(keep).joinToString(".")
         }
     }

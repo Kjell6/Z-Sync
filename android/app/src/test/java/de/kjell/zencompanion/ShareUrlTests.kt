@@ -70,6 +70,23 @@ class ShareUrlTests {
     fun linkWithUnicodeDomainIsAccepted() {
         assertEquals("https://bücher.example/a", sharedLink("https://bücher.example/a"))
         assertEquals("https://bücher.example/a?q=1", sharedLink("see https://bücher.example/a?q=1."))
+        assertEquals("https://bücher.example:8080/a", sharedLink("https://bücher.example:8080/a"))
+    }
+
+    /** A port that is not digits makes the address no link at all. */
+    @Test
+    fun linkWithAnInvalidPortIsSkipped() {
+        assertEquals(
+            "https://valid.example/b",
+            sharedLink("https://example.com:bad/a https://valid.example/b"),
+        )
+        assertNull(sharedLink("https://example.com:bad/a"))
+    }
+
+    /** A long run of closing brackets is dropped without a recount per mark. */
+    @Test
+    fun manyTrailingBracketsAreDropped() {
+        assertEquals("https://example.com/a", sharedLink("https://example.com/a" + ")".repeat(100_000)))
     }
 
     @Test

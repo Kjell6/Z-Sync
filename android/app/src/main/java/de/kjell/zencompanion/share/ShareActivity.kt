@@ -135,13 +135,20 @@ internal fun linkCandidate(text: String): String? {
  * The address's host, or null. `java.net.URI` only knows ASCII domain labels,
  * so a Unicode domain has no host until it is checked in the punycode form
  * `IDN` makes of it; the address itself is still returned as it was shared
- * (iOS's Foundation rewrites the domain to punycode on its own).
+ * (iOS's Foundation rewrites the domain to punycode on its own). The host and
+ * port are split here because `URI` leaves a Unicode domain with a port
+ * without a host; a port that is not digits is no address at all.
  */
 private fun hostOf(text: String): String? {
     val uri = runCatching { java.net.URI(text) }.getOrNull() ?: return null
     if (!uri.host.isNullOrEmpty()) return uri.host
     val authority = uri.rawAuthority ?: return null
-    val host = authority.substringAfterLast('@').substringBeforeLast(':')
+    val hostAndPort = authority.substringAfterLast('@')
+    if (':' in hostAndPort) {
+        val port = hostAndPort.substringAfterLast(':')
+        if (port.isNotEmpty() && (port.length > 5 || port.any { it !in '0'..'9' })) return null
+    }
+    val host = hostAndPort.substringBeforeLast(':')
     return runCatching { java.net.IDN.toASCII(host) }.getOrNull()?.takeIf { it.isNotEmpty() }
 }
 
@@ -168,6 +175,9 @@ internal fun trimSurroundingMarks(text: String): String {
     while (characters.lastOrNull()?.let { it in sentenceMarks } == true) {
         characters.removeAt(characters.lastIndex)
     }
+    // Each character is counted once, so a long run of closing brackets costs
+    // one step per removed mark instead of a recount of the whole list.
+    val counts = characters.groupingBy { it }.eachCount().toMutableMap()
     while (true) {
         val last = characters.lastOrNull() ?: break
         if (last in quoteMarks) {
@@ -175,10 +185,11 @@ internal fun trimSurroundingMarks(text: String): String {
             continue
         }
         val opener = bracketPairs[last] ?: break
-        val opens = characters.count { it == opener }
-        val closes = characters.count { it == last }
+        val opens = counts[opener] ?: 0
+        val closes = counts[last] ?: 0
         if (opens >= closes) break
         characters.removeAt(characters.lastIndex)
+        counts[last] = closes - 1
     }
     return characters.joinToString("")
 }

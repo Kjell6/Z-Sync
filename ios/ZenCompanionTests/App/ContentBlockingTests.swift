@@ -95,6 +95,16 @@ final class BlockListTests: XCTestCase {
         XCTAssertFalse(BlockList.isSameSite("one.id.au", "two.id.au"))
     }
 
+    func testShortLabelsAreOnlySuffixUnderTheirOwnCountryDomain() {
+        // `id` and `asn` are site names under most country domains, so only the
+        // complete suffixes `id.au` and `asn.au` keep three labels.
+        XCTAssertTrue(BlockList.isSameSite("cdn.id.de", "id.de"))
+        XCTAssertFalse(BlockList.isSameSite("a.id.au", "b.id.au"))
+        XCTAssertFalse(BlockList.isSameSite("a.asn.au", "b.asn.au"))
+        let ownSite = BlockList.parse("||cdn.id.de^$third-party")
+        XCTAssertFalse(ownSite.blocks(requestHost: "cdn.id.de", pageHost: "id.de"))
+    }
+
     func testRuleListJSONIsValidAndOrdered() throws {
         let json = list.contentRuleListJSON()
         let rules = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [[String: Any]])

@@ -51,6 +51,7 @@ import de.kjell.zencompanion.ui.browser.BrowserDownload
 import de.kjell.zencompanion.ui.browser.BrowserPrompt
 import de.kjell.zencompanion.ui.browser.MiniBrowserZoom
 import de.kjell.zencompanion.ui.browser.PageBlocker
+import de.kjell.zencompanion.ui.browser.downloadReferrer
 import de.kjell.zencompanion.ui.browser.grantableResources
 import de.kjell.zencompanion.ui.browser.sitePermissionsFor
 import de.kjell.zencompanion.ui.components.openURLExternally
@@ -342,7 +343,7 @@ internal fun MiniBrowserWebView(
                     if (url.isNullOrEmpty()) return@setDownloadListener
                     requests.askDownload(
                         this,
-                        BrowserDownload(url, userAgent, contentDisposition, mimeType, referer = this.url),
+                        BrowserDownload(url, userAgent, contentDisposition, mimeType, referer = downloadReferrer(this.url, url)),
                     )
                 }
                 webChromeClient = object : WebChromeClient() {

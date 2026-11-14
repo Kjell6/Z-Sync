@@ -17,6 +17,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStream
 import java.net.HttpURLConnection
+import java.net.URI
 import java.net.URL
 import java.util.UUID
 import org.json.JSONObject
@@ -74,6 +75,43 @@ internal fun isPageLocalDownload(url: String): Boolean {
 internal fun isWebDownload(url: String): Boolean {
     val scheme = url.substringBefore(':', "").lowercase()
     return scheme == "http" || scheme == "https"
+}
+
+/** The port a scheme uses when the address names none. */
+private fun defaultPort(scheme: String): Int = if (scheme == "https") 443 else 80
+
+/** The port an address really reaches, defaulted from its scheme. */
+private fun effectivePort(uri: URI): Int = uri.port.takeIf { it != -1 } ?: defaultPort(uri.scheme.lowercase())
+
+/** True for an http or https address that names a host. */
+private fun isWebUri(uri: URI): Boolean {
+    val scheme = uri.scheme?.lowercase() ?: return false
+    return (scheme == "http" || scheme == "https") && !uri.host.isNullOrEmpty()
+}
+
+/**
+ * The `Referer` a download may carry, following the browser default
+ * `strict-origin-when-cross-origin`: the page's own address within its site,
+ * only the site's address elsewhere, and nothing on the way down to plain
+ * http. A page's private query, or the part of the page the reader was on,
+ * then stays on that page instead of reaching a third-party file host.
+ */
+internal fun downloadReferrer(pageUrl: String?, targetUrl: String): String? {
+    // Parsed without android.net.Uri, so the policy itself is plain Java and
+    // can be tested off the device.
+    val page = pageUrl?.let { raw -> runCatching { URI(raw) }.getOrNull() }?.takeIf(::isWebUri) ?: return null
+    val target = runCatching { URI(targetUrl) }.getOrNull() ?: return null
+    val pageScheme = page.scheme.lowercase()
+    val targetScheme = target.scheme?.lowercase() ?: return null
+    if (pageScheme == "https" && targetScheme == "http") return null
+    val port = page.port
+    val sameOrigin = pageScheme == targetScheme &&
+        page.host.equals(target.host, ignoreCase = true) &&
+        effectivePort(page) == effectivePort(target)
+    if (sameOrigin) return pageUrl.substringBefore('#')
+    val host = page.host.lowercase()
+    val origin = "$pageScheme://$host"
+    return if (port == -1 || port == defaultPort(pageScheme)) "$origin/" else "$origin:$port/"
 }
 
 /** Where a response sends the download next, or null when it is the file. */

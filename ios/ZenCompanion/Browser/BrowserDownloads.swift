@@ -194,8 +194,16 @@ final class BrowserDownloads: NSObject, WKDownloadDelegate {
     /// file is answered. The page closes then, never while it is already
     /// asleep (the browser ending must not drop its tabs).
     private func closeFileWindow(_ id: ObjectIdentifier) {
-        guard let entry = running[id], entry.closesPage,
-              let model = entry.model, model.webView != nil else { return }
+        guard let entry = running[id], entry.closesPage else { return }
+        closeIfStillEmpty(entry.model)
+    }
+
+    /// The "only for its file" answer is given when the download starts, but
+    /// a script can navigate the window to a real page while the file loads.
+    /// The same test as at adoption is asked again, so that page is kept.
+    private func closeIfStillEmpty(_ model: MiniBrowserModel?) {
+        guard let model, let webView = model.webView,
+              webView.url == nil, !webView.canGoBack else { return }
         model.host?.pageRequestedClose(model)
     }
 
@@ -206,9 +214,7 @@ final class BrowserDownloads: NSObject, WKDownloadDelegate {
             String(localized: "browser.download.finished \(done.fileName)"),
             symbol: "checkmark.circle"
         )
-        if done.closesPage, let model = done.model, model.webView != nil {
-            model.host?.pageRequestedClose(model)
-        }
+        if done.closesPage { closeIfStillEmpty(done.model) }
     }
 
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
@@ -217,8 +223,6 @@ final class BrowserDownloads: NSObject, WKDownloadDelegate {
         // ends here as a cancellation. That is not a failure to report.
         guard !failed.declined else { return }
         failed.model?.showNotice(String(localized: "browser.download.failed"))
-        if failed.closesPage, let model = failed.model, model.webView != nil {
-            model.host?.pageRequestedClose(model)
-        }
+        if failed.closesPage { closeIfStillEmpty(failed.model) }
     }
 }

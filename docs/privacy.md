@@ -51,7 +51,7 @@ While you use the app, the following information is kept **only on your device**
 - **Browsing history of the mini-browser** (the address and title of each page you open and when you last opened it) — local app storage, excluded from device backups — finding a page again and suggesting it while you type. It never enters your Mozilla Sync data and never leaves your device. You can delete entries from the history one by one, and signing out of your Mozilla account does not touch it
 - **Website data from the mini-browser** (cookies, site storage and cache of the sites you visit) — the system web view's local storage — staying signed in to websites. You can remove it under Settings › Clear Website Data; signing out of your Mozilla account leaves it, and your website logins, alone
 - **Site permissions** (which sites you allowed or blocked for camera, microphone and location) — local app storage, excluded from device backups — not asking you again. They are removed with Clear Website Data, and signing out of your Mozilla account leaves them in place
-- **Downloads** (files you download in the mini-browser) — the Z-Sync folder in the Files app on iOS, the Downloads folder on Android — they stay until you delete them, also after signing out
+- **Downloads** (files you download in the mini-browser) — the folder you pick in the system's save screen. Until you pick one, a temporary copy waits in the app's local storage and is deleted once the file is saved or the save screen is cancelled — the saved file stays until you delete it, also after signing out
 
 Notes:
 

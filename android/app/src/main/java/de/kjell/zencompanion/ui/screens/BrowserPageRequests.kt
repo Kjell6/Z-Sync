@@ -339,7 +339,7 @@ internal class BrowserPageRequests(
             if (!isWebDownload(download.url) && !isPageLocalDownload(download.url)) return
             // Where the file goes is the reader's choice every time.
             askWhereToSave(download) { uri, taskId ->
-                if (uri != null) save(view, download, uri, taskId)
+                if (uri != null) save(view, download, uri, taskId) else cancelDownload(view, download)
             }
         }
 

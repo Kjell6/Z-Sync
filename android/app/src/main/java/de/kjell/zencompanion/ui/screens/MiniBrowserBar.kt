@@ -1432,14 +1432,22 @@ private fun ExpandedMenu(
                 background = barColor,
                 onClick = onShare,
             )
-            MenuTile(
-                icon = Icons.AutoMirrored.Outlined.OpenInNew,
-                title = stringResource(R.string.browser_open_short),
-                description = stringResource(R.string.browser_open_in_browser),
-                tint = zen.ink,
-                background = barColor,
-                onClick = onOpenExternal,
-            )
+            // As the default browser, "open in the browser" would only come
+            // back here, so the tile goes and the others share the width.
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val isDefaultBrowser = remember(context) {
+                de.kjell.zencompanion.ui.components.DefaultBrowser.isDefault(context)
+            }
+            if (!isDefaultBrowser) {
+                MenuTile(
+                    icon = Icons.AutoMirrored.Outlined.OpenInNew,
+                    title = stringResource(R.string.browser_open_short),
+                    description = stringResource(R.string.browser_open_in_browser),
+                    tint = zen.ink,
+                    background = barColor,
+                    onClick = onOpenExternal,
+                )
+            }
             // Without the capability the save lands as a pin, whatever the
             // setting says. Signed out there is no space to save into, so the
             // tile is gone and the row's three others share the width.

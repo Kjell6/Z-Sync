@@ -700,6 +700,9 @@ private extension MiniBrowserView {
         if let card = cardPose() { pagePose.corner = card.corner }
         pageFloats = true
         showOverview = true
+        // The overview's controls are there from the first point on, where
+        // they will stay: the deck's buttons, not part of the page in flight.
+        withAnimation(.easeOut(duration: 0.18)) { overviewControls = true }
         Task { @MainActor in
             await pages.capture(page)
         }
@@ -719,7 +722,6 @@ private extension MiniBrowserView {
         )
         let appearing = min(1, max(0, (progress - 0.03) / 0.52))
         overviewReveal = appearing * appearing * (3 - 2 * appearing)
-        chromeFade = 1 - min(1, max(0, (progress - 0.1) / 0.3))
         let passed = progress > Self.pullCommitPoint
         if passed != pullPassedPoint {
             pullPassedPoint = passed
@@ -771,15 +773,8 @@ private extension MiniBrowserView {
             }
             withAnimation(.spring(duration: 0.32, bounce: 0)) { aheadReveal = 1 }
         }
-        withAnimation(.easeOut(duration: 0.12)) { chromeFade = 0 } completion: {
-            guard epoch == transitionEpoch else { return }
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) {
-                overviewControls = true
-            }
-            withAnimation(.easeOut(duration: 0.2)) { chromeFade = 1 }
-        }
+        // The controls are already the overview's (see `beginPagePull`).
+        overviewControls = true
     }
 
     /// The page at once where a landing would leave it, under its card.
@@ -801,7 +796,7 @@ private extension MiniBrowserView {
         transitionEpoch += 1
         let epoch = transitionEpoch
         committingPull = false
-        overviewControls = false
+        withAnimation(.easeOut(duration: 0.18)) { overviewControls = false }
         withAnimation(.spring(duration: 0.36, bounce: 0)) {
             pagePose = PageCardPose(x: 0, y: 0, scale: 1, corner: pagePose.corner)
             overviewReveal = 0

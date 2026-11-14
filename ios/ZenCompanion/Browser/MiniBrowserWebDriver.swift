@@ -408,8 +408,12 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         if #available(iOS 15.0, *) {
             themeColorObservation = webView.observe(\.themeColor, options: [.new]) { [weak self] wv, _ in
                 DispatchQueue.main.async {
+                    // A colour going away is news too: the page's own
+                    // background takes over, not the previous page's tag.
                     if let native = wv.themeColor {
                         self?.model?.setThemeColor(Color(uiColor: native))
+                    } else {
+                        self?.readPageColor()
                     }
                 }
             }
@@ -539,8 +543,15 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         model?.setScrollHidesBar(false)
         // The answer replaces the previous page's colour, with the default
         // when this page has none. Not cleared first: a page that keeps its
-        // address (a script changing the URL) would flash the default.
+        // address (a script changing the URL) would flash the default. Asked
+        // again a moment later: on a step back the address changes before the
+        // restored page is the one that answers scripts.
         readPageColor()
+        let generation = pageGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            guard let self, generation == self.pageGeneration else { return }
+            self.readPageColor()
+        }
     }
 
     /// A page came back from the back/forward cache: its address is already
@@ -564,7 +575,11 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
             DispatchQueue.main.async {
                 guard generation == self.pageGeneration,
                       PageTitle.sameDocument(url, self.webView?.url) else { return }
-                self.model?.updateThemeColor(from: result as? String, nativeColor: self.webView?.themeColor)
+                // The page's answer first: WebKit's own `themeColor` can still
+                // hold the previous page's tag for a moment after a step back.
+                let answer = result as? String
+                let native = (answer?.isEmpty ?? true) ? self.webView?.themeColor : nil
+                self.model?.updateThemeColor(from: answer, nativeColor: native)
             }
         }
     }

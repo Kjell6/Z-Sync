@@ -91,6 +91,8 @@ internal fun MiniBrowserWebView(
     onLoadingChange: (Boolean) -> Unit,
     /** The document finished loading. */
     onPageLoaded: () -> Unit,
+    /** The WebView drew the new page for the first time. */
+    onPageDrawn: () -> Unit = {},
     /** The reader pulled the page down: reload it as the bar's button does. */
     onPullRefresh: () -> Unit,
     /** False while something over the page owns the gestures. */
@@ -256,6 +258,7 @@ internal fun MiniBrowserWebView(
                     // cookie banner and page zoom then run once the page is visible.
                     override fun onPageCommitVisible(view: WebView?, url: String?) {
                         super.onPageCommitVisible(view, url)
+                        onPageDrawn()
                         if (!consent.atDocumentStart) consent.current?.let { view?.evaluateJavascript(it, null) }
                         if (!pageZoomSlot.atDocumentStart) view?.let(pageZoomSlot::applyNow)
                     }

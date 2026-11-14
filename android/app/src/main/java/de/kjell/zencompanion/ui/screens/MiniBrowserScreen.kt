@@ -179,6 +179,9 @@ private class ScrollTracker {
     var downRun = 0
 }
 
+/** How far the tapped card has grown when it covers the screen to the eye. */
+private const val CardFilledScreen = 0.985f
+
 /** Space between two pages while they slide past each other. */
 private val PageGap = 12.dp
 
@@ -443,11 +446,13 @@ fun MiniBrowserScreen(
      * A page that was asleep has an empty WebView at first, and taking the card
      * away would flash it. The card stays until the page has loaded, briefly.
      */
-    suspend fun awaitFirstPaint(page: PageSession) {
+    suspend fun awaitFirstPaint(page: PageSession, paintsBefore: Int) {
         var sawLoading = false
         repeat(80) {
             val state = page.viewModel.state.value
             if (state.isLoading) sawLoading = true
+            // The first drawn frame is enough: the card only has to hide an empty view.
+            if (page.paintCount > paintsBefore) return
             if (state.progress >= 0.9f || (sawLoading && !state.isLoading)) return
             delay(50)
         }
@@ -470,6 +475,7 @@ fun MiniBrowserScreen(
         }
         val target = pages.session(page.id)
         val wasAsleep = target?.webView == null
+        val paintsBefore = target?.paintCount ?: 0
         // Chosen here, it is the current page at once. The deck's order still
         // holds for a moment, so going straight back to the deck — or swiping
         // from the page — finds the tab where it was, not already at the front.
@@ -480,13 +486,17 @@ fun MiniBrowserScreen(
         expandingCardId = page.id
         transition {
             launch { overviewReveal.animateTo(0f, DeckOpenSpring) }
-            cardExpansion.animateTo(1f, DeckOpenSpring)
-            if (wasAsleep && target != null) awaitFirstPaint(target)
+            // The spring's last stretch is invisible; the page takes over once
+            // the card fills the screen to the eye, not when the spring rests.
+            val expanding = launch { cardExpansion.animateTo(1f, DeckOpenSpring) }
+            snapshotFlow { cardExpansion.value >= CardFilledScreen }.first { it }
+            if (wasAsleep && target != null) awaitFirstPaint(target, paintsBefore)
+            expanding.cancel()
             showOverview = false
             expandingCardId = null
             cardExpansion.snapTo(0f)
             // The bar sits under the deck until now.
-            chromeAlpha.animateTo(1f, tween(180))
+            chromeAlpha.animateTo(1f, tween(150))
         }
     }
 
@@ -1665,6 +1675,7 @@ private fun PageStack(
                         onCloseWindow = { pages.close(session.id) },
                         onHitLongPress = onHitLongPress,
                         onPageLoaded = { pages.pageLoaded(session) },
+                        onPageDrawn = { session.paintCount++ },
                         onPullRefresh = onPullRefresh,
                         // A sheet, the reader, find or an error panel owns the
                         // gestures over the page, and so does a full-screen video.

@@ -78,6 +78,8 @@ class PageSession(
     var shotDropWanted = false
     /** True when [shot] is the picture on disk, so letting go of it loses nothing. */
     var shotStored = false
+    /** Bumped each time the WebView first draws a new page (onPageCommitVisible). */
+    var paintCount by mutableIntStateOf(0)
     /** Bumped to reload after a blocking change. */
     var blockingReload by mutableIntStateOf(0)
     /** A crashed renderer takes its WebView with it; a new key builds a fresh one. */

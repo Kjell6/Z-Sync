@@ -392,6 +392,7 @@ internal fun MiniBrowserBar(
                         canGoBack = state.canGoBack || canReturnToOpener,
                         canGoForward = state.canGoForward,
                         effectiveUrl = effectiveUrl,
+                        pageFailed = state.pageError != null,
                         title = state.currentTitle,
                         isLoading = state.isLoading,
                         progress = state.progress,
@@ -692,6 +693,8 @@ private fun NavBar(
     canGoBack: Boolean,
     canGoForward: Boolean,
     effectiveUrl: String,
+    /** An error page is shown: no connection to vouch for. */
+    pageFailed: Boolean = false,
     title: String,
     isLoading: Boolean,
     progress: Float,
@@ -759,7 +762,7 @@ private fun NavBar(
                     .padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                SiteIcon(effectiveUrl = effectiveUrl)
+                SiteIcon(effectiveUrl = effectiveUrl, pageFailed = pageFailed)
                 Spacer(Modifier.width(8.dp))
                 Text(
                     // Same fallback as the iOS bar: a page without a title -
@@ -1770,13 +1773,15 @@ private fun RowScope.MenuTile(
 }
 
 @Composable
-private fun SiteIcon(effectiveUrl: String) {
+private fun SiteIcon(effectiveUrl: String, pageFailed: Boolean = false) {
     val zen = LocalZenColors.current
     val icon = when {
         effectiveUrl.isEmpty() -> Icons.Outlined.Search
         // An insecure page must not wear the padlock a trusted one does.
         effectiveUrl.startsWith("http://") -> Icons.Outlined.LockOpen
-        effectiveUrl.startsWith("https://") -> Icons.Outlined.Lock
+        // A failed load (a bad certificate among them) made no trusted
+        // connection, so it gets no closed padlock either.
+        effectiveUrl.startsWith("https://") && !pageFailed -> Icons.Outlined.Lock
         else -> Icons.Outlined.Language
     }
     // The padlock is the only sign a page is encrypted, so it has to say so:
@@ -1784,6 +1789,7 @@ private fun SiteIcon(effectiveUrl: String) {
     // read with the page's name. A search or a plain address says nothing
     // about a connection and stays silent.
     val description = when {
+        pageFailed -> null
         effectiveUrl.startsWith("https://") -> stringResource(R.string.browser_connection_secure)
         effectiveUrl.startsWith("http://") -> stringResource(R.string.browser_connection_insecure)
         else -> null

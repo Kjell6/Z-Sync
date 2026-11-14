@@ -21,12 +21,15 @@ import de.kjell.zencompanion.ui.screens.formatBrowserInput
 import de.kjell.zencompanion.util.FriendlyError
 import de.kjell.zencompanion.util.PageTitle
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.net.URI
 import kotlin.math.roundToInt
 
@@ -62,6 +65,8 @@ class MiniBrowserViewModel(
     currentSpaceId: String,
     private val suggestionClient: SearchSuggestionClient = LiveSearchSuggestionClient(),
     private val suggestionDebounceMs: Long = SearchSuggestions.DEBOUNCE_MS,
+    /** Where the reader parse runs; tests hand in their own dispatcher. */
+    private val readerParseDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
 
     private var initialUrl: String? = initialUrl
@@ -144,6 +149,11 @@ class MiniBrowserViewModel(
     private var hasPendingPinSave = false
     /** Set after a pick or submit so the following text write does not suggest. */
     private var suggestionsSuspended = false
+    /**
+     * Numbers reader requests. A navigation or a close bumps it, so the parse
+     * of a page that is gone can't publish over the one on screen.
+     */
+    private var readerRequest = 0
 
     /**
      * Live `document.title` from the WebView. The screen installs this.
@@ -263,6 +273,9 @@ class MiniBrowserViewModel(
     }
 
     fun onCurrentUrlChange(url: String) {
+        // A fresh document ends the reading view; a request still running for
+        // the old page keeps its number and is dropped when it answers.
+        if (!PageTitle.sameDocument(_state.value.currentUrl, url)) readerRequest++
         _state.update { state ->
             if (PageTitle.sameDocument(state.currentUrl, url)) {
                 state.copy(currentUrl = url)
@@ -696,11 +709,14 @@ class MiniBrowserViewModel(
     }
 
     fun closeReader() {
+        // A parse still running for this page must not open the reader again.
+        readerRequest++
         _state.update { it.copy(readerArticle = null, readerLoading = false) }
     }
 
     private fun loadReader() {
         if (_state.value.readerLoading) return
+        val request = ++readerRequest
         _state.update { it.copy(readerLoading = true, menuExpanded = false) }
         viewModelScope.launch {
             val payload = try {
@@ -710,13 +726,23 @@ class MiniBrowserViewModel(
             } catch (_: Exception) {
                 null
             }
-            val article = ReaderExtractor.parse(payload)
+            // Long articles carry a payload of hundreds of kilobytes: the
+            // parse belongs off the main thread.
+            val article = withContext(readerParseDispatcher) { ReaderExtractor.parse(payload) }
+            // The page changed or the reader was closed while this ran, so the
+            // article and the "no article" notice both belong to a page that
+            // is no longer showing.
+            if (request != readerRequest) return@launch
             _state.update { it.copy(readerLoading = false, readerArticle = article) }
             if (article == null) showNotice(Notice(R.string.browser_reader_unavailable))
         }
     }
 
-    private fun effectiveUrl(): String = _state.value.currentUrl.ifEmpty { initialUrl ?: "" }
+    private fun effectiveUrl(): String {
+        val state = _state.value
+        return state.failedUrl.takeIf { state.pageError != null && it.isNotEmpty() }
+            ?: state.currentUrl.ifEmpty { initialUrl ?: "" }
+    }
 
     companion object {
         private fun displayHost(url: String?): String {

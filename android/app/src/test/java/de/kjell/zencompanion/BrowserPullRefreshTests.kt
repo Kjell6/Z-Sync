@@ -96,12 +96,17 @@ class MiniBrowserBarTests {
 
     @Test
     fun theSpinnerContrastsWithThePageBehindIt() {
-        assertTrue(pullRefreshTint(Color.White).luminance() < 0.5f)
-        assertTrue(pullRefreshTint(Color.Black).luminance() > 0.5f)
+        val onWhite = pullRefreshTint(Color.White)
+        assertTrue(onWhite.luminance() < 0.5f)
+        assertEquals(1f, onWhite.alpha)
+        val onBlack = pullRefreshTint(Color.Black)
+        assertTrue(onBlack.luminance() > 0.5f)
+        assertEquals(1f, onBlack.alpha)
         // No known page colour: a mid grey that reads on white and on black.
         val unknown = pullRefreshTint(null)
         assertEquals(0.55f, unknown.red, 0.001f)
         assertEquals(unknown.red, unknown.green, 0.001f)
         assertEquals(unknown.red, unknown.blue, 0.001f)
+        assertEquals(1f, unknown.alpha)
     }
 }

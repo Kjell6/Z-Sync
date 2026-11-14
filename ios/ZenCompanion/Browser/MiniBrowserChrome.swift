@@ -1297,7 +1297,10 @@ struct MiniBrowserTopBar: View {
     }
 
     /// Whether the page came over an encrypted connection, for VoiceOver.
+    /// An error page (a bad certificate among them) made no connection to
+    /// vouch for, so it says nothing.
     private var connectionLabel: String? {
+        guard model.pageError == nil else { return nil }
         switch model.effectiveURL?.scheme?.lowercased() {
         case "https": return String(localized: "browser.connection_secure")
         case "http": return String(localized: "browser.connection_insecure")

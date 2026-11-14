@@ -55,9 +55,11 @@ class SignInCookieExpiryTests {
 
     @Test
     fun aCookieValueIsNeverWrittenBackOut() {
-        val lines = expiringCookieLines("session=secret-value-123")
-
-        assertTrue(lines.none { it.contains("secret-value-123") })
+        // Only the name goes in the line: the value is nowhere in it.
+        assertEquals(
+            listOf("session=; Max-Age=0; Path=/; Secure"),
+            expiringCookieLines("session=secret-value-123"),
+        )
     }
 
     @Test

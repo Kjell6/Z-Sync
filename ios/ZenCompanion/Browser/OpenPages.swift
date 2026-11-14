@@ -703,6 +703,13 @@ final class OpenPagesStore: MiniBrowserPageHost {
         try? data.write(to: directory.appendingPathComponent(Self.fileName), options: .atomic)
     }
 
+    /// Writes the pages that stay down now, without waiting for the next
+    /// change. Nothing is written away: what is on disk is replaced by what is
+    /// here.
+    func writeKeptPages() {
+        persist()
+    }
+
     private struct SavedPage: Codable {
         let id: String
         let url: URL

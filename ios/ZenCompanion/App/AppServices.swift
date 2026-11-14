@@ -220,7 +220,17 @@ protocol SessionSigningOut {
 }
 
 struct LiveSessionSigningOut: SessionSigningOut {
-    nonisolated init() {}
+    /// The mini-browser's own data, which signing out keeps.
+    private let pages: @MainActor () -> OpenPagesStore
+    private let history: @MainActor () -> BrowserHistoryStore
+
+    nonisolated init(
+        pages: @escaping @MainActor () -> OpenPagesStore = { .shared },
+        history: @escaping @MainActor () -> BrowserHistoryStore = { .shared }
+    ) {
+        self.pages = pages
+        self.history = history
+    }
 
     func signOut() {
         // Sign-in runs in its own ephemeral (nonPersistent) store, so its
@@ -243,6 +253,10 @@ struct LiveSessionSigningOut: SessionSigningOut {
         AccountStore.clear()
         FaviconLoader.shared.removeAll()
         SpacesSyncService.deleteCachedSnapshot()
+        // The browser's pages and history stay; they are written down now so
+        // nothing of them waits on a save that may not come.
+        pages().writeKeptPages()
+        history().saveNow()
         NotificationCenter.default.post(name: .zenCompanionSignedOut, object: nil)
     }
 }

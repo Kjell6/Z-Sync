@@ -847,23 +847,19 @@ private fun BrowserPageScreen(
     var barHidden by remember { mutableStateOf(false) }
     // Written on every scroll packet; a state write would recompose the screen.
     val scroll = remember { ScrollTracker() }
-    val onPageScroll: (Int) -> Unit = { scrollY ->
-        val delta = scrollY - scroll.lastY
+    val onPageScroll: (Int, Boolean) -> Unit = { scrollY, userDriven ->
+        val step = barScrollStep(
+            delta = scrollY - scroll.lastY,
+            scrollY = scrollY,
+            downRun = scroll.downRun,
+            userDriven = userDriven,
+        )
         scroll.lastY = scrollY
-        when {
-            // A short page, or the top of a long one, always keeps the bar.
-            scrollY <= 40 -> {
-                scroll.downRun = 0
-                barHidden = false
-            }
-            delta > 0 -> {
-                scroll.downRun += delta
-                if (scroll.downRun > 24 && scrollY > 80) barHidden = true
-            }
-            delta < -2 -> {
-                scroll.downRun = 0
-                barHidden = false
-            }
+        scroll.downRun = step.downRun
+        when (step.decision) {
+            BarScrollDecision.KEEP -> Unit
+            BarScrollDecision.SHOW -> barHidden = false
+            BarScrollDecision.HIDE -> barHidden = true
         }
     }
 
@@ -1541,7 +1537,7 @@ private fun PageStack(
     offersNewPage: Boolean,
     blockingSettings: ContentBlockingSettings,
     consentBundle: String?,
-    onActiveScroll: (Int) -> Unit,
+    onActiveScroll: (scrollY: Int, userDriven: Boolean) -> Unit,
     onActivePageStarted: () -> Unit,
     onHitLongPress: (BrowserHitMenu) -> Unit,
     onPullRefresh: () -> Unit,
@@ -1625,6 +1621,7 @@ private fun PageStack(
                         isAddressFocused = state.isAddressFocused,
                         desktopSite = state.requestsDesktopSite,
                         pageZoom = state.pageZoom,
+                        pageThemeColor = state.siteThemeColor,
                         savedHistory = { pages.takeHistory(session) },
                         takePopup = { session.pendingPopup.also { session.pendingPopup = null } },
                         onWebViewCreated = { session.webView = it },
@@ -1683,7 +1680,9 @@ private fun PageStack(
                         },
                         onLinkUnavailable = viewModel::onLinkUnavailable,
                         requests = remember(session.id) { requests.forSession(session) },
-                        onScrollChange = { if (session === currentActive) onActiveScroll(it) },
+                        onScrollChange = { scrollY, userDriven ->
+                            if (session === currentActive) onActiveScroll(scrollY, userDriven)
+                        },
                         onFindResult = { current, total ->
                             viewModel.setFindProgress(if (total > 0) "$current/$total" else null)
                         },

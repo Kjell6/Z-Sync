@@ -37,6 +37,71 @@ enum MiniBrowserTools {
 
 }
 
+/// The bottom bar's hide-on-scroll rule.
+///
+/// Only the reader's own scrolling may tuck the bar away. A back or forward
+/// restore, a layout change, the chrome's own clearance or a page's script
+/// moves the offset without a finger; none of those may hide the bar, they
+/// only become the new baseline.
+///
+/// Android port: `barScrollStep` in `ui/screens/MiniBrowserWebView.kt`.
+enum MiniBrowserBarScroll {
+    /// What one offset change does to the bar.
+    enum Decision: Equatable {
+        case keep
+        case show
+        case hide
+    }
+
+    /// The decision for one offset change, with the downward travel to carry
+    /// into the next event.
+    static func decision(
+        delta: CGFloat,
+        scrollY: CGFloat,
+        viewportHeight: CGFloat,
+        contentHeight: CGFloat,
+        downRun: CGFloat,
+        isUserDriven: Bool
+    ) -> (decision: Decision, downRun: CGFloat) {
+        // A navigation's restored offset is not the reader scrolling.
+        guard isUserDriven else { return (.keep, 0) }
+        // A short page, or the very top of a long one, always keeps the bar.
+        guard contentHeight - viewportHeight > 60, scrollY > 40 else { return (.show, 0) }
+        if delta > 0.5 {
+            let run = downRun + delta
+            return (run > 24 && scrollY > 80 ? .hide : .keep, run)
+        }
+        if delta < -2 { return (.show, 0) }
+        return (.keep, downRun)
+    }
+
+    /// Whether a scroll view's offset move comes from the reader: a drag, or
+    /// the deceleration that follows one.
+    static func isReaderScroll(isDragging: Bool, isDecelerating: Bool) -> Bool {
+        isDragging || isDecelerating
+    }
+}
+
+/// The pull-to-refresh spinner's contrast.
+///
+/// The spinner sits on the page, not on the app's chrome, so its tint follows
+/// the page's own colour: a dark spinner on a light page, a light one on a
+/// dark page. A page with no known colour gets a mid grey that reads on both
+/// white and black.
+///
+/// Android port: `pullRefreshTint` in `ui/screens/MiniBrowserWebView.kt`.
+enum MiniBrowserRefresh {
+    /// The spinner's tint over a page of the given brightness; nil means the
+    /// page has no colour the spinner could follow.
+    static func spinnerTint(pageIsDark: Bool?) -> UIColor {
+        switch pageIsDark {
+        case .some(true): return UIColor(white: 0.92, alpha: 1)
+        case .some(false): return UIColor(white: 0.22, alpha: 1)
+        case .none: return UIColor(white: 0.55, alpha: 1)
+        }
+    }
+}
+
 /// Page zoom inside a loaded document.
 ///
 /// A browser's page zoom reflows the page: the layout viewport narrows, text
@@ -536,6 +601,8 @@ final class MiniBrowserModel {
         self.webView = webView
         self.driver = driver
         applyWebpagePreferences()
+        // A woken page brings its colour along: the new control starts on it.
+        updateRefreshTint()
     }
 
     /// Gives the page a web view again: from [history] when there is one, at
@@ -1132,6 +1199,7 @@ final class MiniBrowserModel {
         blocker.apply(configuration, to: controller)
         // `apply` clears every user script, this one included.
         BrowserGeolocation.addScript(to: controller)
+        BrowserPageShow.addScript(to: controller)
         controller.addUserScript(WKUserScript(
             source: BlockedResourceReport.script,
             injectionTime: .atDocumentStart,
@@ -1441,21 +1509,35 @@ final class MiniBrowserModel {
 
     // MARK: - Theme color
 
+    /// The page's colour, as the top area and the bar use it. The
+    /// pull-to-refresh spinner follows it as well: it has to contrast with the
+    /// page behind it, not with the app's own theme.
+    func setThemeColor(_ color: Color?) {
+        themeColor = color
+        updateRefreshTint()
+    }
+
+    private func updateRefreshTint() {
+        (webView as? MiniBrowserWebView)?.refreshControl?.tintColor = MiniBrowserRefresh.spinnerTint(
+            pageIsDark: themeColor.map(\.isDarkBackground)
+        )
+    }
+
     func updateThemeColor(from string: String?, nativeColor: UIColor?) {
         if let native = nativeColor {
-            self.themeColor = Color(uiColor: native)
+            setThemeColor(Color(uiColor: native))
             return
         }
         guard let string = string?.trimmingCharacters(in: .whitespacesAndNewlines), !string.isEmpty else {
-            self.themeColor = nil
+            setThemeColor(nil)
             return
         }
         if string.starts(with: "#") {
-            self.themeColor = Color(hex: string)
+            setThemeColor(Color(hex: string))
         } else if string.starts(with: "rgb") {
-            self.themeColor = Color(cssRGB: string)
+            setThemeColor(Color(cssRGB: string))
         } else {
-            self.themeColor = nil
+            setThemeColor(nil)
         }
     }
 }

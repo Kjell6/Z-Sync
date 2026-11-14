@@ -235,6 +235,126 @@ final class MiniBrowserModelTests: XCTestCase {
         XCTAssertEqual(model.pageHost, "www.example.com")
     }
 
+    // MARK: - Bar visibility on scroll
+
+    /// Only the reader's finger moves the bar. The offset a back or a forward
+    /// restores arrives without one and must leave the bar alone.
+    func testARestoredOffsetNeverHidesTheBar() {
+        let (decision, downRun) = MiniBrowserBarScroll.decision(
+            delta: 800,
+            scrollY: 800,
+            viewportHeight: 600,
+            contentHeight: 4_000,
+            downRun: 0,
+            isUserDriven: false
+        )
+        XCTAssertEqual(decision, .keep)
+        XCTAssertEqual(downRun, 0)
+    }
+
+    func testADownwardDragTucksTheBarAwayOnceItHasRun() {
+        let jitter = MiniBrowserBarScroll.decision(
+            delta: 8,
+            scrollY: 100,
+            viewportHeight: 600,
+            contentHeight: 4_000,
+            downRun: 0,
+            isUserDriven: true
+        )
+        XCTAssertEqual(jitter.decision, .keep, "a first short move is jitter, not a scroll")
+
+        let drag = MiniBrowserBarScroll.decision(
+            delta: 30,
+            scrollY: 138,
+            viewportHeight: 600,
+            contentHeight: 4_000,
+            downRun: jitter.downRun,
+            isUserDriven: true
+        )
+        XCTAssertEqual(drag.decision, .hide)
+        XCTAssertEqual(drag.downRun, 38)
+    }
+
+    func testAnUpwardDragBringsTheBarBack() {
+        let (decision, downRun) = MiniBrowserBarScroll.decision(
+            delta: -12,
+            scrollY: 200,
+            viewportHeight: 600,
+            contentHeight: 4_000,
+            downRun: 40,
+            isUserDriven: true
+        )
+        XCTAssertEqual(decision, .show)
+        XCTAssertEqual(downRun, 0)
+    }
+
+    func testTheTopOfAPageKeepsTheBar() {
+        // Even a long downward drag at the top cannot hide it.
+        XCTAssertEqual(
+            MiniBrowserBarScroll.decision(
+                delta: 30,
+                scrollY: 20,
+                viewportHeight: 600,
+                contentHeight: 4_000,
+                downRun: 40,
+                isUserDriven: true
+            ).decision,
+            .show
+        )
+        // A short page has nothing to scroll.
+        XCTAssertEqual(
+            MiniBrowserBarScroll.decision(
+                delta: 30,
+                scrollY: 120,
+                viewportHeight: 600,
+                contentHeight: 620,
+                downRun: 0,
+                isUserDriven: true
+            ).decision,
+            .show
+        )
+    }
+
+    func testOnlyADragOrItsMomentumIsTheReadersScroll() {
+        XCTAssertTrue(MiniBrowserBarScroll.isReaderScroll(isDragging: true, isDecelerating: false))
+        XCTAssertTrue(MiniBrowserBarScroll.isReaderScroll(isDragging: false, isDecelerating: true))
+        XCTAssertFalse(MiniBrowserBarScroll.isReaderScroll(isDragging: false, isDecelerating: false))
+    }
+
+    // MARK: - Page colour
+
+    /// A page without a colour of its own falls back to the default surface,
+    /// never to the colour of the page the reader left.
+    func testAPageWithoutAColourClearsThePreviousOne() {
+        let (model, _) = makeModel(initialURL: URL(string: "https://example.com"))
+        model.updateThemeColor(from: "rgb(255, 0, 0)", nativeColor: nil)
+        XCTAssertNotNil(model.themeColor)
+
+        model.updateThemeColor(from: nil, nativeColor: nil)
+        XCTAssertNil(model.themeColor)
+    }
+
+    func testTheSpinnerContrastsWithThePageBehindIt() {
+        XCTAssertGreaterThan(
+            whiteLevel(MiniBrowserRefresh.spinnerTint(pageIsDark: true)),
+            0.5,
+            "a light spinner on a dark page"
+        )
+        XCTAssertLessThan(
+            whiteLevel(MiniBrowserRefresh.spinnerTint(pageIsDark: false)),
+            0.5,
+            "a dark spinner on a light page"
+        )
+        // No known page colour: a mid grey that reads on white and on black.
+        XCTAssertEqual(whiteLevel(MiniBrowserRefresh.spinnerTint(pageIsDark: nil)), 0.55, accuracy: 0.02)
+    }
+
+    private func whiteLevel(_ color: UIColor) -> CGFloat {
+        var level: CGFloat = 0
+        color.getWhite(&level, alpha: nil)
+        return level
+    }
+
     // MARK: - Pin save
 
     func testPinSaveUsesSelectedTargetAndClearsPending() async {

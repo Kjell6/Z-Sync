@@ -32,7 +32,11 @@ import de.kjell.zencompanion.sync.SpacesSyncService
 import de.kjell.zencompanion.sync.SyncError
 import de.kjell.zencompanion.sync.SyncedActivityService
 import de.kjell.zencompanion.sync.ZenSpaces
+import de.kjell.zencompanion.ui.browser.BrowserPages
+import de.kjell.zencompanion.ui.browser.clearBrowserWebsiteData
+import de.kjell.zencompanion.ui.screens.FxAWeb
 import de.kjell.zencompanion.ui.screens.FxAWebLogin
+import de.kjell.zencompanion.ui.screens.sameTabUrl
 import de.kjell.zencompanion.util.FriendlyError
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
@@ -350,6 +354,11 @@ class AppViewModel(
     private val _searchOnOpenPending = MutableStateFlow(false)
     val searchOnOpenPending: StateFlow<Boolean> = _searchOnOpenPending
 
+    // A web link another app handed to Z-Sync. Kept while signed out so it
+    // opens right after sign-in; the spaces screen consumes it once, in-app.
+    private val _incomingLink = MutableStateFlow<String?>(null)
+    val incomingLink: StateFlow<String?> = _incomingLink
+
     private var reloadJob: Job? = null
     /** A reload asked for while one was running; it runs right after. */
     private var reloadQueued = false
@@ -465,6 +474,14 @@ class AppViewModel(
         // Here and not in the Settings button: a session that dies signs out too.
         SitePermissions.clear()
         BrowserHistory.clear()
+        // The open pages go with the sign-in here, as they do on iOS: without
+        // this a dead session would leave them for the next account. Best
+        // effort, so callers without a real app directory stay unaffected.
+        runCatching { BrowserPages.shared(appContext, browserRepository).closeAll() }
+        // The sign-in page's cookies too: the next sign-in must not reuse it.
+        runCatching { FxAWeb.wipeWebSession() }
+        // Every site's storage, not just the sign-in page's, as the policy says.
+        runCatching { clearBrowserWebsiteData(appContext) }
         preferencesRepository.setSyncSetupHintDismissed(false)
         _browser.value = BrowserState()
         _activity.value = ActivityState()
@@ -875,6 +892,26 @@ class AppViewModel(
 
     fun consumeSearchOnOpen() {
         _searchOnOpenPending.value = false
+    }
+
+    /**
+     * Takes a web link from another app, to be opened once the spaces screen is
+     * up — before sign-in it simply waits. Only `http`/`https` is kept, so a
+     * crafted intent cannot put anything else in front of the browser.
+     */
+    fun openLinkFromAnotherApp(url: String) {
+        val address = sameTabUrl(url) ?: return
+        _incomingLink.value = address
+    }
+
+    /** The spaces screen took the link: it opens exactly once. */
+    fun consumeIncomingLink() {
+        _incomingLink.value = null
+    }
+
+    /** The reader left without signing in: the link waiting for it is dropped. */
+    fun discardIncomingLink() {
+        _incomingLink.value = null
     }
 
     /** Loads (or retries) the synced browsing history into [activity]. */

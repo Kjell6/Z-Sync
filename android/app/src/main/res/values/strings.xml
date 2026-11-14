@@ -15,7 +15,6 @@
     <string name="home_license_attribution">Icons from Zen Browser under MPL 2.0.</string>
 
     <string name="legal_privacy">Privacy Policy</string>
-    <string name="legal_support">Support</string>
     <string name="legal_feedback">Ideas &amp; Bug Reports</string>
     <string name="legal_write_review">Write a Review</string>
 
@@ -115,16 +114,7 @@
     <string name="share_no_spaces">No spaces to pin into yet. Turn on “Sync your sidebar across devices” on your desktop, then try again.</string>
     <string name="share_workspace">Space</string>
 
-    <string name="account_title">Account</string>
-    <string name="account_sync_notice">Sync Notice</string>
-    <string name="account_connected">Connected to desktop browser sync</string>
-    <string name="account_sync_issues">Sync Issues Detected</string>
-    <string name="account_sync_now">Sync Now</string>
-
     <string name="settings_title">Settings</string>
-    <string name="settings_account_section">Account</string>
-    <string name="settings_preferences_section">Preferences</string>
-    <string name="settings_advanced">Advanced</string>
     <string name="settings_search_engine">Search Engine</string>
     <string name="settings_search_engine_add_action">Add custom engine…</string>
     <string name="settings_search_engine_add_title">Add Search Engine</string>
@@ -151,6 +141,9 @@
     <string name="settings_kept_lifetime_month">After a month</string>
     <string name="settings_open_into_search_subtitle">Opens a search tab when the app starts</string>
     <string name="settings_external_browser">Open tabs in default browser</string>
+    <string name="settings_default_browser">Default browser</string>
+    <string name="settings_default_browser_subtitle">Open links from other apps in Z-Sync</string>
+    <string name="settings_default_browser_value">Z-Sync</string>
     <string name="settings_essentials_columns">Essentials per row</string>
     <string name="settings_essentials_columns_automatic">Automatic</string>
     <string name="settings_save_kind">Save shared link as</string>
@@ -197,6 +190,8 @@
     <string name="browser_reload">Reload</string>
     <string name="browser_stop">Stop</string>
     <string name="browser_clear_search">Clear search</string>
+    <string name="browser_connection_secure">Secure connection</string>
+    <string name="browser_connection_insecure">Connection is not secure</string>
 
     <string name="browser_more">More</string>
     <string name="browser_close_menu">Close menu</string>
@@ -207,8 +202,12 @@
     <string name="browser_keep_page">Keep Page</string>
     <string name="browser_kept">Kept</string>
     <string name="browser_open_in_new_page">Open in New Page</string>
+    <string name="browser_image_save">Save Image</string>
+    <string name="browser_image_open">Open Image in New Page</string>
+    <string name="browser_image_copy">Copy Image Address</string>
     <string name="kept_new_page">New Page</string>
     <string name="kept_close_all">Close All</string>
+    <string name="kept_close_all_label">Close all pages</string>
     <string name="kept_close_all_title">Close all pages?</string>
     <string name="kept_close_all_message">They are removed from this phone. Tabs in your spaces stay.</string>
     <string name="kept_empty_title">No open pages</string>
@@ -216,7 +215,6 @@
     <string name="kept_pin_to_space">Pin to space</string>
     <string name="kept_copy_link">Copy link</string>
     <string name="kept_close_page">Close page</string>
-    <string name="kept_close_page_named">Close %1$s</string>
     <string name="kept_current_page">Current page</string>
     <string name="browser_copy_link">Copy Link</string>
     <string name="browser_copied">Copied</string>
@@ -232,6 +230,7 @@
     <string name="browser_find_on_page">Find on page</string>
     <string name="browser_find_next">Next</string>
     <string name="browser_find_previous">Previous</string>
+    <string name="browser_print">Print</string>
     <string name="browser_share">Share</string>
     <string name="browser_open_short">Open</string>
     <string name="browser_pin_short">Pin</string>
@@ -295,6 +294,9 @@
     <string name="browser_download_started">Downloading to your Downloads folder</string>
     <string name="browser_download_finished">Saved to your Downloads folder</string>
     <string name="browser_download_failed">The download failed</string>
+    <string name="browser_download_question">Download %1$s?</string>
+    <string name="browser_download_from">From %1$s</string>
+    <string name="browser_download_confirm">Download</string>
     <string name="site_permission_camera">Camera</string>
     <string name="site_permission_microphone">Microphone</string>
     <string name="site_permission_location">Location</string>

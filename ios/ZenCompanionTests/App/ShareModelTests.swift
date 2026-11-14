@@ -370,6 +370,121 @@ final class ShareModelTests: XCTestCase {
         )
     }
 
+    func testSharedTextKeepsALinkInTheMiddle() {
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(from: "look at this https://example.com/a nice" as NSString),
+            URL(string: "https://example.com/a")
+        )
+    }
+
+    func testSharedTextTakesTheFirstOfTwoLinks() {
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(
+                from: "https://first.example/a and https://second.example/b" as NSString
+            ),
+            URL(string: "https://first.example/a")
+        )
+    }
+
+    func testSharedTextWithoutALinkHasNone() {
+        XCTAssertNil(ZenCompanion.ShareLink.httpURL(from: "nothing to see here" as NSString))
+        XCTAssertNil(ZenCompanion.ShareLink.httpURL(from: "write to hi@example.com" as NSString))
+        XCTAssertNil(ZenCompanion.ShareLink.httpURL(from: "file:///tmp/x" as NSString))
+    }
+
+    func testSharedLinkEndingASentenceOrSittingInBrackets() {
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(from: "read https://example.com/a. now" as NSString),
+            URL(string: "https://example.com/a")
+        )
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(from: "read (https://example.com/b) now" as NSString),
+            URL(string: "https://example.com/b")
+        )
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(from: "(https://example.com/b)" as NSString),
+            URL(string: "https://example.com/b")
+        )
+        // Only the unmatched bracket goes; the pair inside the path stays.
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(
+                from: "(https://en.wikipedia.org/wiki/Function_(mathematics))" as NSString
+            ),
+            URL(string: "https://en.wikipedia.org/wiki/Function_(mathematics)")
+        )
+    }
+
+    /// A sentence mark right after the address never belongs to it, but a
+    /// query or a trailing slash does.
+    func testSharedLinkKeepsQueryAndTrailingSlash() {
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(from: "see https://example.com/a?b=c." as NSString),
+            URL(string: "https://example.com/a?b=c")
+        )
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(from: "https://example.com/path/" as NSString),
+            URL(string: "https://example.com/path/")
+        )
+    }
+
+    func testSharedLinkInQuotesOrFollowedByPunctuation() {
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(from: "he said \"https://example.com/q\"" as NSString),
+            URL(string: "https://example.com/q")
+        )
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(from: "look (https://example.com/r)." as NSString),
+            URL(string: "https://example.com/r")
+        )
+    }
+
+    /// A mark the sentence added inside its quotes is the address's own.
+    func testSharedLinkInQuotesKeepsItsOwnMark() {
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(
+                from: "he said \"https://example.com/search?q=wow!\"" as NSString
+            ),
+            URL(string: "https://example.com/search?q=wow!")
+        )
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(from: "\"https://example.com/search?q=wow!\"" as NSString),
+            URL(string: "https://example.com/search?q=wow!")
+        )
+    }
+
+    /// A Unicode domain has a host, so iOS keeps the link too; Foundation
+    /// stores the domain in its punycode form.
+    func testSharedLinkWithUnicodeDomainIsAccepted() {
+        let url = ZenCompanion.ShareLink.httpURL(from: "https://bücher.example/a" as NSString)
+        XCTAssertEqual(url?.path, "/a")
+        XCTAssertFalse(url?.host?.isEmpty ?? true)
+
+        let withPort = ZenCompanion.ShareLink.httpURL(from: "https://bücher.example:8080/a" as NSString)
+        XCTAssertEqual(withPort?.path, "/a")
+        XCTAssertEqual(withPort?.port, 8080)
+        XCTAssertFalse(withPort?.host?.isEmpty ?? true)
+    }
+
+    /// A port that is not digits makes the address no link at all.
+    func testSharedLinkWithAnInvalidPortIsSkipped() {
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(
+                from: "https://example.com:bad/a https://valid.example/b" as NSString
+            ),
+            URL(string: "https://valid.example/b")
+        )
+        XCTAssertNil(ZenCompanion.ShareLink.httpURL(from: "https://example.com:bad/a" as NSString))
+    }
+
+    /// A long run of closing brackets is dropped without a recount per mark.
+    func testManyTrailingBracketsAreDropped() {
+        let text = "https://example.com/a" + String(repeating: ")", count: 100_000)
+        XCTAssertEqual(
+            ZenCompanion.ShareLink.httpURL(from: text as NSString),
+            URL(string: "https://example.com/a")
+        )
+    }
+
     func testHeadlineTitlePrefersPageTitleThenHost() {
         let url = URL(string: "https://pin.example/page")!
         XCTAssertEqual(ZenCompanion.ShareLink.headlineTitle(pageTitle: "Pinned Page", url: url), "Pinned Page")

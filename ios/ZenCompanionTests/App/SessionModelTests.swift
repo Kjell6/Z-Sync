@@ -220,6 +220,77 @@ final class SessionModelTests: XCTestCase {
         XCTAssertNotEqual(spaces.cached?.spaces.first?.id, "old")
         XCTAssertEqual(model.account?.uid, DemoCatalog.account.uid)
     }
+
+    // MARK: - Links from other apps
+
+    func testIncomingWebLinkWaitsForSignInAndIsTakenOnce() {
+        let model = SessionModel(
+            accounts: FakeAccountSession(),
+            spaces: FakeSessionSpaces(),
+            preferences: FakePreferences(),
+            haptics: FakeSessionHaptics()
+        )
+        let url = URL(string: "https://example.com/from-another-app")!
+
+        model.openLinkFromAnotherApp(url)
+
+        // Signed out: the link waits, without touching any account's data.
+        XCTAssertNil(model.account)
+        XCTAssertEqual(model.pendingOpenURL, url)
+
+        model.completeSignIn(snapshot())
+
+        // Sign-in does not take it: the spaces screen opens it, once.
+        XCTAssertEqual(model.pendingOpenURL, url)
+
+        model.consumePendingOpenURL()
+        XCTAssertNil(model.pendingOpenURL)
+    }
+
+    func testIncomingLinkIgnoresNonWebSchemes() {
+        let model = SessionModel(
+            accounts: FakeAccountSession(),
+            spaces: FakeSessionSpaces(),
+            preferences: FakePreferences(),
+            haptics: FakeSessionHaptics()
+        )
+
+        for raw in [
+            "javascript:alert(1)",
+            "file:///etc/hosts",
+            "data:text/html,hi",
+            "mailto:nobody@example.com",
+            "about:blank",
+        ] {
+            model.openLinkFromAnotherApp(URL(string: raw)!)
+            XCTAssertNil(model.pendingOpenURL, raw)
+        }
+    }
+
+    func testRoundTripHandOffIsRecognisedForTheSameAddressOnly() {
+        let url = URL(string: "https://example.com/a")!
+        let start = Date(timeIntervalSince1970: 1_000)
+
+        ExternalBrowser.recordHandOff(url, at: start)
+        XCTAssertTrue(ExternalBrowser.consumeOwnHandOff(url, now: start.addingTimeInterval(1)))
+
+        // Taken already: a later arrival is a link from somewhere else.
+        XCTAssertFalse(ExternalBrowser.consumeOwnHandOff(url, now: start.addingTimeInterval(1)))
+
+        ExternalBrowser.recordHandOff(url, at: start)
+        XCTAssertFalse(
+            ExternalBrowser.consumeOwnHandOff(
+                URL(string: "https://example.com/other")!,
+                now: start.addingTimeInterval(1)
+            )
+        )
+
+        ExternalBrowser.recordHandOff(url, at: start)
+        XCTAssertFalse(
+            ExternalBrowser.consumeOwnHandOff(url, now: start.addingTimeInterval(11)),
+            "too late to be the system handing this app's own link back"
+        )
+    }
 }
 
 @MainActor

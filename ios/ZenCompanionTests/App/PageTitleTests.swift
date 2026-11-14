@@ -56,6 +56,19 @@ final class PageTitleTests: XCTestCase {
         XCTAssertNil(PageTitle.extract(fromHTML: "<html></html>", url: page))
     }
 
+    func testUsableTitleDropsBidiControls() {
+        // A page can hide a right-to-left override in its title to reorder what
+        // the bar shows; the character goes, the rest of the name stays.
+        XCTAssertEqual(PageTitle.usable("Pinned Page\u{202E}", url: page), "Pinned Page")
+        XCTAssertEqual(PageTitle.usable("\u{202E}Pinned Page", url: page), "Pinned Page")
+        // Stripped before the address check, so a disguised address is still
+        // rejected instead of wearing a lookalike name.
+        XCTAssertNil(PageTitle.usable("\u{202E}https://pin.example/page", url: page))
+        // Ordinary right-to-left titles carry no controls and stay as they are.
+        XCTAssertEqual(PageTitle.usable("مصر", url: page), "مصر")
+        XCTAssertEqual(PageTitle.usable("שלום", url: page), "שלום")
+    }
+
     func testPickDocumentTitlePrefersTheTabTitle() {
         XCTAssertEqual(PageTitle.pickDocumentTitle("Pinned Page\u{1e}Other", url: page), "Pinned Page")
         XCTAssertEqual(

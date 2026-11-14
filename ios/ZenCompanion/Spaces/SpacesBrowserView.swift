@@ -10,12 +10,25 @@ struct BrowserTabSession: Identifiable {
     var startsInOverview = false
 }
 
+/// What the incoming-link task waits for: the link itself, and the answer to
+/// the content-blocking question. That question is a full-screen cover of its
+/// own, so the link has to wait for it rather than open behind it.
+private struct IncomingLinkRequest: Equatable {
+    let link: URL?
+    let blockerAsked: Bool
+}
+
 /// The whole app: swipe between spaces (pinned tabs + folders per space),
 /// space switcher at the bottom and the action bar (activity, search,
 /// settings) above the essentials grid or below the switcher, per the
 /// user's `ToolbarPlacement`.
 struct SpacesBrowserView: View {
     let account: AccountSnapshot
+    /// A web link another app handed to Z-Sync before this screen was up,
+    /// waiting through sign-in when it arrived signed out.
+    var incomingLink: URL? = nil
+    /// The link was taken: it opens once, like a tab tapped here.
+    var onConsumeIncomingLink: () -> Void = {}
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.scenePhase) private var scenePhase
@@ -52,9 +65,18 @@ struct SpacesBrowserView: View {
     /// A pin inside the mini-browser (or a delete from it) fired while a sheet
     /// was up; refresh once the last sheet is gone.
     @State private var pendingStaleReload = false
+    /// The content-blocking question was still up when the link arrived: the
+    /// browser waits for its cover to be gone before it takes the screen.
+    @State private var incomingLinkWaitsForBlocker = false
 
-    init(account: AccountSnapshot) {
+    init(
+        account: AccountSnapshot,
+        incomingLink: URL? = nil,
+        onConsumeIncomingLink: @escaping () -> Void = {}
+    ) {
         self.account = account
+        self.incomingLink = incomingLink
+        self.onConsumeIncomingLink = onConsumeIncomingLink
         _model = State(initialValue: BrowserModel(account: account))
         _whatsNew = State(initialValue: WhatsNewStore())
     }
@@ -307,6 +329,9 @@ struct SpacesBrowserView: View {
                 }
         }
         .task { await model.initialLoad() }
+        .task(id: IncomingLinkRequest(link: incomingLink, blockerAsked: ContentBlocker.shared.asked)) {
+            await takeIncomingLink()
+        }
         .task(id: ContentBlocker.shared.asked) {
             // Show release notes once per app version, after the first frame
             // has had a moment to settle. Demo mode skips it like the other
@@ -348,7 +373,10 @@ struct SpacesBrowserView: View {
         .onChange(of: model.searchOnOpenPending) { _, pending in
             guard pending else { return }
             // Leave an open browser or settings sheet where the user left it.
-            if activeSheet == nil, browserSession == nil { openNewTab(in: model.activeSpace) }
+            // A link from another app is the page this launch is for.
+            if activeSheet == nil, browserSession == nil, incomingLink == nil {
+                openNewTab(in: model.activeSpace)
+            }
             model.consumeSearchOnOpen()
         }
         .onChange(of: model.reviewPromptPending) { _, pending in
@@ -477,6 +505,29 @@ struct SpacesBrowserView: View {
         presentBrowser(url: nil, title: nil, space: space)
     }
 
+    /// Opens the link another app handed over, exactly once. The task above
+    /// runs again when the content-blocking question is answered, because that
+    /// question is a full-screen cover: the link waits in the model for its
+    /// answer instead of opening behind it or being lost with it.
+    private func takeIncomingLink() async {
+        guard let url = incomingLink else {
+            incomingLinkWaitsForBlocker = false
+            return
+        }
+        guard ContentBlocker.shared.asked else {
+            incomingLinkWaitsForBlocker = true
+            return
+        }
+        if incomingLinkWaitsForBlocker {
+            incomingLinkWaitsForBlocker = false
+            // The cover has to start going before the browser can take the
+            // screen, like a sheet in `show()`. A newer link cancels this task.
+            do { try await Task.sleep(nanoseconds: 250_000_000) } catch { return }
+        }
+        onConsumeIncomingLink()
+        presentBrowser(url: url, title: nil, space: model.activeSpace)
+    }
+
     /// Opens the browser as a page. A sheet that is already up has to go
     /// first: SwiftUI will not present a full-screen cover over one.
     private func presentBrowser(url: URL?, title: String?, space: ZenSpace, openedFromSpace: Bool = false) {
@@ -507,6 +558,10 @@ struct SpacesBrowserView: View {
             startsInOverview: session.startsInOverview,
             onDismiss: { browserSession = nil }
         )
+        // Keyed by the launch: a link that arrives while the browser is up
+        // starts its own browser, not the last one with its overview or
+        // history still over the new page.
+        .id(session.id)
     }
 
     // MARK: States (shown until the first successful sync)
@@ -622,6 +677,14 @@ struct FolderBlock: View {
             .buttonStyle(PressedButtonStyle())
 
             if isExpanded {
+                if let live = folder.live,
+                   let source = live.sourceURL,
+                   folder.tabs.isEmpty,
+                   folder.subfolders?.isEmpty ?? true {
+                    liveFolderSource(source, type: live.type)
+                        .padding(.leading, isNested ? 0 : 20)
+                        .transition(.opacity)
+                }
                 ForEach(folder.tabs) { tab in
                     TabRow(
                         tab: tab,
@@ -673,5 +736,64 @@ struct FolderBlock: View {
     /// older records may carry (raw or inside Zen's emoji SVG).
     private var userIcon: String? {
         ZenIconDecoder.folderFlapIcon(folder.icon)
+    }
+
+    /// Zen syncs only a live folder's provider configuration, never the items it
+    /// generates. When the folder is empty (the normal case on mobile), the
+    /// expanded body offers the configured source instead of looking broken.
+    private func liveFolderSource(_ source: String, type: String?) -> some View {
+        let url = URL(string: source)
+        let label = providerLabel(type)
+        return Button {
+            onOpenTab(ZenTab(id: "live-source-\(folder.id)", url: source, title: label))
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "link")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.5))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(label)
+                        .zenFont(13, weight: .semibold, design: .rounded)
+                        .foregroundStyle(Palette.ink(scheme))
+                    Text(sourceDisplay(url))
+                        .zenFont(11, design: .rounded)
+                        .foregroundStyle(Palette.ink(scheme).opacity(0.55))
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.3))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                Palette.lift(scheme),
+                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(PressedButtonStyle())
+        .accessibilityLabel(Text(label))
+        .accessibilityValue(Text(sourceDisplay(url)))
+    }
+
+    /// Provider label for the source row; unknown ids fall back to a neutral
+    /// label rather than exposing the raw id.
+    private func providerLabel(_ type: String?) -> String {
+        switch type {
+        case "rss": return String(localized: "folder.live.rss")
+        case "github": return String(localized: "folder.live.github")
+        default: return String(localized: "folder.live.other")
+        }
+    }
+
+    /// Host plus path, so `github.com/pulls` stays readable without the scheme.
+    private func sourceDisplay(_ url: URL?) -> String {
+        guard let url, let host = url.host, !host.isEmpty else {
+            return url?.absoluteString ?? ""
+        }
+        let path = url.path
+        return path.isEmpty || path == "/" ? host : host + path
     }
 }

@@ -61,7 +61,9 @@ import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Laptop
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Restore
@@ -114,7 +116,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -261,6 +265,9 @@ internal fun MiniBrowserBar(
     onSubmitAddress: (String) -> Unit,
     /** False while a page error covers the page: there is nothing to pin. */
     canPin: Boolean = true,
+    /** False while no page is showing, or the reader covers it. */
+    canPrint: Boolean,
+    onPrint: () -> Unit,
     onPickSuggestion: (String) -> Unit,
     onPickVisit: (BrowserVisit) -> Unit,
     onBack: () -> Unit,
@@ -333,6 +340,8 @@ internal fun MiniBrowserBar(
                             canKeep = canKeep,
                             onToggleKeep = onToggleKeep,
                             canPin = canPin,
+                            canPrint = canPrint,
+                            onPrint = onPrint,
                             barColor = barColor,
                             onCopyLink = onCopyLink,
                             onFind = onFind,
@@ -380,6 +389,7 @@ internal fun MiniBrowserBar(
                         canGoBack = state.canGoBack || canReturnToOpener,
                         canGoForward = state.canGoForward,
                         effectiveUrl = effectiveUrl,
+                        pageFailed = state.pageError != null,
                         title = state.currentTitle,
                         isLoading = state.isLoading,
                         progress = state.progress,
@@ -680,6 +690,8 @@ private fun NavBar(
     canGoBack: Boolean,
     canGoForward: Boolean,
     effectiveUrl: String,
+    /** An error page is shown: no connection to vouch for. */
+    pageFailed: Boolean = false,
     title: String,
     isLoading: Boolean,
     progress: Float,
@@ -747,7 +759,7 @@ private fun NavBar(
                     .padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                SiteIcon(effectiveUrl = effectiveUrl)
+                SiteIcon(effectiveUrl = effectiveUrl, pageFailed = pageFailed)
                 Spacer(Modifier.width(8.dp))
                 Text(
                     // Same fallback as the iOS bar: a page without a title -
@@ -777,7 +789,11 @@ private fun NavBar(
     }
 }
 
-/** Icon-only glyph for the navigation bar: no chrome of its own. */
+/**
+ * Icon-only glyph for the navigation bar: no chrome of its own. The box is
+ * 48 dp wide for a thumb; the bar is 44 dp tall, which is as much height as
+ * the target can take here. The glyph inside keeps its 18 dp and its place.
+ */
 @Composable
 private fun NavGlyph(
     icon: ImageVector,
@@ -788,7 +804,7 @@ private fun NavGlyph(
     val zen = LocalZenColors.current
     Box(
         modifier = Modifier
-            .size(width = 34.dp, height = BarHeight - 12.dp)
+            .size(width = 48.dp, height = BarHeight)
             .barClickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -910,6 +926,9 @@ internal fun OverviewDock(
                 description = stringResource(R.string.kept_new_page),
                 tint = zen.ink,
                 onLongClick = onPlusLongPress,
+                // The same label the custom action carries: a long press is
+                // invisible to TalkBack, so the action has to be listed.
+                onLongClickLabel = stringResource(R.string.kept_close_all_label),
                 onClick = onNewPage,
             )
             plusMenu()
@@ -926,6 +945,7 @@ private fun DockButton(
     width: androidx.compose.ui.unit.Dp = DockSide,
     height: androidx.compose.ui.unit.Dp = DockSide,
     onLongClick: (() -> Unit)? = null,
+    onLongClickLabel: String? = null,
     onClick: () -> Unit,
 ) {
     val zen = LocalZenColors.current
@@ -937,7 +957,29 @@ private fun DockButton(
             .border(liftBorder(), DockShape)
             .then(
                 if (onLongClick != null) {
-                    Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                    Modifier
+                        .combinedClickable(
+                            onClick = onClick,
+                            onLongClick = onLongClick,
+                            onLongClickLabel = onLongClickLabel,
+                        )
+                        // TalkBack only finds a long press by holding the
+                        // finger down. The same action as its own entry makes
+                        // it reachable from the actions list as well.
+                        .then(
+                            if (onLongClickLabel != null) {
+                                Modifier.semantics {
+                                    customActions = listOf(
+                                        CustomAccessibilityAction(onLongClickLabel) {
+                                            onLongClick()
+                                            true
+                                        },
+                                    )
+                                }
+                            } else {
+                                Modifier
+                            },
+                        )
                 } else {
                     Modifier.barClickable(onClick = onClick)
                 },
@@ -1052,6 +1094,12 @@ private fun ComposerBar(
     barColor: Color,
 ) {
     val zen = LocalZenColors.current
+    // The composer is composed by the address state, so its field reports
+    // `false` once before the screen's focus request lands. Only a loss after a
+    // real gain ends the edit: tapping the page takes the keyboard away, and
+    // the bar must close the editor the way Cancel does instead of staying an
+    // editor without a keyboard.
+    var hadFocus by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1086,11 +1134,16 @@ private fun ComposerBar(
             modifier = Modifier
                 .weight(1f)
                 .focusRequester(focusRequester)
-                // Only a focus *gain* is reported: the composer is composed by
-                // the address state, so its first attach reports `false` and
-                // would close the field again on the same frame. Closing is
-                // explicit (Cancel, submit, back).
-                .onFocusChanged { if (it.isFocused) onAddressFocusedChange(true) },
+                .onFocusChanged { focus ->
+                    if (focus.isFocused) {
+                        hadFocus = true
+                        onAddressFocusedChange(true)
+                    } else if (hadFocus) {
+                        // Losing the focus ends the edit; a submit that clears
+                        // the focus itself has loaded the address already.
+                        onAddressFocusedChange(false)
+                    }
+                },
             decorationBox = { innerTextField ->
                 Box(contentAlignment = Alignment.CenterStart) {
                     if (addressText.text.isEmpty()) {
@@ -1130,6 +1183,8 @@ private fun ExpandedMenu(
     canKeep: Boolean,
     onToggleKeep: () -> Unit,
     canPin: Boolean,
+    canPrint: Boolean,
+    onPrint: () -> Unit,
     barColor: Color,
     onCopyLink: () -> Unit,
     onFind: () -> Unit,
@@ -1164,11 +1219,13 @@ private fun ExpandedMenu(
                 RowDivider()
             }
             MenuRow(
-                icon = Icons.Outlined.ContentCopy,
+                // Copied: the glyph turns into the checkmark the iOS menu
+                // shows, beside the label that already says so.
+                icon = if (state.copyConfirmed) Icons.Outlined.Check else Icons.Outlined.ContentCopy,
                 title = stringResource(
                     if (state.copyConfirmed) R.string.browser_copied else R.string.browser_copy_link,
                 ),
-                tint = if (state.copyConfirmed) zen.ink else zen.ink,
+                tint = zen.ink,
                 onClick = onCopyLink,
             )
             RowDivider()
@@ -1290,6 +1347,15 @@ private fun ExpandedMenu(
                 tint = zen.ink,
                 background = barColor,
                 onClick = onFind,
+            )
+            MenuTile(
+                icon = Icons.Outlined.Print,
+                title = stringResource(R.string.browser_print),
+                description = stringResource(R.string.browser_print),
+                tint = if (canPrint) zen.ink else zen.ink.copy(alpha = 0.38f),
+                background = barColor,
+                onClick = onPrint,
+                enabled = canPrint,
             )
             MenuTile(
                 icon = Icons.Outlined.Share,
@@ -1644,9 +1710,11 @@ private fun ZoomStep(
     onClick: () -> Unit,
 ) {
     val zen = LocalZenColors.current
+    // 48 dp wide for a thumb. The capsule around the readout is 32 dp tall, so
+    // the box stops there: a taller one would stretch that capsule with it.
     Box(
         modifier = Modifier
-            .size(32.dp)
+            .size(width = 48.dp, height = 32.dp)
             .barClickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -1698,18 +1766,31 @@ private fun RowScope.MenuTile(
 }
 
 @Composable
-private fun SiteIcon(effectiveUrl: String) {
+private fun SiteIcon(effectiveUrl: String, pageFailed: Boolean = false) {
     val zen = LocalZenColors.current
     val icon = when {
         effectiveUrl.isEmpty() -> Icons.Outlined.Search
-        effectiveUrl.startsWith("http://") -> Icons.Outlined.Lock
-        effectiveUrl.startsWith("https://") -> Icons.Outlined.Lock
+        // An insecure page must not wear the padlock a trusted one does.
+        effectiveUrl.startsWith("http://") -> Icons.Outlined.LockOpen
+        // A failed load (a bad certificate among them) made no trusted
+        // connection, so it gets no closed padlock either.
+        effectiveUrl.startsWith("https://") && !pageFailed -> Icons.Outlined.Lock
         else -> Icons.Outlined.Language
+    }
+    // The padlock is the only sign a page is encrypted, so it has to say so:
+    // the clickable row around it merges its children, and the description is
+    // read with the page's name. A search or a plain address says nothing
+    // about a connection and stays silent.
+    val description = when {
+        pageFailed -> null
+        effectiveUrl.startsWith("https://") -> stringResource(R.string.browser_connection_secure)
+        effectiveUrl.startsWith("http://") -> stringResource(R.string.browser_connection_insecure)
+        else -> null
     }
     Icon(
         imageVector = icon,
-        contentDescription = null,
-        tint = if (effectiveUrl.startsWith("http://")) zen.ink else zen.ink.copy(alpha = 0.7f),
+        contentDescription = description,
+        tint = zen.ink.copy(alpha = 0.7f),
         modifier = Modifier.size(18.dp),
     )
 }

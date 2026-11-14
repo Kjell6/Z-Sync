@@ -54,6 +54,56 @@ state on a device).
 `6804470330` is the App Store Connect app id of Z-Sync
 (`de.kjell.zencompanion`). Use `asc.py apps` when it is unknown.
 
+## Default browser on iOS
+
+**iOS cannot be selected as the default browser yet.** Apple only allows it for
+apps that hold the `com.apple.developer.web-browser` entitlement, which the
+developer account has to request; until it is granted, declaring `http`/`https`
+URL types has no effect and the app is not offered as a browser. The code for
+receiving a link is already in place, so the remaining work is configuration
+and review.
+
+Z-Sync's own link form works today, without the entitlement:
+`zsync://open?url=<percent-encoded address>`, e.g.
+`zsync://open?url=https%3A%2F%2Fexample.com%2Fpage`. In Shortcuts, use an
+"Open URLs" action whose URL is `zsync://open?url=` followed by the
+URL-encoded address. Nothing else is accepted: another host or path, a missing
+or extra parameter, and any target that is not `http`/`https` with a host are
+ignored silently.
+
+Remaining maintainer steps, in order:
+
+1. Request the entitlement from Apple:
+   <https://developer.apple.com/contact/request/default-browser-entitlement/>.
+   It is tied to the app's bundle id (`de.kjell.zencompanion`) and the team.
+2. Add `com.apple.developer.web-browser` (Boolean, `true`) to the app's
+   entitlements — both `ios/ZenCompanion/ZenCompanion.entitlements` and the
+   `entitlements.properties` block in `ios/project.yml`, so a later `xcodegen`
+   run keeps it. Re-issue the provisioning profile afterwards.
+3. Add the `http` and `https` URL schemes to `CFBundleURLTypes` in
+   `ios/project.yml` and `ios/ZenCompanion/Info.plist`. `HomeView` already
+   routes `onOpenURL` links into the in-app browser. The app's own `zsync`
+   scheme is declared in both files already.
+4. Check Apple's requirements for default-browser apps before submitting:
+   - **A text field for a URL on launch, or search tools.** Partly met: the
+     browser has the address field and the spaces screen's search pill opens it
+     in one tap, but the app starts on the spaces screen. With "Open into
+     search" on, a search tab comes up at launch. Treat that setting as the
+     launch state, or add an address field to the landing screen, before
+     shipping as a browser.
+   - **Navigate directly to the URL it is given.** Met: an `http`/`https` link
+     arriving through `onOpenURL` becomes a normal page in the in-app browser.
+     A link the app itself sends out is recognised when iOS hands it back and
+     opens in-app instead of being sent out again.
+   - **No redirects to unexpected locations.** Met: only `http`/`https` links
+     from another app are accepted, the address is opened like a typed one, and
+     it is not rewritten or handed to another app.
+5. Add a Settings row that opens the app's page in the Settings app, where the
+   reader can pick the default browser (`UIApplication.openSettingsURLString`).
+
+Until steps 1–3 are done, Z-Sync is not a selectable browser on iOS; only its
+own `zsync://open?url=` links reach it.
+
 ## Related
 
 - Signing: the team id lives in the gitignored `ios/Config/Team.local.xcconfig`

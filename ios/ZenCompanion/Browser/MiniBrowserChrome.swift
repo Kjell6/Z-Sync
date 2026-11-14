@@ -453,7 +453,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
     }
 
     /// Bottom row, trailing edge first for the thumb: Pin sits on the right.
-    /// Left to right: Find, Share, Open, Pin.
+    /// Left to right: Find, Print, Share, Open, Pin.
     private var actionRow: some View {
         HStack(spacing: 8) {
             tile(
@@ -463,6 +463,18 @@ struct MiniBrowserChrome<NavBar: View>: View {
             ) {
                 withAnimation(motion) {
                     model.presentFindOnPage()
+                }
+            }
+            tile(
+                systemName: "printer",
+                title: "browser.print",
+                accessibility: "browser.print",
+                // Nothing to print without a page, under the error panel or
+                // with the reader lifted out of it.
+                enabled: model.canPrint
+            ) {
+                withAnimation(motion) {
+                    model.presentPrint()
                 }
             }
             shareTile
@@ -502,7 +514,8 @@ struct MiniBrowserChrome<NavBar: View>: View {
                     kind: model.pinSaveKind,
                     scheme: scheme,
                     style: .compact,
-                    onOpen: { model.pinMenuWillOpen() }
+                    onOpen: { model.pinMenuWillOpen() },
+                    onMenuDidDismiss: { model.pinMenuDidDismiss() }
                 ) { kind in
                     model.selectPinSaveKind(kind)
                 }
@@ -1152,6 +1165,9 @@ struct MiniBrowserTopBar: View {
             .font(.system(size: 18, weight: .semibold))
             .foregroundStyle(Palette.ink(scheme).opacity(enabled ? 0.85 : 0.3))
             .frame(width: 32, height: barHeight - 8)
+            // The same 44pt slot the real bar's glyphs take, so the bar that
+            // slides in matches the one it replaces.
+            .frame(minWidth: 44, minHeight: 44)
     }
 
     private var swipeGesture: some Gesture {
@@ -1256,8 +1272,15 @@ struct MiniBrowserTopBar: View {
                 }
                 .contentShape(Rectangle())
             }
+            // The icon is the only sign of an encrypted page, so VoiceOver
+            // hears it too (Android's padlock says the same to TalkBack).
+            .accessibilityValue(Text(connectionLabel ?? ""))
             .buttonStyle(AddressPressStyle())
-            .accessibilityLabel(Text("browser.search_placeholder"))
+            // The page's own title, so the collapsed bar does not hide where
+            // the reader is; only an empty title falls back to the prompt.
+            .accessibilityLabel(
+                Text(displayTitle.isEmpty ? String(localized: "browser.search_placeholder") : displayTitle)
+            )
 
             iconButton(
                 systemName: model.isLoading ? "xmark" : "arrow.clockwise",
@@ -1276,9 +1299,27 @@ struct MiniBrowserTopBar: View {
         return host.isEmpty ? String(localized: "browser.search_placeholder") : host
     }
 
+    /// Whether the page came over an encrypted connection, for VoiceOver.
+    /// An error page (a bad certificate among them) made no connection to
+    /// vouch for, so it says nothing.
+    private var connectionLabel: String? {
+        guard model.pageError == nil else { return nil }
+        switch model.effectiveURL?.scheme?.lowercased() {
+        case "https": return String(localized: "browser.connection_secure")
+        case "http": return String(localized: "browser.connection_insecure")
+        default: return nil
+        }
+    }
+
     private var siteIcon: some View {
         Group {
-            if let url = model.effectiveURL, url.scheme == "http" || url.scheme == "https" {
+            if let url = model.effectiveURL, url.scheme?.lowercased() == "http" {
+                // An unencrypted page must not look like a trusted one: an
+                // open padlock instead of its icon, as on Android.
+                Image(systemName: "lock.open")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.85))
+            } else if let url = model.effectiveURL, url.scheme == "https" {
                 Favicon(urlString: url.absoluteString, size: 16)
             } else {
                 Image(systemName: "magnifyingglass")
@@ -1300,6 +1341,9 @@ struct MiniBrowserTopBar: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(Palette.ink(scheme).opacity(enabled ? 0.85 : 0.3))
                 .frame(width: 32, height: barHeight - 8)
+                // The glyph keeps its slot; the button around it takes the
+                // platform's least touch target, filling the bar's height.
+                .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(GlyphPressStyle())

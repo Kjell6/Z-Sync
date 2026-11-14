@@ -1,5 +1,7 @@
 package de.kjell.zencompanion.ui.sheets
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +23,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Keyboard
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SwapVert
@@ -42,9 +45,12 @@ import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.EssentialsColumns
 import de.kjell.zencompanion.data.KeptPageLifetime
@@ -52,6 +58,7 @@ import de.kjell.zencompanion.data.SearchEngine
 import de.kjell.zencompanion.data.SearchEngines
 import de.kjell.zencompanion.data.ToolbarPlacement
 import de.kjell.zencompanion.ui.PreferencesState
+import de.kjell.zencompanion.ui.components.DefaultBrowser
 import de.kjell.zencompanion.ui.theme.LiftCard
 import de.kjell.zencompanion.ui.theme.LocalZenColors
 
@@ -68,7 +75,8 @@ internal fun SettingsSectionLabel(text: String) {
 
 /**
  * "Browsing": how the app picks a search engine, opens links and blocks
- * content. Content blocking is the only row here that leaves the sheet.
+ * content. Content blocking and the browser role are the rows that leave the
+ * sheet.
  */
 @Composable
 internal fun SettingsBrowsingSection(
@@ -83,6 +91,19 @@ internal fun SettingsBrowsingSection(
     onClearWebsiteData: () -> Unit,
 ) {
     var confirmClearData by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    var isDefaultBrowser by remember { mutableStateOf(DefaultBrowser.isDefault(context)) }
+    val browserRoleLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) {
+        // The system granted or kept the role; read it back once it is gone.
+        isDefaultBrowser = DefaultBrowser.isDefault(context)
+    }
+    // Asked in the role dialog or in the Settings app, so the row updates as
+    // soon as the screen comes back.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        isDefaultBrowser = DefaultBrowser.isDefault(context)
+    }
     if (confirmClearData) {
         AlertDialog(
             onDismissRequest = { confirmClearData = false },
@@ -199,6 +220,13 @@ internal fun SettingsBrowsingSection(
                     icon = Icons.AutoMirrored.Outlined.OpenInNew,
                     checked = preferences.alwaysOpenExternally,
                     onCheckedChange = onSetAlwaysOpenExternally,
+                )
+
+                SettingsDivider()
+
+                DefaultBrowserRow(
+                    isDefault = isDefaultBrowser,
+                    onRequestDefault = { browserRoleLauncher.launch(DefaultBrowser.requestIntent(context)) },
                 )
 
                 SettingsDivider()
@@ -477,6 +505,54 @@ private fun MenuRow(
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(20.dp),
         )
+    }
+}
+
+/** "Default browser": the system's browser role, or the way to ask for it. */
+@Composable
+private fun DefaultBrowserRow(isDefault: Boolean, onRequestDefault: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            // Once held, the system decides; the row is a statement, not a button.
+            .clickable(enabled = !isDefault, onClick = onRequestDefault)
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Public,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(22.dp),
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.settings_default_browser),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = stringResource(R.string.settings_default_browser_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (isDefault) {
+            Text(
+                text = stringResource(R.string.settings_default_browser_value),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
 

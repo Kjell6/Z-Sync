@@ -11,6 +11,13 @@ import java.net.URI
  */
 internal object PageTitle {
     private val whitespace = Regex("\\s+")
+    /**
+     * Unicode bidirectional controls (U+200E, U+200F, U+202A to U+202E,
+     * U+2066 to U+2069). A page can put them in its title to reorder the text
+     * around it, so its name reads like another site's in the bar and the
+     * history. Ordinary Arabic and Hebrew letters are untouched.
+     */
+    private val bidiControls = Regex("[\\u200E\\u200F\\u202A-\\u202E\\u2066-\\u2069]")
     private val titleTag = Regex("<title\\b[^>]*>([\\s\\S]*?)</title\\s*>", RegexOption.IGNORE_CASE)
     private val metaTag = Regex("<meta\\b[^>]*>", RegexOption.IGNORE_CASE)
     private val entity = Regex("&(?:#x([0-9A-Fa-f]+)|#([0-9]+)|([A-Za-z][A-Za-z0-9]+));")
@@ -39,7 +46,7 @@ internal object PageTitle {
 
     /** Trimmed title, or null when it is empty or just the page address. */
     fun usable(raw: String, url: String?): String? {
-        val collapsed = raw.replace(whitespace, " ").trim()
+        val collapsed = raw.replace(bidiControls, "").replace(whitespace, " ").trim()
         if (collapsed.isEmpty()) return null
         if (isAbsoluteHttp(collapsed)) return null
         if (url != null && identifies(collapsed, url)) return null

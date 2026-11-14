@@ -23,6 +23,9 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// Downward travel since the last direction change. Hides the bar only
     /// after a committed scroll, not on the first jitter.
     private var scrollDownRun: CGFloat = 0
+    /// The pull-to-refresh's own limit: a load that never reports back cannot
+    /// leave the spinner going.
+    private var refreshDeadline: Task<Void, Never>?
 
     init(model: MiniBrowserModel) {
         self.model = model
@@ -37,6 +40,9 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         // lists and scripts are swapped per site, so each page needs its own.
         configuration.userContentController = WKUserContentController()
         configuration.allowsInlineMediaPlayback = true
+        // A player's own fullscreen button then fills the screen, as it does
+        // in Safari.
+        configuration.preferences.isElementFullscreenEnabled = true
         configuration.userContentController.addScriptMessageHandler(
             BrowserGeolocation.Handler(model: model),
             contentWorld: .page,
@@ -68,6 +74,16 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         webView.scrollView.contentInset = .zero
         webView.scrollView.automaticallyAdjustsScrollIndicatorInsets = false
         webView.scrollView.scrollIndicatorInsets = .zero
+
+        // Pulling down at the top reloads, with the system's own control. It
+        // follows light and dark through the app's ink.
+        let refresh = UIRefreshControl()
+        refresh.tintColor = UIColor { traits in
+            UIColor(Palette.ink(traits.userInterfaceStyle == .dark ? .dark : .light))
+        }
+        refresh.accessibilityLabel = String(localized: "browser.reload")
+        refresh.addTarget(driver, action: #selector(MiniBrowserWebDriver.refreshPulled(_:)), for: .valueChanged)
+        webView.refreshControl = refresh
 
         driver.setupObservers(for: webView)
         model.adopt(webView, driver: driver)
@@ -270,11 +286,15 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     private func startDownload(_ download: WKDownload, in webView: WKWebView) {
         MainActor.assumeIsolated {
-            BrowserDownloads.shared.adopt(download, from: model)
-            // A link that opened a window only for its file leaves nothing to show.
-            if webView.url == nil, !webView.canGoBack, let model {
-                model.host?.pageRequestedClose(model)
-            }
+            // A link that opened a window only for its file leaves nothing to
+            // show. The window closes once the file's question is answered, so
+            // the reader still sees that question on the page that asked it.
+            let closesPage = webView.url == nil && !webView.canGoBack
+            BrowserDownloads.shared.adopt(
+                download,
+                from: model,
+                closingPageWhenAnswered: closesPage
+            )
         }
     }
 
@@ -329,6 +349,9 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         if let miniWebView = webView as? MiniBrowserWebView {
             miniWebView.clearanceDidSettle = { [weak self] in
                 self?.rebaseScrollOrigin()
+            }
+            miniWebView.refreshWasEnded = { [weak self] in
+                self?.rebaseAfterRefreshEnds()
             }
         }
 
@@ -407,6 +430,51 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         scrollDownRun = 0
     }
 
+    // MARK: - Pull to refresh
+
+    /// The reader pulled the page down at its top.
+    @objc private func refreshPulled(_ sender: UIRefreshControl) {
+        MainActor.assumeIsolated {
+            guard let model else {
+                sender.endRefreshing()
+                return
+            }
+            // A pull starts at the top: the page is reloaded from there.
+            model.reload(fromTop: true)
+            startRefreshDeadline()
+        }
+    }
+
+    /// The spinner ends with the load, and at the latest after ten seconds.
+    private func startRefreshDeadline() {
+        refreshDeadline?.cancel()
+        refreshDeadline = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(10))
+            guard !Task.isCancelled else { return }
+            self?.finishRefresh()
+        }
+    }
+
+    /// Ends the pull's spinner. The control's own collapse moves the scroll
+    /// offset without a finger, so the bar's origin follows where it settles
+    /// instead of reading the change as a scroll.
+    private func finishRefresh() {
+        refreshDeadline?.cancel()
+        refreshDeadline = nil
+        guard let control = (webView as? MiniBrowserWebView)?.refreshControl,
+              control.isRefreshing else { return }
+        control.endRefreshing()
+        rebaseAfterRefreshEnds()
+    }
+
+    /// The control is still animating its inset away; its offset move is not
+    /// the reader scrolling.
+    private func rebaseAfterRefreshEnds() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            self?.rebaseScrollOrigin()
+        }
+    }
+
     /// Tucks the bottom bar away once the page has scrolled down and
     /// brings it back as soon as the page scrolls up again. A short page,
     /// or the very top of a long one, always keeps the bar.
@@ -464,6 +532,7 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
         DispatchQueue.main.async {
             self.model?.isLoading = false
+            self.finishRefresh()
             self.model?.updateCurrentURL(webView.url)
             if let model = self.model { model.host?.pageDidFinishLoading(model) }
             self.model?.adoptPageTitle(webView.title ?? "")
@@ -502,6 +571,7 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
         DispatchQueue.main.async {
             self.model?.isLoading = false
+            self.finishRefresh()
             // The page may now be an error page that cannot scroll.
             self.model?.setScrollHidesBar(false)
         }
@@ -510,6 +580,7 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         DispatchQueue.main.async {
             self.model?.isLoading = false
+            self.finishRefresh()
             self.model?.setScrollHidesBar(false)
             self.model?.loadDidFail(error)
         }
@@ -518,6 +589,7 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         DispatchQueue.main.async {
             self.model?.isLoading = false
+            self.finishRefresh()
             guard let model = self.model else { return }
             // A page out of sight just reloads when it comes back.
             if model.host?.pageProcessDidTerminate(model) != true {

@@ -1,7 +1,8 @@
 # Z-Sync — Privacy Policy
 
 **Controller:** Kjell Behrends, Germany  
-**Contact:** [Support@Kjell.cc](mailto:Support@Kjell.cc)
+**Contact:** [Support@Kjell.cc](mailto:Support@Kjell.cc)  
+**Last updated:** 13 November 2026
 
 Z-Sync ("the app") is an independent mobile app. It lets you view the spaces and tabs of your own Mozilla account Sync and send links into them. This policy explains which data the app processes, where it goes, and what rights you have.
 
@@ -14,6 +15,7 @@ Z-Sync ("the app") is an independent mobile app. It lets you view the spaces and
 - Sync content is **encrypted on your device** before it ever leaves it; Mozilla's servers store only ciphertext.
 - To display favicon previews, the app asks **the website of the synced tab** for its own icon, sending the address without its query string. Only when a site offers no reachable icon does the bare domain go to Google's public favicon service (see section 5.2).
 - While you type in the mini-browser address field, that text is sent to the **suggestion service of the search engine you chose** (DuckDuckGo, Google, Ecosia, Brave, or Bing). An engine you added yourself has no suggestion service, so nothing is sent until you submit. Z-Sync does not run a suggestion server.
+- The mini-browser's ad and tracker lists are refreshed once a week from the **EasyList project**, and the system web view checks pages against a list of unsafe sites (see sections 5.4 and 5.5).
 - All remaining data stays **on your device**: Keychain / Android Keystore and local app storage.
 - Signing out or deleting the app removes that local data.
 
@@ -29,7 +31,7 @@ The app contains:
 - **No social plug-ins**
 - **No developer-operated endpoints** of any kind
 
-Nothing about you is transmitted to, stored by, or visible to the developer. Data that leaves the device goes only to Mozilla, to the websites whose tabs you sync, and — solely as a favicon fallback — to Google as described below, so the app can function. While you type a search in the mini-browser, that text itself goes to the suggestion endpoint of the search engine you selected.
+Nothing about you is transmitted to, stored by, or visible to the developer. Data that leaves the device goes only to Mozilla, to the websites whose tabs you sync, to the websites you open in the mini-browser and the other hosts their pages load from (section 5.5), to Google solely as a favicon fallback, and to the EasyList project for the weekly list download, as described below, so the app can function. While you type a search in the mini-browser, that text itself goes to the suggestion endpoint of the search engine you selected.
 
 ---
 
@@ -45,7 +47,7 @@ While you use the app, the following information is kept **only on your device**
 - **Pages open in the mini-browser** (each page's address, title, a small picture of it and its back and forward history) — the app's local storage, excluded from device backups — reopening them like tabs in a browser. They never enter your Mozilla Sync data. Pages stay until you close them, until they have gone unused for the period chosen in Settings (30 days unless you change it), or until you sign out. With "Keep only chosen pages" on, only the pages you keep are stored; the others are held in memory and end when you close the browser
 - **Content blocking settings and lists** (the three blocking switches, the sites where you turned one off, and the downloaded ad and tracker lists) — local preferences and app storage — blocking in the mini-browser
 - **Browsing history of the mini-browser** (the address and title of each page you open and when you last opened it) — local app storage, excluded from device backups — finding a page again and suggesting it while you type. It never enters your Mozilla Sync data and never leaves your device. You can delete pages from the history one by one, and all of it is removed when you sign out
-- **Website data from the mini-browser** (cookies, site storage and cache of the sites you visit) — the system web view's local storage — staying signed in to websites. You can remove it under Settings › Clear Website Data
+- **Website data from the mini-browser** (cookies, site storage and cache of the sites you visit) — the system web view's local storage — staying signed in to websites. You can remove it under Settings › Clear Website Data, and it is removed when you sign out
 - **Site permissions** (which sites you allowed or blocked for camera, microphone and location) — local app storage, excluded from device backups — not asking you again. They are removed with Clear Website Data and when you sign out
 - **Downloads** (files you download in the mini-browser) — the Z-Sync folder in the Files app on iOS, the Downloads folder on Android — they stay until you delete them, also after signing out
 
@@ -57,6 +59,8 @@ Notes:
 ### Camera, microphone and location
 
 Z-Sync uses these only for websites you open in the mini-browser, and never by itself. When a site asks, the browser first shows its own question, which you can refuse. Only if you allow it does the system ask for the app's permission, the first time. What the camera, microphone or location provide goes to that website, under that website's own privacy policy. It does not go to the developer and is not stored by the app.
+
+On iOS, saving an image from a website to your photo library asks for permission to add to Photos. Z-Sync can only add that image; it cannot read your library.
 
 ## 4. Signing in via Mozilla
 
@@ -133,6 +137,14 @@ The mini-browser can block ads, trackers and cookie banners. The ad and tracker 
 
 **Legal basis:** legitimate interest — Art. 6(1)(f) GDPR. The interest is a mini-browser that keeps its blocking lists current without anyone tracking which pages you open.
 
+### 5.5 Websites you open, and unsafe-site checks
+
+A page you open in the mini-browser is loaded from that website like in any browser: the site receives the request, your IP address and the cookies it set earlier, under its own privacy policy. The page also loads images, scripts and other parts from other hosts that the page itself chooses, and each of those hosts receives that request and your IP address. A link another app hands to Z-Sync is opened like any page you open yourself, and Z-Sync passes nothing to the other app about what you do with it; a site that app operates still sees the visit, as it would from any other link. Nothing about any of this goes to the developer.
+
+The system web view that shows the page also checks addresses against a list of known phishing and malware sites, where the web view on your device supports it and has it turned on. On Android this is Google Safe Browsing, built into the Android System WebView, and depends on the WebView version and the Google settings of the device; on iOS it is the fraudulent website warning built into WebKit, which uses Safe Browsing data provided through Apple and depends on the "Fraudulent Website Warning" setting. These checks are run by the operating system component, not by Z-Sync, and are designed so the full address is normally not sent: the web view compares a short hash prefix of the address against the list. On Android the system web view may also send usage statistics and crash reports to Google when the device's own "Usage & diagnostics" setting allows it; Z-Sync does not turn that on and receives none of it. See the [Google Privacy Policy](https://policies.google.com/privacy) and [Apple's Safari and privacy notice](https://www.apple.com/legal/privacy/data/en/safari/).
+
+**Legal basis:** performance of the feature you are using — Art. 6(1)(b) GDPR — for loading the page, and legitimate interest — Art. 6(1)(f) GDPR — in protecting you from known harmful sites for the check.
+
 ---
 
 ## 6. International data transfers
@@ -158,7 +170,7 @@ The weekly list download goes to `easylist.to`, run by the EasyList project, whi
 ## 7. Retention and deletion
 
 - **Normal use:** local data listed in section 3 persists on your device; server-side, Mozilla retains your sync data per its own retention rules.
-- **Signing out:** the app deletes the stored credentials, all embedded-browser cookies/storage, the cached preview file, and the pages stored on this phone.
+- **Signing out:** the app deletes the stored credentials, all embedded-browser cookies/storage, the cached preview file, the pages stored on this phone, and the mini-browser's history and site permissions.
 - **Deleting the app:** everything above is removed automatically, including Keychain / Keystore items.
 - **Server-side data:** your actual Mozilla sync data lives in your Mozilla account, outside this app's control; manage or delete it through Firefox or your Mozilla account settings.
 
@@ -192,7 +204,7 @@ Z-Sync is a general-audience utility and does not knowingly process data of chil
 ## 11. Security measures
 
 - Connections to Mozilla use TLS (HTTPS).
-- A favicon request uses the scheme of the tab address. On iOS, unencrypted HTTP is allowed only on the local network, so a dashboard on your LAN can be reached; public sites still require HTTPS. On Android, the system blocks unencrypted HTTP, so a local dashboard needs HTTPS for its icon to load.
+- A favicon request uses the scheme of the tab address. On iOS, unencrypted HTTP is allowed only on the local network, so a dashboard on your LAN can be reached; public sites still require HTTPS. On Android, unencrypted HTTP is allowed for websites and their icons, so a tab saved with an `http` address is requested that way; connections to Mozilla always require HTTPS.
 - Sync payloads are end-to-end encrypted client-side before upload (section 5.1).
 - Long-lived secrets are held in the iOS Keychain (*ThisDeviceOnly*) or Android Keystore-backed encrypted preferences.
 - The iOS app ships a privacy manifest declaring no tracking (Apple `PrivacyInfo.xcprivacy`).

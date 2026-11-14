@@ -131,6 +131,10 @@ internal fun SaveKindMenuButton(
                     onClick = {
                         menuOpen = false
                         Haptics.perform(context, Haptics.Kind.SELECTION)
+                        // Picking the kind that is already set changes nothing, so
+                        // nothing restarts what opening the menu paused: the caller
+                        // still has to be told the menu is gone.
+                        if (kind == selected) onMenuDidDismiss()
                         onSelect(kind)
                     },
                 )

@@ -17,13 +17,23 @@ struct HomeView: View {
     var body: some View {
         Group {
             if let snapshot = model.account {
-                SpacesBrowserView(account: snapshot)
+                SpacesBrowserView(
+                    account: snapshot,
+                    incomingLink: model.pendingOpenURL,
+                    onConsumeIncomingLink: { model.consumePendingOpenURL() }
+                )
             } else {
                 SignInLandingView(model: model)
             }
         }
         .onAppear {
             model.load()
+        }
+        // A link that opens Z-Sync: a web link from another app, or the app's
+        // own zsync:// link from a Shortcut. It opens in the in-app browser,
+        // or waits in the model until sign-in finishes.
+        .onOpenURL { url in
+            model.openLinkFromAnotherApp(url)
         }
         .onReceive(NotificationCenter.default.publisher(for: .zenCompanionSignedOut)) { _ in
             model.signedOut()

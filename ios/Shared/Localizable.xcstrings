@@ -247,6 +247,28 @@
         }
       }
     },
+    "browser.connection_insecure": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection is not secure"
+          }
+        }
+      }
+    },
+    "browser.connection_secure": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Secure connection"
+          }
+        }
+      }
+    },
     "browser.dialog.login_failed": {
       "localizations": {
         "en": {
@@ -307,6 +329,16 @@
         }
       }
     },
+    "browser.download.confirm": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download"
+          }
+        }
+      }
+    },
     "browser.download.failed": {
       "localizations": {
         "en": {
@@ -323,6 +355,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ saved to Files › Z-Sync"
+          }
+        }
+      }
+    },
+    "browser.download.from %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "From %@"
+          }
+        }
+      }
+    },
+    "browser.download.question %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download %@?"
           }
         }
       }
@@ -498,6 +550,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "Try again"
+          }
+        }
+      }
+    },
+    "browser.field_next": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next field"
+          }
+        }
+      }
+    },
+    "browser.field_previous": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous field"
           }
         }
       }
@@ -778,7 +852,6 @@
         }
       }
     },
-    "CONTENT BLOCKING": {},
     "Delete": {},
     "demo.account_caption": {
       "localizations": {
@@ -2220,16 +2293,6 @@
         }
       }
     },
-    "browser.clear": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Clear"
-          }
-        }
-      }
-    },
     "browser.close": {
       "extractionState": "manual",
       "localizations": {
@@ -2348,6 +2411,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pin"
+          }
+        }
+      }
+    },
+    "browser.print": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Print"
           }
         }
       }

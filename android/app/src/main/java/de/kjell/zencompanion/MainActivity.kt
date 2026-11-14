@@ -1,6 +1,7 @@
 package de.kjell.zencompanion
 
 import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -12,6 +13,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.listSaver
@@ -22,8 +24,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.viewmodel.compose.viewModel
 import de.kjell.zencompanion.review.PlayInAppReview
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.AppViewModel
@@ -33,6 +35,7 @@ import de.kjell.zencompanion.ui.screens.MiniBrowserScreen
 import de.kjell.zencompanion.ui.screens.MozillaSignInScreen
 import de.kjell.zencompanion.ui.screens.SignInLandingView
 import de.kjell.zencompanion.ui.screens.SpacesBrowserScreen
+import de.kjell.zencompanion.ui.screens.incomingWebLink
 import de.kjell.zencompanion.ui.sheets.SettingsSheet
 import de.kjell.zencompanion.ui.sheets.SignInHelpSheet
 import de.kjell.zencompanion.ui.sheets.SyncedActivitySheet
@@ -43,34 +46,105 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import de.kjell.zencompanion.ui.sheets.ZenSheet
 import de.kjell.zencompanion.ui.theme.ZenTheme
+import java.util.UUID
 import kotlinx.coroutines.delay
 
 /** The browser being open. The pages live in [BrowserPages]; [url] reopens one after the process died. */
-private data class BrowserLaunch(val url: String?, val title: String?, val overview: Boolean)
+private data class BrowserLaunch(
+    val url: String?,
+    val title: String?,
+    val overview: Boolean,
+    /**
+     * Tells two launches apart, even when they name the same address: each is
+     * its own browser instead of inheriting the last one's screen.
+     */
+    val id: String = UUID.randomUUID().toString(),
+)
 
 /** Keeps an open browser across configuration changes (theme, font size, locale). */
 private val BrowserLaunchSaver = listSaver<BrowserLaunch?, Any?>(
-    save = { launch -> if (launch == null) emptyList() else listOf(launch.url, launch.title, launch.overview) },
+    save = { launch ->
+        if (launch == null) emptyList() else listOf(launch.url, launch.title, launch.overview, launch.id)
+    },
     restore = { values ->
-        if (values.isEmpty()) null else BrowserLaunch(values[0] as String?, values[1] as String?, values[2] as Boolean)
+        if (values.isEmpty()) null else BrowserLaunch(
+            values[0] as String?,
+            values[1] as String?,
+            values[2] as Boolean,
+            // State saved by a version without launch ids restores as a new one.
+            values.getOrNull(3) as? String ?: UUID.randomUUID().toString(),
+        )
     },
 )
+
+/** A web link another app handed over that is still waiting for sign-in. */
+private const val PENDING_LINK_KEY = "pendingIncomingLink"
 
 /**
  * Entry point: sign-in landing or the spaces browser (port of `HomeView`).
  */
 class MainActivity : ComponentActivity() {
+    /** One instance for the activity's lifetime, shared with the composition. */
+    private lateinit var appViewModel: AppViewModel
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        appViewModel = ViewModelProvider(this, AppViewModel.Factory(applicationContext))
+            .get(AppViewModel::class.java)
         enableEdgeToEdge()
+        // A recreation keeps the pending link in the ViewModel instead of
+        // opening the launch intent a second time. After the process ended the
+        // ViewModel is gone and the saved state carries the link that was
+        // still waiting for sign-in; one that was opened was never saved.
+        if (savedInstanceState == null) {
+            openIncomingLink(intent)
+        } else {
+            savedInstanceState.getString(PENDING_LINK_KEY)?.let(appViewModel::openLinkFromAnotherApp)
+        }
         setContent {
             ZenTheme {
-                val viewModel: AppViewModel = viewModel(factory = AppViewModel.Factory(applicationContext))
+                val viewModel = appViewModel
                 LaunchedEffect(Unit) { viewModel.bootstrap() }
 
                 HomeContent(viewModel)
             }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        // Only a link that has not opened yet is kept; consuming it clears the
+        // value, so a restart never reopens the page.
+        outState.putString(PENDING_LINK_KEY, appViewModel.incomingLink.value)
+    }
+
+    /**
+     * A link from another app while this one is already running. `singleTask`
+     * delivers it here instead of building a second copy inside the caller.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        openIncomingLink(intent)
+    }
+
+    override fun onDestroy() {
+        // Leaving the app before signing in drops a link that was kept for it.
+        if (isFinishing) appViewModel.discardIncomingLink()
+        super.onDestroy()
+    }
+
+    /** Only `VIEW` intents with an `http`/`https` or `zsync` data URI carry a web link. */
+    private fun openIncomingLink(intent: Intent?) {
+        // Reopening the app from Recents can replay the launch intent that
+        // brought it there, with no saved instance state, so the old link
+        // would open again as a new page. The system marks such a replay; a
+        // link the reader just picked never carries this flag.
+        val launchedFromHistory = intent != null &&
+            (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
+        if (launchedFromHistory) return
+        val address = incomingWebLink(intent?.action, intent?.scheme, intent?.dataString) ?: return
+        appViewModel.openLinkFromAnotherApp(address)
     }
 }
 
@@ -173,8 +247,15 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
         pinned = emptyList(),
     )
 
-    fun openBrowser(url: String?, title: String?, openedFromSpace: Boolean = false) {
-        if (url != null && preferences.alwaysOpenExternally) {
+    fun openBrowser(
+        url: String?,
+        title: String?,
+        openedFromSpace: Boolean = false,
+        fromAnotherApp: Boolean = false,
+    ) {
+        // A link another app handed over always opens here: sending it out
+        // again would hand it straight back once Z-Sync is the default browser.
+        if (!fromAnotherApp && url != null && preferences.alwaysOpenExternally) {
             openURLExternally(context, url)
         } else {
             pages.updateSpaces(spaces, currentSpace.id)
@@ -208,12 +289,28 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    val incomingLink by viewModel.incomingLink.collectAsState()
     val searchOnOpenPending by viewModel.searchOnOpenPending.collectAsState()
     LaunchedEffect(searchOnOpenPending) {
         if (!searchOnOpenPending) return@LaunchedEffect
-        // Leave an open browser, settings or activity sheet where the user left it.
-        if (activeBrowserLaunch == null && !showSettings && !showActivity) openBrowser(null, null)
+        // Leave an open browser, settings or activity sheet where the user left
+        // it. A link from another app is the tab this launch is for.
+        if (incomingLink == null && activeBrowserLaunch == null && !showSettings && !showActivity) {
+            openBrowser(null, null)
+        }
         viewModel.consumeSearchOnOpen()
+    }
+
+    // A web link from another app: the reader chose Z-Sync for it, so it opens
+    // on top of the spaces screen. Consumed first, so recomposition cannot
+    // open it twice; before sign-in it waits in the ViewModel.
+    LaunchedEffect(incomingLink) {
+        val url = incomingLink ?: return@LaunchedEffect
+        viewModel.consumeIncomingLink()
+        // A sheet would cover the page; close it like tapping a link does.
+        showSettings = false
+        showActivity = false
+        openBrowser(url, null, fromAnotherApp = true)
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -239,16 +336,21 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
 
         val launch = activeBrowserLaunch
         if (launch != null) {
-            MiniBrowserScreen(
-                pages = pages,
-                startsInOverview = launch.overview,
-                launchUrl = launch.url,
-                launchTitle = launch.title,
-                currentSpace = currentSpace,
-                allSpaces = spaces,
-                browserRepository = viewModel.browserRepository,
-                onDismiss = { activeBrowserLaunch = null },
-            )
+            // Keyed by launch: a link that arrives while the last browser is
+            // showing (its overview or history up) starts a browser of its own
+            // instead of putting the new page behind the old screen.
+            key(launch.id) {
+                MiniBrowserScreen(
+                    pages = pages,
+                    startsInOverview = launch.overview,
+                    launchUrl = launch.url,
+                    launchTitle = launch.title,
+                    currentSpace = currentSpace,
+                    allSpaces = spaces,
+                    browserRepository = viewModel.browserRepository,
+                    onDismiss = { activeBrowserLaunch = null },
+                )
+            }
         }
     }
 

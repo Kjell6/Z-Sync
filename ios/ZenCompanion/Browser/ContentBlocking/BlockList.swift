@@ -189,13 +189,30 @@ struct BlockList: Sendable {
         return suffixes(of: host).contains(where: set.contains)
     }
 
+    /// Second-level labels that are part of the suffix under a two-letter
+    /// country domain: `co` in `co.uk`, `com` in `com.au`. Only these keep
+    /// three labels in a site name, so a short site name such as `zdf` in
+    /// `zdf.de` stays a site of its own.
+    private static let genericSecondLevelLabels: Set<String> = [
+        "co", "com", "org", "net", "ac", "gov", "edu", "or", "ne", "go", "mil", "gob", "nom", "sch",
+    ]
+
+    /// Complete suffixes whose second-level label is part of the suffix only
+    /// under that exact country domain: `id.au`, `asn.au`. The same label is a
+    /// normal site name under every other country domain, so `cdn.id.de` stays
+    /// a part of `id.de`.
+    private static let countrySecondLevelSuffixes: Set<String> = ["id.au", "asn.au"]
+
     /// Whether two hosts belong to the same site, for third-party rules.
     ///
-    /// shortcut: compares the last two labels, or three under a short
-    /// second-level label such as `co.uk`, instead of reading the Public
-    /// Suffix List. It can only treat two sites as one (a rule then doesn't
-    /// fire), never split one site in two. Upgrade if that misses real
-    /// trackers.
+    /// shortcut: compares the last two labels, or three when the last label is
+    /// a two-letter country domain and the one before it is a generic
+    /// second-level label such as `co` in `co.uk`, or when the last two labels
+    /// are one of the complete suffixes listed separately such as `id.au`,
+    /// instead of reading the Public Suffix List. Both hosts of one site share
+    /// their last two labels, so the rule never splits a site in two; two sites
+    /// under a public suffix that isn't listed here count as one, which only
+    /// makes a rule not fire. Upgrade if that misses real trackers.
     static func isSameSite(_ a: String, _ b: String) -> Bool {
         site(of: a) == site(of: b)
     }
@@ -203,7 +220,10 @@ struct BlockList: Sendable {
     private static func site(of host: String) -> String {
         let labels = host.split(separator: ".")
         guard labels.count > 2 else { return host }
-        let keep = labels[labels.count - 1].count == 2 && labels[labels.count - 2].count <= 3 ? 3 : 2
+        let countryDomain = labels[labels.count - 1].count == 2
+        let genericSecondLevel = genericSecondLevelLabels.contains(String(labels[labels.count - 2]))
+        let completeSuffix = countrySecondLevelSuffixes.contains(labels.suffix(2).joined(separator: "."))
+        let keep = (countryDomain && genericSecondLevel) || completeSuffix ? 3 : 2
         return labels.suffix(keep).joined(separator: ".")
     }
 

@@ -417,7 +417,13 @@ class PinMenuButton: UIButton {
     override func contextMenuInteraction(_ interaction: UIContextMenuInteraction, willEndFor configuration: UIContextMenuConfiguration, animator: UIContextMenuInteractionAnimating?) {
         super.contextMenuInteraction(interaction, willEndFor: configuration, animator: animator)
         isMenuPresented = false
-        animator?.addCompletion { [weak self] in
+        // UIKit may hand over no animator; the completion would then never
+        // run and the host would wait on a dismissal that already happened.
+        guard let animator else {
+            coordinator?.menuDidDismiss()
+            return
+        }
+        animator.addCompletion { [weak self] in
             self?.coordinator?.menuDidDismiss()
         }
     }

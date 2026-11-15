@@ -416,6 +416,20 @@ class OpenPagesTests {
     }
 
     @Test
+    fun aWriteThatFailsKeepsTheListInMemory() {
+        // A file where the store's directory should be: nothing can be written.
+        val blocked = java.io.File(folder.root, "blocked")
+        blocked.writeText("not a directory")
+        val pages = store(blocked)
+
+        val page = pages.open(a)
+        pages.toggleKeep(page.id, failed = false)
+
+        assertTrue(pages.page(page.id)!!.isKept)
+        assertEquals(listOf(page.id), pages.pages.value.map { it.id })
+    }
+
+    @Test
     fun closeAllLeavesNothingOnDisk() {
         val dir = java.io.File(folder.root, "pages")
         val pages = store(dir)

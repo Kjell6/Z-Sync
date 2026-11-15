@@ -2,6 +2,7 @@ package de.kjell.zencompanion
 
 import androidx.compose.ui.text.input.TextFieldValue
 import de.kjell.zencompanion.R
+import de.kjell.zencompanion.data.BrowserHistory
 import de.kjell.zencompanion.data.SaveKind
 import de.kjell.zencompanion.data.SearchEngine
 import de.kjell.zencompanion.data.SearchEngines
@@ -14,6 +15,8 @@ import de.kjell.zencompanion.ui.browser.MiniBrowserZoom
 import de.kjell.zencompanion.ui.browser.SearchSuggestionClient
 import de.kjell.zencompanion.ui.components.PinDestination
 import de.kjell.zencompanion.ui.screens.BrowserPageError
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -52,6 +55,8 @@ class MiniBrowserViewModelTests {
         spaces: List<ZenSpaces.ZenSpace> = listOf(testSpace("s1"), testSpace("s2")),
         suggestionClient: SearchSuggestionClient = ForbiddenSuggestionClient(),
         suggestionDebounceMs: Long = 200,
+        readerParseDispatcher: CoroutineDispatcher = mainDispatcherRule.testDispatcher,
+        isSignedIn: () -> Boolean = { true },
     ) = MiniBrowserViewModel(
         repository = repository,
         initialUrl = initialUrl,
@@ -60,7 +65,24 @@ class MiniBrowserViewModelTests {
         currentSpaceId = "s1",
         suggestionClient = suggestionClient,
         suggestionDebounceMs = suggestionDebounceMs,
+        readerParseDispatcher = readerParseDispatcher,
+        isSignedIn = isSignedIn,
     )
+
+    @Test
+    fun signedOutNeverOpensThePinBanner() = runTest(mainDispatcherRule.testDispatcher) {
+        val repository = FakeMiniBrowserRepository()
+        val vm = newViewModel(repository = repository, isSignedIn = { false })
+
+        vm.triggerPinBanner()
+
+        assertFalse(vm.state.value.showPinBanner)
+        assertFalse(vm.allowsNormalTabs)
+        vm.commitPendingPinSave()
+        advanceTimeBy(10_000)
+        runCurrent()
+        assertTrue(repository.added.isEmpty())
+    }
 
     @Test
     fun aFailedLoadShowsThePanelForTheFailedAddress() = runTest(mainDispatcherRule.testDispatcher) {
@@ -82,6 +104,22 @@ class MiniBrowserViewModelTests {
 
         assertNull(vm.state.value.pageError)
         assertEquals("", vm.state.value.failedUrl)
+    }
+
+    @Test
+    fun theAddressFieldShowsTheFailedAddressWhileThePanelIsUp() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = newViewModel(initialUrl = "https://start.example/")
+        vm.onPageLoadFailed(BrowserPageError.HOST_NOT_FOUND, "https://bad.example/")
+
+        // Opening the field hands over the address that failed, not the page
+        // underneath it.
+        vm.onAddressFocusChange(true)
+        assertEquals("https://bad.example/", vm.state.value.addressText.text)
+
+        vm.clearPageError()
+        vm.endAddressEdit()
+        vm.onAddressFocusChange(true)
+        assertEquals("https://start.example/", vm.state.value.addressText.text)
     }
 
     @Test
@@ -447,6 +485,42 @@ class MiniBrowserViewModelTests {
     }
 
     @Test
+    fun theAnswerAddsToTheHistoryInsteadOfReplacingIt() = runTest(mainDispatcherRule.testDispatcher) {
+        BrowserHistory.clear()
+        BrowserHistory.record("https://news.ycombinator.com", "Hacker News")
+        // The engine names the page the history already has: one row, not two.
+        val client = RecordingSuggestionClient("""["news",["news today","hacker news","news live"]]""")
+        val vm = newViewModel(initialUrl = null, suggestionClient = client)
+        vm.onAddressFocusChange(true)
+        vm.onAddressTextChange(TextFieldValue("news"))
+
+        assertEquals(
+            listOf("history:https://news.ycombinator.com"),
+            vm.state.value.suggestionRows.map { it.id },
+        )
+
+        advanceTimeBy(1_000)
+        runCurrent()
+
+        assertEquals(
+            listOf("Hacker News", "news today", "news live"),
+            vm.state.value.suggestionRows.map { it.text },
+        )
+        assertEquals(
+            "https://news.ycombinator.com",
+            vm.state.value.suggestionRows.first().visit?.url,
+        )
+
+        // The next keystroke's answer must not push the page out either.
+        vm.onAddressTextChange(TextFieldValue("news y"))
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertEquals("https://news.ycombinator.com", vm.state.value.suggestionRows.first().visit?.url)
+
+        BrowserHistory.clear()
+    }
+
+    @Test
     fun changingToAUrlCancelsThePendingQuery() = runTest(mainDispatcherRule.testDispatcher) {
         val client = RecordingSuggestionClient()
         val vm = newViewModel(
@@ -528,6 +602,76 @@ class MiniBrowserViewModelTests {
         vm.resetPageZoom()
         assertEquals(MiniBrowserZoom.default, vm.state.value.pageZoom, 0.001f)
         assertFalse(MiniBrowserZoom.canReset(vm.state.value.pageZoom))
+    }
+
+    @Test
+    fun aReaderAnswerForThePageOnScreenOpensTheReader() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = newViewModel()
+        val payload = CompletableDeferred<String?>()
+        var requests = 0
+        vm.readerPayload = {
+            requests++
+            payload.await()
+        }
+
+        vm.toggleReader()
+        assertTrue(vm.state.value.readerLoading)
+
+        payload.complete("""{"title":"Old page","blocks":[{"kind":"p","text":"Body"}]}""")
+        runCurrent()
+
+        assertEquals(1, requests)
+        assertEquals("Old page", vm.state.value.readerArticle?.title)
+        assertEquals("Body", vm.state.value.readerArticle?.blocks?.single()?.text)
+        assertFalse(vm.state.value.readerLoading)
+    }
+
+    @Test
+    fun aReaderAnswerForAnOldPageIsDropped() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = newViewModel(initialUrl = "https://start.example/")
+        val payload = CompletableDeferred<String?>()
+        var requests = 0
+        vm.readerPayload = {
+            requests++
+            payload.await()
+        }
+
+        vm.toggleReader()
+        assertTrue(vm.state.value.readerLoading)
+
+        // The page moves on while the extraction is still under way.
+        vm.onCurrentUrlChange("https://next.example/")
+        payload.complete("""{"title":"Old page","blocks":[{"kind":"p","text":"Body"}]}""")
+        runCurrent()
+
+        assertEquals(1, requests)
+        assertNull(vm.state.value.readerArticle)
+        assertFalse(vm.state.value.readerLoading)
+        // Not even the "no article" notice belongs to a page that is gone.
+        assertNull(vm.state.value.notice)
+    }
+
+    @Test
+    fun aReaderAnswerAfterTheReaderClosedStaysClosed() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = newViewModel()
+        val payload = CompletableDeferred<String?>()
+        var requests = 0
+        vm.readerPayload = {
+            requests++
+            payload.await()
+        }
+
+        vm.toggleReader()
+        assertTrue(vm.state.value.readerLoading)
+        vm.closeReader()
+        assertFalse(vm.state.value.readerLoading)
+        payload.complete("""{"title":"Old page","blocks":[{"kind":"p","text":"Body"}]}""")
+        runCurrent()
+
+        assertEquals(1, requests)
+        assertNull(vm.state.value.readerArticle)
+        assertFalse(vm.state.value.readerLoading)
+        assertNull(vm.state.value.notice)
     }
 }
 

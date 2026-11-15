@@ -369,6 +369,14 @@ enum SearchSuggestions {
         if let scheme = URL(string: query)?.scheme, !scheme.isEmpty {
             return true
         }
+        // `localhost` with no port has no scheme and no dot, and submitting it
+        // opens `http://localhost`: the host must not be sent out either.
+        if query.range(
+            of: #"^localhost(?::\d{1,5})?(?:[/?#]\S*)?$"#,
+            options: [.regularExpression, .caseInsensitive]
+        ) != nil {
+            return true
+        }
         return query.contains(".") && query.rangeOfCharacter(from: .whitespacesAndNewlines) == nil
     }
 

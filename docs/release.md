@@ -44,6 +44,33 @@ The script archives, exports, uploads, waits for Apple's processing to reach
 first (or pass `--dirty` only when the maintainer explicitly wants the working
 state on a device).
 
+## Demo access for App Review and Play
+
+Reviewers cannot sign in with a Mozilla account that holds Zen data, so the app
+has a hidden sample-data mode. iOS and Android work the same way:
+
+1. Open the app while signed out. Below the grey placeholder tiles and rows
+   there is a line of bold text, **"Your Zen spaces appear here"**, with the
+   "Sign in with Mozilla" button under it.
+2. Tap exactly on the words "Your Zen spaces appear here" five times in a row,
+   with less than two seconds between taps. Taps anywhere else (the button, the
+   placeholders, empty space around the text) do not count.
+3. The phone vibrates briefly and the home fills with sample spaces under the
+   banner "Sample data — not connected to a Mozilla account".
+4. To leave, open Settings and tap "Exit sample data".
+
+Before each store submission, check that the review notes in App Store Connect
+(App Review Information → Notes) and the Play Console app-access instructions
+still say this. Notes written before the signed-out home was redesigned may
+point at the old sign-in card and its app mark, which no longer exist. Text to
+paste:
+
+> Z-Sync shows the Zen browser data of a Mozilla account. For review without
+> an account, there is a sample-data mode: on the first screen, tap the bold
+> text "Your Zen spaces appear here" (above the "Sign in with Mozilla" button)
+> five times quickly. Sample spaces then appear. To leave it, open Settings
+> and tap "Exit sample data".
+
 ## Checking what is actually live
 
 ```sh
@@ -53,6 +80,54 @@ state on a device).
 
 `6804470330` is the App Store Connect app id of Z-Sync
 (`de.kjell.zencompanion`). Use `asc.py apps` when it is unknown.
+
+## Default browser on iOS
+
+**iOS cannot be selected as the default browser yet.** Apple only allows it for
+apps that hold the `com.apple.developer.web-browser` entitlement, which the
+developer account has to request; until it is granted, declaring `http`/`https`
+URL types has no effect and the app is not offered as a browser. The code for
+receiving a link is already in place, so the remaining work is configuration
+and review.
+
+Z-Sync's own link form works today, without the entitlement:
+`zsync://open?url=<percent-encoded address>`, e.g.
+`zsync://open?url=https%3A%2F%2Fexample.com%2Fpage`. In Shortcuts, use an
+"Open URLs" action whose URL is `zsync://open?url=` followed by the
+URL-encoded address. Nothing else is accepted: another host or path, a missing
+or extra parameter, and any target that is not `http`/`https` with a host are
+ignored silently.
+
+Remaining maintainer steps, in order:
+
+1. Request the entitlement from Apple:
+   <https://developer.apple.com/contact/request/default-browser-entitlement/>.
+   It is tied to the app's bundle id (`de.kjell.zencompanion`) and the team.
+2. Add `com.apple.developer.web-browser` (Boolean, `true`) to the app's
+   entitlements — both `ios/ZenCompanion/ZenCompanion.entitlements` and the
+   `entitlements.properties` block in `ios/project.yml`, so a later `xcodegen`
+   run keeps it. Re-issue the provisioning profile afterwards.
+3. Add the `http` and `https` URL schemes to `CFBundleURLTypes` in
+   `ios/project.yml` and `ios/ZenCompanion/Info.plist`. `HomeView` already
+   routes `onOpenURL` links into the in-app browser. The app's own `zsync`
+   scheme is declared in both files already.
+4. Check Apple's requirements for default-browser apps before submitting:
+   - **A text field for a URL on launch, or search tools.** Met: the app opens
+     on the home screen, whose action bar has a search field, signed in or out;
+     one tap opens the address field. With "Open into search" on, that search
+     tab comes up at launch.
+   - **Navigate directly to the URL it is given.** Met: an `http`/`https` link
+     arriving through `onOpenURL` becomes a normal page in the in-app browser.
+     A link the app itself sends out is recognised when iOS hands it back and
+     opens in-app instead of being sent out again.
+   - **No redirects to unexpected locations.** Met: only `http`/`https` links
+     from another app are accepted, the address is opened like a typed one, and
+     it is not rewritten or handed to another app.
+5. Add a Settings row that opens the app's page in the Settings app, where the
+   reader can pick the default browser (`UIApplication.openSettingsURLString`).
+
+Until steps 1–3 are done, Z-Sync is not a selectable browser on iOS; only its
+own `zsync://open?url=` links reach it.
 
 ## Related
 

@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.print.PrintManager
 import android.view.inputmethod.InputMethodManager
 import android.webkit.WebView
 import androidx.activity.compose.BackHandler
@@ -14,6 +15,8 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateDpAsState
@@ -47,6 +50,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -61,9 +65,11 @@ import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -116,6 +122,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
@@ -126,10 +133,19 @@ import de.kjell.zencompanion.R
 import de.kjell.zencompanion.util.FriendlyError
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.BrowserRepository
+import de.kjell.zencompanion.ui.browser.BrowserDownload
+import de.kjell.zencompanion.ui.browser.BrowserDownloadCentre
 import de.kjell.zencompanion.ui.browser.BrowserPages
+import de.kjell.zencompanion.ui.browser.DownloadFailure
+import de.kjell.zencompanion.ui.browser.DownloadState
+import de.kjell.zencompanion.ui.browser.DownloadSummary
+import de.kjell.zencompanion.ui.browser.DownloadTask
 import de.kjell.zencompanion.ui.browser.MiniBrowserViewModel
 import de.kjell.zencompanion.ui.browser.PageSession
 import de.kjell.zencompanion.ui.browser.BlockingCard
+import de.kjell.zencompanion.ui.browser.downloadPercent
+import de.kjell.zencompanion.ui.browser.downloadReferrer
+import de.kjell.zencompanion.ui.browser.downloadSummary
 import de.kjell.zencompanion.data.BrowserVisit
 import de.kjell.zencompanion.data.ContentBlocking
 import de.kjell.zencompanion.data.ContentBlockingSettings
@@ -165,6 +181,9 @@ private class ScrollTracker {
     var downRun = 0
 }
 
+/** How far the tapped card has grown when it covers the screen to the eye. */
+private const val CardFilledScreen = 0.985f
+
 /** Space between two pages while they slide past each other. */
 private val PageGap = 12.dp
 
@@ -175,6 +194,8 @@ private val PageGap = 12.dp
 @Composable
 fun MiniBrowserScreen(
     pages: BrowserPages,
+    /** Signed out the browser is the same, without the pin path. */
+    signedIn: Boolean,
     /** Opened from the count on home: the overview first, no page yet. */
     startsInOverview: Boolean,
     /** Set when the app came back without its pages, after the process died. */
@@ -427,11 +448,13 @@ fun MiniBrowserScreen(
      * A page that was asleep has an empty WebView at first, and taking the card
      * away would flash it. The card stays until the page has loaded, briefly.
      */
-    suspend fun awaitFirstPaint(page: PageSession) {
+    suspend fun awaitFirstPaint(page: PageSession, paintsBefore: Int) {
         var sawLoading = false
         repeat(80) {
             val state = page.viewModel.state.value
             if (state.isLoading) sawLoading = true
+            // The first drawn frame is enough: the card only has to hide an empty view.
+            if (page.paintCount > paintsBefore) return
             if (state.progress >= 0.9f || (sawLoading && !state.isLoading)) return
             delay(50)
         }
@@ -454,6 +477,7 @@ fun MiniBrowserScreen(
         }
         val target = pages.session(page.id)
         val wasAsleep = target?.webView == null
+        val paintsBefore = target?.paintCount ?: 0
         // Chosen here, it is the current page at once. The deck's order still
         // holds for a moment, so going straight back to the deck — or swiping
         // from the page — finds the tab where it was, not already at the front.
@@ -464,13 +488,17 @@ fun MiniBrowserScreen(
         expandingCardId = page.id
         transition {
             launch { overviewReveal.animateTo(0f, DeckOpenSpring) }
-            cardExpansion.animateTo(1f, DeckOpenSpring)
-            if (wasAsleep && target != null) awaitFirstPaint(target)
+            // The spring's last stretch is invisible; the page takes over once
+            // the card fills the screen to the eye, not when the spring rests.
+            val expanding = launch { cardExpansion.animateTo(1f, DeckOpenSpring) }
+            snapshotFlow { cardExpansion.value >= CardFilledScreen }.first { it }
+            if (wasAsleep && target != null) awaitFirstPaint(target, paintsBefore)
+            expanding.cancel()
             showOverview = false
             expandingCardId = null
             cardExpansion.snapTo(0f)
             // The bar sits under the deck until now.
-            chromeAlpha.animateTo(1f, tween(180))
+            chromeAlpha.animateTo(1f, tween(150))
         }
     }
 
@@ -568,7 +596,9 @@ fun MiniBrowserScreen(
         }
     }
 
-    val saveKind = if (browserRepository.cachedSnapshot?.normalTabsCapability == ZenSpaces.NormalTabsCapability.ENABLED) {
+    val saveKind = if (signedIn &&
+        browserRepository.cachedSnapshot?.normalTabsCapability == ZenSpaces.NormalTabsCapability.ENABLED
+    ) {
         browserRepository.saveKind()
     } else {
         SaveKind.PINNED
@@ -615,6 +645,7 @@ fun MiniBrowserScreen(
                     .then(if (showOverview) Modifier.clearAndSetSemantics { } else Modifier),
                 session = session,
                 pages = pages,
+                signedIn = signedIn,
                 pageCount = openPages.size,
                 currentSpace = currentSpace,
                 allSpaces = allSpaces,
@@ -646,6 +677,7 @@ fun MiniBrowserScreen(
                         pages = pages,
                         openPages = openPages,
                         activeId = pages.active?.id.takeIf { excludedCardId == null },
+                        signedIn = signedIn,
                         spaces = allSpaces,
                         saveKind = saveKind,
                         hiddenCardId = hiddenCardId,
@@ -795,6 +827,8 @@ private const val PullCommitPoint = 0.16f
 private fun BrowserPageScreen(
     session: PageSession,
     pages: BrowserPages,
+    /** Signed out the bar has no pin control. */
+    signedIn: Boolean,
     pageCount: Int,
     currentSpace: ZenSpaces.ZenSpace,
     allSpaces: List<ZenSpaces.ZenSpace>,
@@ -824,33 +858,34 @@ private fun BrowserPageScreen(
     val shownSession by rememberUpdatedState(session)
     var paneWidth by remember { mutableIntStateOf(0) }
     val pageGapPx = with(LocalDensity.current) { PageGap.toPx() }
-    /** The link a long press is asking about. */
-    var linkMenu by remember { mutableStateOf<String?>(null) }
+    /** The link or image a long press is asking about. */
+    var hitMenu by remember { mutableStateOf<BrowserHitMenu?>(null) }
+    // One set for the screen: a page's file bridge and its download must match.
+    val requests = rememberBrowserPageRequests(pages)
     // Keyed: a collector carried over to another page reads the old page's
     // state for its first frames, and the bar would show that page's colors.
     val state by key(session.id) { viewModel.state.collectAsState() }
+    // The browser's downloads, not this page's: a popup that started a file
+    // may be gone while the capsule still reports it here.
+    val downloadTasks by BrowserDownloadCentre.tasks.collectAsState()
 
     // Scroll-driven bar: tucks away on the way down, returns on the way up.
     var barHidden by remember { mutableStateOf(false) }
     // Written on every scroll packet; a state write would recompose the screen.
     val scroll = remember { ScrollTracker() }
-    val onPageScroll: (Int) -> Unit = { scrollY ->
-        val delta = scrollY - scroll.lastY
+    val onPageScroll: (Int, Boolean) -> Unit = { scrollY, userDriven ->
+        val step = barScrollStep(
+            delta = scrollY - scroll.lastY,
+            scrollY = scrollY,
+            downRun = scroll.downRun,
+            userDriven = userDriven,
+        )
         scroll.lastY = scrollY
-        when {
-            // A short page, or the top of a long one, always keeps the bar.
-            scrollY <= 40 -> {
-                scroll.downRun = 0
-                barHidden = false
-            }
-            delta > 0 -> {
-                scroll.downRun += delta
-                if (scroll.downRun > 24 && scrollY > 80) barHidden = true
-            }
-            delta < -2 -> {
-                scroll.downRun = 0
-                barHidden = false
-            }
+        scroll.downRun = step.downRun
+        when (step.decision) {
+            BarScrollDecision.KEEP -> Unit
+            BarScrollDecision.SHOW -> barHidden = false
+            BarScrollDecision.HIDE -> barHidden = true
         }
     }
 
@@ -967,6 +1002,18 @@ private fun BrowserPageScreen(
         viewModel.endAddressEdit()
     }
 
+    /**
+     * Reload the page, remembering where the reader was: the reloaded document
+     * may otherwise land somewhere else. The bar's button and a page pull share
+     * this path, and a fresh load takes the error panel away with it.
+     */
+    fun reloadPage() {
+        webView?.let { view ->
+            session.reloadScroll = view.scrollY
+            view.reload()
+        }
+    }
+
     val defaultSurface = MaterialTheme.colorScheme.surface
     // The error panel sits on the surface color. The failed load leaves the
     // previous page's color behind, so the bar ignores it while it shows.
@@ -986,6 +1033,7 @@ private fun BrowserPageScreen(
         state.menuExpanded ||
         state.showPinBanner ||
         state.notice != null ||
+        downloadTasks.isNotEmpty() ||
         state.findVisible ||
         state.readerArticle != null ||
         state.pageError != null
@@ -1155,6 +1203,7 @@ private fun BrowserPageScreen(
                 PageStack(
                     pages = pages,
                     active = session,
+                    requests = requests,
                     offset = { pageSwipe.value },
                     gap = pageGapPx,
                     offersNewPage = offersNewPage,
@@ -1166,7 +1215,8 @@ private fun BrowserPageScreen(
                         scroll.downRun = 0
                         scroll.lastY = 0
                     },
-                    onLinkLongPress = { linkMenu = it },
+                    onHitLongPress = { hitMenu = it },
+                    onPullRefresh = ::reloadPage,
                 )
 
                 if (state.readerArticle != null) {
@@ -1254,9 +1304,46 @@ private fun BrowserPageScreen(
                 ) {
                     NoticeBanner(notice = shownNotice)
                 }
+
+                // The browser's downloads, above the bar. The capsule rides
+                // over the pin banner so the two never cover each other.
+                val capsuleLift by animateDpAsState(
+                    targetValue = if (state.showPinBanner) 64.dp else 0.dp,
+                    label = "downloadCapsuleLift",
+                )
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = downloadTasks.isNotEmpty(),
+                    enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 16.dp + capsuleLift, start = 20.dp, end = 20.dp),
+                ) {
+                    DownloadCapsule(tasks = downloadTasks)
+                }
             }
 
                 Spacer(Modifier.height(reservedBottom))
+            }
+
+            // The open menu owns the screen, as on iOS: the page behind it takes
+            // no touches, and a touch anywhere outside the bar closes the menu.
+            if (state.menuExpanded) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false).consume()
+                                viewModel.collapseMenu()
+                                // The rest of this touch goes nowhere either.
+                                do {
+                                    val event = awaitPointerEvent()
+                                    event.changes.forEach { it.consume() }
+                                } while (event.changes.any { it.pressed })
+                            }
+                        },
+                )
             }
 
             AnimatedVisibility(
@@ -1274,6 +1361,7 @@ private fun BrowserPageScreen(
                     MiniBrowserBar(
                         state = state,
                         viewModel = viewModel,
+                        signedIn = signedIn,
                         onClose = onDismiss,
                         pageCount = pageCount,
                         onOpenPages = onOpenOverview,
@@ -1310,17 +1398,27 @@ private fun BrowserPageScreen(
                             finishAddressEdit()
                         },
                         // A page that failed to load has nothing worth pinning.
-                        canPin = allSpaces.isNotEmpty() && state.pageError == null,
-                        onBack = { webView?.goBack() },
-                        onForward = { webView?.goForward() },
-                        onReload = {
-                            webView?.let { view ->
-                                // Remember where the reader was: the reloaded
-                                // page may otherwise land somewhere else.
-                                session.reloadScroll = view.scrollY
-                                view.reload()
+                        canPin = signedIn && allSpaces.isNotEmpty() && state.pageError == null,
+                        // A page that is not showing has nothing to print.
+                        canPrint = webView != null &&
+                            effectiveUrl.isNotEmpty() &&
+                            effectiveUrl != "about:blank" &&
+                            state.pageError == null &&
+                            state.readerArticle == null,
+                        onPrint = {
+                            val view = webView
+                            if (view != null) {
+                                // The menu goes for the system's own sheet.
+                                viewModel.collapseMenu()
+                                val jobName = state.currentTitle.takeIf { it.isNotBlank() }
+                                    ?: addressDisplay(effectiveUrl)
+                                context.activity()?.getSystemService(PrintManager::class.java)
+                                    ?.print(jobName, view.createPrintDocumentAdapter(jobName), null)
                             }
                         },
+                        onBack = { webView?.goBack() },
+                        onForward = { webView?.goForward() },
+                        onReload = ::reloadPage,
                         onStop = { webView?.stopLoading() },
                         onCopyLink = {
                             if (effectiveUrl.isNotEmpty()) {
@@ -1391,23 +1489,55 @@ private fun BrowserPageScreen(
         }
     }
 
-    linkMenu?.let { url ->
+    hitMenu?.let { menu ->
         LinkMenu(
-            url = url,
+            menu = menu,
             onOpenInNewPage = {
-                linkMenu = null
-                pages.capture(session)
-                pages.open(url, openerId = session.id)
+                hitMenu = null
+                menu.link?.let { link ->
+                    pages.capture(session)
+                    pages.open(link, openerId = session.id)
+                }
             },
             onCopy = {
-                linkMenu = null
-                copyLink(context, url)
+                hitMenu = null
+                menu.link?.let { copyLink(context, it) }
             },
             onShare = {
-                linkMenu = null
-                shareUrl(context, url, "")
+                hitMenu = null
+                menu.link?.let { shareUrl(context, it, "") }
             },
-            onDismiss = { linkMenu = null },
+            onSaveImage = {
+                hitMenu = null
+                val image = menu.image
+                val view = webView
+                if (image != null && view != null) {
+                    // Chosen by the reader, so it goes straight to Downloads with
+                    // the same notices a page's own download gets.
+                    requests.forSession(session).download(
+                        view,
+                        BrowserDownload(
+                            url = image,
+                            userAgent = view.settings.userAgentString,
+                            contentDisposition = null,
+                            mimeType = null,
+                            referer = downloadReferrer(effectiveUrl, image),
+                        ),
+                    )
+                }
+            },
+            onOpenImageInNewPage = {
+                hitMenu = null
+                menu.image?.let { image ->
+                    pages.capture(session)
+                    pages.open(image, openerId = session.id)
+                }
+            },
+            onCopyImage = {
+                hitMenu = null
+                menu.image?.let { copyLink(context, it) }
+            },
+            onDismiss = { hitMenu = null },
         )
     }
 
@@ -1464,14 +1594,17 @@ private fun peekBar(pages: BrowserPages, page: OpenPage): PeekBar {
 private fun PageStack(
     pages: BrowserPages,
     active: PageSession,
+    /** The screen's page requests, shared with the long-press menu outside the stack. */
+    requests: BrowserPageRequests,
     offset: () -> Float,
     gap: Float,
     offersNewPage: Boolean,
     blockingSettings: ContentBlockingSettings,
     consentBundle: String?,
-    onActiveScroll: (Int) -> Unit,
+    onActiveScroll: (scrollY: Int, userDriven: Boolean) -> Unit,
     onActivePageStarted: () -> Unit,
-    onLinkLongPress: (String) -> Unit,
+    onHitLongPress: (BrowserHitMenu) -> Unit,
+    onPullRefresh: () -> Unit,
 ) {
     val openPages by pages.store.pages.collectAsState()
     val switchingOrder by pages.store.switchingOrder.collectAsState()
@@ -1479,8 +1612,10 @@ private fun PageStack(
     val previousId = previous?.id
     val nextId = next?.id
     val currentActive by rememberUpdatedState(active)
-    val requests = rememberBrowserPageRequests(pages)
     BrowserPromptDialogs(active, requests)
+    // A video on the whole display takes Back first. Composed here, inside the
+    // screen's later part, so it outranks the browser's own back handling.
+    BackHandler(enabled = requests.isFullscreen) { requests.exitFullscreen() }
     // A blank page is the bare plate, in the app's paper: the same background
     // the Settings sheet uses, not a darker version of it.
     val surface = MaterialTheme.colorScheme.surface
@@ -1550,7 +1685,8 @@ private fun PageStack(
                         isAddressFocused = state.isAddressFocused,
                         desktopSite = state.requestsDesktopSite,
                         pageZoom = state.pageZoom,
-                        savedHistory = { session.history.also { session.history = null } },
+                        pageThemeColor = state.siteThemeColor,
+                        savedHistory = { pages.takeHistory(session) },
                         takePopup = { session.pendingPopup.also { session.pendingPopup = null } },
                         onWebViewCreated = { session.webView = it },
                         onWebViewReleased = { pages.webViewReleased(session, it) },
@@ -1559,8 +1695,17 @@ private fun PageStack(
                             pages.open(null, openerId = session.id, popup = message)
                         },
                         onCloseWindow = { pages.close(session.id) },
-                        onLinkLongPress = onLinkLongPress,
+                        onHitLongPress = onHitLongPress,
                         onPageLoaded = { pages.pageLoaded(session) },
+                        onPageDrawn = { session.paintCount++ },
+                        onPullRefresh = onPullRefresh,
+                        // A sheet, the reader, find or an error panel owns the
+                        // gestures over the page, and so does a full-screen video.
+                        pullToRefreshEnabled = !state.isAddressFocused &&
+                            !state.findVisible &&
+                            state.readerArticle == null &&
+                            state.pageError == null &&
+                            !requests.isFullscreen,
                         onLoadingChange = { loading ->
                             viewModel.onLoadingChange(loading)
                             if (!loading) {
@@ -1595,12 +1740,16 @@ private fun PageStack(
                         onRendererGone = { url ->
                             viewModel.onPageLoadFailed(BrowserPageError.CRASHED, url ?: state.currentUrl)
                             viewModel.onLoadingChange(false)
+                            // The page's own files went with its renderer.
+                            requests.pageLeft(session.id)
                             session.webView = null
                             session.webViewGeneration++
                         },
                         onLinkUnavailable = viewModel::onLinkUnavailable,
                         requests = remember(session.id) { requests.forSession(session) },
-                        onScrollChange = { if (session === currentActive) onActiveScroll(it) },
+                        onScrollChange = { scrollY, userDriven ->
+                            if (session === currentActive) onActiveScroll(scrollY, userDriven)
+                        },
                         onFindResult = { current, total ->
                             viewModel.setFindProgress(if (total > 0) "$current/$total" else null)
                         },
@@ -1760,6 +1909,144 @@ private fun NoticeBanner(notice: MiniBrowserViewModel.Notice?) {
     }
 }
 
+/**
+ * The browser's downloads: a file still arriving with its bar and its cancel,
+ * one waiting for the save screen, or what came of it. It shows on whichever
+ * page is in front, wherever the file came from.
+ */
+@Composable
+private fun DownloadCapsule(tasks: List<DownloadTask>) {
+    val summary = downloadSummary(tasks) ?: return
+    Surface(
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shadowElevation = 8.dp,
+        tonalElevation = 6.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        text = downloadTitle(summary),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = 240.dp),
+                    )
+                    val fraction = summary.fraction
+                    if (summary.state == DownloadState.Downloading && fraction != null) {
+                        Text(
+                            text = stringResource(
+                                R.string.browser_download_percent,
+                                downloadPercent(fraction) ?: 0,
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                when (summary.state) {
+                    DownloadState.Downloading -> {
+                        val fraction = summary.fraction
+                        if (fraction == null) {
+                            // The server named no size: a bar would be a guess.
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(12.dp),
+                                strokeWidth = 1.5.dp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        } else {
+                            DownloadBar(fraction)
+                        }
+                    }
+                    is DownloadState.Failed -> Text(
+                        text = downloadFailureText(summary.reason),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                    )
+                    else -> Unit
+                }
+            }
+            if (summary.state == DownloadState.Downloading) {
+                IconButton(
+                    onClick = { summary.ids.forEach(BrowserDownloadCentre::cancel) },
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = stringResource(R.string.browser_download_cancel),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** A thin bar that fills as the bytes arrive. */
+@Composable
+private fun DownloadBar(fraction: Float) {
+    Box(
+        modifier = Modifier
+            .width(160.dp)
+            .height(3.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(fraction.coerceIn(0f, 1f))
+                .height(3.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)),
+        )
+    }
+}
+
+@Composable
+private fun downloadTitle(summary: DownloadSummary): String {
+    val single = summary.count == 1
+    return when (summary.state) {
+        DownloadState.Downloading -> if (single) {
+            stringResource(R.string.browser_download_started, summary.name)
+        } else {
+            stringResource(R.string.browser_download_started_many, summary.count)
+        }
+        DownloadState.ChoosingLocation -> if (single) {
+            stringResource(R.string.browser_download_choose, summary.name)
+        } else {
+            stringResource(R.string.browser_download_choose_many, summary.count)
+        }
+        DownloadState.Saved -> if (single) {
+            stringResource(R.string.browser_download_finished, summary.name)
+        } else {
+            stringResource(R.string.browser_download_finished_many, summary.count)
+        }
+        is DownloadState.Failed -> if (single) {
+            stringResource(R.string.browser_download_failed, summary.name)
+        } else {
+            stringResource(R.string.browser_download_failed_many, summary.count)
+        }
+    }
+}
+
+@Composable
+private fun downloadFailureText(reason: DownloadFailure?): String = when (reason) {
+    DownloadFailure.NETWORK -> stringResource(R.string.browser_download_reason_network)
+    DownloadFailure.STORAGE -> stringResource(R.string.browser_download_reason_storage)
+    DownloadFailure.SAVE, null -> stringResource(R.string.browser_download_reason_save)
+}
+
 // MARK: - Find bar
 
 @Composable
@@ -1777,7 +2064,9 @@ private fun MiniBrowserFindBar(
         modifier = Modifier
             .fillMaxWidth()
             .background(zen.background)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            // The step buttons take the platform's 48 dp; half the air above
+            // and below them keeps the strip at the height it had at 36 dp.
+            .padding(horizontal = 16.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -1833,9 +2122,10 @@ private fun FindStep(
     onClick: () -> Unit,
 ) {
     val zen = LocalZenColors.current
+    // The platform's least touch target; the 20 dp glyph stays as it is.
     Box(
         modifier = Modifier
-            .size(36.dp)
+            .size(48.dp)
             .barClickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -1858,12 +2148,4 @@ internal fun shareUrl(context: Context, url: String, title: String) {
         if (title.isNotEmpty()) putExtra(Intent.EXTRA_SUBJECT, title)
     }
     runCatching { context.startActivity(Intent.createChooser(intent, null)) }
-}
-
-/** The page's host for blocking, or null for a blank or non-web page. */
-private fun pageHost(url: String): String? {
-    val uri = runCatching { android.net.Uri.parse(url) }.getOrNull() ?: return null
-    val scheme = uri.scheme?.lowercase()
-    if (scheme != "http" && scheme != "https") return null
-    return uri.host?.takeIf { it.isNotEmpty() }
 }

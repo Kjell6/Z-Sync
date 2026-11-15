@@ -1,9 +1,11 @@
 package de.kjell.zencompanion
 
+import android.content.Context
 import android.content.ContextWrapper
 import android.content.SharedPreferences
 import de.kjell.zencompanion.data.AccountStore
 import de.kjell.zencompanion.data.AppEvents
+import de.kjell.zencompanion.data.BrowserHistory
 import de.kjell.zencompanion.data.DemoCatalog
 import de.kjell.zencompanion.data.EssentialsColumns
 import de.kjell.zencompanion.data.KeptPageLifetime
@@ -20,6 +22,7 @@ import de.kjell.zencompanion.ui.ActivityRepository
 import de.kjell.zencompanion.ui.AndroidPreferencesRepository
 import de.kjell.zencompanion.ui.AppViewModel
 import de.kjell.zencompanion.ui.BrowserRepository
+import de.kjell.zencompanion.ui.browser.BrowserPages
 import de.kjell.zencompanion.ui.LoginCompleter
 import de.kjell.zencompanion.ui.PreferencesRepository
 import de.kjell.zencompanion.ui.PreferencesState
@@ -179,6 +182,32 @@ class AppViewModelTests {
         assertFalse(AccountStore.isSignedIn(context))
     }
 
+    /**
+     * The mini-browser belongs to the phone, not to the account: signing out
+     * keeps its open pages (kept ones included) and its history.
+     */
+    @Test
+    fun signOutKeepsTheBrowsersHistoryAndOpenPages() = runTest(mainDispatcherRule.testDispatcher) {
+        val repository = FakeBrowserRepository()
+        val vm = newViewModel(browser = repository)
+        vm.completeSignIn(snapshot())
+        val pages = BrowserPages.shared(context, repository)
+        val address = "https://sign-out-keeps.example/page"
+        val page = pages.open(address, "Kept")
+        pages.toggleKeep(page.id)
+        BrowserHistory.record(address, "Kept")
+
+        try {
+            vm.signOut()
+
+            assertTrue(BrowserHistory.visits.value.any { it.url == address })
+            assertEquals(listOf(page.id), pages.store.pages.value.map { it.id })
+        } finally {
+            pages.closeAll()
+            BrowserHistory.clear()
+        }
+    }
+
     @Test
     fun enterDemoStillEntersMemoryOnlySessionWhenSaveFails() = runTest(mainDispatcherRule.testDispatcher) {
         AccountStore.secureStoreFactory = { null }
@@ -194,8 +223,11 @@ class AppViewModelTests {
     @Test
     fun refreshWaitsForInFlightReloadThenFetchesAgain() = runTest(mainDispatcherRule.testDispatcher) {
         val browser = FakeBrowserRepository()
-        browser.refreshGate = CompletableDeferred()
         val vm = newViewModel(browser = browser)
+        vm.completeSignIn(snapshot())
+        advanceUntilIdle()
+        browser.refreshCalls = 0
+        browser.refreshGate = CompletableDeferred()
 
         vm.reload()
         runCurrent()
@@ -215,8 +247,11 @@ class AppViewModelTests {
     @Test
     fun reloadDuringReloadRunsAgainAfterward() = runTest(mainDispatcherRule.testDispatcher) {
         val browser = FakeBrowserRepository()
-        browser.refreshGate = CompletableDeferred()
         val vm = newViewModel(browser = browser)
+        vm.completeSignIn(snapshot())
+        advanceUntilIdle()
+        browser.refreshCalls = 0
+        browser.refreshGate = CompletableDeferred()
 
         vm.reload()
         runCurrent()
@@ -233,14 +268,32 @@ class AppViewModelTests {
     @Test
     fun interruptedRefreshIsRetriedOnce() = runTest(mainDispatcherRule.testDispatcher) {
         val browser = FakeBrowserRepository()
-        browser.refreshFailures += java.util.concurrent.CancellationException("request interrupted")
         val vm = newViewModel(browser = browser)
+        vm.completeSignIn(snapshot())
+        advanceUntilIdle()
+        browser.refreshCalls = 0
+        browser.refreshFailures += java.util.concurrent.CancellationException("request interrupted")
 
         vm.reload()
         advanceUntilIdle()
 
         assertEquals(2, browser.refreshCalls)
         assertNull(vm.browser.value.loadErrorRes)
+    }
+
+    @Test
+    fun signedOutNeverSyncsSpaces() = runTest(mainDispatcherRule.testDispatcher) {
+        val browser = FakeBrowserRepository(snapshot = snapshotWithPinnedTab())
+        val vm = newViewModel(browser = browser)
+
+        vm.bootstrap()
+        vm.reload()
+        vm.refresh()
+        advanceUntilIdle()
+
+        assertNull(vm.session.value)
+        assertEquals(0, browser.refreshCalls)
+        assertTrue(vm.browser.value.snapshot.spaces.isEmpty())
     }
 
     @Test
@@ -333,19 +386,76 @@ class AppViewModelTests {
     }
 
     @Test
-    fun openIntoSearchSkipsAnOpenWithoutSpaces() = runTest(mainDispatcherRule.testDispatcher) {
-        val vm = newViewModel(browser = oneSpaceBrowser(), preferences = searchPreferences())
+    fun openIntoSearchOpensSignedOut() = runTest(mainDispatcherRule.testDispatcher) {
+        // No account and no spaces: the signed-out home still opens the search
+        // tab, once per trip to the foreground.
+        val vm = newViewModel(preferences = searchPreferences())
 
-        // First launch after sign-in: the screen starts before any spaces load.
         vm.appCameToForeground()
-        vm.completeSignIn(snapshot())
-        advanceUntilIdle()
+        assertEquals(true, vm.searchOnOpenPending.value)
+        vm.consumeSearchOnOpen()
+
         vm.appCameToForeground()
         assertEquals(false, vm.searchOnOpenPending.value)
 
         vm.appWentToBackground()
         vm.appCameToForeground()
         assertEquals(true, vm.searchOnOpenPending.value)
+    }
+
+    @Test
+    fun openIntoSearchWaitsForSpacesWhenSignedIn() = runTest(mainDispatcherRule.testDispatcher) {
+        val browser = FakeBrowserRepository()
+        val vm = newViewModel(browser = browser, preferences = searchPreferences())
+        vm.completeSignIn(snapshot())
+        advanceUntilIdle()
+
+        // First launch after sign-in: the screen starts before any spaces load.
+        vm.appCameToForeground()
+        assertEquals(false, vm.searchOnOpenPending.value)
+
+        browser.snapshot = ZenSpaces.ZenSnapshot(
+            listOf(ZenSpaces.ZenSpace("s1", "One", null, null, null, emptyList())),
+        )
+        vm.reload()
+        advanceUntilIdle()
+        vm.appWentToBackground()
+        vm.appCameToForeground()
+        assertEquals(true, vm.searchOnOpenPending.value)
+    }
+
+    @Test
+    fun incomingLinkOpensWhileSignedOut() = runTest(mainDispatcherRule.testDispatcher) {
+        val browser = FakeBrowserRepository()
+        val vm = newViewModel(browser = browser)
+
+        vm.openLinkFromAnotherApp("https://example.com/from-another-app")
+
+        // No account and no sync: the link is ready for the browser at once,
+        // rather than waiting for a sign-in that may never come.
+        assertNull(vm.session.value)
+        assertEquals("https://example.com/from-another-app", vm.incomingLink.value)
+        assertEquals(0, browser.refreshCalls)
+
+        vm.consumeIncomingLink()
+        assertNull(vm.incomingLink.value)
+    }
+
+    @Test
+    fun incomingLinkDropsWhatIsNotAWebAddress() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = newViewModel()
+
+        for (url in listOf(
+            "javascript:alert(1)",
+            "file:///etc/hosts",
+            "content://com.example/secret",
+            "intent://scan/#Intent;scheme=zxing;end",
+            "mailto:nobody@example.com",
+            "  ",
+        )) {
+            vm.openLinkFromAnotherApp(url)
+            assertNull(url, vm.incomingLink.value)
+        }
     }
 
     @Test
@@ -848,7 +958,11 @@ private class FakeAppContext : ContextWrapper(null) {
     private val prefs = mutableMapOf<String, String>()
     private val files = File(System.getProperty("java.io.tmpdir"), "zen-appvm-${System.nanoTime()}")
 
+    override fun getApplicationContext(): Context = this
+
     override fun getFilesDir(): File = files
+
+    override fun getNoBackupFilesDir(): File = files
 
     override fun getSharedPreferences(name: String?, mode: Int): SharedPreferences =
         FakePrefsSharedPreferences(prefs)

@@ -22,6 +22,9 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
     /// layout viewport is pushed up by this much, so its bottom-most content
     /// and fixed banners stay clear of the glass. Zero while the bar is away.
     var bottomClearance: CGFloat = 0
+    /// Whether the page may be pulled to refresh right now. The reader, the
+    /// address editor and the error panel take the pull away.
+    var pullToRefreshAllowed = true
     var previous: PeekingPage?
     var next: PeekingPage?
     /// The current page's color while it is sliding; nil while it sits still.
@@ -52,13 +55,16 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
             host.setCornerRadius(cornerRadius)
         }
         for peek in [previous, next] {
-            (peek?.webView as? MiniBrowserWebView)?.setBottomClearance(bottomClearance)
+            let view = peek?.webView as? MiniBrowserWebView
+            view?.setBottomClearance(bottomClearance)
+            view?.setPullToRefreshAllowed(pullToRefreshAllowed)
         }
         guard let webView = model.webView as? MiniBrowserWebView else { return }
         if !webView.isUserInteractionEnabled {
             webView.isUserInteractionEnabled = true
         }
         webView.setBottomClearance(bottomClearance)
+        webView.setPullToRefreshAllowed(pullToRefreshAllowed)
         model.applyWebpagePreferences()
         model.applyPageZoom()
     }
@@ -233,7 +239,7 @@ extension Color {
         } else {
             let r = Double((rgb & 0xF00) >> 8) / 15.0
             let g = Double((rgb & 0x0F0) >> 4) / 15.0
-            let b = Double((rgb & 0x00F) >> 4) / 15.0
+            let b = Double(rgb & 0x00F) / 15.0
             self.init(red: r, green: g, blue: b)
         }
     }

@@ -10,12 +10,35 @@ struct BrowserTabSession: Identifiable {
     var startsInOverview = false
 }
 
+/// What the incoming-link task waits for: the link itself, and the answer to
+/// the content-blocking question. That question is a full-screen cover of its
+/// own, so the link has to wait for it rather than open behind it.
+private struct IncomingLinkRequest: Equatable {
+    let link: URL?
+    let blockerAsked: Bool
+}
+
 /// The whole app: swipe between spaces (pinned tabs + folders per space),
 /// space switcher at the bottom and the action bar (activity, search,
 /// settings) above the essentials grid or below the switcher, per the
-/// user's `ToolbarPlacement`.
+/// user's `ToolbarPlacement`. Signed out the same screen stands: the account's
+/// content is a placeholder skeleton and a card offers sign-in.
 struct SpacesBrowserView: View {
-    let account: AccountSnapshot
+    /// The signed-in account, nil while the reader uses the app without one.
+    let account: AccountSnapshot?
+    /// Why the last session ended, shown in the signed-out card.
+    var sessionNotice: String? = nil
+    /// A web link another app handed to Z-Sync before this screen was up. It
+    /// opens at once, signed in or out.
+    var incomingLink: URL? = nil
+    /// The link was taken: it opens once, like a tab tapped here.
+    var onConsumeIncomingLink: () -> Void = {}
+    /// Starts the existing Mozilla sign-in flow from the signed-out card.
+    var onPresentSignIn: () -> Void = {}
+    /// The sign-in help sheet under the card.
+    var onPresentSignInHelp: () -> Void = {}
+    /// The hidden demo unlock behind the card's app mark and title.
+    var onDemoTap: () -> Void = {}
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.scenePhase) private var scenePhase
@@ -52,12 +75,32 @@ struct SpacesBrowserView: View {
     /// A pin inside the mini-browser (or a delete from it) fired while a sheet
     /// was up; refresh once the last sheet is gone.
     @State private var pendingStaleReload = false
+    /// The content-blocking question was still up when the link arrived: the
+    /// browser waits for its cover to be gone before it takes the screen.
+    @State private var incomingLinkWaitsForBlocker = false
 
-    init(account: AccountSnapshot) {
+    init(
+        account: AccountSnapshot?,
+        sessionNotice: String? = nil,
+        incomingLink: URL? = nil,
+        onConsumeIncomingLink: @escaping () -> Void = {},
+        onPresentSignIn: @escaping () -> Void = {},
+        onPresentSignInHelp: @escaping () -> Void = {},
+        onDemoTap: @escaping () -> Void = {}
+    ) {
         self.account = account
+        self.sessionNotice = sessionNotice
+        self.incomingLink = incomingLink
+        self.onConsumeIncomingLink = onConsumeIncomingLink
+        self.onPresentSignIn = onPresentSignIn
+        self.onPresentSignInHelp = onPresentSignInHelp
+        self.onDemoTap = onDemoTap
         _model = State(initialValue: BrowserModel(account: account))
         _whatsNew = State(initialValue: WhatsNewStore())
     }
+
+    private var isSignedIn: Bool { account != nil }
+    private var isDemo: Bool { account?.isDemo == true }
 
     private var effectiveScheme: ColorScheme {
         if let isDark = model.currentTheme?.isDarkTheme {
@@ -81,7 +124,7 @@ struct SpacesBrowserView: View {
                 .ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    if account.isDemo {
+                    if isDemo {
                         Text("demo.banner")
                             .zenFont(12, weight: .medium, design: .rounded)
                             .foregroundStyle(Palette.ink(effectiveScheme).opacity(0.7))
@@ -97,7 +140,9 @@ struct SpacesBrowserView: View {
 
                     let placement = model.toolbarPlacement
 
-                    if model.snapshot.spaces.isEmpty {
+                    if !isSignedIn {
+                        signedOutHome(scheme: effectiveScheme, placement: placement)
+                    } else if model.snapshot.spaces.isEmpty {
                         if placement == .top {
                             actionBar(scheme: effectiveScheme, placement: placement)
                         }
@@ -234,7 +279,7 @@ struct SpacesBrowserView: View {
         // Keyboard from the mini-browser sheet must not lift the space switcher.
         .ignoresSafeArea(.keyboard)
         .overlay(alignment: .top) {
-            if model.showShareTip && !model.snapshot.spaces.isEmpty {
+            if isSignedIn, model.showShareTip, !model.snapshot.spaces.isEmpty {
                 ShareExtensionTip(scheme: scheme) {
                     model.dismissShareTip()
                 }
@@ -251,7 +296,8 @@ struct SpacesBrowserView: View {
                     scheme: scheme,
                     normalTabsCapability: model.snapshot.normalTabsCapability,
                     onToolbarPlacementChange: { model.setToolbarPlacement($0) },
-                    onEssentialsColumnsChange: { model.setEssentialsColumns($0) }
+                    onEssentialsColumnsChange: { model.setEssentialsColumns($0) },
+                    onSignIn: { onPresentSignIn() }
                 )
                 // Single detent on purpose: with `[.fraction(0.85), .large]`
                 // the sheet dropped back to the small detent when a page with
@@ -306,7 +352,17 @@ struct SpacesBrowserView: View {
                     }
                 }
         }
-        .task { await model.initialLoad() }
+        .task(id: model.isSignedIn) { await model.initialLoad() }
+        .onChange(of: account?.uid) { _, _ in
+            // The sign-in sheet can replace the session under this screen.
+            // The browser model follows the account; the open pages do not go
+            // anywhere, they just cannot be saved into a space without one.
+            model.accountChanged(isSignedIn: isSignedIn, isDemo: isDemo)
+            openPages.canSave = isSignedIn
+        }
+        .task(id: IncomingLinkRequest(link: incomingLink, blockerAsked: ContentBlocker.shared.asked)) {
+            await takeIncomingLink()
+        }
         .task(id: ContentBlocker.shared.asked) {
             // Show release notes once per app version, after the first frame
             // has had a moment to settle. Demo mode skips it like the other
@@ -316,7 +372,7 @@ struct SpacesBrowserView: View {
             // question comes first; the notes wait for its answer.
             guard ContentBlocker.shared.asked else { return }
             try? await Task.sleep(for: .milliseconds(450))
-            guard !account.isDemo, activeSheet == nil, whatsNew.shouldPresent else { return }
+            guard !isDemo, activeSheet == nil, whatsNew.shouldPresent else { return }
             whatsNew.markPresented()
             activeSheet = .whatsNew
         }
@@ -348,7 +404,10 @@ struct SpacesBrowserView: View {
         .onChange(of: model.searchOnOpenPending) { _, pending in
             guard pending else { return }
             // Leave an open browser or settings sheet where the user left it.
-            if activeSheet == nil, browserSession == nil { openNewTab(in: model.activeSpace) }
+            // A link from another app is the page this launch is for.
+            if activeSheet == nil, browserSession == nil, incomingLink == nil {
+                openNewTab(in: model.activeSpace)
+            }
             model.consumeSearchOnOpen()
         }
         .onChange(of: model.reviewPromptPending) { _, pending in
@@ -366,9 +425,14 @@ struct SpacesBrowserView: View {
 
     private func actionBar(scheme: ColorScheme, placement: ToolbarPlacement) -> some View {
         HStack(spacing: 12) {
+            // The activity is the account's synced history. Signed out the
+            // button keeps its place, dimmed, so the row does not change shape
+            // with the sign-in.
             actionCard(systemName: "archivebox", accessibilityKey: "activity.title", scheme: scheme) {
                 activeSheet = .activity
             }
+            .disabled(!isSignedIn)
+            .opacity(isSignedIn ? 1 : 0.4)
 
             searchPill(scheme: scheme)
 
@@ -449,7 +513,7 @@ struct SpacesBrowserView: View {
             if pageCount > 0 {
                 // Its own target: the rest of the field still starts a search.
                 Button {
-                    openPages.allowsNormalTabs = model.snapshot.normalTabsCapability.allowsNormalTabs
+                    prepareOpenPages()
                     show(BrowserTabSession(space: model.activeSpace, startsInOverview: true))
                 } label: {
                     PageCountBadge(count: pageCount, side: 26)
@@ -466,6 +530,14 @@ struct SpacesBrowserView: View {
     private var openPages: OpenPagesStore { .shared }
     private var pageCount: Int { openPages.pages.count }
 
+    /// Brings the shared page store in line with this session before it opens
+    /// a browser: normal saves follow the synced capability, and saving at all
+    /// follows the account.
+    private func prepareOpenPages() {
+        openPages.allowsNormalTabs = model.snapshot.normalTabsCapability.allowsNormalTabs
+        openPages.canSave = isSignedIn
+    }
+
     private func openTab(_ tab: ZenTab, in space: ZenSpace) {
         guard let url = URL(string: tab.url) else { return }
         if model.alwaysOpenExternally {
@@ -479,10 +551,33 @@ struct SpacesBrowserView: View {
         presentBrowser(url: nil, title: nil, space: space)
     }
 
+    /// Opens the link another app handed over, exactly once. The task above
+    /// runs again when the content-blocking question is answered, because that
+    /// question is a full-screen cover: the link waits in the model for its
+    /// answer instead of opening behind it or being lost with it.
+    private func takeIncomingLink() async {
+        guard let url = incomingLink else {
+            incomingLinkWaitsForBlocker = false
+            return
+        }
+        guard ContentBlocker.shared.asked else {
+            incomingLinkWaitsForBlocker = true
+            return
+        }
+        if incomingLinkWaitsForBlocker {
+            incomingLinkWaitsForBlocker = false
+            // The cover has to start going before the browser can take the
+            // screen, like a sheet in `show()`. A newer link cancels this task.
+            do { try await Task.sleep(nanoseconds: 250_000_000) } catch { return }
+        }
+        onConsumeIncomingLink()
+        presentBrowser(url: url, title: nil, space: model.activeSpace)
+    }
+
     /// Opens the browser as a page. A sheet that is already up has to go
     /// first: SwiftUI will not present a full-screen cover over one.
     private func presentBrowser(url: URL?, title: String?, space: ZenSpace, openedFromSpace: Bool = false) {
-        openPages.allowsNormalTabs = model.snapshot.normalTabsCapability.allowsNormalTabs
+        prepareOpenPages()
         openPages.open(url: url, title: title, openedFromSpace: openedFromSpace)
         show(BrowserTabSession(space: space))
     }
@@ -506,9 +601,14 @@ struct SpacesBrowserView: View {
             space: session.space,
             allSpaces: spaces,
             allowsNormalTabs: model.snapshot.normalTabsCapability.allowsNormalTabs,
+            canSave: isSignedIn,
             startsInOverview: session.startsInOverview,
             onDismiss: { browserSession = nil }
         )
+        // Keyed by the launch: a link that arrives while the browser is up
+        // starts its own browser, not the last one with its overview or
+        // history still over the new page.
+        .id(session.id)
     }
 
     // MARK: States (shown until the first successful sync)
@@ -575,6 +675,221 @@ struct SpacesBrowserView: View {
             }
         }
     }
+
+    // MARK: - Signed out: the same home with the account's content sketched
+
+    /// The signed-in layout with the account's content as a skeleton: six
+    /// essentials and four tab rows, then the sign-in prompt where the rest
+    /// of the space would be. The action bar keeps its shape; the activity
+    /// (synced history) is dimmed and the space switcher is left out, since
+    /// neither works without an account.
+    @ViewBuilder
+    private func signedOutHome(scheme: ColorScheme, placement: ToolbarPlacement) -> some View {
+        if placement == .top {
+            actionBar(scheme: scheme, placement: placement)
+        }
+
+        SignedOutEssentialsSkeleton(
+            columns: model.essentialsColumns.columnCount(forItemCount: SignedOutEssentialsSkeleton.tileCount),
+            scheme: scheme
+        )
+        // The real grid's place on the screen, with its own air.
+        .padding(.top, 4)
+        .padding(.bottom, 6)
+
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 0) {
+                SignedOutTabsSkeleton(scheme: scheme)
+
+                signInPrompt(scheme: scheme)
+                    .padding(.top, 28)
+                    .padding(.bottom, 18)
+            }
+            .frame(maxWidth: .infinity)
+        }
+
+        if placement == .bottom {
+            actionBar(scheme: scheme, placement: placement)
+        }
+    }
+
+    /// The prompt under the skeleton rows: one line of title, a short pill
+    /// button and the help link, centred and each narrower than the last, so
+    /// the three read as one quiet step down instead of three equal blocks.
+    /// The title keeps the hidden demo unlock.
+    private func signInPrompt(scheme: ColorScheme) -> some View {
+        VStack(spacing: 0) {
+            Text("signedout.title")
+                .zenFont(17, weight: .semibold, design: .rounded)
+                .tracking(-0.2)
+                .foregroundStyle(Palette.ink(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+                .contentShape(Rectangle())
+                .onTapGesture { onDemoTap() }
+                .accessibilityAddTraits(.isHeader)
+
+            if let sessionNotice {
+                Text(sessionNotice)
+                    .zenFont(13, weight: .medium, design: .rounded)
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.6))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 6)
+            }
+
+            Button { onPresentSignIn() } label: {
+                Text("signedout.sign_in")
+                    .zenFont(15, weight: .semibold, design: .rounded)
+                    .lineLimit(1)
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, 11)
+                    .foregroundStyle(Palette.paper(scheme))
+                    .modifier(DomedFill(shape: Capsule(), scheme: scheme, fill: Palette.ink(scheme)))
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(LiquidPressButtonStyle())
+            .padding(.top, 16)
+
+            Button { onPresentSignInHelp() } label: {
+                Text("signin.help.link")
+                    .zenFont(13, weight: .medium, design: .rounded)
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.5))
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 12)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PressedButtonStyle())
+            .padding(.top, 4)
+        }
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, 20)
+        .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - Signed-out placeholders
+
+/// Six rounded tiles where the essentials grid is, drawn with the grid's own
+/// metrics. Decoration: hidden from VoiceOver, never tappable.
+private struct SignedOutEssentialsSkeleton: View {
+    static let tileCount = 6
+
+    let columns: Int
+    let scheme: ColorScheme
+
+    private var rows: Int {
+        let perRow = max(1, columns)
+        return (Self.tileCount + perRow - 1) / perRow
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ForEach(0..<rows, id: \.self) { row in
+                HStack(spacing: 10) {
+                    // A short last row stretches, like the real grid's.
+                    ForEach(0..<min(max(1, columns), Self.tileCount - row * max(1, columns)), id: \.self) { _ in
+                        RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous)
+                            .fill(Palette.lift(scheme))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 54)
+                            .glassRim(cornerRadius: Palette.liftCornerRadius)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .skeletonShimmer()
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+}
+
+/// Placeholder rows in the shape of pinned tabs: a favicon-sized square and a
+/// title-sized bar, then a folder-shaped row. Decoration only.
+private struct SignedOutTabsSkeleton: View {
+    let scheme: ColorScheme
+
+    var body: some View {
+        VStack(spacing: 0) {
+            tabRow(titleWidth: 168)
+            tabRow(titleWidth: 112)
+            tabRow(titleWidth: 196)
+            folderRow
+        }
+        .skeletonShimmer()
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+
+    private func tabRow(titleWidth: CGFloat) -> some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Palette.lift(scheme))
+                .frame(width: 28, height: 28)
+                .glassRim(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(Palette.ink(scheme).opacity(0.1))
+                .frame(width: titleWidth, height: 11)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 9)
+    }
+
+    private var folderRow: some View {
+        HStack(spacing: 12) {
+            SkeletonFolderIcon(color: Palette.ink(scheme).opacity(0.1))
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(Palette.ink(scheme).opacity(0.1))
+                .frame(width: 136, height: 12)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 9)
+    }
+}
+
+/// The folder silhouette in low ink: a body with a small tab on its top edge.
+private struct SkeletonFolderIcon: View {
+    let color: Color
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 4, style: .continuous)
+            .fill(color)
+            .frame(width: 28, height: 21)
+            .overlay(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(color)
+                    .frame(width: 12, height: 6)
+                    .offset(x: 3, y: -3)
+            }
+            .frame(width: 28, height: 28, alignment: .bottom)
+    }
+}
+
+/// A very slow breath on the placeholder shapes. Reduce Motion keeps them
+/// still; the skeletons hide themselves from VoiceOver.
+private struct SkeletonShimmer: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var bright = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(reduceMotion ? 1 : (bright ? 1 : 0.72))
+            .animation(
+                reduceMotion ? nil : .easeInOut(duration: 2.8).repeatForever(autoreverses: true),
+                value: bright
+            )
+            .onAppear {
+                guard !reduceMotion else { return }
+                bright = true
+            }
+    }
+}
+
+private extension View {
+    func skeletonShimmer() -> some View {
+        modifier(SkeletonShimmer())
+    }
 }
 
 extension Notification.Name {
@@ -624,6 +939,14 @@ struct FolderBlock: View {
             .buttonStyle(PressedButtonStyle())
 
             if isExpanded {
+                if let live = folder.live,
+                   let source = live.sourceURL,
+                   folder.tabs.isEmpty,
+                   folder.subfolders?.isEmpty ?? true {
+                    liveFolderSource(source, type: live.type)
+                        .padding(.leading, isNested ? 0 : 20)
+                        .transition(.opacity)
+                }
                 ForEach(folder.tabs) { tab in
                     TabRow(
                         tab: tab,
@@ -675,5 +998,64 @@ struct FolderBlock: View {
     /// older records may carry (raw or inside Zen's emoji SVG).
     private var userIcon: String? {
         ZenIconDecoder.folderFlapIcon(folder.icon)
+    }
+
+    /// Zen syncs only a live folder's provider configuration, never the items it
+    /// generates. When the folder is empty (the normal case on mobile), the
+    /// expanded body offers the configured source instead of looking broken.
+    private func liveFolderSource(_ source: String, type: String?) -> some View {
+        let url = URL(string: source)
+        let label = providerLabel(type)
+        return Button {
+            onOpenTab(ZenTab(id: "live-source-\(folder.id)", url: source, title: label))
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "link")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.5))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(label)
+                        .zenFont(13, weight: .semibold, design: .rounded)
+                        .foregroundStyle(Palette.ink(scheme))
+                    Text(sourceDisplay(url))
+                        .zenFont(11, design: .rounded)
+                        .foregroundStyle(Palette.ink(scheme).opacity(0.55))
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.3))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                Palette.lift(scheme),
+                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(PressedButtonStyle())
+        .accessibilityLabel(Text(label))
+        .accessibilityValue(Text(sourceDisplay(url)))
+    }
+
+    /// Provider label for the source row; unknown ids fall back to a neutral
+    /// label rather than exposing the raw id.
+    private func providerLabel(_ type: String?) -> String {
+        switch type {
+        case "rss": return String(localized: "folder.live.rss")
+        case "github": return String(localized: "folder.live.github")
+        default: return String(localized: "folder.live.other")
+        }
+    }
+
+    /// Host plus path, so `github.com/pulls` stays readable without the scheme.
+    private func sourceDisplay(_ url: URL?) -> String {
+        guard let url, let host = url.host, !host.isEmpty else {
+            return url?.absoluteString ?? ""
+        }
+        let path = url.path
+        return path.isEmpty || path == "/" ? host : host + path
     }
 }

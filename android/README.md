@@ -74,8 +74,8 @@ android/
       motion/    Spring catalog: response r ↔ stiffness (2π/r)², reduce-motion
       components/ ZenMark, ZenIconView, Favicon, gradient engine + noise,
                  folder fold icon, tab rows, essentials grid
-      screens/   Landing, Mozilla sign-in WebView, spaces pager + switcher +
-                 account bar
+      screens/   Signed-in home and its signed-out skeleton + sign-in card,
+                 spaces pager + switcher + account bar, Mozilla sign-in WebView
       sheets/    Account sheet, history sheet
     share/       ShareActivity + ShareScreen (share-extension parity)
   app/src/test/  Ports of ZenCompanionTests (crypto/Hawk/AES vectors,

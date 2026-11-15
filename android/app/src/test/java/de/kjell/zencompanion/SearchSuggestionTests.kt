@@ -25,6 +25,11 @@ class SearchSuggestionTests {
             "example.com",
             "192.168.0.1:8080",
             "mailto:support@kjell.cc",
+            // Submitting these opens http://localhost, so nothing may be sent.
+            "localhost",
+            "LocalHost",
+            "localhost:3000",
+            "localhost/status",
             "   \n\t",
             "",
         )
@@ -87,6 +92,19 @@ class SearchSuggestionTests {
     @Test
     fun dotWithSpaceStillSuggests() {
         assertTrue(SearchSuggestions.requestUrl("hello.world foo", SearchEngine.GOOGLE)!!.contains("hello.world"))
+    }
+
+    /** Same rule as iOS: "&" and "=" must not end the query parameter. */
+    @Test
+    fun suggestQueryEscapesParameterSeparators() {
+        val raw = SearchSuggestions.requestUrl("AT&T c++ a=b", SearchEngine.GOOGLE)!!
+        val pairs = (URI(raw).rawQuery ?: "").split("&")
+        assertEquals(2, pairs.size)
+        assertTrue(URI(raw).rawQuery, pairs.contains("q=AT%26T+c%2B%2B+a%3Db"))
+        assertEquals(
+            "AT&T c++ a=b",
+            URLDecoder.decode("AT%26T+c%2B%2B+a%3Db", StandardCharsets.UTF_8),
+        )
     }
 
     @Test

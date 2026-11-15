@@ -185,8 +185,14 @@ final class SessionModelTests: XCTestCase {
         pages.toggleKeep(page.id)
         history.record(address, title: "Kept")
 
-        // The account side is left out: the simulator's own account stays.
-        LiveSessionSigningOut(pages: { pages }, history: { history }, endAccount: {}).signOut()
+        // The account side is left out: the simulator's own account stays, and
+        // the app hosting the tests never hears of a sign-out.
+        LiveSessionSigningOut(
+            pages: { pages },
+            history: { history },
+            endAccount: {},
+            notifications: NotificationCenter()
+        ).signOut()
 
         XCTAssertEqual(pages.page(page.id)?.url, address)
         XCTAssertEqual(pages.page(page.id)?.isKept, true)

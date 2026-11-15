@@ -225,15 +225,19 @@ struct LiveSessionSigningOut: SessionSigningOut {
     private let history: @MainActor () -> BrowserHistoryStore
     /// Everything that belongs to the account; a test leaves the device's own alone.
     private let endAccount: @MainActor () -> Void
+    /// Where the app hears of it; a test keeps the running app out of it.
+    private let notifications: NotificationCenter
 
     nonisolated init(
         pages: @escaping @MainActor () -> OpenPagesStore = { .shared },
         history: @escaping @MainActor () -> BrowserHistoryStore = { .shared },
-        endAccount: @escaping @MainActor () -> Void = { LiveSessionSigningOut.endAccount() }
+        endAccount: @escaping @MainActor () -> Void = { LiveSessionSigningOut.endAccount() },
+        notifications: NotificationCenter = .default
     ) {
         self.pages = pages
         self.history = history
         self.endAccount = endAccount
+        self.notifications = notifications
     }
 
     func signOut() {
@@ -242,7 +246,7 @@ struct LiveSessionSigningOut: SessionSigningOut {
         // nothing of them waits on a save that may not come.
         pages().writeKeptPages()
         history().saveNow()
-        NotificationCenter.default.post(name: .zenCompanionSignedOut, object: nil)
+        notifications.post(name: .zenCompanionSignedOut, object: nil)
     }
 
     @MainActor

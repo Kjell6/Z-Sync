@@ -1,5 +1,9 @@
 package de.kjell.zencompanion.ui.screens
 
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
@@ -215,6 +219,9 @@ private val RowGap = 8.dp
 
 /** The bar turning into the composer, and the dock fading as it does. */
 internal const val BarMorphMs = 160
+
+/** The menu card unfolding from the bar, as on iOS. */
+private const val FloatingPanelMs = 260
 /** How long the suggestion list takes to grow, shrink or fade a row in. */
 private const val SuggestionMs = 260
 /** How far the dock drops into the gesture area: the safe area is not touched,
@@ -305,25 +312,24 @@ internal fun MiniBrowserBar(
 ) {
     val zen = LocalZenColors.current
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            // The bar area has its own background already (the page ends above
-            // it). Painting it here keeps the translucent tiles compositing
-            // against that background instead of the page.
-            .drawBehind { drawRect(liveBarColor()) }
-            // The background starts above the address row: it should not end
-            // hard against it.
-            .padding(start = 16.dp, end = 16.dp, top = TopGap),
-        verticalArrangement = Arrangement.spacedBy(RowGap),
+    Column(modifier = modifier.fillMaxWidth()) {
+    // The menu and the suggestions float over the page as cards of their own,
+    // as on iOS: the bar below keeps its height and its plate.
+    val floatMs = if (rememberReducedMotion()) 0 else FloatingPanelMs
+    AnimatedVisibility(
+        visible = state.menuExpanded,
+        enter = scaleIn(tween(floatMs, easing = FastOutSlowInEasing), initialScale = 0.88f, transformOrigin = TransformOrigin(0.5f, 1f)) +
+            fadeIn(tween(floatMs)),
+        exit = scaleOut(tween(floatMs), targetScale = 0.95f, transformOrigin = TransformOrigin(0.5f, 1f)) +
+            fadeOut(tween(floatMs)),
+        label = "menu",
     ) {
-        if (state.menuExpanded) {
             Column(
                 modifier = Modifier
+                    .padding(start = 16.dp, end = 16.dp, bottom = RowGap)
                     .fillMaxWidth()
-                    // Same surface as the dock buttons, so the open menu reads
-                    // as part of the bar rather than as a second plate.
-                    .pane(PanelShape, zen.lift)
+                    .floatingPanel(PanelShape, liveBarColor, zen.lift)
+                    .border(liftBorder(), PanelShape)
                     .padding(PanelInset),
             ) {
                 // One panel, two pages: the tools, and the site's own switches.
@@ -376,23 +382,34 @@ internal fun MiniBrowserBar(
         val suggestionMs = if (rememberReducedMotion()) 0 else SuggestionMs
         AnimatedVisibility(
             visible = state.isAddressFocused && state.suggestionRows.isNotEmpty(),
-            enter = expandVertically(
-                animationSpec = tween(suggestionMs, easing = FastOutSlowInEasing),
-                expandFrom = Alignment.Bottom,
-            ) + fadeIn(animationSpec = tween(suggestionMs, easing = FastOutSlowInEasing)),
-            exit = shrinkVertically(
-                animationSpec = tween(suggestionMs, easing = FastOutSlowInEasing),
-                shrinkTowards = Alignment.Bottom,
-            ) + fadeOut(animationSpec = tween(suggestionMs, easing = FastOutSlowInEasing)),
+            enter = scaleIn(tween(suggestionMs, easing = FastOutSlowInEasing), initialScale = 0.88f, transformOrigin = TransformOrigin(0.5f, 1f)) +
+                fadeIn(animationSpec = tween(suggestionMs, easing = FastOutSlowInEasing)),
+            exit = scaleOut(tween(suggestionMs, easing = FastOutSlowInEasing), targetScale = 0.95f, transformOrigin = TransformOrigin(0.5f, 1f)) +
+                fadeOut(animationSpec = tween(suggestionMs, easing = FastOutSlowInEasing)),
             label = "suggestions",
         ) {
             SuggestionPanel(
                 rows = state.suggestionRows,
                 motionMs = suggestionMs,
+                plate = liveBarColor,
                 onSelectVisit = onPickVisit,
                 onSelect = onPickSuggestion,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = RowGap),
             )
         }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            // The bar area has its own background already (the page ends above
+            // it). Painting it here keeps the translucent tiles compositing
+            // against that background instead of the page.
+            .drawBehind { drawRect(liveBarColor()) }
+            // The background starts above the address row: it should not end
+            // hard against it.
+            .padding(start = 16.dp, end = 16.dp, top = TopGap),
+        verticalArrangement = Arrangement.spacedBy(RowGap),
+    ) {
 
         // The bar turns into the composer in place.
         Crossfade(
@@ -468,7 +485,20 @@ internal fun MiniBrowserBar(
             }
         }
     }
+    }
 }
+
+/**
+ * A card over the page: the page's own color under the bar's lift, the dock's
+ * hairline and a soft shadow, so it reads as lying on top.
+ */
+private fun Modifier.floatingPanel(shape: Shape, plate: () -> Color, lift: Color): Modifier = this
+    .shadow(12.dp, shape, ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.25f))
+    .clip(shape)
+    .drawBehind {
+        drawRect(plate())
+        drawRect(lift)
+    }
 
 /**
  * A pane, not a floating sheet: same fill and hairline as the dock buttons, no
@@ -1037,14 +1067,17 @@ private fun DockButton(
 private fun SuggestionPanel(
     rows: List<AddressSuggestion>,
     motionMs: Int,
+    plate: () -> Color,
     onSelectVisit: (BrowserVisit) -> Unit,
     onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val zen = LocalZenColors.current
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .pane(DockShape, zen.lift)
+            .floatingPanel(DockShape, plate, zen.lift)
+            .border(liftBorder(), DockShape)
             // The panel's own height, plate and all, follows the row count
             // instead of jumping when an answer brings a longer list.
             .animateContentSize(animationSpec = tween(motionMs)),

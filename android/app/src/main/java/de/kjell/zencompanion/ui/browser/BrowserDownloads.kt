@@ -361,6 +361,15 @@ internal object BrowserDownloadCentre {
         _tasks.update { list -> list.filterNot { it.id == id } }
     }
 
+    /**
+     * The file can no longer arrive although the reader chose where it goes:
+     * the empty document goes, and the capsule says the file failed.
+     */
+    fun abandon(context: Context, id: Long, destination: Uri) {
+        discardDocument(context.applicationContext, destination)
+        fail(id, null)
+    }
+
     /** The capsule's cancel: the file stops arriving and nothing is saved. */
     fun cancel(id: Long) {
         val stop = synchronized(cancels) { cancels.remove(id) }

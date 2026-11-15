@@ -157,10 +157,11 @@ internal class BrowserPageRequests(
     private class PendingSave(
         val target: DownloadTarget,
         val taskId: Long,
+        val download: BrowserDownload,
+        /** The screen that asked; a new one stands in after a rebuilt activity. */
+        val owner: BrowserPageRequests,
         val done: (Uri?, Long) -> Unit,
     )
-
-    private val saveQueue = ArrayDeque<PendingSave>()
 
     /** Callers waiting while a system request is open, answered when it closes. */
     private val permissionWaiters = mutableListOf<WaitingRequest>()
@@ -204,8 +205,28 @@ internal class BrowserPageRequests(
         val next = saveQueue.removeFirstOrNull() ?: return
         // A cancel saves nothing and says nothing more.
         if (uri == null) BrowserDownloadCentre.remove(next.taskId)
-        next.done(uri, next.taskId)
+        finishSave(next, uri)
         launchNextSave()
+    }
+
+    /**
+     * Hands the reader's choice to the screen that asked. When the activity
+     * was rebuilt while the save screen was up (a switch to dark mode, say),
+     * that screen and its page view are gone, but the file is not: a web file
+     * still downloads from its address. A file the page held itself went with
+     * the page, so the empty document it would have filled goes too.
+     */
+    private fun finishSave(save: PendingSave, uri: Uri?) {
+        if (save.owner === this) {
+            save.done(uri, save.taskId)
+            return
+        }
+        if (uri == null) return
+        if (isWebDownload(save.download.url)) {
+            BrowserDownloadCentre.startWebDownload(context, save.download, uri, save.taskId)
+        } else {
+            BrowserDownloadCentre.abandon(context, save.taskId, uri)
+        }
     }
 
     /**
@@ -215,7 +236,7 @@ internal class BrowserPageRequests(
     private fun askWhereToSave(download: BrowserDownload, done: (Uri?, Long) -> Unit) {
         val target = DownloadTarget(announcedDownloadName(download), downloadMimeType(download))
         val taskId = BrowserDownloadCentre.startChoosing(target.fileName)
-        saveQueue.addLast(PendingSave(target, taskId, done))
+        saveQueue.addLast(PendingSave(target, taskId, download, this, done))
         if (saveQueue.size == 1) launchNextSave()
     }
 
@@ -225,7 +246,7 @@ internal class BrowserPageRequests(
         // No save screen to show: nothing can be saved.
         saveQueue.removeFirst()
         BrowserDownloadCentre.remove(next.taskId)
-        next.done(null, next.taskId)
+        finishSave(next, null)
         launchNextSave()
     }
 
@@ -424,6 +445,14 @@ internal class BrowserPageRequests(
     fun endFullscreen() {
         fullscreen?.close()
         fullscreen = null
+    }
+
+    private companion object {
+        /**
+         * Outlives the screen: the system's save screen answers the activity
+         * that comes back, which may be a rebuilt one. Main thread only.
+         */
+        val saveQueue = ArrayDeque<PendingSave>()
     }
 }
 

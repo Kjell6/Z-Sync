@@ -18,6 +18,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -77,9 +78,19 @@ internal fun ZenListItem(
     supportingText: String? = null,
     trailingContent: (@Composable () -> Unit)? = null,
     colors: ListItemColors = zenListItemColors(),
+    /** Page titles and addresses: one line each, cut with an ellipsis, so a
+     * row keeps its height and its leading icon stays centred. */
+    singleLine: Boolean = false,
 ) {
+    val maxLines = if (singleLine) 1 else Int.MAX_VALUE
+    val overflow = if (singleLine) TextOverflow.Ellipsis else TextOverflow.Clip
     val label: @Composable () -> Unit = {
-        Text(text = headline, style = MaterialTheme.typography.bodyLarge)
+        Text(
+            text = headline,
+            style = MaterialTheme.typography.bodyLarge,
+            maxLines = maxLines,
+            overflow = overflow,
+        )
     }
     val supporting: (@Composable () -> Unit)? = supportingText?.let { line ->
         {
@@ -87,6 +98,8 @@ internal fun ZenListItem(
                 text = line,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = maxLines,
+                overflow = overflow,
             )
         }
     }

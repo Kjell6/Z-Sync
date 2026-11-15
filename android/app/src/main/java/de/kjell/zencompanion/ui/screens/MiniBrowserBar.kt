@@ -1131,6 +1131,7 @@ private fun SuggestionRow(
     ZenListItem(
         headline = row.text,
         supportingText = visit?.displayAddress,
+        singleLine = true,
         onClick = { if (visit != null) onSelectVisit(visit) else onSelect(row.text) },
         leadingContent = {
             Icon(

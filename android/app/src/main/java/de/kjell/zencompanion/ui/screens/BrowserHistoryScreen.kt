@@ -299,6 +299,7 @@ private fun VisitRow(visit: BrowserVisit, time: String, onOpen: () -> Unit, onDe
         ZenListItem(
             headline = visit.title.ifEmpty { visit.host },
             supportingText = "$time · ${visit.displayAddress}",
+            singleLine = true,
             onClick = onOpen,
             modifier = Modifier
                 // The card's own fill, opaque: `lift` alone is translucent, so

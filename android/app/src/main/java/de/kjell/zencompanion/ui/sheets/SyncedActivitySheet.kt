@@ -254,6 +254,7 @@ private fun HistoryRow(
     ZenListItem(
         headline = entry.title.ifEmpty { entry.url },
         supportingText = historySecondary(entry),
+        singleLine = true,
         onClick = { onOpenUrl(entry.url, entry.title.ifEmpty { null }) },
         leadingContent = {
             if (FaviconResolver.isLocalURL(entry.url)) {

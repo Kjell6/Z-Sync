@@ -1,14 +1,18 @@
 package de.kjell.zencompanion
 
 import android.webkit.WebView
+import de.kjell.zencompanion.ui.components.ExternalLinkRoute
+import de.kjell.zencompanion.ui.components.externalLinkRoute
 import de.kjell.zencompanion.ui.screens.BrowserHitMenu
 import de.kjell.zencompanion.ui.screens.BrowserLinkAction
 import de.kjell.zencompanion.ui.screens.browserLinkAction
+import de.kjell.zencompanion.ui.screens.incomingWebLink
 import de.kjell.zencompanion.ui.screens.isWebScheme
 import de.kjell.zencompanion.ui.screens.loadsInWebView
 import de.kjell.zencompanion.ui.screens.schemeLoadsInWebView
 import de.kjell.zencompanion.ui.screens.sameTabUrl
 import de.kjell.zencompanion.ui.screens.tappedLinkUrl
+import de.kjell.zencompanion.ui.screens.zsyncWebLink
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -66,6 +70,24 @@ class BrowserLinkPolicyTests {
         assertEquals(
             BrowserLinkAction.LOAD_IN_WEBVIEW,
             action("https", resolvedPackage = ownPackage),
+        )
+    }
+
+    /** Declaring the browser filter puts Z-Sync in `browserPackages`; that must
+     * change nothing for a link the WebView can load itself. */
+    @Test
+    fun ownPackageInTheBrowserListStillLoadsInTheWebView() {
+        assertEquals(
+            BrowserLinkAction.LOAD_IN_WEBVIEW,
+            browserLinkAction(
+                scheme = "https",
+                isRedirect = false,
+                hasGesture = true,
+                isMainFrame = true,
+                resolvedPackage = ownPackage,
+                browserPackages = browsers + ownPackage,
+                ownPackage = ownPackage,
+            ),
         )
     }
 
@@ -207,6 +229,153 @@ class BrowserLinkPolicyTests {
         assertTrue(loadsInWebView("https://example.com/a"))
         assertTrue(loadsInWebView("http://localhost:8765/redirect.html"))
     }
+
+    // MARK: - Links from other apps
+
+    @Test
+    fun onlyViewIntentsWithWebDataAreAccepted() {
+        val view = "android.intent.action.VIEW"
+        assertEquals(
+            "https://example.com/a?b=1",
+            incomingWebLink(view, "https", "https://example.com/a?b=1"),
+        )
+        assertEquals(
+            "http://localhost:8765/redirect.html",
+            incomingWebLink(view, "http", "http://localhost:8765/redirect.html"),
+        )
+        assertEquals(
+            "scheme matching is case-insensitive",
+            "HTTPS://Example.com",
+            incomingWebLink(view, "HTTPS", "HTTPS://Example.com"),
+        )
+    }
+
+    @Test
+    fun everythingElseInAnIncomingIntentIsIgnored() {
+        val view = "android.intent.action.VIEW"
+        // Other actions, other schemes, and a missing or unusable address.
+        assertEquals(null, incomingWebLink("android.intent.action.MAIN", "https", "https://example.com"))
+        assertEquals(null, incomingWebLink(view, "javascript", "javascript:alert(1)"))
+        assertEquals(null, incomingWebLink(view, "file", "file:///etc/hosts"))
+        assertEquals(null, incomingWebLink(view, "content", "content://com.example/secret"))
+        assertEquals(null, incomingWebLink(view, "intent", "intent://scan/#Intent;scheme=zxing;end"))
+        assertEquals(null, incomingWebLink(view, "mailto", "mailto:nobody@example.com"))
+        assertEquals(null, incomingWebLink(view, "https", null))
+        assertEquals(null, incomingWebLink(view, "https", "   "))
+        assertEquals(null, incomingWebLink(view, null, "https://example.com"))
+    }
+
+    // MARK: - zsync:// links
+
+    @Test
+    fun zsyncOpenLinkCarriesItsTargetPage() {
+        assertEquals(
+            "https://example.com/a?b=1&c=2",
+            zsyncWebLink("zsync://open?url=https%3A%2F%2Fexample.com%2Fa%3Fb%3D1%26c%3D2"),
+        )
+        assertEquals(
+            "http://localhost:8765/redirect.html",
+            zsyncWebLink("zsync://open?url=http%3A%2F%2Flocalhost%3A8765%2Fredirect.html"),
+        )
+        // Encoded parameters inside the target survive one decode.
+        assertEquals(
+            "https://example.com/search?q=a%20b&page=2",
+            zsyncWebLink("zsync://open?url=https%3A%2F%2Fexample.com%2Fsearch%3Fq%3Da%2520b%26page%3D2"),
+        )
+        // A `+` is a plus in an address, not a space.
+        assertEquals(
+            "https://example.com/a+b",
+            zsyncWebLink("zsync://open?url=https%3A%2F%2Fexample.com%2Fa+b"),
+        )
+        // Scheme and host match like any URI; a bare slash is the same host.
+        assertEquals(
+            "https://example.com/",
+            zsyncWebLink("ZSYNC://OPEN/?url=https%3A%2F%2Fexample.com%2F"),
+        )
+        // The intent helper accepts the same link from a VIEW intent.
+        assertEquals(
+            "https://example.com/from-a-shortcut",
+            incomingWebLink(
+                "android.intent.action.VIEW",
+                "zsync",
+                "zsync://open?url=https%3A%2F%2Fexample.com%2Ffrom-a-shortcut",
+            ),
+        )
+    }
+
+    @Test
+    fun zsyncOpenLinkRejectsEverythingElse() {
+        // Another host or path, a missing or extra parameter, a plain web URL.
+        assertEquals(null, zsyncWebLink("zsync://other?url=https%3A%2F%2Fexample.com"))
+        assertEquals(null, zsyncWebLink("zsync://open/elsewhere?url=https%3A%2F%2Fexample.com"))
+        assertEquals(null, zsyncWebLink("zsync://open"))
+        assertEquals(null, zsyncWebLink("zsync://open?url="))
+        assertEquals(null, zsyncWebLink("zsync://open?url=https%3A%2F%2Fexample.com&x=1"))
+        assertEquals(null, zsyncWebLink("zsync://open?target=https%3A%2F%2Fexample.com"))
+        assertEquals(null, zsyncWebLink("https://example.com/?url=https%3A%2F%2Fexample.com"))
+        assertEquals(null, zsyncWebLink("zsync:open?url=https%3A%2F%2Fexample.com"))
+        assertEquals(null, zsyncWebLink(null))
+        assertEquals(null, zsyncWebLink("  "))
+        // Targets that are not web pages.
+        for (encoded in listOf(
+            "javascript%3Aalert(1)",
+            "file%3A%2F%2F%2Fetc%2Fhosts",
+            "data%3Atext%2Fhtml%2Chi",
+            "intent%3A%2F%2Fscan%2F%23Intent%3Bscheme%3Dzxing%3Bend",
+            "mailto%3Anobody%40example.com",
+        )) {
+            assertEquals(encoded, null, zsyncWebLink("zsync://open?url=$encoded"))
+        }
+        // A web address without a host.
+        assertEquals(null, zsyncWebLink("zsync://open?url=https%3A%2F%2F"))
+    }
+
+    @Test
+    fun externalHandOffNeverChoosesThisApp() {
+        // A real default browser takes the link as it is.
+        assertEquals(
+            ExternalLinkRoute.StartWithPackage("com.android.chrome"),
+            route(listOf(ownPackage, "com.android.chrome"), resolved = "com.android.chrome"),
+        )
+        // No default and several handlers: the resolver reports the system's
+        // chooser activity, not null. Starting the intent unchanged would list
+        // Z-Sync among the browsers the reader can pick.
+        assertEquals(
+            ExternalLinkRoute.StartWithPackage("com.android.chrome"),
+            route(listOf(ownPackage, "com.android.chrome"), resolved = "android"),
+        )
+        // Z-Sync itself is the default: another browser has to take the link.
+        assertEquals(
+            ExternalLinkRoute.StartWithPackage("org.mozilla.firefox"),
+            route(listOf(ownPackage, "org.mozilla.firefox"), resolved = ownPackage),
+        )
+        // The handler is not a known browser: ask the reader, without us.
+        assertEquals(
+            ExternalLinkRoute.ChooserWithoutUs,
+            route(listOf(ownPackage, "com.example.viewer"), resolved = "android"),
+        )
+        // Only Z-Sync handles this address: the caller reports it.
+        assertEquals(
+            ExternalLinkRoute.NoOtherApp,
+            route(listOf(ownPackage), resolved = ownPackage),
+        )
+        // Z-Sync does not handle the link at all: today's behaviour.
+        assertEquals(
+            ExternalLinkRoute.StartAsIs,
+            route(listOf("com.android.chrome"), resolved = "android"),
+        )
+        assertEquals(ExternalLinkRoute.StartAsIs, route(emptyList()))
+    }
+
+    private fun route(
+        handlers: List<String>,
+        resolved: String? = null,
+    ): ExternalLinkRoute = externalLinkRoute(
+        handlerPackages = handlers,
+        resolvedPackage = resolved,
+        ownPackage = ownPackage,
+        browserPackages = browsers.toList(),
+    )
 
     @Test
     fun aTextLinkOffersOnlyTheLinkActions() {

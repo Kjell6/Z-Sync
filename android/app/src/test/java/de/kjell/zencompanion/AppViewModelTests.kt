@@ -349,6 +349,54 @@ class AppViewModelTests {
     }
 
     @Test
+    fun incomingLinkWaitsForSignInThenOpensOnce() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = newViewModel()
+
+        vm.openLinkFromAnotherApp("https://example.com/from-another-app")
+
+        // Signed out: the link waits and no account data is involved.
+        assertNull(vm.session.value)
+        assertEquals("https://example.com/from-another-app", vm.incomingLink.value)
+
+        vm.completeSignIn(snapshot())
+        advanceUntilIdle()
+
+        // Sign-in does not consume it: the spaces screen opens it, once.
+        assertEquals("https://example.com/from-another-app", vm.incomingLink.value)
+
+        vm.consumeIncomingLink()
+        assertNull(vm.incomingLink.value)
+    }
+
+    @Test
+    fun incomingLinkDropsWhatIsNotAWebAddress() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = newViewModel()
+
+        for (url in listOf(
+            "javascript:alert(1)",
+            "file:///etc/hosts",
+            "content://com.example/secret",
+            "intent://scan/#Intent;scheme=zxing;end",
+            "mailto:nobody@example.com",
+            "  ",
+        )) {
+            vm.openLinkFromAnotherApp(url)
+            assertNull(url, vm.incomingLink.value)
+        }
+    }
+
+    @Test
+    fun leavingWithoutSigningInDropsThePendingLink() = runTest(mainDispatcherRule.testDispatcher) {
+        val vm = newViewModel()
+        vm.openLinkFromAnotherApp("https://example.com/later")
+
+        vm.discardIncomingLink()
+
+        assertNull(vm.incomingLink.value)
+        assertNull(vm.session.value)
+    }
+
+    @Test
     fun selectSpacePersistsOnlyValidIndex() = runTest(mainDispatcherRule.testDispatcher) {
         val space = ZenSpaces.ZenSpace(
             id = "s1",

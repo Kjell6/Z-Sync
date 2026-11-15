@@ -37,6 +37,14 @@ targets:
         CFBundleName: Z-Sync
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        # The app's own link form, zsync://open?url=<address>, works without
+        # the browser entitlement: a Shortcut can open a page here today.
+        # http/https wait for Apple to grant it (see docs/release.md).
+        CFBundleURLTypes:
+          - CFBundleTypeRole: Viewer
+            CFBundleURLName: de.kjell.zencompanion.zsync
+            CFBundleURLSchemes:
+              - zsync
         UILaunchScreen: {}
         CFBundleDevelopmentRegion: en
         UIRequiresFullScreen: true

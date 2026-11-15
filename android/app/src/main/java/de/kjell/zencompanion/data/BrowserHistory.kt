@@ -172,7 +172,8 @@ internal fun visitSuggestions(
 
 /**
  * The pages opened in the browser, on this phone only: it never enters Zen's
- * data, stays out of device backups, and goes on sign-out.
+ * data and stays out of device backups. It is the phone's, not the account's,
+ * so signing out keeps it; entries go one at a time, from the history list.
  *
  * iOS port: `BrowserHistoryStore` in `Browser/BrowserHistory.swift`.
  */

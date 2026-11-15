@@ -90,6 +90,13 @@ struct MiniBrowserChrome<NavBar: View>: View {
         reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.24, dampingFraction: 0.82)
     }
 
+    /// The suggestion list's motion: short and ease-out, with no bounce, so a
+    /// row arriving does not kick the panel. Reduce Motion keeps a quicker
+    /// fade and drops the travel.
+    private var suggestionMotion: Animation {
+        reduceMotion ? .easeOut(duration: 0.12) : .easeOut(duration: 0.26)
+    }
+
     private var menuOpen: Bool { model.menuExpanded }
 
     /// The kind the next save will use: the setting, unless this account cannot
@@ -117,7 +124,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
 
             // Only while the address field is open. The list grows out of the
             // bar the same way the page menu does, and shares its glass.
-            if addressEditing, !model.suggestions.isEmpty || !model.historySuggestions.isEmpty {
+            if addressEditing, !model.suggestionRows.isEmpty {
                 suggestionList
                     .frame(maxWidth: .infinity)
                     .fixedSize(horizontal: false, vertical: true)
@@ -164,6 +171,9 @@ struct MiniBrowserChrome<NavBar: View>: View {
         .animation(motion, value: overviewShown)
         .animation(motion, value: model.menuExpanded)
         .animation(motion, value: model.menuSiteSettings)
+        // The list arrives on its own, so its own motion is what carries it:
+        // the column's height and the rows' opacity together.
+        .animation(suggestionMotion, value: model.suggestionRows)
         // Chrome, not content: the rows have fixed 44pt metrics, so type stops
         // at the first accessibility size instead of overflowing the bar.
         .dynamicTypeSize(...DynamicTypeSize.accessibility1)
@@ -174,79 +184,64 @@ struct MiniBrowserChrome<NavBar: View>: View {
     /// Part of the address editing state, not a new layer: the rows use the
     /// same ink and row height as the menu, and the panel sits in the space
     /// above the bar that only exists while typing.
-    private var shownSuggestions: [String] {
-        SearchSuggestions.fitting(model.suggestions, beside: model.historySuggestions.count)
-    }
-
+    ///
+    /// One list, keyed by what each row says. The model merges the history and
+    /// the answer, so the answer arriving can only add a row: a page from the
+    /// history keeps its place at the top, and a row that stays is not rebuilt
+    /// when the rows around it change.
     private var suggestionList: some View {
         VStack(spacing: 0) {
-            ForEach(model.historySuggestions) { visit in
+            ForEach(Array(model.suggestionRows.enumerated()), id: \.element.id) { index, row in
                 Button {
-                    onPickVisit(visit)
+                    if let visit = row.visit {
+                        onPickVisit(visit)
+                    } else {
+                        onPickSuggestion(row.text)
+                    }
                 } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "clock")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Palette.ink(scheme).opacity(0.45))
-                            .frame(width: 22, height: 22)
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text(verbatim: visit.title.isEmpty ? visit.host : visit.title)
-                                .zenFont(16, weight: .medium, design: .rounded)
-                                .foregroundStyle(Palette.ink(scheme))
-                                .lineLimit(1)
-                            Text(verbatim: visit.displayAddress)
-                                .zenFont(13, design: .rounded)
-                                .foregroundStyle(Palette.ink(scheme).opacity(0.6))
-                                .lineLimit(1)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(.horizontal, 20)
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
-                    .overlay(alignment: .bottom) {
-                        if visit != model.historySuggestions.last || !model.suggestions.isEmpty {
-                            Rectangle()
-                                .fill(Color.primary.opacity(0.08))
-                                .frame(height: 0.5)
-                                .padding(.leading, 52)
-                        }
-                    }
+                    suggestionRow(row, last: index == model.suggestionRows.count - 1)
                 }
                 .buttonStyle(SuggestionPressStyle())
-            }
-            ForEach(Array(shownSuggestions.enumerated()), id: \.offset) { index, suggestion in
-                Button {
-                    onPickSuggestion(suggestion)
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Palette.ink(scheme).opacity(0.45))
-                            .frame(width: 22, height: 22)
-                        Text(suggestion)
-                            .zenFont(16, weight: .medium, design: .rounded)
-                            .foregroundStyle(Palette.ink(scheme))
-                            .lineLimit(1)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(.horizontal, 20)
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
-                    .overlay(alignment: .bottom) {
-                        if index < shownSuggestions.count - 1 {
-                            Rectangle()
-                                .fill(Color.primary.opacity(0.08))
-                                .frame(height: 0.5)
-                                .padding(.leading, 52)
-                        }
-                    }
-                }
-                .buttonStyle(SuggestionPressStyle())
+                // Only the rows that come or go fade; the rest stay still.
+                .transition(.opacity)
             }
         }
         .padding(.vertical, 6)
         .accessibilityElement(children: .contain)
+    }
+
+    /// A page prints its name over its address, a search phrase prints alone.
+    private func suggestionRow(_ row: AddressSuggestion, last: Bool) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: row.visit == nil ? "magnifyingglass" : "clock")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Palette.ink(scheme).opacity(0.45))
+                .frame(width: 22, height: 22)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(verbatim: row.text)
+                    .zenFont(16, weight: .medium, design: .rounded)
+                    .foregroundStyle(Palette.ink(scheme))
+                    .lineLimit(1)
+                if let visit = row.visit {
+                    Text(verbatim: visit.displayAddress)
+                        .zenFont(13, design: .rounded)
+                        .foregroundStyle(Palette.ink(scheme).opacity(0.6))
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 20)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .overlay(alignment: .bottom) {
+            if !last {
+                Rectangle()
+                    .fill(Color.primary.opacity(0.08))
+                    .frame(height: 0.5)
+                    .padding(.leading, 52)
+            }
+        }
     }
 
     /// The open pages, or the history once the overview is up. One piece of
@@ -456,7 +451,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
     }
 
     /// Bottom row, trailing edge first for the thumb: Pin sits on the right.
-    /// Left to right: Find, Print, Share, Open, Pin.
+    /// Left to right: Find, Share, Open, Pin.
     private var actionRow: some View {
         HStack(spacing: 8) {
             tile(
@@ -466,18 +461,6 @@ struct MiniBrowserChrome<NavBar: View>: View {
             ) {
                 withAnimation(motion) {
                     model.presentFindOnPage()
-                }
-            }
-            tile(
-                systemName: "printer",
-                title: "browser.print",
-                accessibility: "browser.print",
-                // Nothing to print without a page, under the error panel or
-                // with the reader lifted out of it.
-                enabled: model.canPrint
-            ) {
-                withAnimation(motion) {
-                    model.presentPrint()
                 }
             }
             shareTile
@@ -558,9 +541,13 @@ struct MiniBrowserChrome<NavBar: View>: View {
     }
 
     @ViewBuilder
+    /// The system share sheet, which also carries Print for the page, as in
+    /// Safari: the menu keeps no print row of its own.
     private var shareTile: some View {
-        if let url = model.effectiveURL {
-            SwiftUI.ShareLink(item: url) {
+        if model.effectiveURL != nil {
+            Button {
+                model.presentShare()
+            } label: {
                 tileLabel(systemName: "square.and.arrow.up", title: "browser.share")
             }
             .buttonStyle(CardPressStyle())
@@ -1357,17 +1344,26 @@ struct MiniBrowserTopBar: View {
     }
 
     private var editor: some View {
-        NativeAddressField(
-            text: Binding(get: { model.addressText }, set: { model.addressText = $0 }),
-            placeholder: String(localized: "browser.search_placeholder"),
-            ink: UIColor(Palette.ink(scheme)),
-            // The system tint, so caret and selection use the usual iOS accent.
-            caret: UIColor.tintColor,
-            isFocused: isAddressFocused,
-            onSubmit: onSubmit,
-            onFocusChange: { focused in isAddressFocused = focused }
-        )
-        .padding(.horizontal, 16)
+        HStack(spacing: 0) {
+            NativeAddressField(
+                text: Binding(get: { model.addressText }, set: { model.addressText = $0 }),
+                placeholder: String(localized: "browser.search_placeholder"),
+                ink: UIColor(Palette.ink(scheme)),
+                // The system tint, so caret and selection use the usual iOS accent.
+                caret: UIColor.tintColor,
+                isFocused: isAddressFocused,
+                onSubmit: onSubmit,
+                onFocusChange: { focused in isAddressFocused = focused }
+            )
+            if !model.addressText.isEmpty {
+                clearButton
+            }
+        }
+        .padding(.leading, 16)
+        // The clear glyph ends on the same inset the text starts on. The
+        // button fills the pill's end, so the target stays large without the
+        // air that made the right side look wider.
+        .padding(.trailing, 2)
         .frame(height: barHeight)
         .floatingGlassCapsule()
         .accessibilityLabel(Text("browser.search_placeholder"))
@@ -1378,6 +1374,26 @@ struct MiniBrowserTopBar: View {
                 isAddressFocused = true
             }
         }
+    }
+
+    /// Clears the address while typing. Drawn here rather than by the text
+    /// field: the system button brings its own trailing inset inside the
+    /// field, which left a wider gap on that side than the text has on the
+    /// other, and its touch area is only as big as its glyph.
+    private var clearButton: some View {
+        Button {
+            model.addressText = ""
+        } label: {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Palette.ink(scheme).opacity(0.35))
+                // A full-height slot in the capsule's round end: 44pt of
+                // target, with the glyph in the middle of it.
+                .frame(width: barHeight, height: barHeight)
+                .contentShape(Circle())
+        }
+        .buttonStyle(GlyphPressStyle())
+        .accessibilityLabel(Text("browser.clear_search"))
     }
 
     /// The way out of editing. Safari keeps it outside the field, as a circle.

@@ -87,7 +87,8 @@ object KeptPagesPolicy {
  * Every page open on this phone, the one on screen and what stays on disk.
  *
  * Kept pages live under [dir] as one JSON file plus a picture and a history
- * file per page, and go on sign-out. The app's backup rules leave them out.
+ * file per page. They belong to the phone and not to the account, so signing
+ * out keeps them. The app's backup rules leave them out.
  * The store knows nothing about WebViews; `BrowserPages` holds those.
  */
 class OpenPagesStore(

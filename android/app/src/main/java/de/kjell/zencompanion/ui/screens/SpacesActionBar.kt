@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -49,8 +50,9 @@ internal fun ActionBar(
     /** Pages open on this phone; the count shows from one up. */
     pageCount: Int = 0,
     onOpenPages: () -> Unit = {},
-    /** The synced history is the account's: signed out its card is gone. */
-    showsActivity: Boolean = true,
+    /** The synced history is the account's: signed out its card stays in
+     * place, dimmed and inert, so the row keeps its shape. */
+    activityEnabled: Boolean = true,
     /** Gap below the bar: toward the essentials grid at the top placement,
      * toward the screen edge when the bar is the last row. */
     bottomPadding: Dp = 6.dp,
@@ -69,10 +71,11 @@ internal fun ActionBar(
     ) {
         // Left: History card. Press is the outermost modifier so the whole
         // tile, not only the icon, shrinks while the finger is down.
-        if (showsActivity) {
+        run {
             Box(
                 modifier = Modifier
-                    .clickableNoIndication(onClick = onOpenActivity)
+                    .then(if (activityEnabled) Modifier.clickableNoIndication(onClick = onOpenActivity) else Modifier)
+                    .alpha(if (activityEnabled) 1f else 0.4f)
                     .size(44.dp)
                     .clip(cardShape)
                     .background(zen.lift)

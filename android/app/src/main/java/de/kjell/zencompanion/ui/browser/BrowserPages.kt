@@ -78,6 +78,8 @@ class PageSession(
     var shotDropWanted = false
     /** True when [shot] is the picture on disk, so letting go of it loses nothing. */
     var shotStored = false
+    /** Bumped each time the WebView first draws a new page (onPageCommitVisible). */
+    var paintCount by mutableIntStateOf(0)
     /** Bumped to reload after a blocking change. */
     var blockingReload by mutableIntStateOf(0)
     /** A crashed renderer takes its WebView with it; a new key builds a fresh one. */
@@ -177,6 +179,9 @@ class BrowserPages(
 
     /** Whether the app has an account right now: no pin path runs without one. */
     private var signedIn: Boolean = true
+
+    /** Told when a page's WebView goes, so the files it was reading end too. */
+    var onPageLeft: ((String) -> Unit)? = null
 
     init {
         store.onPageRemoved = { id ->
@@ -323,7 +328,8 @@ class BrowserPages(
         live.clear()
         recent.clear()
         sessions.clear()
-        // Nothing of the pages stays in memory either, sign-out included.
+        // Nothing of the pages stays in memory either: this is the reader
+        // closing every page, not a sign-out.
         shotBitmaps.clear()
         syncActive()
     }
@@ -353,6 +359,8 @@ class BrowserPages(
             session.dismissPrompts()
             saveHistory(session)
             session.webView = null
+            // A file the page was still reading has nowhere to land now.
+            onPageLeft?.invoke(session.id)
         }
     }
 

@@ -61,6 +61,8 @@ final class SessionModel {
 
     /// The stored session was rejected by the server: sign out and explain
     /// why in the signed-out card. Temporary sync failures never come here.
+    /// This is the same sign-out as the Settings button: the mini-browser's
+    /// pages and history stay, because they are not the account's.
     func sessionExpired() {
         guard let account, !account.isDemo else { return }
         signerOut.signOut()

@@ -167,6 +167,43 @@ final class SessionModelTests: XCTestCase {
         XCTAssertEqual(model.account?.isDemo, true)
     }
 
+    /// The mini-browser belongs to the phone, not to the account: signing out
+    /// keeps its open pages (kept ones included) and its history.
+    func testSigningOutKeepsTheBrowsersPagesAndHistory() {
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+        let preferences = FakePreferences()
+        let pages = OpenPagesStore(
+            directory: folder.appendingPathComponent("OpenPages", isDirectory: true),
+            preferences: preferences,
+            makeModel: { MiniBrowserModel(initialURL: $0, preferences: preferences) }
+        )
+        let history = BrowserHistoryStore(fileURL: folder.appendingPathComponent("history.json"))
+        let address = URL(string: "https://sign-out-keeps.example/kept")!
+        let page = pages.open(url: address, title: "Kept")
+        pages.toggleKeep(page.id)
+        history.record(address, title: "Kept")
+
+        // The account side is left out: the simulator's own account stays, and
+        // the app hosting the tests never hears of a sign-out.
+        LiveSessionSigningOut(
+            pages: { pages },
+            history: { history },
+            endAccount: {},
+            notifications: NotificationCenter()
+        ).signOut()
+
+        XCTAssertEqual(pages.page(page.id)?.url, address)
+        XCTAssertEqual(pages.page(page.id)?.isKept, true)
+        XCTAssertTrue(history.visits.contains { $0.url == address.absoluteString })
+        // Written down by the sign-out itself, so an app ended right after it
+        // still finds both.
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: folder.appendingPathComponent("history.json").path
+        ))
+    }
+
     func testFiveDemoTapsWithinWindowEnterDemo() {
         let accounts = FakeAccountSession()
         let spaces = FakeSessionSpaces()

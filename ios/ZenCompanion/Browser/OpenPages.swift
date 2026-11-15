@@ -144,7 +144,8 @@ enum KeptPagesPolicy {
 /// the browser closes, and the setting decides which ones those are. Only the most
 /// recently used pages hold a web view; the others sleep with their history and
 /// wake when they are shown. Kept pages live in Application Support as one JSON
-/// file plus a picture and a history file per page, and go on sign-out.
+/// file plus a picture and a history file per page. They belong to the phone
+/// and not to the account, so signing out keeps them.
 @MainActor
 @Observable
 final class OpenPagesStore: MiniBrowserPageHost {
@@ -700,6 +701,13 @@ final class OpenPagesStore: MiniBrowserPageHost {
         guard let data = try? JSONEncoder().encode(saved) else { return }
         // The list in memory still holds; the next write tries again.
         try? data.write(to: directory.appendingPathComponent(Self.fileName), options: .atomic)
+    }
+
+    /// Writes the pages that stay down now, without waiting for the next
+    /// change. Nothing is written away: what is on disk is replaced by what is
+    /// here.
+    func writeKeptPages() {
+        persist()
     }
 
     private struct SavedPage: Codable {

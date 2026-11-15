@@ -2,7 +2,7 @@
 
 **Controller:** Kjell Behrends, Germany  
 **Contact:** [Support@Kjell.cc](mailto:Support@Kjell.cc)  
-**Last updated:** 13 November 2026
+**Last updated:** 14 November 2026
 
 Z-Sync ("the app") is an independent mobile app. It lets you view the spaces and tabs of your own Mozilla account Sync and send links into them. This policy explains which data the app processes, where it goes, and what rights you have.
 
@@ -17,7 +17,7 @@ Z-Sync ("the app") is an independent mobile app. It lets you view the spaces and
 - While you type in the mini-browser address field, that text is sent to the **suggestion service of the search engine you chose** (DuckDuckGo, Google, Ecosia, Brave, or Bing). An engine you added yourself has no suggestion service, so nothing is sent until you submit. Z-Sync does not run a suggestion server.
 - The mini-browser's ad and tracker lists are refreshed once a week from the **EasyList project**, and the system web view checks pages against a list of unsafe sites (see sections 5.4 and 5.5).
 - All remaining data stays **on your device**: Keychain / Android Keystore and local app storage.
-- Signing out or deleting the app removes that local data.
+- Signing out removes the account's local data: the stored credentials, the cached preview data and the Mozilla sign-in page's own web session. The mini-browser's open pages, history, website data and site permissions belong to the device, not to the account, and stay until you remove them or delete the app.
 
 ---
 
@@ -46,12 +46,12 @@ While you use the app, the following information is kept **only on your device**
 - **Cached preview data** (space names, icons, themes; pinned-tab titles, URLs and icons) — local app storage (`spaces-cache.json`) — instant display while fresh data loads
 - **Cached website icons** (the image and the address it was loaded from) — the app's local cache — showing a synced tab again without downloading its page
 - **Preferences** (last selected space, cache timestamp) — local preferences — convenience
-- **Pages open in the mini-browser** (each page's address, title, a small picture of it and its back and forward history) — the app's local storage, excluded from device backups — reopening them like tabs in a browser. They never enter your Mozilla Sync data. Pages stay until you close them, until they have gone unused for the period chosen in Settings (30 days unless you change it), or until you sign out. With "Keep only chosen pages" on, only the pages you keep are stored; the others are held in memory and end when you close the browser
+- **Pages open in the mini-browser** (each page's address, title, a small picture of it and its back and forward history) — the app's local storage, excluded from device backups — reopening them like tabs in a browser. They never enter your Mozilla Sync data. Pages stay until you close them or until they have gone unused for the period chosen in Settings (30 days unless you change it); signing out of your Mozilla account leaves them where they are. With "Keep only chosen pages" on, only the pages you keep are stored; the others are held in memory and end when you close the browser
 - **Content blocking settings and lists** (the three blocking switches, the sites where you turned one off, and the downloaded ad and tracker lists) — local preferences and app storage — blocking in the mini-browser
-- **Browsing history of the mini-browser** (the address and title of each page you open and when you last opened it) — local app storage, excluded from device backups — finding a page again and suggesting it while you type. It never enters your Mozilla Sync data and never leaves your device. You can delete pages from the history one by one, and all of it is removed when you sign out
-- **Website data from the mini-browser** (cookies, site storage and cache of the sites you visit) — the system web view's local storage — staying signed in to websites. You can remove it under Settings › Clear Website Data, and it is removed when you sign out
-- **Site permissions** (which sites you allowed or blocked for camera, microphone and location) — local app storage, excluded from device backups — not asking you again. They are removed with Clear Website Data and when you sign out
-- **Downloads** (files you download in the mini-browser) — the Z-Sync folder in the Files app on iOS, the Downloads folder on Android — they stay until you delete them, also after signing out
+- **Browsing history of the mini-browser** (the address and title of each page you open and when you last opened it) — local app storage, excluded from device backups — finding a page again and suggesting it while you type. It never enters your Mozilla Sync data and never leaves your device. You can delete entries from the history one by one, and signing out of your Mozilla account does not touch it
+- **Website data from the mini-browser** (cookies, site storage and cache of the sites you visit) — the system web view's local storage — staying signed in to websites. You can remove it under Settings › Clear Website Data; signing out of your Mozilla account leaves it, and your website logins, alone (on Android, except a Mozilla account login on accounts.firefox.com, see section 4)
+- **Site permissions** (which sites you allowed or blocked for camera, microphone and location) — local app storage, excluded from device backups — not asking you again. They are removed with Clear Website Data, and signing out of your Mozilla account leaves them in place
+- **Downloads** (files you download in the mini-browser) — the folder you pick in the system's save screen. Until you pick one, a temporary copy waits in the app's local storage and is deleted once the file is saved or the save screen is cancelled — the saved file stays until you delete it, also after signing out
 
 Notes:
 
@@ -68,7 +68,7 @@ On iOS, saving an image from a website to your photo library asks for permission
 
 Sign-in does not run through the developer. The app opens Mozilla's official accounts page (`accounts.firefox.com`) in an embedded browser view, and you enter your credentials directly there. The developer never sees your password.
 
-Mozilla's page sets cookies and local browser storage inside the app so you don't have to re-enter everything during a session. When you sign out, the app **wipes all of that website data**, together with the stored credentials and the cached preview file (see section 7).
+Mozilla's page sets cookies and local browser storage inside the app so you don't have to re-enter everything during a session. That web session belongs to the sign-in page alone: when you sign out, the app clears it, so the next sign-in cannot reuse the previous Mozilla login, together with the stored credentials and the cached preview file (see section 7). The mini-browser's own cookies, site storage and website logins are not touched, with one exception on Android: there the sign-in page and the mini-browser share one cookie store, so a Mozilla account login (accounts.firefox.com) that you opened in the mini-browser ends too.
 
 ---
 
@@ -172,7 +172,7 @@ The weekly list download goes to `easylist.to`, run by the EasyList project, whi
 ## 7. Retention and deletion
 
 - **Normal use:** local data listed in section 3 persists on your device; server-side, Mozilla retains your sync data per its own retention rules.
-- **Signing out:** the app deletes the stored credentials, all embedded-browser cookies/storage, the cached preview file, the pages stored on this phone, and the mini-browser's history and site permissions.
+- **Signing out:** the app deletes the stored credentials, the cached preview file and the Mozilla sign-in page's own web session, so the next sign-in starts fresh. The mini-browser's open pages, history, website data and site permissions stay on the device: remove them yourself under Settings › Clear Website Data, by deleting history entries, and by closing pages.
 - **Deleting the app:** everything above is removed automatically, including Keychain / Keystore items.
 - **Server-side data:** your actual Mozilla sync data lives in your Mozilla account, outside this app's control; manage or delete it through Firefox or your Mozilla account settings.
 
@@ -191,7 +191,7 @@ If you are in the EU/EEA, you have the right to:
 - Access (Art. 15), rectification (Art. 16), erasure (Art. 17), restriction of processing (Art. 18), data portability (Art. 20), and objection (Art. 21)
 - Lodge a complaint with a supervisory authority — in Germany, the Unabhängiges Landeszentrum für Datenschutz Schleswig-Holstein ([ULD](https://www.datenschutzzentrum.de)) or the Federal Commissioner ([BfDI](https://www.bfdi.bund.de))
 
-Because the developer holds **no data about you** (nothing ever reaches him), most requests concern data held by **Apple, Google, or Mozilla**, by **the search engine you selected**, or by a website whose icon the app loaded — please direct such requests to those companies. Anything genuinely local to the app you control yourself: sign out or delete the app.
+Because the developer holds **no data about you** (nothing ever reaches him), most requests concern data held by **Apple, Google, or Mozilla**, by **the search engine you selected**, or by a website whose icon the app loaded — please direct such requests to those companies. Anything genuinely local to the app you control yourself: clear it under Settings › Clear Website Data, delete history entries, close pages, or delete the app.
 
 Questions or objections: Support@Kjell.cc
 

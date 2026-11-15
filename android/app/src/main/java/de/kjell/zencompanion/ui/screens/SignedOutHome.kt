@@ -2,6 +2,11 @@ package de.kjell.zencompanion.ui.screens
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -37,7 +42,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -45,18 +49,14 @@ import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.EssentialsColumns
 import de.kjell.zencompanion.data.ToolbarPlacement
-import de.kjell.zencompanion.ui.components.ZenMark
-import de.kjell.zencompanion.ui.components.openURLExternally
-import de.kjell.zencompanion.ui.theme.LiftCard
 import de.kjell.zencompanion.ui.theme.LocalZenColors
 import de.kjell.zencompanion.util.Haptics
 
 /** Placeholder fill: the app's ink at low opacity, so it reads as "content goes here". */
 private const val SkeletonAlpha = 0.09f
 
-/** Enough essentials to give the configured column count two full rows. */
-private const val SkeletonEssentialsCount = 8
-private const val SkeletonEssentialsRows = 2
+/** Six tiles, laid out like the real grid for the configured column count. */
+private const val SkeletonEssentialsCount = 6
 
 /** The demo entry gesture is the same as the old landing screen's. */
 private const val DemoTaps = 5
@@ -64,8 +64,8 @@ private const val DemoTapWindowMs = 2_000L
 
 /**
  * The home screen without an account: the same layout and toolbar placement as
- * the spaces screen, its account content as a wireframe, and the sign-in
- * prompt in the content area between the essentials and the tab rows.
+ * the spaces screen, six essentials and four tab rows as a wireframe, and the
+ * sign-in prompt below them. No space switcher: it needs an account.
  */
 @Composable
 internal fun SignedOutHome(
@@ -84,7 +84,7 @@ internal fun SignedOutHome(
         }
 
         // Scrolls like the real content, so the largest font scale still
-        // reaches the card and every row.
+        // reaches the prompt.
         Column(
             Modifier
                 .weight(1f)
@@ -93,26 +93,20 @@ internal fun SignedOutHome(
         ) {
             Spacer(Modifier.height(4.dp))
             SkeletonEssentials(columns = essentialsColumns)
-            Spacer(Modifier.height(20.dp))
-            SignInPromptCard(
+            Spacer(Modifier.height(12.dp))
+            SkeletonTabs()
+            Spacer(Modifier.height(28.dp))
+            SignInPrompt(
                 sessionNotice = sessionNotice,
                 onSignIn = onSignIn,
                 onOpenHelp = onOpenHelp,
                 onEnterDemo = onEnterDemo,
             )
-            Spacer(Modifier.height(20.dp))
-            SkeletonTabs()
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(18.dp))
         }
 
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            SkeletonSpaceSwitcher()
-            if (toolbarPlacement == ToolbarPlacement.BOTTOM) {
+        if (toolbarPlacement == ToolbarPlacement.BOTTOM) {
+            Box(Modifier.fillMaxWidth().navigationBarsPadding()) {
                 actionBar()
             }
         }
@@ -131,12 +125,15 @@ private fun SkeletonEssentials(columns: EssentialsColumns) {
             .clearAndSetSemantics { },
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        repeat(SkeletonEssentialsRows) {
+        // A short last row stretches, like the real grid's.
+        SkeletonEssentialsCount.let { count ->
+            (0 until count).chunked(columnCount.coerceAtLeast(1))
+        }.forEach { row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                repeat(columnCount) {
+                repeat(row.size) {
                     Box(
                         Modifier
                             .weight(1f)
@@ -158,13 +155,10 @@ private fun SkeletonTabs() {
             .fillMaxWidth()
             .clearAndSetSemantics { },
     ) {
-        SkeletonTabRow(titleWidth = 0.62f)
-        SkeletonTabRow(titleWidth = 0.44f)
-        SkeletonTabRow(titleWidth = 0.52f, folder = true)
-        SkeletonTabRow(titleWidth = 0.36f)
-        SkeletonTabDivider()
-        SkeletonTabRow(titleWidth = 0.58f)
-        SkeletonTabRow(titleWidth = 0.40f)
+        SkeletonTabRow(titleWidth = 0.52f)
+        SkeletonTabRow(titleWidth = 0.34f)
+        SkeletonTabRow(titleWidth = 0.60f)
+        SkeletonTabRow(titleWidth = 0.42f, folder = true)
     }
 }
 
@@ -223,57 +217,20 @@ private fun SkeletonFolderGlyph(fill: Color) {
     }
 }
 
-@Composable
-private fun SkeletonTabDivider() {
-    val ink = LocalZenColors.current.ink
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 10.dp)
-            .height(1.dp)
-            .background(ink.copy(alpha = 0.12f)),
-    )
-}
-
-/** Where the space switcher is: two placeholder pills, not tappable. */
-@Composable
-private fun SkeletonSpaceSwitcher() {
-    val ink = LocalZenColors.current.ink
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(38.dp)
-            .clearAndSetSemantics { },
-        horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier
-                .size(width = 36.dp, height = 22.dp)
-                .clip(RoundedCornerShape(11.dp))
-                .background(ink.copy(alpha = 0.16f)),
-        )
-        Box(
-            Modifier
-                .size(width = 36.dp, height = 22.dp)
-                .clip(RoundedCornerShape(11.dp))
-                .background(ink.copy(alpha = SkeletonAlpha)),
-        )
-    }
-}
-
 /**
- * The card in the content area: what the account would fill this screen with,
- * the way to sign in, and the same five-tap demo entry the landing screen had.
+ * The prompt under the skeleton rows: one line of title, a short pill button
+ * and the help link, centred and each narrower than the last, so the three
+ * read as one quiet step down. The title keeps the five-tap demo entry.
  */
 @Composable
-private fun SignInPromptCard(
+private fun SignInPrompt(
     @StringRes sessionNotice: Int?,
     onSignIn: () -> Unit,
     onOpenHelp: () -> Unit,
     onEnterDemo: () -> Unit,
 ) {
     val context = LocalContext.current
+    val zen = LocalZenColors.current
     var demoTapCount by remember { mutableIntStateOf(0) }
     var lastDemoTap by remember { mutableLongStateOf(0L) }
 
@@ -288,94 +245,60 @@ private fun SignInPromptCard(
         onEnterDemo()
     }
 
-    val logoHint = stringResource(R.string.demo_logo_hint)
-    val demoTap = Modifier.clickable(
-        interactionSource = remember { MutableInteractionSource() },
-        indication = null,
-        role = Role.Button,
-        onClickLabel = logoHint,
-        onClick = { registerDemoTap() },
-    )
-
-    LiftCard(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(
+        Text(
+            text = stringResource(R.string.signed_out_title),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = zen.ink,
+            textAlign = TextAlign.Center,
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .semantics { heading() }
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = { registerDemoTap() },
+                ),
+        )
+
+        if (sessionNotice != null) {
+            Text(
+                text = stringResource(sessionNotice),
+                style = MaterialTheme.typography.bodySmall,
+                color = zen.ink.copy(alpha = 0.6f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+
+        Button(
+            onClick = onSignIn,
+            shape = CircleShape,
+            colors = ButtonDefaults.buttonColors(containerColor = zen.ink, contentColor = zen.paper),
+            contentPadding = PaddingValues(horizontal = 22.dp, vertical = 11.dp),
+            modifier = Modifier
+                .padding(top = 16.dp)
+                .heightIn(min = 44.dp),
         ) {
-            ZenMark(size = 44.dp, modifier = demoTap)
-
             Text(
-                text = stringResource(R.string.signed_out_title),
-                style = MaterialTheme.typography.titleLarge,
+                text = stringResource(R.string.signed_out_sign_in),
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center,
-                modifier = demoTap,
+                maxLines = 1,
             )
+        }
 
+        TextButton(onClick = onOpenHelp, modifier = Modifier.padding(top = 2.dp)) {
             Text(
-                text = stringResource(R.string.signed_out_message),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
+                text = stringResource(R.string.signin_help_link),
+                style = MaterialTheme.typography.labelMedium,
+                color = zen.ink.copy(alpha = 0.5f),
             )
-
-            if (sessionNotice != null) {
-                Text(
-                    text = stringResource(sessionNotice),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-                            RoundedCornerShape(12.dp),
-                        )
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                )
-            }
-
-            Button(
-                onClick = onSignIn,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.home_sign_in),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.Center,
-                )
-            }
-
-            // Stacked rather than side by side: at the largest font scale two
-            // links in one row would not fit the card.
-            TextButton(onClick = onOpenHelp) {
-                Text(
-                    text = stringResource(R.string.signin_help_link),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            TextButton(
-                onClick = { openURLExternally(context, Legal.publicPolicyURL) },
-            ) {
-                Text(
-                    text = stringResource(R.string.legal_privacy),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
         }
     }
 }

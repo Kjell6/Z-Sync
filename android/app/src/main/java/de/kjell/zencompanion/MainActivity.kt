@@ -342,9 +342,10 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
             onClearWebsiteData = { de.kjell.zencompanion.ui.browser.clearBrowserWebsiteData(context) },
             onSignOut = {
                 showSettings = false
-                // Clears encrypted store + sync cache + wipes WebView data.
-                de.kjell.zencompanion.ui.screens.FxAWeb.wipeWebSession()
-                pages.closeAll()
+                // Clears the account's encrypted store and sync cache, and the
+                // sign-in page's own web session. The mini-browser stays: its
+                // pages, history, website data and site permissions are the
+                // phone's, not the account's.
                 viewModel.signOut()
             },
             onOpenWhatsNew = {

@@ -2,6 +2,7 @@ package de.kjell.zencompanion
 
 import androidx.compose.ui.text.input.TextFieldValue
 import de.kjell.zencompanion.R
+import de.kjell.zencompanion.data.BrowserHistory
 import de.kjell.zencompanion.data.SaveKind
 import de.kjell.zencompanion.data.SearchEngine
 import de.kjell.zencompanion.data.SearchEngines
@@ -481,6 +482,42 @@ class MiniBrowserViewModelTests {
         assertEquals(1, client.requested.size)
         assertTrue(client.requested.single().contains("q=zen+browser"))
         assertEquals(listOf("zen browser", "zen browser download"), vm.state.value.suggestions)
+    }
+
+    @Test
+    fun theAnswerAddsToTheHistoryInsteadOfReplacingIt() = runTest(mainDispatcherRule.testDispatcher) {
+        BrowserHistory.clear()
+        BrowserHistory.record("https://news.ycombinator.com", "Hacker News")
+        // The engine names the page the history already has: one row, not two.
+        val client = RecordingSuggestionClient("""["news",["news today","hacker news","news live"]]""")
+        val vm = newViewModel(initialUrl = null, suggestionClient = client)
+        vm.onAddressFocusChange(true)
+        vm.onAddressTextChange(TextFieldValue("news"))
+
+        assertEquals(
+            listOf("history:https://news.ycombinator.com"),
+            vm.state.value.suggestionRows.map { it.id },
+        )
+
+        advanceTimeBy(1_000)
+        runCurrent()
+
+        assertEquals(
+            listOf("Hacker News", "news today", "news live"),
+            vm.state.value.suggestionRows.map { it.text },
+        )
+        assertEquals(
+            "https://news.ycombinator.com",
+            vm.state.value.suggestionRows.first().visit?.url,
+        )
+
+        // The next keystroke's answer must not push the page out either.
+        vm.onAddressTextChange(TextFieldValue("news y"))
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertEquals("https://news.ycombinator.com", vm.state.value.suggestionRows.first().visit?.url)
+
+        BrowserHistory.clear()
     }
 
     @Test

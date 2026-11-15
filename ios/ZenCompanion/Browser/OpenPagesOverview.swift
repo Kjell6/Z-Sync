@@ -134,9 +134,11 @@ private struct DeckCardPlacement: ViewModifier, Animatable {
 }
 
 /// Cards the deck is not resting on sit a little in the dark, the ones behind
-/// more than the one lying on top, so the focused card stands out.
+/// more than the one lying on top, so the focused card stands out. On a dark
+/// background the shadows hardly show, so the dimming does more of the work.
 private struct DeckCardDim: ViewModifier, Animatable {
     var offset: CGFloat
+    let isDark: Bool
 
     var animatableData: CGFloat {
         get { offset }
@@ -144,7 +146,10 @@ private struct DeckCardDim: ViewModifier, Animatable {
     }
 
     func body(content: Content) -> some View {
-        content.opacity(Double(offset < 0 ? min(0.3, -offset * 0.2) : min(0.16, offset * 0.14)))
+        let dim = isDark
+            ? (offset < 0 ? min(0.45, -offset * 0.3) : min(0.26, offset * 0.22))
+            : (offset < 0 ? min(0.3, -offset * 0.2) : min(0.16, offset * 0.14))
+        return content.opacity(Double(dim))
     }
 }
 
@@ -647,6 +652,8 @@ private struct OpenPageCard<Menu: View>: View {
     var onClose: () -> Void
     @ViewBuilder var menu: () -> Menu
 
+    @Environment(\.colorScheme) private var scheme
+
     private let iconSide: CGFloat = 22
     private let headerInset: CGFloat = 20
     private let iconGap: CGFloat = 8
@@ -670,10 +677,19 @@ private struct OpenPageCard<Menu: View>: View {
             .frame(width: size.width, height: size.height)
             .overlay {
                 Color.black
-                    .modifier(DeckCardDim(offset: offset))
+                    .modifier(DeckCardDim(offset: offset, isDark: scheme == .dark))
                     .allowsHitTesting(false)
             }
             .clipShape(shape)
+            // Dark: the shadow is lost on the background, so a faint light rim
+            // draws each card's edge over the one below.
+            .overlay {
+                if scheme == .dark && !isExpanding {
+                    shape
+                        .strokeBorder(Color.white.opacity(0.14), lineWidth: 0.75)
+                        .allowsHitTesting(false)
+                }
+            }
             // One picture, so the page's color under it never shows through
             // while the card fades.
             .compositingGroup()

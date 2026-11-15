@@ -9,6 +9,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -661,16 +662,26 @@ private fun OpenPageCard(
         ) {
             OpenPageShot(page = page, session = session, topInset = topInset, surface = surface)
             // Cards the deck is not resting on sit a little in the dark, the
-            // ones behind more than the one lying on top.
+            // ones behind more than the one lying on top. On a dark background
+            // the shadows hardly show, so the dimming does more of the work.
+            val dark = zen.isDark
             Box(
                 Modifier
                     .fillMaxSize()
                     .drawWithContent {
                         val away = offset()
-                        val dim = if (away < 0f) min(0.3f, -away * 0.2f) else min(0.16f, away * 0.14f)
+                        val dim = if (dark) {
+                            if (away < 0f) min(0.45f, -away * 0.3f) else min(0.26f, away * 0.22f)
+                        } else {
+                            if (away < 0f) min(0.3f, -away * 0.2f) else min(0.16f, away * 0.14f)
+                        }
                         drawRect(Color.Black, alpha = dim)
                     },
             )
+            // Dark: a faint light rim draws each card's edge over the one below.
+            if (dark && !isExpanding) {
+                Box(Modifier.fillMaxSize().border(0.75.dp, Color.White.copy(alpha = 0.14f), shape))
+            }
         }
         Row(
             modifier = Modifier

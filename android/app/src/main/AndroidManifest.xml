@@ -11,10 +11,6 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <!-- Android 8 and 9 need it to save a download into the shared Downloads folder. -->
-    <uses-permission
-        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28" />
 
     <!-- The app works without them, so stores keep offering it to devices that lack one. -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />

@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -39,7 +38,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -147,7 +145,7 @@ private fun SkeletonEssentials(columns: EssentialsColumns) {
     }
 }
 
-/** Rows the size of real pinned tabs and folders, plus the normal-tab break. */
+/** Rows the size of real pinned tabs, all with the same favicon slot. */
 @Composable
 private fun SkeletonTabs() {
     Column(
@@ -158,13 +156,13 @@ private fun SkeletonTabs() {
         SkeletonTabRow(titleWidth = 0.52f)
         SkeletonTabRow(titleWidth = 0.34f)
         SkeletonTabRow(titleWidth = 0.60f)
-        SkeletonTabRow(titleWidth = 0.42f, folder = true)
+        SkeletonTabRow(titleWidth = 0.42f)
     }
 }
 
 /** One tab row: favicon slot, then a rounded bar where the title is. */
 @Composable
-private fun SkeletonTabRow(titleWidth: Float, folder: Boolean = false) {
+private fun SkeletonTabRow(titleWidth: Float) {
     val ink = LocalZenColors.current.ink
     val fill = ink.copy(alpha = SkeletonAlpha)
     Row(
@@ -173,47 +171,21 @@ private fun SkeletonTabRow(titleWidth: Float, folder: Boolean = false) {
             .padding(horizontal = 20.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (folder) {
-            SkeletonFolderGlyph(fill)
-        } else {
-            Box(
-                Modifier
-                    .size(28.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(fill),
-            )
-        }
+        Box(
+            Modifier
+                .size(28.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(fill),
+        )
         Spacer(Modifier.width(12.dp))
         Box(
             Modifier
                 .weight(titleWidth)
-                .height(if (folder) 14.dp else 12.dp)
+                .height(12.dp)
                 .clip(RoundedCornerShape(6.dp))
                 .background(fill),
         )
         Spacer(Modifier.weight(1f - titleWidth))
-    }
-}
-
-/** A folder silhouette in the icon slot a folder row uses. */
-@Composable
-private fun SkeletonFolderGlyph(fill: Color) {
-    Box(Modifier.size(28.dp)) {
-        Box(
-            Modifier
-                .align(Alignment.BottomStart)
-                .size(width = 26.dp, height = 18.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(fill),
-        )
-        Box(
-            Modifier
-                .align(Alignment.TopStart)
-                .offset(x = 3.dp, y = 3.dp)
-                .size(width = 12.dp, height = 6.dp)
-                .clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp))
-                .background(fill),
-        )
     }
 }
 

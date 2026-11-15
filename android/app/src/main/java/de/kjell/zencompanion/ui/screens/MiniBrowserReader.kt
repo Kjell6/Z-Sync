@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -83,8 +84,8 @@ private fun ReaderHeader(article: ReaderArticle, onClose: () -> Unit) {
             Spacer(Modifier.width(8.dp))
             IconButton(
                 onClick = onClose,
-                modifier = Modifier
-                    .background(colors.lift, CircleShape),
+                shapes = IconButtonDefaults.shapes(shape = CircleShape),
+                colors = IconButtonDefaults.iconButtonColors(containerColor = colors.lift),
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Close,

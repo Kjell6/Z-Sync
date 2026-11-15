@@ -1,20 +1,13 @@
 package de.kjell.zencompanion.ui.sheets
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -22,19 +15,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ExitToApp
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ArrowDropDown
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -47,9 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import de.kjell.zencompanion.ui.theme.liftBorder
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.KeptPageLifetime
 import de.kjell.zencompanion.data.EssentialsColumns
@@ -59,8 +47,14 @@ import de.kjell.zencompanion.data.SearchEngineValidation
 import de.kjell.zencompanion.data.ToolbarPlacement
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.PreferencesState
-import de.kjell.zencompanion.ui.theme.LiftCard
 import de.kjell.zencompanion.ui.theme.LocalZenColors
+import de.kjell.zencompanion.ui.theme.ZenListGroup
+import de.kjell.zencompanion.ui.theme.ZenListItem
+import de.kjell.zencompanion.ui.theme.ZenListValue
+import de.kjell.zencompanion.ui.theme.ZenMenu
+import de.kjell.zencompanion.ui.theme.ZenMenuCheck
+import de.kjell.zencompanion.ui.theme.ZenMenuGroup
+import de.kjell.zencompanion.ui.theme.ZenSelectableMenuItem
 
 /**
  * Native Material 3 Settings Bottom Sheet.
@@ -129,6 +123,7 @@ fun SettingsSheet(
                         showSignOutDialog = false
                         onSignOut()
                     },
+                    shapes = ButtonDefaults.shapes(),
                 ) {
                     Text(
                         text = stringResource(
@@ -140,7 +135,7 @@ fun SettingsSheet(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showSignOutDialog = false }) {
+                TextButton(onClick = { showSignOutDialog = false }, shapes = ButtonDefaults.shapes()) {
                     Text(text = stringResource(R.string.common_cancel))
                 }
             },
@@ -150,18 +145,6 @@ fun SettingsSheet(
     ZenSheet(
         onDismiss = onDone,
         skipPartiallyExpanded = true,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        dragHandle = {
-            Box(
-                modifier = Modifier
-                    .padding(top = 12.dp, bottom = 8.dp)
-                    .size(width = 36.dp, height = 4.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                        shape = RoundedCornerShape(2.dp),
-                    ),
-            )
-        },
     ) {
         if (showContentBlocking) {
             SettingsContentBlockingScreen(
@@ -185,7 +168,10 @@ fun SettingsSheet(
                 .settingsSheetPage()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
-                .padding(top = 28.dp, bottom = 28.dp),
+                .padding(
+                    top = SheetContentTopSpacing,
+                    bottom = SheetContentBottomSpacing,
+                ),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             SettingsSheetHeader(onDone = onDone)
@@ -253,7 +239,11 @@ private fun SettingsSheetHeader(onDone: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
-        IconButton(onClick = onDone, modifier = Modifier.padding(end = 4.dp)) {
+        IconButton(
+            onClick = onDone,
+            shapes = IconButtonDefaults.shapes(),
+            modifier = Modifier.padding(end = 4.dp),
+        ) {
             Icon(
                 imageVector = Icons.Outlined.Close,
                 contentDescription = stringResource(R.string.common_done),
@@ -264,7 +254,7 @@ private fun SettingsSheetHeader(onDone: () -> Unit) {
 }
 
 /**
- * Email on the left, the destructive action as a compact card beside it.
+ * Email on the left, the destructive action as a compact icon button beside it.
  */
 @Composable
 private fun SettingsAccountCard(
@@ -277,74 +267,44 @@ private fun SettingsAccountCard(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        LiftCard(
-            modifier = Modifier
-                .weight(1f)
-                .heightIn(min = if (isDemo) 64.dp else 56.dp),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = if (isDemo) 64.dp else 56.dp)
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Person,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(22.dp),
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = if (isDemo) {
-                            stringResource(R.string.demo_account_name)
-                        } else {
-                            email
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+        ZenListGroup(modifier = Modifier.weight(1f)) {
+            ZenListItem(
+                headline = if (isDemo) {
+                    stringResource(R.string.demo_account_name)
+                } else {
+                    email
+                },
+                supportingText = if (isDemo) {
+                    stringResource(R.string.demo_account_caption)
+                } else {
+                    null
+                },
+                leadingContent = {
+                    Icon(
+                        imageVector = Icons.Outlined.Person,
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp),
                     )
-                    if (isDemo) {
-                        Text(
-                            text = stringResource(R.string.demo_account_caption),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
+                },
+            )
         }
 
-        Card(
-            modifier = Modifier
-                .size(56.dp)
-                .clickable(onClick = onSignOut),
-            colors = CardDefaults.cardColors(
+        FilledTonalIconButton(
+            onClick = onSignOut,
+            shapes = IconButtonDefaults.shapes(shape = RoundedCornerShape(16.dp)),
+            colors = IconButtonDefaults.filledTonalIconButtonColors(
                 containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
+                contentColor = MaterialTheme.colorScheme.error,
             ),
-            shape = RoundedCornerShape(16.dp),
-            border = liftBorder(),
+            modifier = Modifier.size(56.dp),
         ) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.ExitToApp,
-                    contentDescription = stringResource(
-                        if (isDemo) R.string.demo_exit else R.string.home_sign_out,
-                    ),
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(22.dp),
-                )
-            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.ExitToApp,
+                contentDescription = stringResource(
+                    if (isDemo) R.string.demo_exit else R.string.home_sign_out,
+                ),
+                modifier = Modifier.size(22.dp),
+            )
         }
     }
 }
@@ -367,78 +327,51 @@ private fun SettingsSaveKindCard(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        LiftCard(modifier = Modifier.fillMaxWidth()) {
+        ZenListGroup {
             Box(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { menuExpanded = true }
-                        .heightIn(min = 56.dp)
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.PushPin,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(22.dp),
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = stringResource(R.string.settings_save_kind),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        text = stringResource(displayed.labelRes()),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(
-                        imageVector = Icons.Outlined.ArrowDropDown,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
+                ZenListItem(
+                    headline = stringResource(R.string.settings_save_kind),
+                    onClick = { menuExpanded = true },
+                    leadingContent = {
+                        Icon(
+                            imageVector = Icons.Outlined.PushPin,
+                            contentDescription = null,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    },
+                    trailingContent = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            ZenListValue(stringResource(displayed.labelRes()))
+                            Icon(
+                                imageVector = Icons.Outlined.ArrowDropDown,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    },
+                )
 
-                DropdownMenu(
+                ZenMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false },
                 ) {
-                    SaveKind.entries.forEach { kind ->
-                        val enabled = kind != SaveKind.NORMAL ||
-                            normalTabsCapability == ZenSpaces.NormalTabsCapability.ENABLED
-                        DropdownMenuItem(
-                            enabled = enabled,
-                            text = {
-                                Text(
-                                    text = stringResource(kind.labelRes()),
-                                    fontWeight = if (kind == displayed) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = if (kind == displayed) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurface
-                                    },
-                                )
-                            },
-                            trailingIcon = if (kind == displayed) {
-                                {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Check,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp),
-                                    )
-                                }
-                            } else null,
-                            onClick = {
-                                onSetSaveKind(kind)
-                                menuExpanded = false
-                            },
-                        )
+                    ZenMenuGroup(index = 0, count = 1) {
+                        SaveKind.entries.forEachIndexed { index, kind ->
+                            val enabled = kind != SaveKind.NORMAL ||
+                                normalTabsCapability == ZenSpaces.NormalTabsCapability.ENABLED
+                            ZenSelectableMenuItem(
+                                selected = kind == displayed,
+                                onClick = {
+                                    onSetSaveKind(kind)
+                                    menuExpanded = false
+                                },
+                                text = { Text(stringResource(kind.labelRes())) },
+                                index = index,
+                                count = SaveKind.entries.size,
+                                enabled = enabled,
+                                selectedLeadingIcon = { ZenMenuCheck() },
+                            )
+                        }
                     }
                 }
             }
@@ -469,7 +402,10 @@ private fun SettingsContentBlockingScreen(
             .settingsSheetPage()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp)
-            .padding(top = 28.dp, bottom = 28.dp),
+            .padding(
+                top = SheetContentTopSpacing,
+                bottom = SheetContentBottomSpacing,
+            ),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Row(
@@ -478,7 +414,11 @@ private fun SettingsContentBlockingScreen(
                 .fillMaxWidth()
                 .padding(start = 4.dp),
         ) {
-            IconButton(onClick = onBack, modifier = Modifier.padding(end = 4.dp)) {
+            IconButton(
+                onClick = onBack,
+                shapes = IconButtonDefaults.shapes(),
+                modifier = Modifier.padding(end = 4.dp),
+            ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
                     contentDescription = stringResource(R.string.common_back),
@@ -492,7 +432,11 @@ private fun SettingsContentBlockingScreen(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
             )
-            IconButton(onClick = onDone, modifier = Modifier.padding(end = 4.dp)) {
+            IconButton(
+                onClick = onDone,
+                shapes = IconButtonDefaults.shapes(),
+                modifier = Modifier.padding(end = 4.dp),
+            ) {
                 Icon(
                     imageVector = Icons.Outlined.Close,
                     contentDescription = stringResource(R.string.common_done),

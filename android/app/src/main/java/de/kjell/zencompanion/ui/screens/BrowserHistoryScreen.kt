@@ -2,27 +2,22 @@ package de.kjell.zencompanion.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
@@ -45,7 +40,6 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.kjell.zencompanion.R
@@ -53,9 +47,11 @@ import de.kjell.zencompanion.data.BrowserHistory
 import de.kjell.zencompanion.data.BrowserVisit
 import de.kjell.zencompanion.data.searchVisits
 import de.kjell.zencompanion.ui.components.Favicon
+import de.kjell.zencompanion.ui.sheets.SheetContentTopSpacing
 import de.kjell.zencompanion.ui.sheets.ZenSheet
-import de.kjell.zencompanion.ui.theme.LiftCard
 import de.kjell.zencompanion.ui.theme.LocalZenColors
+import de.kjell.zencompanion.ui.theme.ZenListGroup
+import de.kjell.zencompanion.ui.theme.ZenListItem
 import de.kjell.zencompanion.ui.theme.ZenType
 import de.kjell.zencompanion.ui.theme.liftBorder
 import java.text.DateFormat
@@ -92,15 +88,16 @@ internal fun BrowserHistoryScreen(
 
     ZenSheet(onDismiss = onClose, skipPartiallyExpanded = true) {
         Column(
+            // The sheet already applies the status-bar inset and draws the
+            // drag handle above this row, so no extra inset belongs here.
             modifier = Modifier
                 .fillMaxSize()
-                .background(zen.background)
-                .statusBarsPadding(),
+                .background(zen.background),
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 4.dp),
+                    .padding(start = 20.dp, end = 8.dp, top = SheetContentTopSpacing, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -109,7 +106,10 @@ internal fun BrowserHistoryScreen(
                     color = zen.ink,
                     modifier = Modifier.weight(1f),
                 )
-                IconButton(onClick = onClose) {
+                IconButton(
+                    onClick = onClose,
+                    shapes = IconButtonDefaults.shapes(),
+                ) {
                     Icon(
                         imageVector = Icons.Outlined.Close,
                         contentDescription = stringResource(R.string.common_done),
@@ -187,7 +187,7 @@ internal fun BrowserHistoryScreen(
     }
 }
 
-/** One day: its label, then its pages in one card. */
+/** One day: its label, then its pages in one grouped list. */
 @Composable
 private fun DaySection(
     label: String,
@@ -203,25 +203,17 @@ private fun DaySection(
             color = zen.ink.copy(alpha = 0.4f),
             modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
         )
-        LiftCard(modifier = Modifier.fillMaxWidth()) {
-            Column {
-                visits.forEachIndexed { index, visit ->
-                    // Keyed: a deleted entry must not hand its swipe state to
-                    // the row that takes its place.
-                    key(visit.url) {
-                        VisitRow(
-                            visit = visit,
-                            time = timeFormat.format(Date(visit.lastVisited)),
-                            onOpen = { onOpen(visit) },
-                            onDelete = { BrowserHistory.remove(visit) },
-                        )
-                        if (index < visits.size - 1) {
-                            HorizontalDivider(
-                                color = zen.ink.copy(alpha = 0.08f),
-                                modifier = Modifier.padding(start = 54.dp),
-                            )
-                        }
-                    }
+        ZenListGroup {
+            visits.forEach { visit ->
+                // Keyed: a deleted entry must not hand its swipe state to
+                // the row that takes its place.
+                key(visit.url) {
+                    VisitRow(
+                        visit = visit,
+                        time = timeFormat.format(Date(visit.lastVisited)),
+                        onOpen = { onOpen(visit) },
+                        onDelete = { BrowserHistory.remove(visit) },
+                    )
                 }
             }
         }
@@ -266,14 +258,15 @@ private fun VisitRow(visit: BrowserVisit, time: String, onOpen: () -> Unit, onDe
             }
         },
     ) {
-        Row(
+        ZenListItem(
+            headline = visit.title.ifEmpty { visit.host },
+            supportingText = "$time · ${visit.displayAddress}",
+            onClick = onOpen,
             modifier = Modifier
-                .fillMaxWidth()
                 // The card's own fill, opaque: `lift` alone is translucent, so
                 // the swipe background would show through the row at rest.
                 .background(zen.background)
                 .background(zen.lift)
-                .clickable(onClick = onOpen)
                 // A swipe alone would leave screen readers no way to delete.
                 .semantics {
                     customActions = listOf(
@@ -282,29 +275,8 @@ private fun VisitRow(visit: BrowserVisit, time: String, onOpen: () -> Unit, onDe
                             true
                         },
                     )
-                }
-                .padding(horizontal = 16.dp, vertical = 9.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Favicon(urlString = visit.url, size = 26.dp)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = visit.title.ifEmpty { visit.host },
-                    style = ZenType.rounded(15, FontWeight.Medium),
-                    color = zen.ink,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(1.dp))
-                Text(
-                    text = "$time · ${visit.displayAddress}",
-                    style = ZenType.rounded(12, FontWeight.Normal),
-                    color = zen.ink.copy(alpha = 0.4f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
+                },
+            leadingContent = { Favicon(urlString = visit.url, size = 26.dp) },
+        )
     }
 }

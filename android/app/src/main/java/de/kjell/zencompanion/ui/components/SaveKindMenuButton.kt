@@ -1,15 +1,12 @@
 package de.kjell.zencompanion.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
@@ -23,7 +20,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -32,8 +28,12 @@ import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.SaveKind
 import de.kjell.zencompanion.ui.theme.LocalZenColors
+import de.kjell.zencompanion.ui.theme.ZenMenu
+import de.kjell.zencompanion.ui.theme.ZenMenuCheck
+import de.kjell.zencompanion.ui.theme.ZenMenuGroup
+import de.kjell.zencompanion.ui.theme.ZenSelectableMenuItem
 import de.kjell.zencompanion.ui.theme.ZenType
-import de.kjell.zencompanion.ui.theme.liftRim
+import de.kjell.zencompanion.ui.theme.liftBorder
 import de.kjell.zencompanion.util.Haptics
 
 /**
@@ -69,71 +69,68 @@ internal fun SaveKindMenuButton(
     Box(modifier) {
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(48.dp)
-                .clickable(enabled = enabled) {
+            modifier = Modifier.size(48.dp),
+        ) {
+            Surface(
+                onClick = {
                     onMenuWillOpen()
                     menuOpen = true
-                }
-                .semantics {
-                    contentDescription = saveAs
-                    stateDescription = kindLabel
                 },
-        ) {
-            Box(
-                contentAlignment = Alignment.Center,
+                enabled = enabled,
+                shape = CircleShape,
+                color = colors.lift,
+                border = liftBorder(),
                 modifier = Modifier
                     .size(44.dp)
                     .alpha(if (enabled) 1f else 0.55f)
-                    .background(colors.lift, CircleShape)
-                    .liftRim(CircleShape),
+                    .semantics {
+                        contentDescription = saveAs
+                        stateDescription = kindLabel
+                    },
             ) {
-                SaveKindIcon(kind = selected, size = 16.dp, tint = colors.ink)
+                Box(contentAlignment = Alignment.Center) {
+                    SaveKindIcon(kind = selected, size = 16.dp, tint = colors.ink)
+                }
             }
         }
 
-        DropdownMenu(
+        ZenMenu(
             expanded = menuOpen,
             onDismissRequest = {
                 menuOpen = false
                 onMenuDidDismiss()
             },
         ) {
-            for (kind in SaveKind.entries) {
-                val isSelected = selected == kind
-                DropdownMenuItem(
-                    modifier = Modifier.semantics { this.selected = isSelected },
-                    text = {
-                        Text(
-                            text = stringResource(
-                                if (kind == SaveKind.PINNED) {
-                                    R.string.share_save_kind_pinned_menu
-                                } else {
-                                    R.string.share_save_kind_normal_menu
-                                },
-                            ),
-                            style = ZenType.rounded(15, FontWeight.Medium),
-                        )
-                    },
-                    leadingIcon = {
-                        SaveKindIcon(kind = kind, size = 18.dp, tint = colors.ink)
-                    },
-                    trailingIcon = {
-                        if (isSelected) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_checkmark),
-                                contentDescription = null,
-                                tint = colors.ink,
-                                modifier = Modifier.size(14.dp),
+            ZenMenuGroup(index = 0, count = 1) {
+                SaveKind.entries.forEachIndexed { index, kind ->
+                    val isSelected = selected == kind
+                    ZenSelectableMenuItem(
+                        selected = isSelected,
+                        onClick = {
+                            menuOpen = false
+                            Haptics.perform(context, Haptics.Kind.SELECTION)
+                            onSelect(kind)
+                        },
+                        text = {
+                            Text(
+                                text = stringResource(
+                                    if (kind == SaveKind.PINNED) {
+                                        R.string.share_save_kind_pinned_menu
+                                    } else {
+                                        R.string.share_save_kind_normal_menu
+                                    },
+                                ),
+                                style = ZenType.rounded(15, FontWeight.Medium),
                             )
-                        }
-                    },
-                    onClick = {
-                        menuOpen = false
-                        Haptics.perform(context, Haptics.Kind.SELECTION)
-                        onSelect(kind)
-                    },
-                )
+                        },
+                        index = index,
+                        count = SaveKind.entries.size,
+                        leadingIcon = {
+                            SaveKindIcon(kind = kind, size = 18.dp, tint = colors.ink)
+                        },
+                        trailingContent = if (isSelected) ({ ZenMenuCheck() }) else null,
+                    )
+                }
             }
         }
     }

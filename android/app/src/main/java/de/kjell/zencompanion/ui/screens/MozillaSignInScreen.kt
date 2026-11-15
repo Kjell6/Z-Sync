@@ -24,14 +24,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -52,6 +51,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.ui.components.openURLExternally
 import de.kjell.zencompanion.ui.theme.LocalZenColors
+import de.kjell.zencompanion.ui.theme.ZenLoadingIndicator
 import de.kjell.zencompanion.ui.theme.ZenType
 import de.kjell.zencompanion.util.FriendlyError
 import kotlinx.coroutines.launch
@@ -382,7 +382,7 @@ fun MozillaSignInScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .statusBarsPadding()
+                .padding(top = 4.dp)
                 .height(56.dp)
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -390,6 +390,7 @@ fun MozillaSignInScreen(
         ) {
             IconButton(
                 onClick = { if (!finishing) onCancel() },
+                shapes = IconButtonDefaults.shapes(),
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Close,
@@ -401,6 +402,7 @@ fun MozillaSignInScreen(
             if (pending != null && !finishing) {
                 IconButton(
                     onClick = { pending?.let { scope.launch { finish(it) } } },
+                    shapes = IconButtonDefaults.shapes(),
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Check,
@@ -534,10 +536,9 @@ fun MozillaSignInScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        CircularProgressIndicator(
+                        ZenLoadingIndicator(
                             color = colors.coral,
                             modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
                         )
                         Text(
                             text = stringResource(R.string.signin_finishing),
@@ -613,6 +614,7 @@ private fun NoticeBubble(
             )
             IconButton(
                 onClick = onClose,
+                shapes = IconButtonDefaults.shapes(),
                 modifier = Modifier.size(28.dp),
             ) {
                 Icon(
@@ -638,6 +640,7 @@ internal fun ToolbarIcon(
     val colors = LocalZenColors.current
     androidx.compose.material3.IconButton(
         onClick = onClick,
+        shapes = IconButtonDefaults.shapes(),
         modifier = modifier,
     ) {
         Image(

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -146,7 +147,7 @@ fun SignInLandingView(
 
         Button(
             onClick = onOpenSignIn,
-            shape = RoundedCornerShape(16.dp),
+            shapes = ButtonDefaults.shapes(shape = RoundedCornerShape(16.dp)),
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 56.dp),
@@ -159,7 +160,7 @@ fun SignInLandingView(
             )
         }
 
-        TextButton(onClick = onOpenHelp) {
+        TextButton(onClick = onOpenHelp, shapes = ButtonDefaults.shapes()) {
             Text(
                 text = stringResource(R.string.signin_help_link),
                 style = MaterialTheme.typography.labelMedium,
@@ -180,6 +181,7 @@ fun SignInLandingView(
                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Legal.publicPolicyURL)))
                 }
             },
+            shapes = ButtonDefaults.shapes(),
         ) {
             Text(
                 text = stringResource(R.string.legal_privacy),

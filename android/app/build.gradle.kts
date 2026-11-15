@@ -121,7 +121,9 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.foundation:foundation")
-    implementation("androidx.compose.material3:material3")
+    // Ahead of the BOM, which only lists stable releases: 1.5 brings Material 3
+    // Expressive. Back to the BOM entry once it ships 1.5.
+    implementation("androidx.compose.material3:material3:1.5.0-rc01")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.animation:animation")
     implementation("androidx.compose.ui:ui-tooling-preview")

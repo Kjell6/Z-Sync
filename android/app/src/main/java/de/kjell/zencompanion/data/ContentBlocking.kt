@@ -131,6 +131,22 @@ internal object FilterListUpdates {
         if (!text.startsWith("[Adblock")) return null
         return BlockList.parse(text).takeIf { it.ruleCount >= MIN_RULES }
     }
+
+    /**
+     * The copy to use when both parse: the downloaded one only when it is at
+     * least as new as the bundled one, so a newer list that came with an app
+     * update isn't held back by an older download. Versions are fixed-width
+     * timestamps (`202610242150`), so plain string order is newness; a version
+     * missing on either side keeps the download, as before.
+     */
+    fun chooseList(bundled: BlockList?, downloaded: BlockList?): BlockList? {
+        if (downloaded == null) return bundled
+        if (bundled == null) return downloaded
+        val bundledVersion = bundled.version
+        val downloadedVersion = downloaded.version
+        if (bundledVersion == null || downloadedVersion == null) return downloaded
+        return if (downloadedVersion >= bundledVersion) downloaded else bundled
+    }
 }
 
 /**
@@ -208,12 +224,13 @@ object ContentBlocking {
 
     private fun loadLists(context: Context) {
         val loaded = FilterList.entries.mapNotNull { list ->
-            val parsed = downloadedFile(context, list).takeIf { it.exists() }
+            val bundled = runCatching {
+                context.assets.open("$ASSET_DIR/${list.fileName}").bufferedReader()
+                    .use { BlockList.parse(it.readText()) }
+            }.getOrNull()
+            val downloaded = downloadedFile(context, list).takeIf { it.exists() }
                 ?.let { runCatching { FilterListUpdates.accept(it.readText()) }.getOrNull() }
-                ?: runCatching {
-                    context.assets.open("$ASSET_DIR/${list.fileName}").bufferedReader().use { BlockList.parse(it.readText()) }
-                }.getOrNull()
-            parsed?.let { list.category to it }
+            FilterListUpdates.chooseList(bundled, downloaded)?.let { list.category to it }
         }.toMap()
         lists = loaded
         _lastModified.value = loaded[BlockCategory.ADS]?.lastModified

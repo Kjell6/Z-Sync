@@ -1550,7 +1550,7 @@ private fun PageStack(
                         isAddressFocused = state.isAddressFocused,
                         desktopSite = state.requestsDesktopSite,
                         pageZoom = state.pageZoom,
-                        savedHistory = { session.history.also { session.history = null } },
+                        savedHistory = { pages.takeHistory(session) },
                         takePopup = { session.pendingPopup.also { session.pendingPopup = null } },
                         onWebViewCreated = { session.webView = it },
                         onWebViewReleased = { pages.webViewReleased(session, it) },

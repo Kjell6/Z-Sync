@@ -47,6 +47,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -105,6 +106,15 @@ import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+
+/**
+ * Cards this far from the deck's focus hold their picture; the others let go
+ * of it once the disk can give it back. A card ahead is off screen past about
+ * 1.4 cards ([PageDeckGeometry.frame]); cards behind tuck in with a sliver of
+ * at least a few pixels up to about 5 cards back. One card of margin on top.
+ */
+private const val PICTURE_CARDS_AHEAD = 3f
+private const val PICTURE_CARDS_BEHIND = 6f
 
 /** A tapped card growing back into its page, and the deck parting around it. */
 internal val DeckOpenSpring = spring<Float>(stiffness = 220f, visibilityThreshold = 0.002f)
@@ -597,7 +607,15 @@ private fun OpenPageCard(
     val headerInset = 20.dp
     val iconGap = 8.dp
 
-    LaunchedEffect(page.id) { session?.let(pages::loadShot) }
+    // Only the cards near the focus hold a picture. Derived, so the card does
+    // not recompose with every frame of a swipe, only as it crosses the edge.
+    val currentOffset by rememberUpdatedState(offset)
+    val near by remember {
+        derivedStateOf { currentOffset().let { it > -PICTURE_CARDS_BEHIND && it < PICTURE_CARDS_AHEAD } }
+    }
+    LaunchedEffect(page.id, near) {
+        session?.let { if (near) pages.loadShot(it) else pages.dropShot(it) }
+    }
 
     Box(modifier.requiredSize(width, height)) {
         Box(

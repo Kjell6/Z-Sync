@@ -372,8 +372,13 @@ class OpenPagesStore(
             _pages.value = next
             dir.mkdirs()
             val temp = File(dir, "$FILE_NAME.tmp")
-            temp.writeText(encode(next.filter { it.isKept }))
-            if (!temp.renameTo(File(dir, FILE_NAME))) temp.delete()
+            // A full disk must not take the app down: the list in memory still
+            // holds and the next write tries again.
+            val written = runCatching {
+                temp.writeText(encode(next.filter { it.isKept }))
+                temp.renameTo(File(dir, FILE_NAME))
+            }.getOrDefault(false)
+            if (!written) temp.delete()
         }
     }
 

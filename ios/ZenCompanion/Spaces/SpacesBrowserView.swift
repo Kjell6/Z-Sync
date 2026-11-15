@@ -802,7 +802,7 @@ private struct SignedOutEssentialsSkeleton: View {
 }
 
 /// Placeholder rows in the shape of pinned tabs: a favicon-sized square and a
-/// title-sized bar, then a folder-shaped row. Decoration only.
+/// title-sized bar. Decoration only.
 private struct SignedOutTabsSkeleton: View {
     let scheme: ColorScheme
 
@@ -811,7 +811,7 @@ private struct SignedOutTabsSkeleton: View {
             tabRow(titleWidth: 168)
             tabRow(titleWidth: 112)
             tabRow(titleWidth: 196)
-            folderRow
+            tabRow(titleWidth: 136)
         }
         .skeletonShimmer()
         .accessibilityHidden(true)
@@ -831,36 +831,6 @@ private struct SignedOutTabsSkeleton: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 9)
-    }
-
-    private var folderRow: some View {
-        HStack(spacing: 12) {
-            SkeletonFolderIcon(color: Palette.ink(scheme).opacity(0.1))
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(Palette.ink(scheme).opacity(0.1))
-                .frame(width: 136, height: 12)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 9)
-    }
-}
-
-/// The folder silhouette in low ink: a body with a small tab on its top edge.
-private struct SkeletonFolderIcon: View {
-    let color: Color
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: 4, style: .continuous)
-            .fill(color)
-            .frame(width: 28, height: 21)
-            .overlay(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(color)
-                    .frame(width: 12, height: 6)
-                    .offset(x: 3, y: -3)
-            }
-            .frame(width: 28, height: 28, alignment: .bottom)
     }
 }
 

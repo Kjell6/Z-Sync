@@ -56,16 +56,19 @@ enum Palette {
     /// in `ButtonChrome.kt`.
     static let rimWidth: CGFloat = 0.6
     static let rimOpacity: Double = 0.12
+    /// The essentials' lighter hairline: flat tiles in a dense grid, where the
+    /// full rim would read as a grid of outlines.
+    static let essentialRimOpacity: Double = 0.07
 
 }
 
 extension View {
     /// Flat hairline for lift surfaces: the same dark line in Light and Dark
     /// Mode. Stays inside the shape so neighboring tiles do not share an edge.
-    func glassRim(cornerRadius: CGFloat) -> some View {
+    func glassRim(cornerRadius: CGFloat, opacity: Double = Palette.rimOpacity) -> some View {
         overlay {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(Color.black.opacity(Palette.rimOpacity), lineWidth: Palette.rimWidth)
+                .strokeBorder(Color.black.opacity(opacity), lineWidth: Palette.rimWidth)
                 .allowsHitTesting(false)
         }
     }

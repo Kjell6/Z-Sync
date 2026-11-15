@@ -62,13 +62,14 @@ private struct EssentialTile: View {
         Button(action: onOpen) {
             let shape = RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous)
             ZStack {
-                Color.clear
-                    .modifier(DomedFill(shape: shape, scheme: scheme))
+                // Flat, unlike the domed buttons: the favicons carry the tile.
+                shape
+                    .fill(Palette.lift(scheme))
                 ZenTabIcon(tab: tab, size: 24, scheme: scheme)
             }
             .frame(maxWidth: .infinity)
             .frame(height: height)
-            .glassRim(cornerRadius: Palette.liftCornerRadius)
+            .glassRim(cornerRadius: Palette.liftCornerRadius, opacity: Palette.essentialRimOpacity)
             .contentShape(shape)
         }
         .buttonStyle(LiquidPressButtonStyle())

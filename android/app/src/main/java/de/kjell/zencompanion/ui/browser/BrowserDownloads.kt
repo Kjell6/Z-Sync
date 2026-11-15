@@ -593,9 +593,10 @@ internal fun copyToDocument(
         discardDocument(context, destination)
         return CopyResult.FAILED
     }
+    // The document is closed even when the staged file is already gone.
     val result = try {
-        file.inputStream().use { input ->
-            output.use { out ->
+        output.use { out ->
+            file.inputStream().use { input ->
                 val buffer = ByteArray(COPY_BUFFER_BYTES)
                 var result = CopyResult.SAVED
                 while (true) {

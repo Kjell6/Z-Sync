@@ -1740,6 +1740,8 @@ private fun PageStack(
                         onRendererGone = { url ->
                             viewModel.onPageLoadFailed(BrowserPageError.CRASHED, url ?: state.currentUrl)
                             viewModel.onLoadingChange(false)
+                            // The page's own files went with its renderer.
+                            requests.pageLeft(session.id)
                             session.webView = null
                             session.webViewGeneration++
                         },

@@ -223,16 +223,30 @@ struct LiveSessionSigningOut: SessionSigningOut {
     /// The mini-browser's own data, which signing out keeps.
     private let pages: @MainActor () -> OpenPagesStore
     private let history: @MainActor () -> BrowserHistoryStore
+    /// Everything that belongs to the account; a test leaves the device's own alone.
+    private let endAccount: @MainActor () -> Void
 
     nonisolated init(
         pages: @escaping @MainActor () -> OpenPagesStore = { .shared },
-        history: @escaping @MainActor () -> BrowserHistoryStore = { .shared }
+        history: @escaping @MainActor () -> BrowserHistoryStore = { .shared },
+        endAccount: @escaping @MainActor () -> Void = { LiveSessionSigningOut.endAccount() }
     ) {
         self.pages = pages
         self.history = history
+        self.endAccount = endAccount
     }
 
     func signOut() {
+        endAccount()
+        // The browser's pages and history stay; they are written down now so
+        // nothing of them waits on a save that may not come.
+        pages().writeKeptPages()
+        history().saveNow()
+        NotificationCenter.default.post(name: .zenCompanionSignedOut, object: nil)
+    }
+
+    @MainActor
+    private static func endAccount() {
         // Sign-in runs in its own ephemeral (nonPersistent) store, so its
         // website data is emptied here: the next sign-in starts without the
         // previous one's Mozilla login. The mini-browser's store is left alone:
@@ -253,11 +267,6 @@ struct LiveSessionSigningOut: SessionSigningOut {
         AccountStore.clear()
         FaviconLoader.shared.removeAll()
         SpacesSyncService.deleteCachedSnapshot()
-        // The browser's pages and history stay; they are written down now so
-        // nothing of them waits on a save that may not come.
-        pages().writeKeptPages()
-        history().saveNow()
-        NotificationCenter.default.post(name: .zenCompanionSignedOut, object: nil)
     }
 }
 

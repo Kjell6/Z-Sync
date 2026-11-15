@@ -529,7 +529,15 @@ final class MiniBrowserModel {
     var allowsNormalTabs: Bool
     /// Whether saving into a space is offered at all. Signed out there is no
     /// space to save to, so the pin control and every pin path stay off.
-    var canSave = true
+    var canSave = true {
+        didSet {
+            // A pin tapped before the account went is never written for the next one.
+            if !canSave {
+                hasPendingPinSave = false
+                pendingPin = nil
+            }
+        }
+    }
     private let suggestionClient: SearchSuggestionFetching
     let sitePermissions: SitePermissionStore
     private let history: BrowserHistoryStore

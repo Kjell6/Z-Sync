@@ -10,28 +10,27 @@ enum Legal {
     static let writeReviewURL = URL(string: "https://apps.apple.com/app/id6804470330?action=write-review")!
 }
 
-/// Entry point: sign-in landing or the spaces browser.
+/// Entry point: the spaces browser, signed in or not. Signed out it shows the
+/// same screen with the account's content as a placeholder and a sign-in card.
 struct HomeView: View {
     @State private var model = SessionModel()
 
     var body: some View {
-        Group {
-            if let snapshot = model.account {
-                SpacesBrowserView(
-                    account: snapshot,
-                    incomingLink: model.pendingOpenURL,
-                    onConsumeIncomingLink: { model.consumePendingOpenURL() }
-                )
-            } else {
-                SignInLandingView(model: model)
-            }
-        }
+        SpacesBrowserView(
+            account: model.account,
+            sessionNotice: model.sessionNotice,
+            incomingLink: model.pendingOpenURL,
+            onConsumeIncomingLink: { model.consumePendingOpenURL() },
+            onPresentSignIn: { model.presentSignIn() },
+            onPresentSignInHelp: { model.presentSignInHelp() },
+            onDemoTap: { model.registerDemoTap() }
+        )
         .onAppear {
             model.load()
         }
         // A link that opens Z-Sync: a web link from another app, or the app's
-        // own zsync:// link from a Shortcut. It opens in the in-app browser,
-        // or waits in the model until sign-in finishes.
+        // own zsync:// link from a Shortcut. It opens in the in-app browser at
+        // once, signed in or out.
         .onOpenURL { url in
             model.openLinkFromAnotherApp(url)
         }
@@ -41,89 +40,6 @@ struct HomeView: View {
         .onReceive(NotificationCenter.default.publisher(for: .zenCompanionSessionInvalidated)) { _ in
             model.sessionExpired()
         }
-    }
-}
-
-/// Minimal landing: brand + one button, no onboarding text walls.
-private struct SignInLandingView: View {
-    @Bindable var model: SessionModel
-
-    @Environment(\.colorScheme) private var scheme
-
-    private var landingContent: some View {
-        VStack(spacing: 18) {
-            Spacer()
-            ZenMark(scheme: scheme, size: 64)
-                .contentShape(Rectangle())
-                .onTapGesture(count: 1) { model.registerDemoTap() }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(Text("demo.logo_hint"))
-                .accessibilityAddTraits(.isButton)
-            Text("app.name")
-                .zenFont(32, weight: .semibold, design: .rounded)
-                .tracking(-0.5)
-                .foregroundStyle(Palette.ink(scheme))
-                .contentShape(Rectangle())
-                .onTapGesture { model.registerDemoTap() }
-            Text("home.tagline")
-                .zenFont(16, weight: .regular, design: .rounded)
-                .foregroundStyle(Palette.ink(scheme).opacity(0.6))
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 40)
-            if let notice = model.sessionNotice {
-                Text(notice)
-                    .zenFont(14, weight: .medium, design: .rounded)
-                    .foregroundStyle(Palette.ink(scheme).opacity(0.75))
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 11)
-                    .background(
-                        Palette.ink(scheme).opacity(0.06),
-                        in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    )
-                    .padding(.horizontal, 28)
-            }
-            Spacer()
-            Button { model.presentSignIn() } label: {
-                Text("home.sign_in")
-                    .zenFont(17, weight: .semibold, design: .rounded)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .foregroundStyle(Palette.paper(scheme))
-                    .background(Palette.ink(scheme), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            }
-            .buttonStyle(PressedButtonStyle())
-            Button { model.presentSignInHelp() } label: {
-                Text("signin.help.link")
-                    .zenFont(13, weight: .medium, design: .rounded)
-                    .foregroundStyle(Palette.ink(scheme).opacity(0.55))
-                    .multilineTextAlignment(.center)
-            }
-            .buttonStyle(PressedButtonStyle())
-            Link("legal.privacy", destination: Legal.publicPolicyURL)
-                .zenFont(13, weight: .medium, design: .rounded)
-                .foregroundStyle(Palette.ink(scheme).opacity(0.45))
-                .padding(.top, 4)
-        }
-        .frame(maxWidth: 440)
-        .frame(maxWidth: .infinity)
-        .padding(24)
-    }
-
-    var body: some View {
-        ZStack {
-            Palette.background(scheme).ignoresSafeArea()
-            // The design's centred layout whenever it fits; a scrolling copy
-            // once the system text size makes it taller than the screen.
-            ViewThatFits(in: .vertical) {
-                landingContent
-                ScrollView { landingContent }
-            }
-        }
-        .tint(Palette.coral(scheme))
         .sheet(isPresented: $model.showMozilla) {
             MozillaSignInView { snap in
                 model.completeSignIn(snap)

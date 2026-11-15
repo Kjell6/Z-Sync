@@ -46,6 +46,9 @@ struct MiniBrowserChrome<NavBar: View>: View {
     var pages: OpenPagesStore
     let space: ZenSpace
     let allSpaces: [ZenSpace]
+    /// Whether saving into a space is offered. Signed out the pin tile and its
+    /// saved-to row are gone, and the row of page tools closes up.
+    var canSave = true
     var onToggleMenu: () -> Void
     /// Closes the mini-browser. The dock's middle control used to be a
     /// placeholder; it is the way out now that there is no sheet to swipe down.
@@ -444,7 +447,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
 
             actionRow
 
-            if model.showPinBanner {
+            if model.showPinBanner, canSave {
                 // No opacity transition. The sheet just grows by this card.
                 pinSavedSection
                     .transition(.identity)
@@ -488,17 +491,19 @@ struct MiniBrowserChrome<NavBar: View>: View {
                     model.collapseMenu()
                 }
             }
-            tile(
-                systemName: "pin",
-                // Without the capability the save lands as a pin, whatever the
-                // setting says.
-                title: effectiveSaveKind == .normal ? "browser.save_short" : "browser.pin_short",
-                accessibility: effectiveSaveKind == .normal ? "browser.save_short" : "browser.pin_to_space",
-                // A page that failed to load has nothing worth pinning.
-                enabled: model.pageError == nil
-            ) {
-                // Stay open. The saved-to row grows the sheet instead of a banner.
-                model.triggerPinBanner(spaces: allSpaces, fallbackSpace: space)
+            if canSave {
+                tile(
+                    systemName: "pin",
+                    // Without the capability the save lands as a pin, whatever the
+                    // setting says.
+                    title: effectiveSaveKind == .normal ? "browser.save_short" : "browser.pin_short",
+                    accessibility: effectiveSaveKind == .normal ? "browser.save_short" : "browser.pin_to_space",
+                    // A page that failed to load has nothing worth pinning.
+                    enabled: model.pageError == nil
+                ) {
+                    // Stay open. The saved-to row grows the sheet instead of a banner.
+                    model.triggerPinBanner(spaces: allSpaces, fallbackSpace: space)
+                }
             }
         }
     }

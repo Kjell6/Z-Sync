@@ -6,7 +6,7 @@ import SwiftUI
 /// subpage (Content blocking); everything else changes in place. The account
 /// and the "Save shared link as" choice sit on their own above the groups.
 struct SettingsSheet: View {
-    let account: AccountSnapshot
+    let account: AccountSnapshot?
     let loadError: String?
     let scheme: ColorScheme
     var normalTabsCapability: NormalTabsCapability = .absent
@@ -15,6 +15,8 @@ struct SettingsSheet: View {
     var onToolbarPlacementChange: (ToolbarPlacement) -> Void = { _ in }
     /// Same for the essentials-per-row choice, which the start-page grid reads.
     var onEssentialsColumnsChange: (EssentialsColumns) -> Void = { _ in }
+    /// Starts the Mozilla sign-in from the signed-out account row.
+    var onSignIn: () -> Void = {}
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -23,6 +25,10 @@ struct SettingsSheet: View {
     @State private var isShowingSignOutConfirm: Bool = false
     @State private var isShowingWhatsNew: Bool = false
     @State private var isShowingAddEngine: Bool = false
+
+    private var access: SettingsAccess {
+        SettingsAccess(isSignedIn: account != nil)
+    }
 
     private var appVersionString: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -69,11 +75,11 @@ struct SettingsSheet: View {
                 AddSearchEngineView(model: model, scheme: scheme)
             }
             .confirmationDialog(
-                LocalizedStringKey(account.isDemo ? "demo.exit" : "home.sign_out"),
+                LocalizedStringKey(account?.isDemo == true ? "demo.exit" : "home.sign_out"),
                 isPresented: $isShowingSignOutConfirm,
                 titleVisibility: .visible
             ) {
-                Button(LocalizedStringKey(account.isDemo ? "demo.exit" : "home.sign_out"), role: .destructive) {
+                Button(LocalizedStringKey(account?.isDemo == true ? "demo.exit" : "home.sign_out"), role: .destructive) {
                     dismiss()
                     model.signOut()
                 }
@@ -102,7 +108,7 @@ struct SettingsSheet: View {
     // MARK: Account
 
     /// Email and demo caption on a lift card.
-    private var accountBadge: some View {
+    private func accountBadge(_ account: AccountSnapshot) -> some View {
         HStack(spacing: 12) {
             Image(systemName: "person.crop.circle")
                 .font(.system(size: 16, weight: .semibold))
@@ -128,8 +134,42 @@ struct SettingsSheet: View {
         .liftCard(scheme)
     }
 
+    /// Signed out the account card is one row that starts the existing Mozilla
+    /// sign-in flow, where the email and sign-out would be.
+    private var signInCard: some View {
+        Button {
+            // The settings sheet has to be gone before the sign-in sheet can
+            // come up: one sheet at a time from the same screen.
+            dismiss()
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(300))
+                onSignIn()
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "person.crop.circle")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.6))
+
+                Text("home.sign_in")
+                    .zenFont(16, weight: .medium, design: .rounded)
+                    .foregroundStyle(Palette.ink(scheme))
+                    .multilineTextAlignment(.leading)
+
+                Spacer(minLength: 8)
+
+                SettingsChevron(scheme: scheme)
+            }
+            .padding(.horizontal, 16)
+            .frame(minHeight: 54)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressedButtonStyle())
+        .liftCard(scheme)
+    }
+
     /// The destructive action, square on its own card.
-    private var signOutButton: some View {
+    private func signOutButton(_ account: AccountSnapshot) -> some View {
         Button(role: .destructive) {
             isShowingSignOutConfirm = true
         } label: {
@@ -150,20 +190,25 @@ struct SettingsSheet: View {
     }
 
     /// Email on the left, the destructive action as a compact card beside it.
+    /// Signed out both make way for the sign-in row.
     private var accountCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Accessibility sizes give the badge the full width and move
-            // sign-out below it; every other size keeps them side by side.
-            if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 10) {
-                    accountBadge
-                    signOutButton
+            if let account {
+                // Accessibility sizes give the badge the full width and move
+                // sign-out below it; every other size keeps them side by side.
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 10) {
+                        accountBadge(account)
+                        signOutButton(account)
+                    }
+                } else {
+                    HStack(spacing: 10) {
+                        accountBadge(account)
+                        signOutButton(account)
+                    }
                 }
             } else {
-                HStack(spacing: 10) {
-                    accountBadge
-                    signOutButton
-                }
+                signInCard
             }
             if let loadError {
                 HStack(alignment: .top, spacing: 8) {
@@ -191,7 +236,7 @@ struct SettingsSheet: View {
 
     @ViewBuilder
     private var saveKindCard: some View {
-        if normalTabsCapability != .absent {
+        if access.showsSaveKind, normalTabsCapability != .absent {
             VStack(alignment: .leading, spacing: 8) {
                 VStack(spacing: 0) {
                     SettingsRow(title: "settings.save_kind", systemImage: "pin", scheme: scheme) {
@@ -378,26 +423,28 @@ struct SettingsSheet: View {
     private func layoutSection(model: SettingsModel) -> some View {
         SettingsSection(title: "Layout", scheme: scheme) {
             VStack(spacing: 0) {
-                SettingsRow(title: "settings.essentials_columns", systemImage: "rectangle.grid.3x2", scheme: scheme) {
-                    Menu {
-                        ForEach(EssentialsColumns.allCases) { columns in
-                            Button {
-                                model.essentialsColumns = columns
-                                onEssentialsColumnsChange(columns)
-                            } label: {
-                                if model.essentialsColumns == columns {
-                                    Label(columns.title, systemImage: "checkmark")
-                                } else {
-                                    Text(columns.title)
+                if access.showsEssentialsColumns {
+                    SettingsRow(title: "settings.essentials_columns", systemImage: "rectangle.grid.3x2", scheme: scheme) {
+                        Menu {
+                            ForEach(EssentialsColumns.allCases) { columns in
+                                Button {
+                                    model.essentialsColumns = columns
+                                    onEssentialsColumnsChange(columns)
+                                } label: {
+                                    if model.essentialsColumns == columns {
+                                        Label(columns.title, systemImage: "checkmark")
+                                    } else {
+                                        Text(columns.title)
+                                    }
                                 }
                             }
+                        } label: {
+                            SettingsMenuValue(text: model.essentialsColumns.title, scheme: scheme)
                         }
-                    } label: {
-                        SettingsMenuValue(text: model.essentialsColumns.title, scheme: scheme)
                     }
-                }
 
-                SettingsHairline(scheme: scheme)
+                    SettingsHairline(scheme: scheme)
+                }
 
                 SettingsRow(title: "settings.toolbar", systemImage: "arrow.up.and.down", scheme: scheme) {
                     Menu {

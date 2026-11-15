@@ -211,6 +211,8 @@ internal fun OpenPagesOverview(
     pages: BrowserPages,
     openPages: List<OpenPage>,
     activeId: String?,
+    /** Signed out a card offers no "Pin to space": there is nowhere to pin. */
+    signedIn: Boolean,
     spaces: List<ZenSpaces.ZenSpace>,
     /** Folders are offered only when the save lands as a pinned tab. */
     saveKind: SaveKind,
@@ -525,6 +527,7 @@ internal fun OpenPagesOverview(
                             onOpen(page)
                         },
                         spaces = spaces,
+                        canPin = signedIn && spaces.isNotEmpty(),
                         pinsIntoFolders = saveKind == SaveKind.PINNED,
                         onClose = {
                             menuCardId = null
@@ -588,6 +591,8 @@ private fun OpenPageCard(
     onMenuDismiss: () -> Unit,
     onOpen: () -> Unit,
     spaces: List<ZenSpaces.ZenSpace>,
+    /** Signed in and with spaces, the menu offers "Pin to space". */
+    canPin: Boolean,
     pinsIntoFolders: Boolean,
     onClose: () -> Unit,
     onPin: (PinDestination) -> Unit,
@@ -702,6 +707,7 @@ private fun OpenPageCard(
             page = page,
             canKeep = pages.keepsOnlyChosenPages() && pages.store.canKeep(page, pageFailed),
             spaces = spaces,
+            canPin = canPin,
             pinsIntoFolders = pinsIntoFolders,
             onDismiss = onMenuDismiss,
             onToggleKeep = {
@@ -760,6 +766,7 @@ private fun PageCardMenu(
     page: OpenPage,
     canKeep: Boolean,
     spaces: List<ZenSpaces.ZenSpace>,
+    canPin: Boolean,
     pinsIntoFolders: Boolean,
     onDismiss: () -> Unit,
     onToggleKeep: () -> Unit,
@@ -798,13 +805,15 @@ private fun PageCardMenu(
             )
         }
         if (page.url.isNotEmpty()) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.kept_pin_to_space)) },
-                leadingIcon = { Icon(Icons.Outlined.PushPin, contentDescription = null) },
-                trailingIcon = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null) },
-                enabled = spaces.isNotEmpty(),
-                onClick = { pinning = true },
-            )
+            if (canPin) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.kept_pin_to_space)) },
+                    leadingIcon = { Icon(Icons.Outlined.PushPin, contentDescription = null) },
+                    trailingIcon = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null) },
+                    enabled = spaces.isNotEmpty(),
+                    onClick = { pinning = true },
+                )
+            }
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.kept_copy_link)) },
                 leadingIcon = { Icon(Icons.Outlined.ContentCopy, contentDescription = null) },

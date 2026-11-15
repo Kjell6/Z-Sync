@@ -510,30 +510,31 @@ struct OpenPagesOverview: View {
         }
 
         if let url = page.url {
-            Menu {
-                ForEach(spaces) { space in
-                    let folders = saveKind == .pinned ? PinDestinationModel.folderEntries(in: space) : []
-                    if folders.isEmpty {
-                        Button(space.name) { pin(page, url: url, to: PinDestination(spaceId: space.id)) }
-                    } else {
-                        Menu(space.name) {
+            if !spaces.isEmpty {
+                Menu {
+                    ForEach(spaces) { space in
+                        let folders = saveKind == .pinned ? PinDestinationModel.folderEntries(in: space) : []
+                        if folders.isEmpty {
                             Button(space.name) { pin(page, url: url, to: PinDestination(spaceId: space.id)) }
-                            ForEach(folders, id: \.folderId) { folder in
-                                Button(String(repeating: "   ", count: folder.depth) + folder.name) {
-                                    pin(page, url: url, to: PinDestination(spaceId: space.id, folderId: folder.folderId))
+                        } else {
+                            Menu(space.name) {
+                                Button(space.name) { pin(page, url: url, to: PinDestination(spaceId: space.id)) }
+                                ForEach(folders, id: \.folderId) { folder in
+                                    Button(String(repeating: "   ", count: folder.depth) + folder.name) {
+                                        pin(page, url: url, to: PinDestination(spaceId: space.id, folderId: folder.folderId))
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            } label: {
-                Label {
-                    Text("kept.pin_to_space")
-                } icon: {
-                    Image(systemName: "pin")
+                } label: {
+                    Label {
+                        Text("kept.pin_to_space")
+                    } icon: {
+                        Image(systemName: "pin")
+                    }
                 }
             }
-            .disabled(spaces.isEmpty)
 
             Button {
                 UIPasteboard.general.url = url

@@ -37,6 +37,8 @@ Nothing about you is transmitted to, stored by, or visible to the developer. Dat
 
 ## 3. Data stored locally on your device
 
+The mini-browser can be used without signing in to a Mozilla account; its pages, history, website data and site permissions are then stored on the device exactly as described here, and nothing is sent to Mozilla until you sign in.
+
 While you use the app, the following information is kept **only on your device**:
 
 - **Mozilla account email and user ID** — iOS Keychain / Android EncryptedSharedPreferences (Keystore) — showing which account is connected

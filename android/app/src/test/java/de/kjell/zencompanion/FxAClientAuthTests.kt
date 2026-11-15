@@ -2,7 +2,10 @@ package de.kjell.zencompanion
 
 import de.kjell.zencompanion.sync.FxAClient
 import de.kjell.zencompanion.sync.SyncError
+import de.kjell.zencompanion.sync.SyncHttpRequest
 import de.kjell.zencompanion.sync.SyncHttpResponse
+import de.kjell.zencompanion.sync.SyncHttpTransport
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -197,5 +200,31 @@ class FxAClientAuthTests {
         } catch (expected: SyncError.Auth) {
             assertFalse(expected.sessionInvalid)
         }
+    }
+
+    /**
+     * A cancelled request is not a failed sign-in. It must come out as the
+     * cancellation it is, without a BrowserID attempt, so the caller can retry
+     * instead of showing "Sync sign-in failed".
+     */
+    @Test
+    fun syncCredentialsPassesACancelledRequestOnUnwrapped() {
+        var calls = 0
+        val cancelling = object : SyncHttpTransport {
+            override fun execute(request: SyncHttpRequest): SyncHttpResponse {
+                calls++
+                throw CancellationException("cancelled")
+            }
+        }
+
+        try {
+            runBlocking { FxAClient(cancelling).syncCredentials(sessionToken, kB) }
+            fail("expected the cancellation")
+        } catch (expected: CancellationException) {
+            // Expected.
+        } catch (other: Exception) {
+            fail("expected the cancellation, got $other")
+        }
+        assertEquals(1, calls)
     }
 }

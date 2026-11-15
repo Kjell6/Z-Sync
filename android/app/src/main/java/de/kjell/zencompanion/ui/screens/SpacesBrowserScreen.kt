@@ -1,5 +1,6 @@
 package de.kjell.zencompanion.ui.screens
 
+import androidx.annotation.StringRes
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -46,13 +47,22 @@ import de.kjell.zencompanion.ui.theme.ZenTheme
  * rendered above the essentials grid or below the space switcher, per
  * [toolbarPlacement]. Bottom: space switcher + disclaimer. Refresh via
  * pull-to-refresh.
+ *
+ * Signed out it keeps the same layout: the account's content is a skeleton in
+ * its real shape and [SignedOutHome]'s card starts the sign-in flow.
  */
 @Composable
 fun SpacesBrowserScreen(
+    /** Signed out, the account's content is a skeleton and the card offers sign-in. */
+    signedIn: Boolean = true,
     isDemo: Boolean,
     state: BrowserState,
     essentialsColumns: EssentialsColumns,
     toolbarPlacement: ToolbarPlacement,
+    @StringRes sessionNotice: Int? = null,
+    onSignIn: () -> Unit = {},
+    onOpenSignInHelp: () -> Unit = {},
+    onEnterDemo: () -> Unit = {},
     onSelectSpace: (Int) -> Unit,
     onRefresh: () -> Unit,
     onDeleteTab: (String) -> Unit,
@@ -86,6 +96,8 @@ fun SpacesBrowserScreen(
             onOpenAccount = onOpenAccount,
             pageCount = pageCount,
             onOpenPages = onOpenPages,
+            // The synced history needs an account: no card signed out.
+            showsActivity = signedIn,
             // Toward the screen edge when the bar is the last row: the
             // navigation-bar inset is the only gap, so no extra padding.
             bottomPadding = if (toolbarPlacement == ToolbarPlacement.BOTTOM) 0.dp else 6.dp,
@@ -116,7 +128,18 @@ fun SpacesBrowserScreen(
                             .padding(horizontal = 20.dp, vertical = 8.dp),
                     )
                 }
-                if (spaces.isEmpty()) {
+                if (!signedIn) {
+                    SignedOutHome(
+                        essentialsColumns = essentialsColumns,
+                        toolbarPlacement = toolbarPlacement,
+                        actionBar = actionBar,
+                        sessionNotice = sessionNotice,
+                        onSignIn = onSignIn,
+                        onOpenHelp = onOpenSignInHelp,
+                        onEnterDemo = onEnterDemo,
+                        modifier = Modifier.weight(1f),
+                    )
+                } else if (spaces.isEmpty()) {
                     if (toolbarPlacement == ToolbarPlacement.TOP) {
                         actionBar()
                     }
@@ -181,31 +204,35 @@ fun SpacesBrowserScreen(
                 // Bottom: Space Switcher (+ action bar when placed low). The
                 // disclaimer that used to sit here lives in Settings (About);
                 // repeating it on the home screen only cost a row of height.
-                if (spaces.isNotEmpty()) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .navigationBarsPadding(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        // Sits between the content and the switcher: the dock
-                        // keeps its shape and the text never reads as part of
-                        // the toolbar below it.
-                        StatusLine(state = state, onRetry = onRefresh)
-                        SpaceSwitcher(
-                            spaces = spaces,
-                            selectedIndex = state.selectedIndex,
-                            onSelect = onSelectSpace,
-                        )
+                // Signed out the switcher is part of the skeleton, so nothing
+                // goes below the content.
+                if (signedIn) {
+                    if (spaces.isNotEmpty()) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .navigationBarsPadding(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            // Sits between the content and the switcher: the dock
+                            // keeps its shape and the text never reads as part of
+                            // the toolbar below it.
+                            StatusLine(state = state, onRetry = onRefresh)
+                            SpaceSwitcher(
+                                spaces = spaces,
+                                selectedIndex = state.selectedIndex,
+                                onSelect = onSelectSpace,
+                            )
+                            if (toolbarPlacement == ToolbarPlacement.BOTTOM) {
+                                actionBar()
+                            }
+                        }
+                    } else {
                         if (toolbarPlacement == ToolbarPlacement.BOTTOM) {
                             actionBar()
                         }
+                        Spacer(Modifier.navigationBarsPadding())
                     }
-                } else {
-                    if (toolbarPlacement == ToolbarPlacement.BOTTOM) {
-                        actionBar()
-                    }
-                    Spacer(Modifier.navigationBarsPadding())
                 }
             }
 

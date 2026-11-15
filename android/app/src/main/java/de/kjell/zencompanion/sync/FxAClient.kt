@@ -1,5 +1,6 @@
 package de.kjell.zencompanion.sync
 
+import kotlinx.coroutines.CancellationException
 import org.json.JSONObject
 import java.math.BigInteger
 import java.net.URL
@@ -40,6 +41,9 @@ class FxAClient(
             return tokenServerCreds("Bearer $oauth", kB, rotation)
         } catch (e: Exception) {
             if (e is SyncError.TotpRequired) throw e
+            // A cancelled fetch is not a failed sign-in: pass it on as it is,
+            // so the caller can tell it apart and try again.
+            if (e is CancellationException) throw e
             primaryError = e
             last = e.message ?: e.toString()
         }
@@ -47,6 +51,7 @@ class FxAClient(
             val assertion = browserIDAssertion(sessionToken, audience = TOKEN_SERVER_AUDIENCE)
             return tokenServerCreds("BrowserID $assertion", kB, 0)
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             // Keep the "session is dead" verdict from either path: if the auth
             // server rejected the session token, signing in again is the only
             // fix even though the message is wrapped below.
@@ -102,6 +107,7 @@ class FxAClient(
                 obj.optString("access_token").takeIf { it.isNotEmpty() }?.let { return it }
                 last = "OAuth response without access_token"
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 if ((e as? SyncError)?.isSessionInvalid == true) sessionInvalid = true
                 last = e.message ?: e.toString()
             }

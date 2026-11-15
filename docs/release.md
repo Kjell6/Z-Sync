@@ -85,12 +85,10 @@ Remaining maintainer steps, in order:
    routes `onOpenURL` links into the in-app browser. The app's own `zsync`
    scheme is declared in both files already.
 4. Check Apple's requirements for default-browser apps before submitting:
-   - **A text field for a URL on launch, or search tools.** Partly met: the
-     browser has the address field and the spaces screen's search pill opens it
-     in one tap, but the app starts on the spaces screen. With "Open into
-     search" on, a search tab comes up at launch. Treat that setting as the
-     launch state, or add an address field to the landing screen, before
-     shipping as a browser.
+   - **A text field for a URL on launch, or search tools.** Met: the app opens
+     on the home screen, whose action bar has a search field, signed in or out;
+     one tap opens the address field. With "Open into search" on, that search
+     tab comes up at launch.
    - **Navigate directly to the URL it is given.** Met: an `http`/`https` link
      arriving through `onOpenURL` becomes a normal page in the in-app browser.
      A link the app itself sends out is recognised when iOS hands it back and

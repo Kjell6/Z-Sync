@@ -17,6 +17,9 @@ struct MiniBrowserView: View {
     /// Whether a save here may write a normal tab. Comes from the synced
     /// browser's capability, like the share sheet.
     var allowsNormalTabs = false
+    /// Whether saving into a space is offered at all. Signed out the pin
+    /// control is hidden and no save can be started.
+    var canSave = true
     var onDismiss: () -> Void
 
     @Environment(\.colorScheme) private var scheme
@@ -92,6 +95,7 @@ struct MiniBrowserView: View {
         space: ZenSpace,
         allSpaces: [ZenSpace],
         allowsNormalTabs: Bool = false,
+        canSave: Bool = true,
         startsInOverview: Bool = false,
         onDismiss: @escaping () -> Void
     ) {
@@ -99,6 +103,7 @@ struct MiniBrowserView: View {
         self.space = space
         self.allSpaces = allSpaces
         self.allowsNormalTabs = allowsNormalTabs
+        self.canSave = canSave
         self.onDismiss = onDismiss
         _startsInSearch = State(initialValue: pages.active?.model.opensWithSearch ?? false)
         _showOverview = State(initialValue: startsInOverview)
@@ -196,6 +201,7 @@ struct MiniBrowserView: View {
                 pages: pages,
                 space: space,
                 allSpaces: allSpaces,
+                canSave: canSave,
                 onToggleMenu: { model.toggleMenu() },
                 onClose: { leaveBrowser() },
                 addressEditing: addressEditing,

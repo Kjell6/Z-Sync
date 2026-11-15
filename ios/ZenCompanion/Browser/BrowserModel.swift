@@ -41,7 +41,10 @@ final class BrowserModel {
     /// "Open into search" on. The view consumes it by opening a new tab.
     var searchOnOpenPending = false
 
-    private let isDemo: Bool
+    private(set) var isDemo: Bool
+    /// Whether an account is signed in. A signed-out browser never reads or
+    /// writes the account's spaces: no cache, no refresh, no favicons.
+    private(set) var isSignedIn: Bool
     private let repository: SpacesRepository
     private let preferences: PreferencesStoring
     private let favicons: FaviconPrefetching
@@ -57,12 +60,13 @@ final class BrowserModel {
     private var searchOnOpenArmed = true
 
     init(
-        account: AccountSnapshot,
+        account: AccountSnapshot?,
         repository: SpacesRepository = AppServices.spaces,
         preferences: PreferencesStoring = AppServices.preferences,
         favicons: FaviconPrefetching = AppServices.favicons
     ) {
-        self.isDemo = account.isDemo
+        self.isDemo = account?.isDemo ?? false
+        self.isSignedIn = account != nil
         self.repository = repository
         self.preferences = preferences
         self.favicons = favicons
@@ -212,9 +216,49 @@ final class BrowserModel {
         )
     }
 
+    // MARK: - Session
+
+    /// The account changed under the screen. Signing in starts the account's
+    /// load; signing out drops everything the account brought on screen. The
+    /// view reloads on `isSignedIn`, so this only moves the state.
+    func accountChanged(isSignedIn: Bool, isDemo: Bool) {
+        self.isDemo = isDemo
+        guard isSignedIn != self.isSignedIn else { return }
+        self.isSignedIn = isSignedIn
+        if !isSignedIn {
+            resetForSignedOut()
+        }
+    }
+
+    /// Sign-out already cleared the cache, the pages and the keychain. The
+    /// model only has to stop showing what it held.
+    private func resetForSignedOut() {
+        snapshot = .empty
+        selectedIndex = 0
+        displayedIndex = 0
+        loading = false
+        reloading = false
+        reloadQueued = false
+        loadError = nil
+        zeroSpaces = false
+        deleteError = nil
+        showShareTip = false
+        // A search should not pop over the home the moment the reader signs
+        // out; the next trip through the background arms it again.
+        searchOnOpenArmed = false
+        searchOnOpenPending = false
+        reviewPromptTask?.cancel()
+        reviewPromptTask = nil
+        reviewArmedThisProcess = false
+    }
+
     // MARK: - Loading
 
     func initialLoad() async {
+        considerSearchOnOpen()
+        // Signed out there is no account to read: no cached spaces and no
+        // snapshot fetch. The home screen's skeleton is local decoration.
+        guard isSignedIn else { return }
         if let cached = repository.cachedSnapshot(), !cached.spaces.isEmpty {
             snapshot = cached
             if let restored = Self.restoredIndex(in: cached, preferences: preferences) {
@@ -236,16 +280,25 @@ final class BrowserModel {
     /// Manual pull-to-refresh. Unlike a background reload this must always hit
     /// the network: if a reload is already in flight, wait for it and fetch
     /// again instead of silently doing nothing.
+    ///
+    /// The fetch runs in its own task. SwiftUI cancels the task of
+    /// `.refreshable` when the list under it is rebuilt, and a fetch inside
+    /// it would end as "cancelled" and show as a failed refresh, with a retry
+    /// that the same cancelled task cannot run either.
     func manualRefresh() async {
-        var waited: Duration = .zero
-        while reloading, waited < .seconds(15) {
-            try? await Task.sleep(for: .milliseconds(100))
-            waited += .milliseconds(100)
-        }
-        await reload()
+        await Task { [weak self] in
+            guard let self else { return }
+            var waited: Duration = .zero
+            while reloading, waited < .seconds(15) {
+                try? await Task.sleep(for: .milliseconds(100))
+                waited += .milliseconds(100)
+            }
+            await reload()
+        }.value
     }
 
     func reload(retryAttempted: Bool = false) async {
+        guard isSignedIn else { return }
         guard !reloading else {
             // A write's stale signal landed mid-fetch: that fetch may predate
             // the write, so fetch again once it finishes instead of dropping it.
@@ -327,6 +380,7 @@ final class BrowserModel {
     /// failure (the cached view stays on screen) and clears again on the next
     /// success, matching Android's auto refresh.
     func reloadQuietly() async {
+        guard isSignedIn else { return }
         guard !reloading else { return }
         reloading = true
         defer { reloading = false }
@@ -364,6 +418,7 @@ final class BrowserModel {
     /// extension) refreshes what's on screen against the server.
     func sceneBecameActive() async {
         considerSearchOnOpen()
+        guard isSignedIn else { return }
         if snapshot.spaces.isEmpty {
             await reload()
         } else {
@@ -379,9 +434,11 @@ final class BrowserModel {
 
     /// Asks the view for a new tab once per open, when the setting is on and
     /// there is a space to pin into. Without spaces yet (scenePhase can fire
-    /// before the cache loads) the open stays armed for the next call.
+    /// before the cache loads) the open stays armed for the next call. Signed
+    /// out the browser has no pinning, so a search needs no space.
     func considerSearchOnOpen() {
-        guard searchOnOpenArmed, !snapshot.spaces.isEmpty else { return }
+        guard searchOnOpenArmed else { return }
+        if isSignedIn, snapshot.spaces.isEmpty { return }
         searchOnOpenArmed = false
         guard preferences.bool(PreferenceKeys.openIntoSearch, scope: .standard) else { return }
         searchOnOpenPending = true
@@ -479,6 +536,7 @@ final class BrowserModel {
     // MARK: - Tab deletion
 
     func deleteTab(id: String) async {
+        guard isSignedIn else { return }
         do {
             try await repository.deleteTab(id: id)
         } catch {
@@ -502,6 +560,7 @@ final class BrowserModel {
     }
 
     func renameTab(id: String, label: String) async {
+        guard isSignedIn else { return }
         // Optimistic: apply the custom name to the on-screen snapshot right
         // away, then confirm the write against the server. Without this the
         // name only appeared after the conditional write *and* the follow-up
@@ -513,6 +572,7 @@ final class BrowserModel {
     }
 
     func moveTab(id: String, toFolder folderId: String?, in spaceId: String) async {
+        guard isSignedIn else { return }
         // Optimistic: the tab changes place before the conditional write and
         // the follow-up reload. A failed write self-corrects on the next reload.
         snapshot = SpacesSyncEdits.moving(id: id, folderId: folderId, in: spaceId, snapshot: snapshot)
@@ -526,6 +586,7 @@ final class BrowserModel {
     }
 
     func pinTab(id: String, in spaceId: String) async {
+        guard isSignedIn else { return }
         // Optimistic: the row leaves the normal section and reappears at the
         // space root of the pinned section before the conditional write. A
         // failed write self-corrects on the next reload.

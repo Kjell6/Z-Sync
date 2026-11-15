@@ -49,6 +49,8 @@ internal fun ActionBar(
     /** Pages open on this phone; the count shows from one up. */
     pageCount: Int = 0,
     onOpenPages: () -> Unit = {},
+    /** The synced history is the account's: signed out its card is gone. */
+    showsActivity: Boolean = true,
     /** Gap below the bar: toward the essentials grid at the top placement,
      * toward the screen edge when the bar is the last row. */
     bottomPadding: Dp = 6.dp,
@@ -67,22 +69,24 @@ internal fun ActionBar(
     ) {
         // Left: History card. Press is the outermost modifier so the whole
         // tile, not only the icon, shrinks while the finger is down.
-        Box(
-            modifier = Modifier
-                .clickableNoIndication(onClick = onOpenActivity)
-                .size(44.dp)
-                .clip(cardShape)
-                .background(zen.lift)
-                .liftRim(cardShape)
-                .semantics { contentDescription = "History" },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Inventory2,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
-                modifier = Modifier.size(20.dp),
-            )
+        if (showsActivity) {
+            Box(
+                modifier = Modifier
+                    .clickableNoIndication(onClick = onOpenActivity)
+                    .size(44.dp)
+                    .clip(cardShape)
+                    .background(zen.lift)
+                    .liftRim(cardShape)
+                    .semantics { contentDescription = "History" },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Inventory2,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
 
         // Center: Search card (flexible width)

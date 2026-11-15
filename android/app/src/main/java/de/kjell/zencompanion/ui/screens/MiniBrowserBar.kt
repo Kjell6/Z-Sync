@@ -1542,7 +1542,8 @@ private fun SiteSettingsMenuPage(
             text = stringResource(R.string.site_settings_footer, site),
             style = ZenType.rounded(13, FontWeight.Normal),
             color = zen.ink.copy(alpha = 0.6f),
-            modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = RowGap),
+            // Inset from the card's rounded bottom, so the last line clears the curve.
+            modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = RowGap, bottom = 8.dp),
         )
     }
 }

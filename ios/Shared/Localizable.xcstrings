@@ -852,7 +852,6 @@
         }
       }
     },
-    "CONTENT BLOCKING": {},
     "Delete": {},
     "demo.account_caption": {
       "localizations": {
@@ -2290,16 +2289,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Unsplit tabs"
-          }
-        }
-      }
-    },
-    "browser.clear": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Clear"
           }
         }
       }

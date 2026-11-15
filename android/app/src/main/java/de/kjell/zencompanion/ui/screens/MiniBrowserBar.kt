@@ -116,7 +116,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -787,7 +789,11 @@ private fun NavBar(
     }
 }
 
-/** Icon-only glyph for the navigation bar: no chrome of its own. */
+/**
+ * Icon-only glyph for the navigation bar: no chrome of its own. The box is
+ * 48 dp wide for a thumb; the bar is 44 dp tall, which is as much height as
+ * the target can take here. The glyph inside keeps its 18 dp and its place.
+ */
 @Composable
 private fun NavGlyph(
     icon: ImageVector,
@@ -798,7 +804,7 @@ private fun NavGlyph(
     val zen = LocalZenColors.current
     Box(
         modifier = Modifier
-            .size(width = 34.dp, height = BarHeight - 12.dp)
+            .size(width = 48.dp, height = BarHeight)
             .barClickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -920,6 +926,9 @@ internal fun OverviewDock(
                 description = stringResource(R.string.kept_new_page),
                 tint = zen.ink,
                 onLongClick = onPlusLongPress,
+                // The same label the custom action carries: a long press is
+                // invisible to TalkBack, so the action has to be listed.
+                onLongClickLabel = stringResource(R.string.kept_close_all_label),
                 onClick = onNewPage,
             )
             plusMenu()
@@ -936,6 +945,7 @@ private fun DockButton(
     width: androidx.compose.ui.unit.Dp = DockSide,
     height: androidx.compose.ui.unit.Dp = DockSide,
     onLongClick: (() -> Unit)? = null,
+    onLongClickLabel: String? = null,
     onClick: () -> Unit,
 ) {
     val zen = LocalZenColors.current
@@ -947,7 +957,29 @@ private fun DockButton(
             .border(liftBorder(), DockShape)
             .then(
                 if (onLongClick != null) {
-                    Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                    Modifier
+                        .combinedClickable(
+                            onClick = onClick,
+                            onLongClick = onLongClick,
+                            onLongClickLabel = onLongClickLabel,
+                        )
+                        // TalkBack only finds a long press by holding the
+                        // finger down. The same action as its own entry makes
+                        // it reachable from the actions list as well.
+                        .then(
+                            if (onLongClickLabel != null) {
+                                Modifier.semantics {
+                                    customActions = listOf(
+                                        CustomAccessibilityAction(onLongClickLabel) {
+                                            onLongClick()
+                                            true
+                                        },
+                                    )
+                                }
+                            } else {
+                                Modifier
+                            },
+                        )
                 } else {
                     Modifier.barClickable(onClick = onClick)
                 },
@@ -1062,6 +1094,12 @@ private fun ComposerBar(
     barColor: Color,
 ) {
     val zen = LocalZenColors.current
+    // The composer is composed by the address state, so its field reports
+    // `false` once before the screen's focus request lands. Only a loss after a
+    // real gain ends the edit: tapping the page takes the keyboard away, and
+    // the bar must close the editor the way Cancel does instead of staying an
+    // editor without a keyboard.
+    var hadFocus by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1096,11 +1134,16 @@ private fun ComposerBar(
             modifier = Modifier
                 .weight(1f)
                 .focusRequester(focusRequester)
-                // Only a focus *gain* is reported: the composer is composed by
-                // the address state, so its first attach reports `false` and
-                // would close the field again on the same frame. Closing is
-                // explicit (Cancel, submit, back).
-                .onFocusChanged { if (it.isFocused) onAddressFocusedChange(true) },
+                .onFocusChanged { focus ->
+                    if (focus.isFocused) {
+                        hadFocus = true
+                        onAddressFocusedChange(true)
+                    } else if (hadFocus) {
+                        // Losing the focus ends the edit; a submit that clears
+                        // the focus itself has loaded the address already.
+                        onAddressFocusedChange(false)
+                    }
+                },
             decorationBox = { innerTextField ->
                 Box(contentAlignment = Alignment.CenterStart) {
                     if (addressText.text.isEmpty()) {
@@ -1176,11 +1219,13 @@ private fun ExpandedMenu(
                 RowDivider()
             }
             MenuRow(
-                icon = Icons.Outlined.ContentCopy,
+                // Copied: the glyph turns into the checkmark the iOS menu
+                // shows, beside the label that already says so.
+                icon = if (state.copyConfirmed) Icons.Outlined.Check else Icons.Outlined.ContentCopy,
                 title = stringResource(
                     if (state.copyConfirmed) R.string.browser_copied else R.string.browser_copy_link,
                 ),
-                tint = if (state.copyConfirmed) zen.ink else zen.ink,
+                tint = zen.ink,
                 onClick = onCopyLink,
             )
             RowDivider()
@@ -1665,9 +1710,11 @@ private fun ZoomStep(
     onClick: () -> Unit,
 ) {
     val zen = LocalZenColors.current
+    // 48 dp wide for a thumb. The capsule around the readout is 32 dp tall, so
+    // the box stops there: a taller one would stretch that capsule with it.
     Box(
         modifier = Modifier
-            .size(32.dp)
+            .size(width = 48.dp, height = 32.dp)
             .barClickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {

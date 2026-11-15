@@ -329,6 +329,16 @@
         }
       }
     },
+    "browser.download.confirm": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download"
+          }
+        }
+      }
+    },
     "browser.download.failed": {
       "localizations": {
         "en": {
@@ -345,6 +355,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ saved to Files › Z-Sync"
+          }
+        }
+      }
+    },
+    "browser.download.from %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "From %@"
+          }
+        }
+      }
+    },
+    "browser.download.question %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download %@?"
           }
         }
       }
@@ -2392,6 +2422,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pin"
+          }
+        }
+      }
+    },
+    "browser.print": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Print"
           }
         }
       }

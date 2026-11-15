@@ -136,6 +136,8 @@ dependencies {
     implementation("com.caverock:androidsvg-aar:1.4")
     // Adds the cookie banner script before a page's own scripts run.
     implementation("androidx.webkit:webkit:1.18.0")
+    // The page's pull-to-refresh indicator.
+    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20260814")

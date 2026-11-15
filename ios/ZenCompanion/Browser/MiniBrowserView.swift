@@ -492,6 +492,13 @@ struct MiniBrowserView: View {
         CGSize(width: pageFrame.width, height: pageFrame.maxY)
     }
 
+    /// The reader, an error panel and the address editor own the page's
+    /// gestures, so a pull there is not a reload. The find bar is handled by
+    /// the web view itself.
+    private var pullToRefreshAllowed: Bool {
+        !addressEditing && model.readerArticle == nil && model.pageError == nil
+    }
+
     /// The page stops at the bar: the plate is opaque, so there is nothing to
     /// paint under it and no viewport inset to reserve.
     private var webPane: some View {
@@ -499,6 +506,7 @@ struct MiniBrowserView: View {
         return MiniBrowserRepresentable(
             model: model,
             bottomClearance: pageBottomClearance,
+            pullToRefreshAllowed: pullToRefreshAllowed,
             previous: peeking ? neighbours.previous.map(peek) : nil,
             next: peeking ? neighbours.next.map(peek) : nil,
             slidingColor: peeking || pageFloats ? UIColor(sheetBackground) : nil,

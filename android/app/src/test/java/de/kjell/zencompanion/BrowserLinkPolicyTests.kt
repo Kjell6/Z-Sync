@@ -1,6 +1,7 @@
 package de.kjell.zencompanion
 
 import android.webkit.WebView
+import de.kjell.zencompanion.ui.screens.BrowserHitMenu
 import de.kjell.zencompanion.ui.screens.BrowserLinkAction
 import de.kjell.zencompanion.ui.screens.browserLinkAction
 import de.kjell.zencompanion.ui.screens.isWebScheme
@@ -205,5 +206,67 @@ class BrowserLinkPolicyTests {
         assertFalse(loadsInWebView("intent://scan/#Intent;scheme=zxing;end"))
         assertTrue(loadsInWebView("https://example.com/a"))
         assertTrue(loadsInWebView("http://localhost:8765/redirect.html"))
+    }
+
+    @Test
+    fun aTextLinkOffersOnlyTheLinkActions() {
+        val menu = BrowserHitMenu(link = "https://example.com/a")
+        assertEquals("https://example.com/a", menu.title)
+        assertFalse(menu.hasImageActions)
+        assertFalse(menu.canSaveImage)
+        assertFalse(menu.canOpenImage)
+        assertFalse(menu.canCopyImage)
+    }
+
+    @Test
+    fun aWebImageOffersAllThreeImageActions() {
+        val menu = BrowserHitMenu(image = "https://example.com/picture.png")
+        assertEquals("https://example.com/picture.png", menu.title)
+        assertTrue(menu.canSaveImage)
+        assertTrue(menu.canOpenImage)
+        assertTrue(menu.canCopyImage)
+    }
+
+    @Test
+    fun anImageLinkKeepsTheLinkFirstAndItsImageBelow() {
+        val menu = BrowserHitMenu(
+            link = "https://example.com/page",
+            image = "https://cdn.example.com/picture.png",
+        )
+        // The menu names the link; the image sits in its own block under it.
+        assertEquals("https://example.com/page", menu.title)
+        assertTrue(menu.canSaveImage)
+    }
+
+    @Test
+    fun aPageLocalImageIsSavedButNeitherOpenedNorCopied() {
+        val blob = BrowserHitMenu(image = "blob:https://example.com/1")
+        assertTrue(blob.hasImageActions)
+        assertTrue(blob.canSaveImage)
+        assertFalse(blob.canOpenImage)
+        assertFalse(blob.canCopyImage)
+
+        val data = BrowserHitMenu(image = "data:image/png;base64,AAAA")
+        assertTrue(data.canSaveImage)
+        assertFalse(data.canOpenImage)
+        assertFalse(data.canCopyImage)
+    }
+
+    @Test
+    fun anImageNoActionCanTakeOffersNothing() {
+        val menu = BrowserHitMenu(image = "ftp://example.com/picture.png")
+        assertFalse(menu.hasImageActions)
+        assertFalse(menu.canSaveImage)
+        assertFalse(menu.canOpenImage)
+        assertFalse(menu.canCopyImage)
+    }
+
+    @Test
+    fun aDataImageIsNamedByItsHeadOnly() {
+        val payload = "A".repeat(4_000)
+        val menu = BrowserHitMenu(image = "data:image/png;base64,$payload")
+        assertTrue(menu.title.length < 320)
+        assertTrue(menu.title.startsWith("data:image/png;base64,"))
+        assertTrue(menu.title.endsWith("…"))
     }
 }

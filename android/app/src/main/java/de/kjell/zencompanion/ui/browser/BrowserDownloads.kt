@@ -17,6 +17,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStream
 import java.net.HttpURLConnection
+import java.net.URI
 import java.net.URL
 import java.util.UUID
 import org.json.JSONObject
@@ -44,6 +45,27 @@ internal fun safeDownloadName(suggested: String?, fallback: String = "download")
 internal fun nameWithExtension(name: String, extension: String?): String =
     if (extension.isNullOrEmpty() || name.substringAfterLast('.', "").isNotEmpty()) name else "$name.$extension"
 
+/** The name the system's downloader gives a web file. */
+internal fun webDownloadName(download: BrowserDownload): String = safeDownloadName(
+    URLUtil.guessFileName(download.url, download.contentDisposition, download.mimeType),
+)
+
+/**
+ * The name a download is asked about. A web file is named as the downloader
+ * will name it; a page-local one names itself only once the page reads it, so
+ * its type is the best there is to go on.
+ */
+internal fun announcedDownloadName(download: BrowserDownload): String {
+    if (isWebDownload(download.url)) return webDownloadName(download)
+    val extension = download.mimeType
+        ?.takeIf { it.isNotEmpty() }
+        ?.let { MimeTypeMap.getSingleton().getExtensionFromMimeType(it) }
+    return nameWithExtension(PAGE_LOCAL_NAME, extension)
+}
+
+/** What a page-local file is called until its page gives it a real name. */
+private const val PAGE_LOCAL_NAME = "download"
+
 /** True for addresses only the page itself can read. */
 internal fun isPageLocalDownload(url: String): Boolean {
     val scheme = url.substringBefore(':', "").lowercase()
@@ -53,6 +75,36 @@ internal fun isPageLocalDownload(url: String): Boolean {
 internal fun isWebDownload(url: String): Boolean {
     val scheme = url.substringBefore(':', "").lowercase()
     return scheme == "http" || scheme == "https"
+}
+
+/** The port a scheme uses when the address names none. */
+private fun defaultPort(scheme: String): Int = if (scheme == "https") 443 else 80
+
+/** True for an http or https address that names a host. */
+private fun isWebUri(uri: URI): Boolean {
+    val scheme = uri.scheme?.lowercase() ?: return false
+    return (scheme == "http" || scheme == "https") && !uri.host.isNullOrEmpty()
+}
+
+/**
+ * The `Referer` a download may carry: only the page's origin, never its path,
+ * query or fragment, and nothing on the way down to plain http (the
+ * `strict-origin` policy). The downloader follows redirects on its own, and a
+ * redirect seen while probing can differ from the one the download gets, so a
+ * page's private query must not be in the header at all. Hotlink checks only
+ * look at the site, which the origin still names.
+ */
+internal fun downloadReferrer(pageUrl: String?, targetUrl: String): String? {
+    // Parsed without android.net.Uri, so the policy itself is plain Java and
+    // can be tested off the device.
+    val page = pageUrl?.let { raw -> runCatching { URI(raw) }.getOrNull() }?.takeIf(::isWebUri) ?: return null
+    val target = runCatching { URI(targetUrl) }.getOrNull() ?: return null
+    val pageScheme = page.scheme.lowercase()
+    val targetScheme = target.scheme?.lowercase() ?: return null
+    if (pageScheme == "https" && targetScheme == "http") return null
+    val port = page.port
+    val origin = "$pageScheme://${page.host.lowercase()}"
+    return if (port == -1 || port == defaultPort(pageScheme)) "$origin/" else "$origin:$port/"
 }
 
 /** Where a response sends the download next, or null when it is the file. */
@@ -108,9 +160,7 @@ private fun probeDownload(url: String, userAgent: String?): Pair<Int, String?> {
  * Blocks on the network; call it off the main thread.
  */
 internal fun enqueueWebDownload(context: Context, download: BrowserDownload): Boolean = runCatching {
-    val name = safeDownloadName(
-        URLUtil.guessFileName(download.url, download.contentDisposition, download.mimeType),
-    )
+    val name = webDownloadName(download)
     val target = resolveDownloadUrl(download.url) { probeDownload(it, download.userAgent) }
     val request = DownloadManager.Request(Uri.parse(target ?: download.url))
         .setTitle(name)
@@ -119,7 +169,11 @@ internal fun enqueueWebDownload(context: Context, download: BrowserDownload): Bo
     download.mimeType?.takeIf { it.isNotEmpty() }?.let(request::setMimeType)
     target?.let(CookieManager.getInstance()::getCookie)?.let { request.addRequestHeader("Cookie", it) }
     download.userAgent?.takeIf { it.isNotEmpty() }?.let { request.addRequestHeader("User-Agent", it) }
-    download.referer?.takeIf(::isWebDownload)?.let { request.addRequestHeader("Referer", it) }
+    // The policy again for where the file really comes from, so a secure page
+    // whose file redirects to plain http sends no Referer at all.
+    downloadReferrer(download.referer, target ?: download.url)
+        ?.takeIf(::isWebDownload)
+        ?.let { request.addRequestHeader("Referer", it) }
     context.getSystemService(DownloadManager::class.java).enqueue(request)
 }.isSuccess
 

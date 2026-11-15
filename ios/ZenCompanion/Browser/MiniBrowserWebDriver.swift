@@ -37,6 +37,9 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         // lists and scripts are swapped per site, so each page needs its own.
         configuration.userContentController = WKUserContentController()
         configuration.allowsInlineMediaPlayback = true
+        // A player's own fullscreen button then fills the screen, as it does
+        // in Safari.
+        configuration.preferences.isElementFullscreenEnabled = true
         configuration.userContentController.addScriptMessageHandler(
             BrowserGeolocation.Handler(model: model),
             contentWorld: .page,

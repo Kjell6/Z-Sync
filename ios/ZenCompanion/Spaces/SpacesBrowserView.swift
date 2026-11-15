@@ -622,6 +622,14 @@ struct FolderBlock: View {
             .buttonStyle(PressedButtonStyle())
 
             if isExpanded {
+                if let live = folder.live,
+                   let source = live.sourceURL,
+                   folder.tabs.isEmpty,
+                   folder.subfolders?.isEmpty ?? true {
+                    liveFolderSource(source, type: live.type)
+                        .padding(.leading, isNested ? 0 : 20)
+                        .transition(.opacity)
+                }
                 ForEach(folder.tabs) { tab in
                     TabRow(
                         tab: tab,
@@ -673,5 +681,64 @@ struct FolderBlock: View {
     /// older records may carry (raw or inside Zen's emoji SVG).
     private var userIcon: String? {
         ZenIconDecoder.folderFlapIcon(folder.icon)
+    }
+
+    /// Zen syncs only a live folder's provider configuration, never the items it
+    /// generates. When the folder is empty (the normal case on mobile), the
+    /// expanded body offers the configured source instead of looking broken.
+    private func liveFolderSource(_ source: String, type: String?) -> some View {
+        let url = URL(string: source)
+        let label = providerLabel(type)
+        return Button {
+            onOpenTab(ZenTab(id: "live-source-\(folder.id)", url: source, title: label))
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "link")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.5))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(label)
+                        .zenFont(13, weight: .semibold, design: .rounded)
+                        .foregroundStyle(Palette.ink(scheme))
+                    Text(sourceDisplay(url))
+                        .zenFont(11, design: .rounded)
+                        .foregroundStyle(Palette.ink(scheme).opacity(0.55))
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.3))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                Palette.lift(scheme),
+                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(PressedButtonStyle())
+        .accessibilityLabel(Text(label))
+        .accessibilityValue(Text(sourceDisplay(url)))
+    }
+
+    /// Provider label for the source row; unknown ids fall back to a neutral
+    /// label rather than exposing the raw id.
+    private func providerLabel(_ type: String?) -> String {
+        switch type {
+        case "rss": return String(localized: "folder.live.rss")
+        case "github": return String(localized: "folder.live.github")
+        default: return String(localized: "folder.live.other")
+        }
+    }
+
+    /// Host plus path, so `github.com/pulls` stays readable without the scheme.
+    private func sourceDisplay(_ url: URL?) -> String {
+        guard let url, let host = url.host, !host.isEmpty else {
+            return url?.absoluteString ?? ""
+        }
+        let path = url.path
+        return path.isEmpty || path == "/" ? host : host + path
     }
 }

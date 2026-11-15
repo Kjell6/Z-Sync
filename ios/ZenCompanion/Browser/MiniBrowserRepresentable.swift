@@ -233,7 +233,7 @@ extension Color {
         } else {
             let r = Double((rgb & 0xF00) >> 8) / 15.0
             let g = Double((rgb & 0x0F0) >> 4) / 15.0
-            let b = Double((rgb & 0x00F) >> 4) / 15.0
+            let b = Double(rgb & 0x00F) / 15.0
             self.init(red: r, green: g, blue: b)
         }
     }

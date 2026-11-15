@@ -223,8 +223,9 @@ struct LiveSessionSigningOut: SessionSigningOut {
     nonisolated init() {}
 
     func signOut() {
-        // Sign-in runs in an ephemeral (nonPersistent) store, so sign-out
-        // purges that one; the default store (mini browser) keeps its data.
+        // Sign-in runs in an ephemeral (nonPersistent) store and the mini
+        // browser in the default store. Both are emptied at sign-out, so the
+        // next sign-in starts without the previous one's website logins.
         WKWebsiteDataStore.nonPersistent().removeData(
             ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
             modifiedSince: Date.distantPast
@@ -238,6 +239,12 @@ struct LiveSessionSigningOut: SessionSigningOut {
         AccountStore.clear()
         FaviconLoader.shared.removeAll()
         OpenPagesStore.shared.closeAll()
+        // Cleared only after the pages are asleep, so no live web view writes
+        // its cookies and storage back into the default store.
+        WKWebsiteDataStore.default().removeData(
+            ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
+            modifiedSince: Date.distantPast
+        ) {}
         SitePermissionStore.shared.removeAll()
         BrowserHistoryStore.shared.removeAll()
         SpacesSyncService.deleteCachedSnapshot()

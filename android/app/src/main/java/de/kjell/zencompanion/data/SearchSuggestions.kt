@@ -36,6 +36,9 @@ internal object SearchSuggestions {
 
     private val schemePrefix = Regex("^[A-Za-z][A-Za-z0-9+.\\-]*:")
 
+    /** `localhost`, with an optional port and path: an address, not a search. */
+    private val localhost = Regex("^localhost(?::\\d{1,5})?(?:[/?#]\\S*)?$", RegexOption.IGNORE_CASE)
+
     fun endpoint(engine: SearchEngine): SearchSuggestEndpoint? {
         if (!engine.isBuiltIn) return null
         return when (engine.id) {
@@ -82,6 +85,9 @@ internal object SearchSuggestions {
         if (schemePrefix.containsMatchIn(query)) return true
         val scheme = runCatching { URI(query).scheme }.getOrNull()
         if (!scheme.isNullOrEmpty()) return true
+        // A bare `localhost` has no scheme and no dot, and submitting it opens
+        // `http://localhost`: the host must not be sent out either.
+        if (localhost.matches(query)) return true
         return query.contains('.') && !query.any { it.isWhitespace() }
     }
 

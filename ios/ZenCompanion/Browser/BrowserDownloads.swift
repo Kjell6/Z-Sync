@@ -14,7 +14,12 @@ enum BrowserDownloadPolicy {
 
     /// A name that stays inside the folder, whatever the server suggested.
     static func safeFileName(_ suggested: String) -> String {
-        let name = suggested
+        // Control characters too, as on Android: a line break or tab in a
+        // name from the server has no place in Files.
+        let visible = String(String.UnicodeScalarView(suggested.unicodeScalars.map { scalar in
+            scalar.properties.generalCategory == .control ? "_" : scalar
+        }))
+        let name = visible
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "\\", with: "_")
             .replacingOccurrences(of: ":", with: "_")

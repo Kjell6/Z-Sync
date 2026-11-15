@@ -9,6 +9,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -42,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -105,6 +108,15 @@ import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+
+/**
+ * Cards this far from the deck's focus hold their picture; the others let go
+ * of it once the disk can give it back. A card ahead is off screen past about
+ * 1.4 cards ([PageDeckGeometry.frame]); cards behind tuck in with a sliver of
+ * at least a few pixels up to about 5 cards back. One card of margin on top.
+ */
+private const val PICTURE_CARDS_AHEAD = 3f
+private const val PICTURE_CARDS_BEHIND = 6f
 
 /** A tapped card growing back into its page, and the deck parting around it. */
 internal val DeckOpenSpring = spring<Float>(stiffness = 220f, visibilityThreshold = 0.002f)
@@ -201,6 +213,8 @@ internal fun OpenPagesOverview(
     pages: BrowserPages,
     openPages: List<OpenPage>,
     activeId: String?,
+    /** Signed out a card offers no "Pin to space": there is nowhere to pin. */
+    signedIn: Boolean,
     spaces: List<ZenSpaces.ZenSpace>,
     /** Folders are offered only when the save lands as a pinned tab. */
     saveKind: SaveKind,
@@ -515,6 +529,7 @@ internal fun OpenPagesOverview(
                             onOpen(page)
                         },
                         spaces = spaces,
+                        canPin = signedIn && spaces.isNotEmpty(),
                         pinsIntoFolders = saveKind == SaveKind.PINNED,
                         onClose = {
                             menuCardId = null
@@ -578,6 +593,8 @@ private fun OpenPageCard(
     onMenuDismiss: () -> Unit,
     onOpen: () -> Unit,
     spaces: List<ZenSpaces.ZenSpace>,
+    /** Signed in and with spaces, the menu offers "Pin to space". */
+    canPin: Boolean,
     pinsIntoFolders: Boolean,
     onClose: () -> Unit,
     onPin: (PinDestination) -> Unit,
@@ -597,7 +614,15 @@ private fun OpenPageCard(
     val headerInset = 20.dp
     val iconGap = 8.dp
 
-    LaunchedEffect(page.id) { session?.let(pages::loadShot) }
+    // Only the cards near the focus hold a picture. Derived, so the card does
+    // not recompose with every frame of a swipe, only as it crosses the edge.
+    val currentOffset by rememberUpdatedState(offset)
+    val near by remember {
+        derivedStateOf { currentOffset().let { it > -PICTURE_CARDS_BEHIND && it < PICTURE_CARDS_AHEAD } }
+    }
+    LaunchedEffect(page.id, near) {
+        session?.let { if (near) pages.loadShot(it) else pages.dropShot(it) }
+    }
 
     Box(modifier.requiredSize(width, height)) {
         Box(
@@ -638,16 +663,26 @@ private fun OpenPageCard(
         ) {
             OpenPageShot(page = page, session = session, topInset = topInset, surface = surface)
             // Cards the deck is not resting on sit a little in the dark, the
-            // ones behind more than the one lying on top.
+            // ones behind more than the one lying on top. On a dark background
+            // the shadows hardly show, so the dimming does more of the work.
+            val dark = zen.isDark
             Box(
                 Modifier
                     .fillMaxSize()
                     .drawWithContent {
                         val away = offset()
-                        val dim = if (away < 0f) min(0.3f, -away * 0.2f) else min(0.16f, away * 0.14f)
+                        val dim = if (dark) {
+                            if (away < 0f) min(0.45f, -away * 0.3f) else min(0.26f, away * 0.22f)
+                        } else {
+                            if (away < 0f) min(0.3f, -away * 0.2f) else min(0.16f, away * 0.14f)
+                        }
                         drawRect(Color.Black, alpha = dim)
                     },
             )
+            // Dark: a faint light rim draws each card's edge over the one below.
+            if (dark && !isExpanding) {
+                Box(Modifier.fillMaxSize().border(0.75.dp, Color.White.copy(alpha = 0.14f), shape))
+            }
         }
         Row(
             modifier = Modifier
@@ -684,6 +719,7 @@ private fun OpenPageCard(
             page = page,
             canKeep = pages.keepsOnlyChosenPages() && pages.store.canKeep(page, pageFailed),
             spaces = spaces,
+            canPin = canPin,
             pinsIntoFolders = pinsIntoFolders,
             onDismiss = onMenuDismiss,
             onToggleKeep = {
@@ -742,6 +778,7 @@ private fun PageCardMenu(
     page: OpenPage,
     canKeep: Boolean,
     spaces: List<ZenSpaces.ZenSpace>,
+    canPin: Boolean,
     pinsIntoFolders: Boolean,
     onDismiss: () -> Unit,
     onToggleKeep: () -> Unit,
@@ -783,11 +820,12 @@ private fun PageCardMenu(
             return@ZenMenu
         }
         val hasUrl = page.url.isNotEmpty()
-        val actionCount = (if (canKeep) 1 else 0) + (if (hasUrl) 3 else 0)
+        val showsPin = hasUrl && canPin
+        val actionCount = (if (canKeep) 1 else 0) + (if (showsPin) 1 else 0) + (if (hasUrl) 2 else 0)
         if (actionCount > 0) {
             val keepIndex = if (canKeep) 0 else -1
             val pinIndex = if (canKeep) 1 else 0
-            val copyIndex = pinIndex + 1
+            val copyIndex = if (showsPin) pinIndex + 1 else pinIndex
             val shareIndex = copyIndex + 1
             ZenMenuGroup(index = 0, count = 2) {
                 if (canKeep) {
@@ -810,7 +848,7 @@ private fun PageCardMenu(
                         },
                     )
                 }
-                if (hasUrl) {
+                if (showsPin) {
                     ZenMenuItem(
                         text = { Text(stringResource(R.string.kept_pin_to_space)) },
                         onClick = { pinning = true },
@@ -825,6 +863,8 @@ private fun PageCardMenu(
                             )
                         },
                     )
+                }
+                if (hasUrl) {
                     ZenMenuItem(
                         text = { Text(stringResource(R.string.kept_copy_link)) },
                         onClick = onCopy,
@@ -870,40 +910,70 @@ private fun PageCardMenu(
     }
 }
 
-/** Long press on a link in a page: the same grouped menu, in a dialog. */
+/** Long press on a link or an image in a page: the same grouped menus, in a dialog. */
 @Composable
 internal fun LinkMenu(
-    url: String,
+    menu: BrowserHitMenu,
     onOpenInNewPage: () -> Unit,
     onCopy: () -> Unit,
     onShare: () -> Unit,
+    onSaveImage: () -> Unit,
+    onOpenImageInNewPage: () -> Unit,
+    onCopyImage: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(url, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            Text(menu.title, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
         },
         text = {
-            ZenMenuGroup(index = 0, count = 1) {
-                ZenMenuItem(
-                    text = { Text(stringResource(R.string.browser_open_in_new_page)) },
-                    onClick = onOpenInNewPage,
-                    index = 0,
-                    count = 3,
-                )
-                ZenMenuItem(
-                    text = { Text(stringResource(R.string.kept_copy_link)) },
-                    onClick = onCopy,
-                    index = 1,
-                    count = 3,
-                )
-                ZenMenuItem(
-                    text = { Text(stringResource(R.string.browser_share)) },
-                    onClick = onShare,
-                    index = 2,
-                    count = 3,
-                )
+            Column(Modifier.fillMaxWidth()) {
+                val link = menu.link
+                if (link != null) {
+                    ZenMenuGroup(index = 0, count = if (menu.hasImageActions) 2 else 1) {
+                        ZenMenuItem(
+                            text = { Text(stringResource(R.string.browser_open_in_new_page)) },
+                            onClick = onOpenInNewPage,
+                            index = 0,
+                            count = 3,
+                        )
+                        ZenMenuItem(
+                            text = { Text(stringResource(R.string.kept_copy_link)) },
+                            onClick = onCopy,
+                            index = 1,
+                            count = 3,
+                        )
+                        ZenMenuItem(
+                            text = { Text(stringResource(R.string.browser_share)) },
+                            onClick = onShare,
+                            index = 2,
+                            count = 3,
+                        )
+                    }
+                }
+                if (menu.hasImageActions) {
+                    // The image's own actions sit below the link's, as two groups.
+                    if (link != null) ZenMenuGroupGap()
+                    val imageActions = buildList {
+                        if (menu.canSaveImage) add(R.string.browser_image_save to onSaveImage)
+                        if (menu.canOpenImage) add(R.string.browser_image_open to onOpenImageInNewPage)
+                        if (menu.canCopyImage) add(R.string.browser_image_copy to onCopyImage)
+                    }
+                    ZenMenuGroup(
+                        index = if (link != null) 1 else 0,
+                        count = if (link != null) 2 else 1,
+                    ) {
+                        imageActions.forEachIndexed { index, (label, action) ->
+                            ZenMenuItem(
+                                text = { Text(stringResource(label)) },
+                                onClick = action,
+                                index = index,
+                                count = imageActions.size,
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {},

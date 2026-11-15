@@ -37,6 +37,71 @@ enum MiniBrowserTools {
 
 }
 
+/// The bottom bar's hide-on-scroll rule.
+///
+/// Only the reader's own scrolling may tuck the bar away. A back or forward
+/// restore, a layout change, the chrome's own clearance or a page's script
+/// moves the offset without a finger; none of those may hide the bar, they
+/// only become the new baseline.
+///
+/// Android port: `barScrollStep` in `ui/screens/MiniBrowserWebView.kt`.
+enum MiniBrowserBarScroll {
+    /// What one offset change does to the bar.
+    enum Decision: Equatable {
+        case keep
+        case show
+        case hide
+    }
+
+    /// The decision for one offset change, with the downward travel to carry
+    /// into the next event.
+    static func decision(
+        delta: CGFloat,
+        scrollY: CGFloat,
+        viewportHeight: CGFloat,
+        contentHeight: CGFloat,
+        downRun: CGFloat,
+        isUserDriven: Bool
+    ) -> (decision: Decision, downRun: CGFloat) {
+        // A navigation's restored offset is not the reader scrolling.
+        guard isUserDriven else { return (.keep, 0) }
+        // A short page, or the very top of a long one, always keeps the bar.
+        guard contentHeight - viewportHeight > 60, scrollY > 40 else { return (.show, 0) }
+        if delta > 0.5 {
+            let run = downRun + delta
+            return (run > 24 && scrollY > 80 ? .hide : .keep, run)
+        }
+        if delta < -2 { return (.show, 0) }
+        return (.keep, downRun)
+    }
+
+    /// Whether a scroll view's offset move comes from the reader: a drag, or
+    /// the deceleration that follows one.
+    static func isReaderScroll(isDragging: Bool, isDecelerating: Bool) -> Bool {
+        isDragging || isDecelerating
+    }
+}
+
+/// The pull-to-refresh spinner's contrast.
+///
+/// The spinner sits on the page, not on the app's chrome, so its tint follows
+/// the page's own colour: a dark spinner on a light page, a light one on a
+/// dark page. A page with no known colour gets a mid grey that reads on both
+/// white and black.
+///
+/// Android port: `pullRefreshTint` in `ui/screens/MiniBrowserWebView.kt`.
+enum MiniBrowserRefresh {
+    /// The spinner's tint over a page of the given brightness; nil means the
+    /// page has no colour the spinner could follow.
+    static func spinnerTint(pageIsDark: Bool?) -> UIColor {
+        switch pageIsDark {
+        case .some(true): return UIColor(white: 0.92, alpha: 1)
+        case .some(false): return UIColor(white: 0.22, alpha: 1)
+        case .none: return UIColor(white: 0.55, alpha: 1)
+        }
+    }
+}
+
 /// Page zoom inside a loaded document.
 ///
 /// A browser's page zoom reflows the page: the layout viewport narrows, text
@@ -308,6 +373,26 @@ enum ReaderExtractor {
     }
 }
 
+/// One row of the address field's list: a page from the history, or a phrase
+/// the engine suggests. The id is the row's own content, so a row that stays
+/// in the list keeps its identity when the rows around it change.
+struct AddressSuggestion: Identifiable, Equatable {
+    /// The page the row opens, or nil for a search phrase.
+    let visit: BrowserVisit?
+    /// What the row prints: the page's name, or the phrase itself.
+    let text: String
+
+    var id: String { visit.map { "history:\($0.url)" } ?? "search:\(text)" }
+
+    static func page(_ visit: BrowserVisit) -> AddressSuggestion {
+        AddressSuggestion(visit: visit, text: visit.title.isEmpty ? visit.host : visit.title)
+    }
+
+    static func phrase(_ text: String) -> AddressSuggestion {
+        AddressSuggestion(visit: nil, text: text)
+    }
+}
+
 /// State owner for the mini-browser: web-view progress/URL state fed by KVO,
 /// the address field text, URL/search resolution and the pin-save banner state
 /// machine. Replaces the former `MiniBrowserState` + view state in
@@ -331,6 +416,9 @@ final class MiniBrowserModel {
     private(set) var readerArticle: ReaderArticle?
     /// A reader extraction is in flight (the row shows a spinner).
     private(set) var readerLoading = false
+    /// Bumped when the reader closes or the page moves on, so an answer for a
+    /// page the reader has left cannot open it.
+    @ObservationIgnored private var readerRequest = 0
     /// The page scrolled down far enough to tuck the bottom bar away. Fed by
     /// the web view; the view ANDs it with the states that must keep the bar
     /// (editing the address, an open menu, a live toast).
@@ -359,6 +447,21 @@ final class MiniBrowserModel {
     var suggestions: [String] = []
     /// Pages from the history for the same text, above the suggestions.
     var historySuggestions: [BrowserVisit] = []
+    /// What the panel draws, as one ordered array: the history matches first,
+    /// then the engine's phrases the history does not already name. Worked out
+    /// from both parts every time it is read, so an answer that arrives late
+    /// can only add rows: it can never take the pages on screen away.
+    var suggestionRows: [AddressSuggestion] {
+        let rows = historySuggestions.map(AddressSuggestion.page)
+        // The history row already prints the page's name and address, so a
+        // phrase that repeats either one is the same row twice.
+        var named = Set(historySuggestions.flatMap {
+            [$0.title.lowercased(), $0.displayAddress.lowercased()]
+        })
+        let unseen = suggestions.filter { named.insert($0.lowercased()).inserted }
+        return rows + SearchSuggestions.fitting(unseen, beside: rows.count).map(AddressSuggestion.phrase)
+    }
+
     /// Set while a suggestion was just chosen or the field was submitted, so
     /// the text change that follows does not send another suggest request.
     @ObservationIgnored private var suggestionsSuspended = false
@@ -424,6 +527,17 @@ final class MiniBrowserModel {
     /// Whether this account can write normal tabs at all. Without it the save
     /// row offers pinned only, like the share sheet.
     var allowsNormalTabs: Bool
+    /// Whether saving into a space is offered at all. Signed out there is no
+    /// space to save to, so the pin control and every pin path stay off.
+    var canSave = true {
+        didSet {
+            // A pin tapped before the account went is never written for the next one.
+            if !canSave {
+                hasPendingPinSave = false
+                pendingPin = nil
+            }
+        }
+    }
     private let suggestionClient: SearchSuggestionFetching
     let sitePermissions: SitePermissionStore
     private let history: BrowserHistoryStore
@@ -530,6 +644,8 @@ final class MiniBrowserModel {
         self.webView = webView
         self.driver = driver
         applyWebpagePreferences()
+        // A woken page brings its colour along: the new control starts on it.
+        updateRefreshTint()
     }
 
     /// Gives the page a web view again: from [history] when there is one, at
@@ -537,6 +653,9 @@ final class MiniBrowserModel {
     func wake(history: Any? = nil) {
         guard webView == nil else { return }
         let view = MiniBrowserWebDriver.attach(to: self)
+        // A restored page can start without asking the navigation delegate
+        // first, so its lists and scripts go on before the state comes back.
+        if let url = pageURL { prepareBlocking(for: url) }
         if let history {
             view.interactionState = history
         } else if let url = pageURL {
@@ -598,7 +717,7 @@ final class MiniBrowserModel {
         webView?.load(URLRequest(url: url))
     }
 
-    func reload() {
+    func reload(fromTop: Bool = false) {
         // After a failed load the web view still holds the old page;
         // reloading means trying the failed address again.
         if pageError != nil {
@@ -607,9 +726,18 @@ final class MiniBrowserModel {
         }
         // Keep the reader where they were. WebKit's own restore can land at
         // the end of a long document, and a page with an anchor (`#cite_note…`)
-        // jumps to it, which reads as "reload throws me to the bottom".
-        reloadScrollY = webView?.scrollView.contentOffset.y
+        // jumps to it, which reads as "reload throws me to the bottom". A pull
+        // starts at the top, so it asks for the top: leaving nothing to
+        // restore would let WebKit's own landing place win.
+        reloadScrollY = fromTop ? topScrollY : webView?.scrollView.contentOffset.y
         webView?.reload()
+    }
+
+    /// The page's top edge in the scroll view's offset. A top inset moves it
+    /// below zero, so a literal 0 is not the top.
+    private var topScrollY: CGFloat? {
+        guard let scrollView = webView?.scrollView else { return nil }
+        return -scrollView.adjustedContentInset.top
     }
 
     /// Puts the page back where it was before the reload, once the new
@@ -617,8 +745,11 @@ final class MiniBrowserModel {
     func restoreScrollAfterReload() {
         guard let y = reloadScrollY, let scrollView = webView?.scrollView else { return }
         reloadScrollY = nil
-        let maxY = max(0, scrollView.contentSize.height - scrollView.bounds.height)
-        let target = min(max(0, y), maxY)
+        // Everything above the top edge is out of bounds; the bottom stays
+        // where the content ends.
+        let topY = -scrollView.adjustedContentInset.top
+        let maxY = max(topY, scrollView.contentSize.height - scrollView.bounds.height)
+        let target = min(max(topY, y), maxY)
         guard abs(scrollView.contentOffset.y - target) > 1 else { return }
         scrollView.setContentOffset(
             CGPoint(x: scrollView.contentOffset.x, y: target),
@@ -683,6 +814,7 @@ final class MiniBrowserModel {
     }
 
     func closeReader() {
+        readerRequest += 1
         readerLoading = false
         withAnimation(.easeInOut(duration: 0.2)) {
             readerArticle = nil
@@ -692,10 +824,16 @@ final class MiniBrowserModel {
     private func loadReader() {
         guard let webView, webView.url != nil, !readerLoading else { return }
         readerLoading = true
-        webView.evaluateJavaScript(ReaderExtractor.jsonScript) { [weak self] result, _ in
+        let request = readerRequest
+        Task { @MainActor [weak self] in
             guard let self else { return }
+            let payload = await self.pageScriptAnswer(ReaderExtractor.jsonScript, within: .seconds(5))
+            // The page changed or the reader was closed while this ran, so the
+            // article and the "no article" notice both belong to a page that
+            // is no longer showing.
+            guard request == self.readerRequest else { return }
             self.readerLoading = false
-            guard let article = ReaderExtractor.article(from: result as? String) else {
+            guard let article = ReaderExtractor.article(from: payload) else {
                 self.readerArticle = nil
                 self.showPinNotice(
                     String(localized: "browser.reader_unavailable"),
@@ -749,6 +887,51 @@ final class MiniBrowserModel {
         guard let webView else { return }
         webView.isFindInteractionEnabled = true
         webView.findInteraction?.presentFindNavigator(showingReplace: false)
+        // The find bar and the pull-to-refresh control share the top of the
+        // page; the control waits until the bar is gone.
+        (webView as? MiniBrowserWebView)?.findNavigatorDidPresent()
+    }
+
+    /// There is a page to print: it is loaded, nothing covers it, and it is
+    /// not the reader.
+    var canPrint: Bool {
+        guard pageError == nil, readerArticle == nil else { return false }
+        return pageURL != nil || webView?.url != nil
+    }
+
+    /// The system share sheet for the page. A printable page also hands its
+    /// print formatter and job name over, so the sheet offers Print the way
+    /// Safari's does.
+    func presentShare() {
+        guard let url = effectiveURL else { return }
+        var items: [Any] = [url]
+        if canPrint, let webView {
+            let info = UIPrintInfo(dictionary: nil)
+            info.jobName = Self.printJobName(title: pageTitle, url: pageURL ?? webView.url)
+            info.outputType = .general
+            items += [info, webView.viewPrintFormatter()]
+        }
+        guard let presenter = BrowserDownloads.topViewController() else { return }
+        let sheet = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        // iPad shows the sheet as a popover; it points at the bottom bar.
+        if let popover = sheet.popoverPresentationController {
+            popover.sourceView = presenter.view
+            popover.sourceRect = CGRect(
+                x: presenter.view.bounds.midX,
+                y: presenter.view.bounds.maxY - 80,
+                width: 1,
+                height: 1
+            )
+            popover.permittedArrowDirections = .down
+        }
+        presenter.present(sheet, animated: true)
+    }
+
+    /// What the print dialog calls the job: the page's name, or its host when
+    /// the page has no title.
+    static func printJobName(title: String, url: URL?) -> String {
+        let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? (url?.host ?? "") : name
     }
 
     /// Copies the current page URL. Returns false when there is nothing to copy.
@@ -865,10 +1048,11 @@ final class MiniBrowserModel {
     /// has to be one transaction for the whole screen: the column grows
     /// upwards as the list comes, and animated only from inside, its new
     /// place is taken at once and the address field jumps up and springs back.
+    /// Short and ease-out, so a row never kicks the bar.
     private func animateSuggestions(_ change: () -> Void) {
         let motion: Animation = UIAccessibility.isReduceMotionEnabled
             ? .easeOut(duration: 0.12)
-            : .spring(response: 0.24, dampingFraction: 0.82)
+            : .easeOut(duration: 0.26)
         withAnimation(motion, change)
     }
 
@@ -896,13 +1080,16 @@ final class MiniBrowserModel {
             // A fresh document starts at the top with the bar in place, and
             // ends the reading view.
             scrollHidesBar = false
+            readerRequest += 1
             readerArticle = nil
             readerLoading = false
         }
         currentURL = url
         if url != nil { host?.pageDidChange(self) }
-        // A single-page site changes its address without loading anything.
-        if !isLoading { recordVisit() }
+        // A single-page site changes its address without loading anything. The
+        // web view is asked too: WebKit publishes its new address and its
+        // loading state together, and the address can arrive first.
+        if !isLoading, webView?.isLoading != true { recordVisit() }
     }
 
     /// Keeps a real document title. URL-shaped WebKit titles are ignored so
@@ -1067,6 +1254,7 @@ final class MiniBrowserModel {
         blocker.apply(configuration, to: controller)
         // `apply` clears every user script, this one included.
         BrowserGeolocation.addScript(to: controller)
+        BrowserPageShow.addScript(to: controller)
         controller.addUserScript(WKUserScript(
             source: BlockedResourceReport.script,
             injectionTime: .atDocumentStart,
@@ -1129,8 +1317,8 @@ final class MiniBrowserModel {
     // MARK: - Pin save state machine
 
     func triggerPinBanner(spaces: [ZenSpace], fallbackSpace: ZenSpace) {
-        // A page that failed to load has nothing worth pinning.
-        guard let url = effectiveURL, pageError == nil else { return }
+        // Signed out there is no account and no space to save into.
+        guard canSave, let url = effectiveURL, pageError == nil else { return }
         guard !spaces.isEmpty else {
             // There is no attached destination, so refuse instead of writing
             // to an unattached workspace id (fallbackSpace is not in sync).
@@ -1192,17 +1380,19 @@ final class MiniBrowserModel {
         let store = sitePermissions
         switch store.decision(for: kinds, host: host) {
         case .grant:
-            completion(allowedBySystem(kinds))
+            completion(allowedBySystem(kinds, host: host))
         case .deny:
             completion(false)
         case .ask:
             let answer = DialogAnswer<Bool?>(fallback: nil) { [weak self] allowed in
                 guard let allowed else {
+                    // Nobody answered: the site hears no for the rest of this run.
+                    store.markUnanswered(for: kinds, host: host)
                     completion(false)
                     return
                 }
                 store.set(allowed ? .allow : .block, for: kinds, host: host)
-                completion(allowed && (self?.allowedBySystem(kinds) ?? false))
+                completion(allowed && (self?.allowedBySystem(kinds, host: host) ?? false))
             }
             present(.permission(host: host, kinds: kinds, answer))
         }
@@ -1210,7 +1400,7 @@ final class MiniBrowserModel {
 
     /// True while the system may still say yes. When it already said no it
     /// shows nothing more, so the browser explains where to change that.
-    private func allowedBySystem(_ kinds: [SitePermission]) -> Bool {
+    private func allowedBySystem(_ kinds: [SitePermission], host: String) -> Bool {
         let off = kinds.filter { kind in
             switch kind {
             case .camera: Self.isCaptureOff(.video)
@@ -1219,7 +1409,10 @@ final class MiniBrowserModel {
             }
         }
         guard !off.isEmpty else { return true }
-        present(.systemAccessOff(kinds: off))
+        // Explained once per site per run: asking again just hears the refusal.
+        if sitePermissions.shouldExplainSystemAccess(host: host) {
+            present(.systemAccessOff(kinds: off))
+        }
         return false
     }
 
@@ -1285,7 +1478,8 @@ final class MiniBrowserModel {
     }
 
     func commitPendingPinSave() {
-        guard hasPendingPinSave,
+        guard canSave,
+              hasPendingPinSave,
               let pin = pendingPin ?? effectiveURL.map({ (url: $0, title: pageTitle) })
         else {
             return
@@ -1327,13 +1521,31 @@ final class MiniBrowserModel {
         }
     }
 
-    private func liveDocumentTitle(for url: URL) async -> String? {
+    /// Runs one script in the page, or nil when it does not answer within
+    /// `limit`. A web content process that died or a page that slept never
+    /// calls back, and the caller must not wait on it.
+    private func pageScriptAnswer(_ script: String, within limit: Duration) async -> String? {
         guard let webView else { return nil }
-        let payload: String? = await withCheckedContinuation { continuation in
-            webView.evaluateJavaScript(PageTitle.documentTitleScript) { result, _ in
-                continuation.resume(returning: result as? String)
+        let answer = ScriptAnswer()
+        return await withCheckedContinuation { continuation in
+            answer.wait(continuation)
+            webView.evaluateJavaScript(script) { result, _ in
+                let value = result as? String
+                Task { @MainActor in answer.finish(value) }
+            }
+            Task { @MainActor in
+                try? await Task.sleep(for: limit)
+                answer.finish(nil)
             }
         }
+    }
+
+    /// The page's own `document.title`, or nil when the page does not answer
+    /// within a second. A web content process that died or a page that slept
+    /// never calls back, and the pin waiting on it must still save with the
+    /// title it already has.
+    private func liveDocumentTitle(for url: URL) async -> String? {
+        let payload = await pageScriptAnswer(PageTitle.documentTitleScript, within: .seconds(1))
         return PageTitle.pickDocumentTitle(payload, url: url)
     }
 
@@ -1357,22 +1569,83 @@ final class MiniBrowserModel {
 
     // MARK: - Theme color
 
+    /// The page's colour, as the top area and the bar use it. The
+    /// pull-to-refresh spinner follows it as well: it has to contrast with the
+    /// page behind it, not with the app's own theme.
+    func setThemeColor(_ color: Color?) {
+        themeColor = color
+        updateRefreshTint()
+    }
+
+    private func updateRefreshTint() {
+        (webView as? MiniBrowserWebView)?.refreshControl?.tintColor = MiniBrowserRefresh.spinnerTint(
+            pageIsDark: themeColor.map(\.isDarkBackground)
+        )
+    }
+
+    /// The page's colour, from its own answer when that is one this app reads,
+    /// else from WebKit's, else none. A colour named in words, as a
+    /// `theme-color` tag may be, is not one the parser reads.
     func updateThemeColor(from string: String?, nativeColor: UIColor?) {
-        if let native = nativeColor {
-            self.themeColor = Color(uiColor: native)
+        if let color = Self.parsedThemeColor(string) {
+            setThemeColor(color)
             return
         }
-        guard let string = string?.trimmingCharacters(in: .whitespacesAndNewlines), !string.isEmpty else {
-            self.themeColor = nil
+        guard let nativeColor else {
+            setThemeColor(nil)
             return
+        }
+        setThemeColor(Color(uiColor: nativeColor))
+    }
+
+    /// A colour named in the page's answer, or nil for one it does not name in
+    /// a form this app reads.
+    private static func parsedThemeColor(_ string: String?) -> Color? {
+        guard let string = string?.trimmingCharacters(in: .whitespacesAndNewlines), !string.isEmpty else {
+            return nil
         }
         if string.starts(with: "#") {
-            self.themeColor = Color(hex: string)
-        } else if string.starts(with: "rgb") {
-            self.themeColor = Color(cssRGB: string)
-        } else {
-            self.themeColor = nil
+            return Color(hex: string)
         }
+        if string.starts(with: "rgb") {
+            return Color(cssRGB: string)
+        }
+        return nil
+    }
+}
+
+/// Settles one script answer. The page's answer and the waiting limit can both
+/// arrive, and a continuation may only be resumed once, so the first one wins.
+private final class ScriptAnswer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<String?, Never>?
+    private var finished = false
+
+    /// Takes the lookup's continuation. A lookup already settled resumes it
+    /// with no answer.
+    func wait(_ continuation: CheckedContinuation<String?, Never>) {
+        lock.lock()
+        if finished {
+            lock.unlock()
+            continuation.resume(returning: nil)
+            return
+        }
+        self.continuation = continuation
+        lock.unlock()
+    }
+
+    /// The page's answer, or nil for the limit. Later answers are dropped.
+    func finish(_ answer: String?) {
+        lock.lock()
+        guard !finished else {
+            lock.unlock()
+            return
+        }
+        finished = true
+        let waiting = continuation
+        continuation = nil
+        lock.unlock()
+        waiting?.resume(returning: answer)
     }
 }
 
@@ -1383,13 +1656,28 @@ protocol SearchSuggestionFetching: Sendable {
 
 /// Ephemeral session: suggest requests do not send or store browser cookies.
 struct LiveSearchSuggestionClient: SearchSuggestionFetching {
+    /// A suggest answer is a short list; anything far bigger is not one.
+    static let maxBodySize = 64 * 1024
+
     func fetch(_ url: URL) async throws -> Data {
         var request = URLRequest(url: url)
         request.timeoutInterval = 4
         request.setValue("application/json, text/javascript, */*", forHTTPHeaderField: "Accept")
-        let (data, response) = try await SearchSuggestionSession.shared.data(for: request)
+        let (bytes, response) = try await SearchSuggestionSession.shared.bytes(for: request)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             throw URLError(.badServerResponse)
+        }
+        // The limit is enforced while the answer arrives, so a huge body is
+        // never held in memory: a known length is refused before the first byte.
+        guard http.expectedContentLength <= Int64(Self.maxBodySize) else {
+            throw URLError(.dataLengthExceedsMaximum)
+        }
+        var data = Data(capacity: Self.maxBodySize)
+        for try await byte in bytes {
+            data.append(byte)
+            guard data.count <= Self.maxBodySize else {
+                throw URLError(.dataLengthExceedsMaximum)
+            }
         }
         return data
     }

@@ -39,6 +39,9 @@ struct BrowserDialog: Identifiable {
         case permission(host: String, kinds: [SitePermission], DialogAnswer<Bool?>)
         /// The site is allowed, but the system says no for the whole app.
         case systemAccessOff(kinds: [SitePermission])
+        /// A file the page wants to save. It starts only once the reader
+        /// says yes; going away with the page refuses it.
+        case download(host: String, fileName: String, DialogAnswer<Bool>)
     }
 
     let id = UUID()
@@ -54,7 +57,15 @@ struct BrowserDialog: Identifiable {
             Self.permissionTitle(host: host, kinds: kinds)
         case .systemAccessOff(let kinds):
             Self.systemAccessTitle(kinds: kinds)
+        case .download(_, let fileName, _):
+            String(localized: "browser.download.question \(fileName)")
         }
+    }
+
+    /// The line under a download's question: where the file comes from.
+    static func downloadMessage(host: String) -> String {
+        let site = host.isEmpty ? String(localized: "browser.dialog.this_page") : host
+        return String(localized: "browser.download.from \(site)")
     }
 
     static func permissionTitle(host: String, kinds: [SitePermission]) -> String {
@@ -170,6 +181,9 @@ struct BrowserDialogPresenter: ViewModifier {
                     }
                 }
             }
+        case .download(_, _, let answer):
+            Button("common.cancel", role: .cancel) { finish(dialog) { answer.send(false) } }
+            Button("browser.download.confirm") { finish(dialog) { answer.send(true) } }
         }
     }
 
@@ -184,6 +198,8 @@ struct BrowserDialogPresenter: ViewModifier {
             Text("browser.permission.message")
         case .systemAccessOff:
             Text("browser.permission.off_message")
+        case .download(let host, _, _):
+            Text(verbatim: BrowserDialog.downloadMessage(host: host))
         }
     }
 

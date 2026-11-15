@@ -1,5 +1,7 @@
 package de.kjell.zencompanion.ui.sheets
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +20,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Keyboard
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Shield
@@ -38,8 +41,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.EssentialsColumns
 import de.kjell.zencompanion.data.KeptPageLifetime
@@ -47,6 +53,7 @@ import de.kjell.zencompanion.data.SearchEngine
 import de.kjell.zencompanion.data.SearchEngines
 import de.kjell.zencompanion.data.ToolbarPlacement
 import de.kjell.zencompanion.ui.PreferencesState
+import de.kjell.zencompanion.ui.components.DefaultBrowser
 import de.kjell.zencompanion.ui.theme.LocalZenColors
 import de.kjell.zencompanion.ui.theme.ZenListGroup
 import de.kjell.zencompanion.ui.theme.ZenListItem
@@ -73,7 +80,8 @@ internal fun SettingsSectionLabel(text: String) {
 
 /**
  * "Browsing": how the app picks a search engine, opens links and blocks
- * content. Content blocking is the only row here that leaves the sheet.
+ * content. Content blocking and the browser role are the rows that leave the
+ * sheet.
  */
 @Composable
 internal fun SettingsBrowsingSection(
@@ -88,6 +96,19 @@ internal fun SettingsBrowsingSection(
     onClearWebsiteData: () -> Unit,
 ) {
     var confirmClearData by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    var isDefaultBrowser by remember { mutableStateOf(DefaultBrowser.isDefault(context)) }
+    val browserRoleLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) {
+        // The system granted or kept the role; read it back once it is gone.
+        isDefaultBrowser = DefaultBrowser.isDefault(context)
+    }
+    // Asked in the role dialog or in the Settings app, so the row updates as
+    // soon as the screen comes back.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        isDefaultBrowser = DefaultBrowser.isDefault(context)
+    }
     if (confirmClearData) {
         AlertDialog(
             onDismissRequest = { confirmClearData = false },
@@ -194,6 +215,11 @@ internal fun SettingsBrowsingSection(
                 icon = Icons.AutoMirrored.Outlined.OpenInNew,
                 checked = preferences.alwaysOpenExternally,
                 onCheckedChange = onSetAlwaysOpenExternally,
+            )
+
+            DefaultBrowserRow(
+                isDefault = isDefaultBrowser,
+                onRequestDefault = { browserRoleLauncher.launch(DefaultBrowser.requestIntent(context)) },
             )
 
             SettingsActionRow(
@@ -322,6 +348,7 @@ internal fun SettingsCustomEnginesCard(
 /** "Layout": how the essentials grid and the action bar look. */
 @Composable
 internal fun SettingsLayoutSection(
+    signedIn: Boolean,
     preferences: PreferencesState,
     onSetEssentialsColumns: (EssentialsColumns) -> Unit,
     onSetToolbarPlacement: (ToolbarPlacement) -> Unit,
@@ -335,31 +362,35 @@ internal fun SettingsLayoutSection(
             val columns = preferences.essentialsColumns
             val toolbar = preferences.toolbarPlacement
 
-            Box(modifier = Modifier.fillMaxWidth()) {
-                SettingsMenuRow(
-                    title = stringResource(R.string.settings_essentials_columns),
-                    value = columns.label(),
-                    icon = Icons.Outlined.GridView,
-                    onClick = { columnsExpanded = true },
-                )
-                ZenMenu(
-                    expanded = columnsExpanded,
-                    onDismissRequest = { columnsExpanded = false },
-                ) {
-                    val options = EssentialsColumns.entries
-                    ZenMenuGroup(index = 0, count = 1) {
-                        options.forEachIndexed { index, option ->
-                            ZenSelectableMenuItem(
-                                selected = option == columns,
-                                onClick = {
-                                    onSetEssentialsColumns(option)
-                                    columnsExpanded = false
-                                },
-                                text = { Text(option.label()) },
-                                index = index,
-                                count = options.size,
-                                selectedLeadingIcon = { ZenMenuCheck() },
-                            )
+            // The grid only exists with an account; the toolbar placement
+            // shapes the signed-out home too, so that row always stays.
+            if (AccountOnlySettings.showsEssentialsColumns(signedIn)) {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    SettingsMenuRow(
+                        title = stringResource(R.string.settings_essentials_columns),
+                        value = columns.label(),
+                        icon = Icons.Outlined.GridView,
+                        onClick = { columnsExpanded = true },
+                    )
+                    ZenMenu(
+                        expanded = columnsExpanded,
+                        onDismissRequest = { columnsExpanded = false },
+                    ) {
+                        val options = EssentialsColumns.entries
+                        ZenMenuGroup(index = 0, count = 1) {
+                            options.forEachIndexed { index, option ->
+                                ZenSelectableMenuItem(
+                                    selected = option == columns,
+                                    onClick = {
+                                        onSetEssentialsColumns(option)
+                                        columnsExpanded = false
+                                    },
+                                    text = { Text(option.label()) },
+                                    index = index,
+                                    count = options.size,
+                                    selectedLeadingIcon = { ZenMenuCheck() },
+                                )
+                            }
                         }
                     }
                 }
@@ -422,6 +453,35 @@ private fun SettingsMenuRow(
                 Spacer(Modifier.width(4.dp))
                 Icon(
                     imageVector = Icons.Outlined.ArrowDropDown,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        },
+    )
+}
+
+/** "Default browser": the system's browser role, or the way to ask for it. */
+@Composable
+private fun DefaultBrowserRow(isDefault: Boolean, onRequestDefault: () -> Unit) {
+    ZenListItem(
+        headline = stringResource(R.string.settings_default_browser),
+        supportingText = stringResource(R.string.settings_default_browser_subtitle),
+        // Once held, the system decides; the row is a statement, not a button.
+        onClick = if (isDefault) null else onRequestDefault,
+        leadingContent = {
+            Icon(
+                imageVector = Icons.Outlined.Public,
+                contentDescription = null,
+                modifier = Modifier.size(22.dp),
+            )
+        },
+        trailingContent = {
+            if (isDefault) {
+                ZenListValue(stringResource(R.string.settings_default_browser_value))
+            } else {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                     contentDescription = null,
                     modifier = Modifier.size(20.dp),
                 )

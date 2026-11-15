@@ -247,6 +247,28 @@
         }
       }
     },
+    "browser.connection_insecure": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection is not secure"
+          }
+        }
+      }
+    },
+    "browser.connection_secure": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Secure connection"
+          }
+        }
+      }
+    },
     "browser.dialog.login_failed": {
       "localizations": {
         "en": {
@@ -307,6 +329,46 @@
         }
       }
     },
+    "browser.download.cancel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel download"
+          }
+        }
+      }
+    },
+    "browser.download.choose_folder %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose where to save %@"
+          }
+        }
+      }
+    },
+    "browser.download.choose_folder_many %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose where to save %lld files"
+          }
+        }
+      }
+    },
+    "browser.download.confirm": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download"
+          }
+        }
+      }
+    },
     "browser.download.failed": {
       "localizations": {
         "en": {
@@ -317,12 +379,112 @@
         }
       }
     },
+    "browser.download.failed_many %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't download %lld files"
+          }
+        }
+      }
+    },
+    "browser.download.failed_name %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't download %@"
+          }
+        }
+      }
+    },
     "browser.download.finished %@": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ saved to Files › Z-Sync"
+            "value": "Saved %@"
+          }
+        }
+      }
+    },
+    "browser.download.from %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "From %@"
+          }
+        }
+      }
+    },
+    "browser.download.page_asleep": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The page was asleep"
+          }
+        }
+      }
+    },
+    "browser.download.percent %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld%%"
+          }
+        }
+      }
+    },
+    "browser.download.question %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download %@?"
+          }
+        }
+      }
+    },
+    "browser.download.reason.network": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The connection was lost"
+          }
+        }
+      }
+    },
+    "browser.download.reason.save": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file couldn't be saved"
+          }
+        }
+      }
+    },
+    "browser.download.reason.server": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server didn't send the file"
+          }
+        }
+      }
+    },
+    "browser.download.saved_many %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved %lld files"
           }
         }
       }
@@ -333,6 +495,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Downloading %@"
+          }
+        }
+      }
+    },
+    "browser.download.started_many %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading %lld files"
           }
         }
       }
@@ -498,6 +670,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "Try again"
+          }
+        }
+      }
+    },
+    "browser.field_next": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next field"
+          }
+        }
+      }
+    },
+    "browser.field_previous": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous field"
           }
         }
       }
@@ -778,7 +972,6 @@
         }
       }
     },
-    "CONTENT BLOCKING": {},
     "Delete": {},
     "demo.account_caption": {
       "localizations": {
@@ -1610,6 +1803,26 @@
         }
       }
     },
+    "signedout.sign_in": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in with Mozilla"
+          }
+        }
+      }
+    },
+    "signedout.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Zen spaces appear here"
+          }
+        }
+      }
+    },
     "signin.confirm": {
       "extractionState": "stale",
       "localizations": {
@@ -2220,12 +2433,13 @@
         }
       }
     },
-    "browser.clear": {
+    "browser.clear_search": {
+      "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Clear"
+            "value": "Clear search"
           }
         }
       }

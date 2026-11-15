@@ -16,7 +16,8 @@ final class MiniBrowserModelTests: XCTestCase {
         preferences: FakePreferences? = nil,
         allowsNormalTabs: Bool = false,
         suggestions: RecordingSuggestionClient = RecordingSuggestionClient(),
-        suggestionDebounce: Duration = .zero
+        suggestionDebounce: Duration = .zero,
+        history: BrowserHistoryStore = .shared
     ) -> (MiniBrowserModel, FakePinWriter) {
         let model = MiniBrowserModel(
             initialURL: initialURL,
@@ -27,9 +28,19 @@ final class MiniBrowserModelTests: XCTestCase {
             preferences: preferences ?? FakePreferences(),
             allowsNormalTabs: allowsNormalTabs,
             suggestionClient: suggestions,
-            suggestionDebounce: suggestionDebounce
+            suggestionDebounce: suggestionDebounce,
+            history: history
         )
         return (model, writer)
+    }
+
+    /// A history of its own, so a recorded visit does not reach the app's file.
+    private func makeHistoryStore() -> BrowserHistoryStore {
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathComponent("history.json")
+        addTeardownBlock { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+        return BrowserHistoryStore(fileURL: file, saveDelay: .zero)
     }
 
     private func preferences(saveKind: SaveKind) -> FakePreferences {
@@ -196,11 +207,165 @@ final class MiniBrowserModelTests: XCTestCase {
         XCTAssertEqual(UIPasteboard.general.url, url)
     }
 
+    func testPrintNeedsAPageAndNamesTheJobAfterThePage() {
+        let (model, _) = makeModel(initialURL: nil)
+        XCTAssertFalse(model.canPrint)
+        XCTAssertEqual(
+            MiniBrowserModel.printJobName(title: "  ", url: URL(string: "https://example.com/x")!),
+            "example.com"
+        )
+        XCTAssertEqual(
+            MiniBrowserModel.printJobName(title: " Example ", url: URL(string: "https://example.com/x")!),
+            "Example"
+        )
+        XCTAssertEqual(MiniBrowserModel.printJobName(title: "", url: nil), "")
+
+        let page = URL(string: "https://example.com/x")!
+        model.currentURL = page
+        XCTAssertTrue(model.canPrint)
+        // The error panel covers the page: nothing to print.
+        model.loadDidFail(loadError(NSURLErrorCannotFindHost, failing: page))
+        XCTAssertFalse(model.canPrint)
+    }
+
     func testPageHostUsesDisplayText() {
         let (model, _) = makeModel(initialURL: nil)
         XCTAssertEqual(model.pageHost, "")
         model.currentURL = URL(string: "https://www.example.com/path")
         XCTAssertEqual(model.pageHost, "www.example.com")
+    }
+
+    // MARK: - Bar visibility on scroll
+
+    /// Only the reader's finger moves the bar. The offset a back or a forward
+    /// restores arrives without one and must leave the bar alone.
+    func testARestoredOffsetNeverHidesTheBar() {
+        let (decision, downRun) = MiniBrowserBarScroll.decision(
+            delta: 800,
+            scrollY: 800,
+            viewportHeight: 600,
+            contentHeight: 4_000,
+            downRun: 0,
+            isUserDriven: false
+        )
+        XCTAssertEqual(decision, .keep)
+        XCTAssertEqual(downRun, 0)
+    }
+
+    func testADownwardDragTucksTheBarAwayOnceItHasRun() {
+        let jitter = MiniBrowserBarScroll.decision(
+            delta: 8,
+            scrollY: 100,
+            viewportHeight: 600,
+            contentHeight: 4_000,
+            downRun: 0,
+            isUserDriven: true
+        )
+        XCTAssertEqual(jitter.decision, .keep, "a first short move is jitter, not a scroll")
+
+        let drag = MiniBrowserBarScroll.decision(
+            delta: 30,
+            scrollY: 138,
+            viewportHeight: 600,
+            contentHeight: 4_000,
+            downRun: jitter.downRun,
+            isUserDriven: true
+        )
+        XCTAssertEqual(drag.decision, .hide)
+        XCTAssertEqual(drag.downRun, 38)
+    }
+
+    func testAnUpwardDragBringsTheBarBack() {
+        let (decision, downRun) = MiniBrowserBarScroll.decision(
+            delta: -12,
+            scrollY: 200,
+            viewportHeight: 600,
+            contentHeight: 4_000,
+            downRun: 40,
+            isUserDriven: true
+        )
+        XCTAssertEqual(decision, .show)
+        XCTAssertEqual(downRun, 0)
+    }
+
+    func testTheTopOfAPageKeepsTheBar() {
+        // Even a long downward drag at the top cannot hide it.
+        XCTAssertEqual(
+            MiniBrowserBarScroll.decision(
+                delta: 30,
+                scrollY: 20,
+                viewportHeight: 600,
+                contentHeight: 4_000,
+                downRun: 40,
+                isUserDriven: true
+            ).decision,
+            .show
+        )
+        // A short page has nothing to scroll.
+        XCTAssertEqual(
+            MiniBrowserBarScroll.decision(
+                delta: 30,
+                scrollY: 120,
+                viewportHeight: 600,
+                contentHeight: 620,
+                downRun: 0,
+                isUserDriven: true
+            ).decision,
+            .show
+        )
+    }
+
+    func testOnlyADragOrItsMomentumIsTheReadersScroll() {
+        XCTAssertTrue(MiniBrowserBarScroll.isReaderScroll(isDragging: true, isDecelerating: false))
+        XCTAssertTrue(MiniBrowserBarScroll.isReaderScroll(isDragging: false, isDecelerating: true))
+        XCTAssertFalse(MiniBrowserBarScroll.isReaderScroll(isDragging: false, isDecelerating: false))
+    }
+
+    // MARK: - Page colour
+
+    /// A page without a colour of its own falls back to the default surface,
+    /// never to the colour of the page the reader left.
+    func testAPageWithoutAColourClearsThePreviousOne() {
+        let (model, _) = makeModel(initialURL: URL(string: "https://example.com"))
+        model.updateThemeColor(from: "rgb(255, 0, 0)", nativeColor: nil)
+        XCTAssertNotNil(model.themeColor)
+
+        model.updateThemeColor(from: nil, nativeColor: nil)
+        XCTAssertNil(model.themeColor)
+    }
+
+    func testAColourNamedInWordsFallsBackToWebKitsOwn() {
+        let (model, _) = makeModel(initialURL: URL(string: "https://example.com"))
+
+        // "black" is a colour the page names in words, which this app cannot
+        // read: WebKit's own answer still counts instead of no colour at all.
+        model.updateThemeColor(from: "black", nativeColor: .red)
+        XCTAssertNotNil(model.themeColor)
+
+        // With nothing of WebKit's either, the previous page's colour goes.
+        model.updateThemeColor(from: "black", nativeColor: nil)
+        XCTAssertNil(model.themeColor)
+    }
+
+    func testTheSpinnerContrastsWithThePageBehindIt() {
+        XCTAssertGreaterThan(
+            whiteLevel(MiniBrowserRefresh.spinnerTint(pageIsDark: true)),
+            0.5,
+            "a light spinner on a dark page"
+        )
+        XCTAssertLessThan(
+            whiteLevel(MiniBrowserRefresh.spinnerTint(pageIsDark: false)),
+            0.5,
+            "a dark spinner on a light page"
+        )
+        // No known page colour: a mid grey that reads on white and on black.
+        XCTAssertEqual(whiteLevel(MiniBrowserRefresh.spinnerTint(pageIsDark: nil)), 0.55, accuracy: 0.02)
+    }
+
+    private func whiteLevel(_ color: UIColor) -> CGFloat {
+        var level: CGFloat = 0
+        color.getWhite(&level, alpha: nil)
+        return level
     }
 
     // MARK: - Pin save
@@ -276,6 +441,22 @@ final class MiniBrowserModelTests: XCTestCase {
         XCTAssertFalse(model.hasPendingPinSave)
         XCTAssertNotNil(model.pinNotice)
         XCTAssertEqual(model.pinnedDestination, ZenCompanion.PinDestination(spaceId: ""))
+
+        model.commitPendingPinSave()
+        await model.waitForPinSave()
+
+        XCTAssertTrue(writer.saved.isEmpty)
+    }
+
+    func testPinIsOffWhenSavingNeedsAnAccount() async {
+        let (model, writer) = makeModel(initialURL: URL(string: "https://pin.example/page")!)
+        model.canSave = false
+
+        model.triggerPinBanner(spaces: [space("a")], fallbackSpace: space("a"))
+
+        XCTAssertFalse(model.showPinBanner)
+        XCTAssertFalse(model.hasPendingPinSave)
+        XCTAssertNil(model.pinNotice, "a hidden control refuses silently")
 
         model.commitPendingPinSave()
         await model.waitForPinSave()
@@ -570,6 +751,42 @@ final class MiniBrowserModelTests: XCTestCase {
         XCTAssertEqual(webView.reloads, 1)
     }
 
+    func testAReloadKeepsTheReadersPlaceButAPullStartsAtTheTop() {
+        let (model, _) = makeModel(initialURL: nil)
+        let webView = FakeWebView(
+            frame: CGRect(x: 0, y: 0, width: 320, height: 600),
+            configuration: WKWebViewConfiguration()
+        )
+        webView.scrollView.contentSize = CGSize(width: 320, height: 4_000)
+        model.webView = webView
+
+        // The bar's reload puts the reader back where they were.
+        webView.scrollView.contentOffset = CGPoint(x: 0, y: 800)
+        model.reload()
+        webView.scrollView.contentOffset = .zero
+        webView.scrollView.contentSize = CGSize(width: 320, height: 4_000)
+        model.restoreScrollAfterReload()
+        XCTAssertEqual(webView.scrollView.contentOffset.y, 800)
+
+        // A pull asks for the page's top, so WebKit's own landing place (an
+        // anchor, the end of a long document) does not win over it.
+        webView.scrollView.contentOffset = CGPoint(x: 0, y: -60)
+        model.reload(fromTop: true)
+        webView.scrollView.contentOffset = CGPoint(x: 0, y: 250)
+        webView.scrollView.contentSize = CGSize(width: 320, height: 4_000)
+        model.restoreScrollAfterReload()
+        XCTAssertEqual(webView.scrollView.contentOffset.y, -webView.scrollView.adjustedContentInset.top)
+
+        // The top edge follows the content inset: a top inset moves it below
+        // zero, so a pull must not land on a literal 0.
+        webView.scrollView.contentInset = UIEdgeInsets(top: 24, left: 0, bottom: 0, right: 0)
+        webView.scrollView.contentOffset = CGPoint(x: 0, y: 900)
+        model.reload(fromTop: true)
+        webView.scrollView.contentOffset = CGPoint(x: 0, y: 1_500)
+        model.restoreScrollAfterReload()
+        XCTAssertEqual(webView.scrollView.contentOffset.y, -24)
+    }
+
     func testCrashKeepsThePageAddressAndReloadsIt() {
         let (model, _) = makeModel(initialURL: nil)
         let webView = FakeWebView(frame: .zero, configuration: WKWebViewConfiguration())
@@ -604,6 +821,35 @@ final class MiniBrowserModelTests: XCTestCase {
         webView.stubbedCanGoBack = true
         XCTAssertFalse(model.leaveErrorPage())
         XCTAssertEqual(webView.wentBack, 1)
+    }
+
+    // MARK: - History
+
+    /// A typed address reaches the model before WebKit reports that the load
+    /// began, so the model's own flag is not enough: the address would be
+    /// recorded as a visit before anything loaded.
+    func testAddressWhileThePageIsLoadingIsNoVisit() {
+        let history = makeHistoryStore()
+        let (model, _) = makeModel(initialURL: nil, history: history)
+        let webView = FakeWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        webView.stubbedIsLoading = true
+        model.webView = webView
+
+        XCTAssertFalse(model.isLoading, "the model has not heard about the load yet")
+        model.updateCurrentURL(URL(string: "https://wikipeida.org"))
+
+        XCTAssertTrue(history.visits.isEmpty)
+    }
+
+    func testAddressChangeWithoutALoadIsAVisit() {
+        let history = makeHistoryStore()
+        let (model, _) = makeModel(initialURL: nil, history: history)
+        let webView = FakeWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        model.webView = webView
+
+        model.updateCurrentURL(URL(string: "https://example.com/a"))
+
+        XCTAssertEqual(history.visits.map(\.url), ["https://example.com/a"])
     }
 
     // MARK: - Suggestions
@@ -641,6 +887,33 @@ final class MiniBrowserModelTests: XCTestCase {
         let items = URLComponents(url: client.requested[0], resolvingAgainstBaseURL: false)?.queryItems
         XCTAssertEqual(items?.first { $0.name == "q" }?.value, "zen browser")
         XCTAssertEqual(model.suggestions, ["zen browser", "zen browser download"])
+    }
+
+    func testTheAnswerAddsToTheHistoryInsteadOfReplacingIt() async {
+        let history = makeHistoryStore()
+        history.record(URL(string: "https://news.ycombinator.com"), title: "Hacker News")
+        let client = RecordingSuggestionClient()
+        // The engine names the page the history already has: one row, not two.
+        client.body = Data(#"["news",["news today","hacker news","news live"]]"#.utf8)
+        let (model, _) = makeModel(initialURL: nil, suggestions: client, history: history)
+
+        model.addressText = "news"
+        model.refreshSuggestions(isEditing: true)
+        XCTAssertEqual(model.suggestionRows.map(\.id), ["history:https://news.ycombinator.com"])
+
+        await model.waitForSuggestions()
+        XCTAssertEqual(
+            model.suggestionRows.map(\.text),
+            ["Hacker News", "news today", "news live"],
+            "the page from the history stays on top, and the answer that names it is left out"
+        )
+        XCTAssertEqual(model.suggestionRows.first?.visit?.url, "https://news.ycombinator.com")
+
+        // The next keystroke's answer must not push the page out either.
+        model.addressText = "news y"
+        model.refreshSuggestions(isEditing: true)
+        await model.waitForSuggestions()
+        XCTAssertEqual(model.suggestionRows.first?.visit?.url, "https://news.ycombinator.com")
     }
 
     func testChangingToAURLCancelsThePendingQuery() async {
@@ -786,12 +1059,14 @@ private final class FakeHaptics: HapticsPlaying {
 private final class FakeWebView: WKWebView {
     var stubbedURL: URL?
     var stubbedCanGoBack = false
+    var stubbedIsLoading = false
     private(set) var loaded: [URL] = []
     private(set) var wentBack = 0
     private(set) var reloads = 0
 
     override var url: URL? { stubbedURL }
     override var canGoBack: Bool { stubbedCanGoBack }
+    override var isLoading: Bool { stubbedIsLoading }
 
     override func load(_ request: URLRequest) -> WKNavigation? {
         if let url = request.url { loaded.append(url) }

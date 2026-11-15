@@ -67,6 +67,26 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertFalse(prefs.hasObject(PreferenceKeys.toolbarPlacement, scope: .appGroup))
         XCTAssertFalse(prefs.hasObject(PreferenceKeys.toolbarPlacement, scope: .standard))
     }
+
+    // MARK: - Signed-out access
+
+    func testSignedOutHidesTheRowsThatNeedAnAccount() {
+        let access = SettingsAccess(isSignedIn: false)
+
+        XCTAssertFalse(access.showsAccountEmail)
+        XCTAssertFalse(access.showsSignOut)
+        XCTAssertFalse(access.showsSaveKind)
+        XCTAssertFalse(access.showsEssentialsColumns)
+    }
+
+    func testSignedInShowsTheAccountRows() {
+        let access = SettingsAccess(isSignedIn: true)
+
+        XCTAssertTrue(access.showsAccountEmail)
+        XCTAssertTrue(access.showsSignOut)
+        XCTAssertTrue(access.showsSaveKind)
+        XCTAssertTrue(access.showsEssentialsColumns)
+    }
 }
 
 @MainActor

@@ -1,6 +1,10 @@
 package de.kjell.zencompanion.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import android.webkit.WebView
+import de.kjell.zencompanion.ui.browser.isPageLocalDownload
+import de.kjell.zencompanion.ui.browser.isWebDownload
 
 internal enum class BrowserLinkAction {
     LOAD_IN_WEBVIEW,
@@ -63,6 +67,89 @@ internal fun browserLinkAction(
     return BrowserLinkAction.OPEN_EXTERNALLY
 }
 
+/**
+ * The address a `VIEW` intent from another app hands to Z-Sync, or null when
+ * it is not a link Z-Sync opens. Any app on the device can send the intent, so
+ * only the data URI counts and nothing else in it is read. Two forms pass:
+ * an `http`/`https` link, and Z-Sync's own `zsync://open?url=` link.
+ */
+internal fun incomingWebLink(action: String?, scheme: String?, data: String?): String? {
+    if (action != Intent.ACTION_VIEW) return null
+    val normalized = scheme?.lowercase()
+    if (normalized == "zsync") return zsyncWebLink(data)
+    if (normalized != "http" && normalized != "https") return null
+    return sameTabUrl(data)
+}
+
+/**
+ * The page a `zsync://open?url=<percent-encoded address>` link names, or null
+ * when it is anything else: another host or path, a missing or extra
+ * parameter, or a target that is not an `http`/`https` address with a host.
+ * A Shortcut or a link can open a page in Z-Sync this way before the system
+ * offers the app as a browser.
+ *
+ * Parsed as text rather than with `android.net.Uri`, so the query stays raw
+ * until its single value is decoded: an encoded `&` inside the target must not
+ * split it into parameters (and this stays a pure function for the tests).
+ */
+internal fun zsyncWebLink(raw: String?): String? {
+    val link = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    val schemeEnd = link.indexOf(':')
+    if (schemeEnd <= 0) return null
+    if (!link.substring(0, schemeEnd).equals("zsync", ignoreCase = true)) return null
+    val rest = link.substring(schemeEnd + 1)
+    if (!rest.startsWith("//")) return null
+
+    // The authority runs to the first slash, query or fragment.
+    val afterSlashes = rest.substring(2)
+    val authorityEnd = afterSlashes.indexOfFirst { it == '/' || it == '?' || it == '#' }
+    val host = if (authorityEnd < 0) afterSlashes else afterSlashes.substring(0, authorityEnd)
+    if (!host.equals("open", ignoreCase = true)) return null
+    val afterHost = if (authorityEnd < 0) "" else afterSlashes.substring(authorityEnd)
+
+    // The path is either absent or a bare slash; a fragment only counts when
+    // it follows the query.
+    val fragmentStart = afterHost.indexOf('#')
+    val queryStart = afterHost.indexOf('?')
+    val pathEnd = minOf(
+        if (queryStart >= 0) queryStart else afterHost.length,
+        if (fragmentStart >= 0) fragmentStart else afterHost.length,
+    )
+    val path = afterHost.substring(0, pathEnd)
+    if (path.isNotEmpty() && path != "/") return null
+    if (queryStart < 0 || (fragmentStart in 0 until queryStart)) return null
+    val query = afterHost.substring(
+        queryStart + 1,
+        if (fragmentStart > queryStart) fragmentStart else afterHost.length,
+    )
+
+    // Exactly one parameter, named `url`: nothing else is accepted.
+    if (query.isEmpty() || query.contains('&')) return null
+    if (query.substringBefore('=') != "url") return null
+    val encoded = query.substringAfter('=', missingDelimiterValue = "")
+    if (encoded.isEmpty()) return null
+
+    val target = decodeQueryValue(encoded) ?: return null
+    return webAddressWithHost(target)
+}
+
+/**
+ * Percent-decodes one query value. A `+` stays a plus — in an address it is a
+ * space only in form encoding, which this link does not use.
+ */
+private fun decodeQueryValue(raw: String): String? = runCatching {
+    java.net.URLDecoder.decode(raw.replace("+", "%2B"), Charsets.UTF_8.name())
+}.getOrNull()
+
+/** The address when it is `http`/`https` and names a host, or null. */
+private fun webAddressWithHost(raw: String): String? {
+    val address = sameTabUrl(raw) ?: return null
+    val rest = address.substringAfter(':')
+    if (!rest.startsWith("//")) return null
+    val host = rest.substring(2).takeWhile { it != '/' && it != '?' && it != '#' }
+    return address.takeIf { host.isNotEmpty() }
+}
+
 /** The http(s) address of a link, or null for anything else. */
 internal fun sameTabUrl(raw: String?): String? {
     val trimmed = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
@@ -78,4 +165,45 @@ internal fun sameTabUrl(raw: String?): String? {
 internal fun tappedLinkUrl(hitType: Int, extra: String?): String? {
     if (hitType != WebView.HitTestResult.SRC_ANCHOR_TYPE) return null
     return sameTabUrl(extra)
+}
+
+/**
+ * What a long press found: the link's actions, then the image's below a
+ * divider. An image link carries both; a plain image only its own address.
+ */
+internal data class BrowserHitMenu(
+    /** The link under the finger, for the three link actions. */
+    val link: String? = null,
+    /** The image's own address, for the image actions. */
+    val image: String? = null,
+) {
+    /** The address the menu names: the link when there is one. */
+    val title: String get() = link ?: image?.let(::menuTitle).orEmpty()
+
+    /** A web image opens as a page of its own. */
+    val canOpenImage: Boolean get() = image?.let(::isWebDownload) == true
+
+    /** A web image downloads as itself; a page-local one is read by its page. */
+    val canSaveImage: Boolean
+        get() = image?.let { isWebDownload(it) || isPageLocalDownload(it) } == true
+
+    /** A page-local address dies with its page: only web ones are worth copying. */
+    val canCopyImage: Boolean get() = image?.let(::isWebDownload) == true
+
+    /** Whether the image block has anything in it at all. */
+    val hasImageActions: Boolean get() = canOpenImage || canSaveImage || canCopyImage
+}
+
+/** An address as a menu names it: a data: image's payload is far too long to show. */
+private fun menuTitle(address: String): String =
+    if (address.length <= MENU_ADDRESS_LIMIT) address else address.take(MENU_ADDRESS_LIMIT - 1) + '…'
+
+private const val MENU_ADDRESS_LIMIT = 300
+
+/** The page's host for blocking and download questions, or null for a blank or non-web page. */
+internal fun pageHost(url: String): String? {
+    val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return null
+    val scheme = uri.scheme?.lowercase()
+    if (scheme != "http" && scheme != "https") return null
+    return uri.host?.takeIf { it.isNotEmpty() }
 }

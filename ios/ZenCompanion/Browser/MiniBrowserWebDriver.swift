@@ -23,6 +23,14 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// Downward travel since the last direction change. Hides the bar only
     /// after a committed scroll, not on the first jitter.
     private var scrollDownRun: CGFloat = 0
+    /// The document the chrome last started over for, so one page resets once.
+    private var currentDocumentURL: URL?
+    /// Counts the documents the page colour was asked of, so an answer about an
+    /// older page cannot paint the one on screen.
+    private var pageGeneration = 0
+    /// The pull-to-refresh's own limit: a load that never reports back cannot
+    /// leave the spinner going.
+    private var refreshDeadline: Task<Void, Never>?
 
     init(model: MiniBrowserModel) {
         self.model = model
@@ -37,6 +45,9 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         // lists and scripts are swapped per site, so each page needs its own.
         configuration.userContentController = WKUserContentController()
         configuration.allowsInlineMediaPlayback = true
+        // A player's own fullscreen button then fills the screen, as it does
+        // in Safari.
+        configuration.preferences.isElementFullscreenEnabled = true
         configuration.userContentController.addScriptMessageHandler(
             BrowserGeolocation.Handler(model: model),
             contentWorld: .page,
@@ -50,9 +61,16 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
             contentWorld: BlockedResourceReport.world,
             name: BlockedResourceReport.handlerName
         )
+        // A page restored from WebKit's back/forward cache answers none of the
+        // load callbacks, so it reports its own `pageshow` instead.
+        let driver = MiniBrowserWebDriver(model: model)
+        configuration.userContentController.add(
+            BrowserPageShow.Handler(driver: driver),
+            name: BrowserPageShow.handlerName
+        )
+        BrowserPageShow.addScript(to: configuration.userContentController)
 
         let webView = MiniBrowserWebView(frame: .zero, configuration: configuration)
-        let driver = MiniBrowserWebDriver(model: model)
         webView.navigationDelegate = driver
         webView.uiDelegate = driver
         webView.allowsBackForwardNavigationGestures = true
@@ -68,6 +86,15 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         webView.scrollView.contentInset = .zero
         webView.scrollView.automaticallyAdjustsScrollIndicatorInsets = false
         webView.scrollView.scrollIndicatorInsets = .zero
+
+        // Pulling down at the top reloads, with the system's own control. Its
+        // tint follows the page's own colour, since the spinner sits on the
+        // page and not on the app's chrome (see `MiniBrowserModel.setThemeColor`).
+        let refresh = UIRefreshControl()
+        refresh.tintColor = MiniBrowserRefresh.spinnerTint(pageIsDark: nil)
+        refresh.accessibilityLabel = String(localized: "browser.reload")
+        refresh.addTarget(driver, action: #selector(MiniBrowserWebDriver.refreshPulled(_:)), for: .valueChanged)
+        webView.refreshControl = refresh
 
         driver.setupObservers(for: webView)
         model.adopt(webView, driver: driver)
@@ -270,11 +297,15 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     private func startDownload(_ download: WKDownload, in webView: WKWebView) {
         MainActor.assumeIsolated {
-            BrowserDownloads.shared.adopt(download, from: model)
-            // A link that opened a window only for its file leaves nothing to show.
-            if webView.url == nil, !webView.canGoBack, let model {
-                model.host?.pageRequestedClose(model)
-            }
+            // A link that opened a window only for its file leaves nothing to
+            // show. The window closes once the file's question is answered, so
+            // the reader still sees that question on the page that asked it.
+            let closesPage = webView.url == nil && !webView.canGoBack
+            BrowserDownloads.shared.adopt(
+                download,
+                from: model,
+                closingPageWhenAnswered: closesPage
+            )
         }
     }
 
@@ -330,6 +361,9 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
             miniWebView.clearanceDidSettle = { [weak self] in
                 self?.rebaseScrollOrigin()
             }
+            miniWebView.refreshWasEnded = { [weak self] in
+                self?.rebaseAfterRefreshEnds()
+            }
         }
 
         progressObservation = webView.observe(\.estimatedProgress, options: [.new]) { [weak self] wv, _ in
@@ -346,6 +380,9 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
 
         urlObservation = webView.observe(\.url, options: [.new]) { [weak self] wv, _ in
             DispatchQueue.main.async {
+                // A step back or forward, or a fresh load, is a new document
+                // for the chrome even when WebKit answers it from its cache.
+                self?.startOver(for: wv.url)
                 self?.model?.updateCurrentURL(wv.url)
             }
         }
@@ -371,8 +408,12 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         if #available(iOS 15.0, *) {
             themeColorObservation = webView.observe(\.themeColor, options: [.new]) { [weak self] wv, _ in
                 DispatchQueue.main.async {
+                    // A colour going away is news too: the page's own
+                    // background takes over, not the previous page's tag.
                     if let native = wv.themeColor {
-                        self?.model?.themeColor = Color(uiColor: native)
+                        self?.model?.setThemeColor(Color(uiColor: native))
+                    } else {
+                        self?.readPageColor()
                     }
                 }
             }
@@ -387,8 +428,18 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
             let y = scrollView.contentOffset.y
             let viewport = scrollView.bounds.height
             let content = scrollView.contentSize.height
+            // Read here: the drag has ended by the time the hop below runs.
+            let byReader = MiniBrowserBarScroll.isReaderScroll(
+                isDragging: scrollView.isDragging,
+                isDecelerating: scrollView.isDecelerating
+            )
             DispatchQueue.main.async {
-                self?.updateBarVisibility(scrollY: y, viewport: viewport, contentHeight: content)
+                self?.updateBarVisibility(
+                    scrollY: y,
+                    viewport: viewport,
+                    contentHeight: content,
+                    isUserDriven: byReader
+                )
             }
         }
     }
@@ -407,30 +458,157 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         scrollDownRun = 0
     }
 
-    /// Tucks the bottom bar away once the page has scrolled down and
-    /// brings it back as soon as the page scrolls up again. A short page,
-    /// or the very top of a long one, always keeps the bar.
-    private func updateBarVisibility(scrollY: CGFloat, viewport: CGFloat, contentHeight: CGFloat) {
-        let maxY = contentHeight - viewport
-        let delta = scrollY - lastScrollY
-        lastScrollY = scrollY
+    // MARK: - Pull to refresh
 
-        guard maxY > 60, scrollY > 40 else {
-            scrollDownRun = 0
-            model?.setScrollHidesBar(false)
-            return
-        }
-
-        if delta > 0.5 {
-            scrollDownRun += delta
-            if scrollDownRun > 24, scrollY > 80 {
-                model?.setScrollHidesBar(true)
+    /// The reader pulled the page down at its top.
+    @objc private func refreshPulled(_ sender: UIRefreshControl) {
+        MainActor.assumeIsolated {
+            guard let model else {
+                sender.endRefreshing()
+                return
             }
-        } else if delta < -2 {
-            scrollDownRun = 0
-            model?.setScrollHidesBar(false)
+            // A pull starts at the top: the page is reloaded from there.
+            model.reload(fromTop: true)
+            startRefreshDeadline()
         }
     }
+
+    /// The spinner ends with the load, and at the latest after ten seconds.
+    private func startRefreshDeadline() {
+        refreshDeadline?.cancel()
+        refreshDeadline = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(10))
+            guard !Task.isCancelled else { return }
+            self?.finishRefresh()
+        }
+    }
+
+    /// Ends the pull's spinner. The control's own collapse moves the scroll
+    /// offset without a finger, so the bar's origin follows where it settles
+    /// instead of reading the change as a scroll.
+    private func finishRefresh() {
+        refreshDeadline?.cancel()
+        refreshDeadline = nil
+        guard let control = (webView as? MiniBrowserWebView)?.refreshControl,
+              control.isRefreshing else { return }
+        control.endRefreshing()
+        rebaseAfterRefreshEnds()
+    }
+
+    /// The control is still animating its inset away; its offset move is not
+    /// the reader scrolling.
+    private func rebaseAfterRefreshEnds() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            self?.rebaseScrollOrigin()
+        }
+    }
+
+    /// Tucks the bottom bar away once the page has scrolled down and
+    /// brings it back as soon as the page scrolls up again. A short page,
+    /// or the very top of a long one, always keeps the bar. The rule itself
+    /// lives in `MiniBrowserBarScroll`; a move without a finger only becomes
+    /// the new baseline.
+    private func updateBarVisibility(scrollY: CGFloat, viewport: CGFloat, contentHeight: CGFloat, isUserDriven: Bool) {
+        let delta = scrollY - lastScrollY
+        let (decision, downRun) = MiniBrowserBarScroll.decision(
+            delta: delta,
+            scrollY: scrollY,
+            viewportHeight: viewport,
+            contentHeight: contentHeight,
+            downRun: scrollDownRun,
+            isUserDriven: isUserDriven
+        )
+        lastScrollY = scrollY
+        scrollDownRun = downRun
+        switch decision {
+        case .keep: break
+        case .show: model?.setScrollHidesBar(false)
+        case .hide: model?.setScrollHidesBar(true)
+        }
+    }
+
+    // MARK: - A page coming on screen
+
+    /// The chrome starts over for the page [url] names: the bar is in place,
+    /// the page's own offset is the scroll baseline, and its colour is read
+    /// again. A back or a forward may put a page on screen with none of the
+    /// load callbacks that used to carry this, so every signal lands here.
+    private func startOver(for url: URL?) {
+        // One document resets once, however many signals announce it.
+        guard !PageTitle.sameDocument(url, currentDocumentURL) else { return }
+        currentDocumentURL = url
+        pageGeneration += 1
+        lastScrollY = webView?.scrollView.contentOffset.y ?? 0
+        scrollDownRun = 0
+        model?.setScrollHidesBar(false)
+        // The answer replaces the previous page's colour, with the default
+        // when this page has none. Not cleared first: a page that keeps its
+        // address (a script changing the URL) would flash the default. Asked
+        // again a moment later: on a step back the address changes before the
+        // restored page is the one that answers scripts.
+        readPageColor()
+        let generation = pageGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            guard let self, generation == self.pageGeneration else { return }
+            self.readPageColor()
+        }
+    }
+
+    /// A page came back from the back/forward cache: its address is already
+    /// known, so the reset is taken even though the URL did not change. A
+    /// first show is left to the load callbacks.
+    func pageShownAgain(persisted: Bool) {
+        guard persisted else { return }
+        currentDocumentURL = nil
+        startOver(for: webView?.url)
+    }
+
+    /// The page's colour, from its `theme-color` tag, else its own background.
+    /// Every answer is checked against the document it was asked of: an older
+    /// page answering late must not paint the page the reader is on now.
+    private func readPageColor() {
+        guard let webView else { return }
+        let generation = pageGeneration
+        let url = webView.url
+        webView.evaluateJavaScript(Self.pageColorScript) { [weak self] result, _ in
+            guard let self else { return }
+            DispatchQueue.main.async {
+                guard generation == self.pageGeneration,
+                      PageTitle.sameDocument(url, self.webView?.url) else { return }
+                // The page's answer first: WebKit's own `themeColor` can still
+                // hold the previous page's tag for a moment after a step back.
+                // When the answer names a colour the parser cannot read, that
+                // tag is still better than clearing the colour.
+                self.model?.updateThemeColor(
+                    from: result as? String,
+                    nativeColor: self.webView?.themeColor
+                )
+            }
+        }
+    }
+
+    /// `<meta name="theme-color">`, else the body's background, else the
+    /// document's own. A tag with a `media` query only counts for the window it
+    /// matches, so the first tag that applies is the one used.
+    private static let pageColorScript = """
+    (function() {
+        var metas = document.querySelectorAll('meta[name="theme-color"]');
+        var meta = null;
+        for (var i = 0; i < metas.length; i++) {
+            var media = metas[i].getAttribute('media');
+            if (!media || !media.trim() || window.matchMedia(media).matches) {
+                meta = metas[i];
+                break;
+            }
+        }
+        if (meta && meta.content) return meta.content;
+        var bg = window.getComputedStyle(document.body).backgroundColor;
+        if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
+        var htmlBg = window.getComputedStyle(document.documentElement).backgroundColor;
+        if (htmlBg && htmlBg !== 'rgba(0, 0, 0, 0)' && htmlBg !== 'transparent') return htmlBg;
+        return null;
+    })()
+    """
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         DispatchQueue.main.async {
@@ -448,6 +626,12 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        // A committed document is on screen: the chrome starts over for it,
+        // even when it is the previous page coming back. Every commit counts
+        // as a new document for the colour, so a reload of the same address
+        // cannot take the previous document's late answer.
+        pageGeneration += 1
+        startOver(for: webView.url)
         DispatchQueue.main.async {
             self.model?.pageDidCommit()
             // A new document starts at 100%: this lands before the page is
@@ -462,8 +646,13 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
             self?.model?.restoreScrollAfterReload()
         }
+        // The document the reader sees is settled: read its colour once more,
+        // since a page can set its theme after its first paint.
+        startOver(for: webView.url)
+        readPageColor()
         DispatchQueue.main.async {
             self.model?.isLoading = false
+            self.finishRefresh()
             self.model?.updateCurrentURL(webView.url)
             if let model = self.model { model.host?.pageDidFinishLoading(model) }
             self.model?.adoptPageTitle(webView.title ?? "")
@@ -471,37 +660,13 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
             // A page whose own scripts rewrote the root style gets the
             // zoom back once it has settled.
             self.model?.applyPageZoom(force: true)
-            if #available(iOS 15.0, *) {
-                if let native = webView.themeColor {
-                    self.model?.themeColor = Color(uiColor: native)
-                }
-            }
-        }
-
-        // Extract background / theme-color from DOM
-        let js = """
-        (function() {
-            var meta = document.querySelector('meta[name="theme-color"]');
-            if (meta && meta.content) return meta.content;
-            var bg = window.getComputedStyle(document.body).backgroundColor;
-            if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
-            var htmlBg = window.getComputedStyle(document.documentElement).backgroundColor;
-            if (htmlBg && htmlBg !== 'rgba(0, 0, 0, 0)' && htmlBg !== 'transparent') return htmlBg;
-            return null;
-        })()
-        """
-        webView.evaluateJavaScript(js) { [weak self] result, _ in
-            guard let self else { return }
-            let colorStr = result as? String
-            DispatchQueue.main.async {
-                self.model?.updateThemeColor(from: colorStr, nativeColor: webView.themeColor)
-            }
         }
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
         DispatchQueue.main.async {
             self.model?.isLoading = false
+            self.finishRefresh()
             // The page may now be an error page that cannot scroll.
             self.model?.setScrollHidesBar(false)
         }
@@ -510,6 +675,7 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         DispatchQueue.main.async {
             self.model?.isLoading = false
+            self.finishRefresh()
             self.model?.setScrollHidesBar(false)
             self.model?.loadDidFail(error)
         }
@@ -518,10 +684,57 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         DispatchQueue.main.async {
             self.model?.isLoading = false
+            self.finishRefresh()
             guard let model = self.model else { return }
             // A page out of sight just reloads when it comes back.
             if model.host?.pageProcessDidTerminate(model) != true {
                 model.webContentProcessDidTerminate()
+            }
+        }
+    }
+}
+
+/// The page script behind WebKit's back/forward cache, and its handler.
+///
+/// A page taken from the cache is put back with its scroll position and its
+/// old theme colour, and WebKit runs none of the callbacks a load would. The
+/// page says so itself instead, so the chrome can start over for it.
+enum BrowserPageShow {
+    static let handlerName = "zenPageShow"
+
+    static func addScript(to controller: WKUserContentController) {
+        controller.addUserScript(WKUserScript(
+            source: script,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        ))
+    }
+
+    static let script = """
+    (function () {
+      if (window.__zenPageShow) return;
+      window.__zenPageShow = true;
+      window.addEventListener('pageshow', function (event) {
+        try {
+          window.webkit.messageHandlers.\(handlerName).postMessage({ persisted: event.persisted });
+        } catch (e) {}
+      });
+    })();
+    """
+
+    /// Weak to the driver, which owns the web view holding this handler.
+    final class Handler: NSObject, WKScriptMessageHandler {
+        private weak var driver: MiniBrowserWebDriver?
+
+        init(driver: MiniBrowserWebDriver) {
+            self.driver = driver
+        }
+
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard message.frameInfo.isMainFrame else { return }
+            let persisted = (message.body as? [String: Any])?["persisted"] as? Bool ?? false
+            MainActor.assumeIsolated {
+                driver?.pageShownAgain(persisted: persisted)
             }
         }
     }

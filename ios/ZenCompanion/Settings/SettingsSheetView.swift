@@ -2,9 +2,11 @@ import SwiftUI
 
 // MARK: - Settings sheet
 
-/// The settings screen. Rows are grouped, and exactly one group leads to a
-/// subpage (Content blocking); everything else changes in place. The account
-/// and the "Save shared link as" choice sit on their own above the groups.
+/// The settings screen. Rows are grouped and change in place, except the
+/// Browser group: its three rows (Search, Pages & tabs, Privacy & blocking)
+/// each lead to a subpage, so the browser's many options stay one tap away
+/// without crowding the main screen. The account and the "Save shared link
+/// as" choice sit on their own above the groups.
 struct SettingsSheet: View {
     let account: AccountSnapshot?
     let loadError: String?
@@ -21,10 +23,8 @@ struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var model = SettingsModel()
-    @State private var isShowingClearWebsiteData = false
     @State private var isShowingSignOutConfirm: Bool = false
     @State private var isShowingWhatsNew: Bool = false
-    @State private var isShowingAddEngine: Bool = false
 
     private var access: SettingsAccess {
         SettingsAccess(isSignedIn: account != nil)
@@ -50,8 +50,7 @@ struct SettingsSheet: View {
                 VStack(spacing: 20) {
                     accountCard
                     saveKindCard
-                    browsingSection(model: model)
-                    customEnginesSection
+                    browserSection
                     layoutSection(model: model)
                     feedbackSection
                     aboutSection
@@ -71,9 +70,6 @@ struct SettingsSheet: View {
                     }
                 }
             }
-            .navigationDestination(isPresented: $isShowingAddEngine) {
-                AddSearchEngineView(model: model, scheme: scheme)
-            }
             .confirmationDialog(
                 LocalizedStringKey(account?.isDemo == true ? "demo.exit" : "home.sign_out"),
                 isPresented: $isShowingSignOutConfirm,
@@ -84,18 +80,6 @@ struct SettingsSheet: View {
                     model.signOut()
                 }
                 Button("common.cancel", role: .cancel) {}
-            }
-            .confirmationDialog(
-                "settings.clear_website_data",
-                isPresented: $isShowingClearWebsiteData,
-                titleVisibility: .visible
-            ) {
-                Button("settings.clear_website_data", role: .destructive) {
-                    BrowserWebsiteData.clearAll()
-                }
-                Button("common.cancel", role: .cancel) {}
-            } message: {
-                Text("settings.clear_website_data.message")
             }
             .sheet(isPresented: $isShowingWhatsNew) {
                 WhatsNewSheet(release: WhatsNewRelease.latest, scheme: scheme)
@@ -270,59 +254,21 @@ struct SettingsSheet: View {
         }
     }
 
-    // MARK: Browsing
+    // MARK: Browser
 
-    private func browsingSection(model: SettingsModel) -> some View {
-        SettingsSection(title: "Browsing", scheme: scheme) {
+    /// Three rows, each opening its own page. No values on the right: the
+    /// choices are made on the page, not previewed here.
+    private var browserSection: some View {
+        SettingsSection(title: "Browser", scheme: scheme) {
             VStack(spacing: 0) {
-                engineRow(model: model)
-
-                SettingsHairline(scheme: scheme)
-
-                SettingsToggleRow(
-                    title: "settings.open_into_search",
-                    systemImage: "keyboard",
-                    scheme: scheme,
-                    subtitle: "settings.open_into_search.subtitle",
-                    isOn: $model.openIntoSearch
-                )
-
-                SettingsHairline(scheme: scheme)
-
-                SettingsToggleRow(
-                    title: "settings.keep_only_chosen",
-                    systemImage: "bookmark",
-                    scheme: scheme,
-                    subtitle: "settings.keep_only_chosen.subtitle",
-                    isOn: $model.keepOnlyChosenPages
-                )
-
-                SettingsHairline(scheme: scheme)
-
-                SettingsRow(title: "settings.kept_lifetime", systemImage: "clock", scheme: scheme) {
-                    Menu {
-                        ForEach(KeptPageLifetime.allCases) { lifetime in
-                            Button {
-                                model.keptPageLifetime = lifetime
-                            } label: {
-                                if model.keptPageLifetime == lifetime {
-                                    Label(lifetime.title, systemImage: "checkmark")
-                                } else {
-                                    Text(lifetime.title)
-                                }
-                            }
-                        }
-                    } label: {
-                        SettingsMenuValue(text: model.keptPageLifetime.title, scheme: scheme)
-                    }
-                }
-
-                SettingsHairline(scheme: scheme)
-
                 NavigationLink {
-                    ContentBlockingSettingsPage(scheme: scheme)
+                    SearchSettingsPage(model: model, scheme: scheme)
                 } label: {
-                    SettingsRow(title: "settings.content_blocking", systemImage: "shield.lefthalf.filled", scheme: scheme) {
+                    SettingsRow(
+                        title: "settings.search",
+                        systemImage: "magnifyingglass",
+                        scheme: scheme
+                    ) {
                         SettingsChevron(scheme: scheme)
                     }
                 }
@@ -330,91 +276,35 @@ struct SettingsSheet: View {
 
                 SettingsHairline(scheme: scheme)
 
-                SettingsToggleRow(
-                    title: "settings.external_browser",
-                    systemImage: "safari",
-                    scheme: scheme,
-                    isOn: $model.alwaysOpenExternally
-                )
+                NavigationLink {
+                    PagesSettingsPage(model: model, scheme: scheme)
+                } label: {
+                    SettingsRow(
+                        title: "settings.pages_tabs",
+                        systemImage: "bookmark",
+                        scheme: scheme
+                    ) {
+                        SettingsChevron(scheme: scheme)
+                    }
+                }
+                .buttonStyle(PressedButtonStyle())
 
                 SettingsHairline(scheme: scheme)
 
-                Button {
-                    isShowingClearWebsiteData = true
+                NavigationLink {
+                    PrivacySettingsPage(scheme: scheme)
                 } label: {
-                    SettingsRow(title: "settings.clear_website_data", systemImage: "trash", scheme: scheme) {
-                        EmptyView()
+                    SettingsRow(
+                        title: "settings.privacy_blocking",
+                        systemImage: "shield.lefthalf.filled",
+                        scheme: scheme
+                    ) {
+                        SettingsChevron(scheme: scheme)
                     }
                 }
                 .buttonStyle(PressedButtonStyle())
             }
             .liftCard(scheme)
-        }
-    }
-
-    /// The engines are picked from a menu on the row itself — the list is
-    /// short enough that a page would only add a tap. Custom engines are
-    /// added from the same menu and managed in their own card below.
-    private func engineRow(model: SettingsModel) -> some View {
-        Menu {
-            ForEach(model.availableSearchEngines) { engine in
-                Button {
-                    model.selectedSearchEngine = engine
-                } label: {
-                    if model.selectedSearchEngine.id == engine.id {
-                        Label(engine.displayName, systemImage: "checkmark")
-                    } else {
-                        Text(engine.displayName)
-                    }
-                }
-            }
-
-            Divider()
-
-            Button {
-                isShowingAddEngine = true
-            } label: {
-                Label("settings.search_engine.add", systemImage: "plus")
-            }
-        } label: {
-            SettingsRow(title: "settings.search_engine", systemImage: "magnifyingglass", scheme: scheme) {
-                SettingsMenuValue(text: model.selectedSearchEngine.displayName, scheme: scheme)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var customEnginesSection: some View {
-        let engines = model.customSearchEngines
-        if !engines.isEmpty {
-            SettingsSection(title: "settings.search_engine.custom_section", scheme: scheme) {
-                VStack(spacing: 0) {
-                    ForEach(Array(engines.enumerated()), id: \.element.id) { index, engine in
-                        HStack(spacing: 12) {
-                            Text(engine.displayName)
-                                .zenFont(16, weight: .medium, design: .rounded)
-                                .foregroundStyle(Palette.ink(scheme))
-                            Spacer(minLength: 8)
-                            Button(role: .destructive) {
-                                model.deleteCustomSearchEngine(engine)
-                            } label: {
-                                Image(systemName: "trash")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundStyle(Color.red.opacity(0.8))
-                            }
-                            .buttonStyle(LiquidPressButtonStyle())
-                            .accessibilityLabel(Text("Delete"))
-                        }
-                        .padding(.horizontal, 16)
-                        .frame(minHeight: 54)
-
-                        if index < engines.count - 1 {
-                            SettingsHairline(scheme: scheme)
-                        }
-                    }
-                }
-                .liftCard(scheme)
-            }
         }
     }
 
@@ -547,26 +437,213 @@ struct SettingsSheet: View {
     }
 }
 
-// MARK: - Content blocking
+// MARK: - Browser subpages
 
-/// The one page under Settings: the three switches for every site plus what
-/// feeds them. Nothing else lives here, which is why it stays a page of its
-/// own instead of six rows on the main screen.
-private struct ContentBlockingSettingsPage: View {
+/// The shared frame of a Browser subpage: a scrolling column of cards on the
+/// sheet background, titled in the navigation bar.
+private struct SettingsSubpage<Content: View>: View {
+    let title: LocalizedStringKey
     let scheme: ColorScheme
+    @ViewBuilder var content: Content
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
-                ContentBlockingSettingsView(scheme: scheme)
+            VStack(spacing: 20) {
+                content
             }
             .padding(.horizontal, 20)
             .padding(.top, 16)
             .padding(.bottom, 32)
         }
         .background(Palette.background(scheme).ignoresSafeArea())
-        .navigationTitle(Text("settings.content_blocking"))
+        .navigationTitle(Text(title))
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// Search: the engine list with the custom engines in it, adding a new one,
+/// and whether the app opens straight into a search tab.
+private struct SearchSettingsPage: View {
+    @Bindable var model: SettingsModel
+    let scheme: ColorScheme
+
+    var body: some View {
+        SettingsSubpage(title: "settings.search", scheme: scheme) {
+            SettingsSection(title: "settings.search_engine", scheme: scheme) {
+                VStack(spacing: 0) {
+                    ForEach(model.availableSearchEngines) { engine in
+                        engineRow(engine)
+                        SettingsHairline(scheme: scheme)
+                    }
+
+                    NavigationLink {
+                        AddSearchEngineView(model: model, scheme: scheme)
+                    } label: {
+                        SettingsRow(
+                            title: "settings.search_engine.add",
+                            systemImage: "plus",
+                            scheme: scheme,
+                            color: Palette.coral(scheme)
+                        ) {
+                            EmptyView()
+                        }
+                    }
+                    .buttonStyle(PressedButtonStyle())
+                }
+                .liftCard(scheme)
+            }
+
+            VStack(spacing: 0) {
+                SettingsToggleRow(
+                    title: "settings.open_into_search",
+                    systemImage: "keyboard",
+                    scheme: scheme,
+                    subtitle: "settings.open_into_search.subtitle",
+                    isOn: $model.openIntoSearch
+                )
+            }
+            .liftCard(scheme)
+        }
+    }
+
+    /// Tapping the row picks the engine. Custom engines carry a delete button.
+    private func engineRow(_ engine: SearchEngine) -> some View {
+        let isSelected = model.selectedSearchEngine.id == engine.id
+        let isCustom = model.customSearchEngines.contains { $0.id == engine.id }
+        return HStack(spacing: 12) {
+            Button {
+                model.selectedSearchEngine = engine
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Palette.coral(scheme))
+                        .frame(width: 20)
+                        .opacity(isSelected ? 1 : 0)
+                    Text(engine.displayName)
+                        .zenFont(16, weight: .medium, design: .rounded)
+                        .foregroundStyle(Palette.ink(scheme))
+                    Spacer(minLength: 8)
+                }
+                .frame(minHeight: 54)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PressedButtonStyle())
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+
+            if isCustom {
+                Button(role: .destructive) {
+                    model.deleteCustomSearchEngine(engine)
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.red.opacity(0.8))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(LiquidPressButtonStyle())
+                .accessibilityLabel(Text("Delete"))
+            }
+        }
+        .padding(.leading, 16)
+        .padding(.trailing, isCustom ? 6 : 16)
+    }
+}
+
+/// Pages & tabs: which pages survive, how long kept pages live, and whether
+/// tabs open in the default browser instead of the built-in one.
+private struct PagesSettingsPage: View {
+    @Bindable var model: SettingsModel
+    let scheme: ColorScheme
+
+    var body: some View {
+        SettingsSubpage(title: "settings.pages_tabs", scheme: scheme) {
+            VStack(spacing: 0) {
+                SettingsToggleRow(
+                    title: "settings.keep_only_chosen",
+                    systemImage: "bookmark",
+                    scheme: scheme,
+                    subtitle: "settings.keep_only_chosen.subtitle",
+                    isOn: $model.keepOnlyChosenPages
+                )
+
+                SettingsHairline(scheme: scheme)
+
+                SettingsRow(title: "settings.kept_lifetime", systemImage: "clock", scheme: scheme) {
+                    Menu {
+                        ForEach(KeptPageLifetime.allCases) { lifetime in
+                            Button {
+                                model.keptPageLifetime = lifetime
+                            } label: {
+                                if model.keptPageLifetime == lifetime {
+                                    Label(lifetime.title, systemImage: "checkmark")
+                                } else {
+                                    Text(lifetime.title)
+                                }
+                            }
+                        }
+                    } label: {
+                        SettingsMenuValue(text: model.keptPageLifetime.title, scheme: scheme)
+                    }
+                }
+            }
+            .liftCard(scheme)
+
+            VStack(spacing: 0) {
+                SettingsToggleRow(
+                    title: "settings.external_browser",
+                    systemImage: "safari",
+                    scheme: scheme,
+                    isOn: $model.alwaysOpenExternally
+                )
+            }
+            .liftCard(scheme)
+        }
+    }
+}
+
+/// Privacy & blocking: the three blocking switches for every site, and
+/// clearing what websites stored.
+private struct PrivacySettingsPage: View {
+    let scheme: ColorScheme
+
+    @State private var isShowingClearWebsiteData = false
+
+    var body: some View {
+        SettingsSubpage(title: "settings.privacy_blocking", scheme: scheme) {
+            ContentBlockingSettingsView(scheme: scheme)
+
+            SettingsSection(title: "settings.website_data", scheme: scheme) {
+                VStack(spacing: 0) {
+                    Button {
+                        isShowingClearWebsiteData = true
+                    } label: {
+                        SettingsRow(
+                            title: "settings.clear_website_data",
+                            systemImage: "trash",
+                            scheme: scheme,
+                            color: .red
+                        ) {
+                            EmptyView()
+                        }
+                    }
+                    .buttonStyle(PressedButtonStyle())
+                }
+                .liftCard(scheme)
+            }
+        }
+        .confirmationDialog(
+            "settings.clear_website_data",
+            isPresented: $isShowingClearWebsiteData,
+            titleVisibility: .visible
+        ) {
+            Button("settings.clear_website_data", role: .destructive) {
+                BrowserWebsiteData.clearAll()
+            }
+            Button("common.cancel", role: .cancel) {}
+        } message: {
+            Text("settings.clear_website_data.message")
+        }
     }
 }
 

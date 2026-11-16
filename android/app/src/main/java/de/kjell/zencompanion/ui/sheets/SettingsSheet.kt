@@ -76,9 +76,10 @@ internal object AccountOnlySettings {
 /**
  * Native Material 3 Settings Bottom Sheet.
  *
- * Rows are grouped (account, save kind, browsing, layout, feedback, about) and
- * exactly one group leads to a sub-screen — the content blocking switches.
- * Everything else changes in place, so the sheet stays one scroll.
+ * Rows are grouped (account, save kind, browser, layout, feedback, about) and
+ * change in place, except the Browser group: its three rows (Search, Pages &
+ * tabs, Privacy & blocking) each open a sub-screen, so the browser's many
+ * options stay one tap away without crowding the main sheet.
  *
  * @param onDone dismisses the whole sheet.
  */
@@ -108,12 +109,10 @@ fun SettingsSheet(
     onDone: () -> Unit,
 ) {
     var showSignOutDialog by remember { mutableStateOf(false) }
-    var showContentBlocking by remember { mutableStateOf(false) }
-    var showAddEngine by remember { mutableStateOf(false) }
+    var page by remember { mutableStateOf(SettingsPage.MAIN) }
 
-    BackHandler(enabled = showContentBlocking || showAddEngine) {
-        showContentBlocking = false
-        showAddEngine = false
+    BackHandler(enabled = page != SettingsPage.MAIN) {
+        page = page.parent
     }
 
     if (showSignOutDialog) {
@@ -166,21 +165,58 @@ fun SettingsSheet(
         onDismiss = onDone,
         skipPartiallyExpanded = true,
     ) {
-        if (showContentBlocking) {
-            SettingsContentBlockingScreen(
-                onBack = { showContentBlocking = false },
-                onDone = onDone,
-            )
-            return@ZenSheet
-        }
-
-        if (showAddEngine) {
-            SettingsAddSearchEngineScreen(
-                onSubmit = onAddSearchEngine,
-                onBack = { showAddEngine = false },
-                onDone = onDone,
-            )
-            return@ZenSheet
+        when (page) {
+            SettingsPage.MAIN -> Unit
+            SettingsPage.SEARCH -> {
+                SettingsSubpage(
+                    title = stringResource(R.string.settings_search),
+                    onBack = { page = page.parent },
+                    onDone = onDone,
+                ) {
+                    SettingsSearchBody(
+                        preferences = preferences,
+                        onSetSearchEngine = onSetSearchEngine,
+                        onDeleteSearchEngine = onDeleteSearchEngine,
+                        onOpenAddSearchEngine = { page = SettingsPage.ADD_ENGINE },
+                        onSetOpenIntoSearch = onSetOpenIntoSearch,
+                    )
+                }
+                return@ZenSheet
+            }
+            SettingsPage.PAGES -> {
+                SettingsSubpage(
+                    title = stringResource(R.string.settings_pages_tabs),
+                    onBack = { page = page.parent },
+                    onDone = onDone,
+                ) {
+                    SettingsPagesBody(
+                        preferences = preferences,
+                        onSetKeepOnlyChosenPages = onSetKeepOnlyChosenPages,
+                        onSetKeptPageLifetime = onSetKeptPageLifetime,
+                        onSetAlwaysOpenExternally = onSetAlwaysOpenExternally,
+                    )
+                }
+                return@ZenSheet
+            }
+            SettingsPage.PRIVACY -> {
+                SettingsSubpage(
+                    title = stringResource(R.string.settings_privacy_blocking),
+                    onBack = { page = page.parent },
+                    onDone = onDone,
+                ) {
+                    SettingsPrivacyBody(onClearWebsiteData = onClearWebsiteData)
+                }
+                return@ZenSheet
+            }
+            SettingsPage.ADD_ENGINE -> {
+                // On success the screen calls onBack, which leads to Search.
+                SettingsAddSearchEngineScreen(
+                    onSubmit = onAddSearchEngine,
+                    onBack = { page = page.parent },
+                    onDone = onDone,
+                )
+                return@ZenSheet
+            }
         }
 
         Column(
@@ -214,24 +250,11 @@ fun SettingsSheet(
                 )
             }
 
-            SettingsBrowsingSection(
-                preferences = preferences,
-                onSetSearchEngine = onSetSearchEngine,
-                onOpenAddSearchEngine = { showAddEngine = true },
-                onSetOpenIntoSearch = onSetOpenIntoSearch,
-                onSetKeepOnlyChosenPages = onSetKeepOnlyChosenPages,
-                onSetKeptPageLifetime = onSetKeptPageLifetime,
-                onOpenContentBlocking = { showContentBlocking = true },
-                onSetAlwaysOpenExternally = onSetAlwaysOpenExternally,
-                onClearWebsiteData = onClearWebsiteData,
+            SettingsBrowserSection(
+                onOpenSearch = { page = SettingsPage.SEARCH },
+                onOpenPages = { page = SettingsPage.PAGES },
+                onOpenPrivacy = { page = SettingsPage.PRIVACY },
             )
-
-            if (preferences.customSearchEngines.isNotEmpty()) {
-                SettingsCustomEnginesCard(
-                    engines = preferences.customSearchEngines,
-                    onDeleteSearchEngine = onDeleteSearchEngine,
-                )
-            }
 
             SettingsLayoutSection(
                 signedIn = signedIn,
@@ -448,14 +471,24 @@ private fun SettingsSaveKindCard(
     }
 }
 
+/** Which screen the sheet shows; [parent] is where Back leads. */
+private enum class SettingsPage {
+    MAIN, SEARCH, PAGES, PRIVACY, ADD_ENGINE;
+
+    val parent: SettingsPage
+        get() = if (this == ADD_ENGINE) SEARCH else MAIN
+}
+
 /**
- * The content blocking page: the three switches for every site and the note on
- * what feeds them. Nothing else lives here.
+ * The frame of a Browser sub-screen: back, title, done, then the page's own
+ * groups in one scroll.
  */
 @Composable
-private fun SettingsContentBlockingScreen(
+private fun SettingsSubpage(
+    title: String,
     onBack: () -> Unit,
     onDone: () -> Unit,
+    content: @Composable () -> Unit,
 ) {
     Column(
         Modifier
@@ -466,7 +499,7 @@ private fun SettingsContentBlockingScreen(
                 top = SheetContentTopSpacing,
                 bottom = SheetContentBottomSpacing,
             ),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -486,7 +519,7 @@ private fun SettingsContentBlockingScreen(
                 )
             }
             Text(
-                text = stringResource(R.string.settings_content_blocking),
+                text = title,
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -505,7 +538,7 @@ private fun SettingsContentBlockingScreen(
             }
         }
 
-        SettingsContentBlockingBody()
+        content()
     }
 }
 

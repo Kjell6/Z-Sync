@@ -14,8 +14,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.GridView
@@ -43,6 +45,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.EssentialsColumns
@@ -60,11 +64,8 @@ import de.kjell.zencompanion.ui.theme.ZenListValue
 import de.kjell.zencompanion.ui.theme.ZenMenu
 import de.kjell.zencompanion.ui.theme.ZenMenuCheck
 import de.kjell.zencompanion.ui.theme.ZenMenuGroup
-import de.kjell.zencompanion.ui.theme.ZenMenuGroupGap
-import de.kjell.zencompanion.ui.theme.ZenMenuItem
 import de.kjell.zencompanion.ui.theme.ZenSelectableMenuItem
 import de.kjell.zencompanion.ui.theme.ZenSwitchListItem
-import de.kjell.zencompanion.ui.theme.zenMenuItemColors
 
 /** Small uppercase label above a card. */
 @Composable
@@ -78,23 +79,133 @@ internal fun SettingsSectionLabel(text: String) {
 }
 
 /**
- * "Browsing": how the app picks a search engine, opens links and blocks
- * content. Content blocking and the browser role are the rows that leave the
- * sheet.
+ * "Browser": three rows, each opening its own sub-screen. No values on the
+ * right: the choices are made on the page, not previewed here.
  */
 @Composable
-internal fun SettingsBrowsingSection(
+internal fun SettingsBrowserSection(
+    onOpenSearch: () -> Unit,
+    onOpenPages: () -> Unit,
+    onOpenPrivacy: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SettingsSectionLabel(stringResource(R.string.settings_browser_section))
+
+        ZenListGroup {
+            SettingsNavRow(
+                title = stringResource(R.string.settings_search),
+                icon = Icons.Outlined.Search,
+                onClick = onOpenSearch,
+            )
+            SettingsNavRow(
+                title = stringResource(R.string.settings_pages_tabs),
+                icon = Icons.Outlined.BookmarkBorder,
+                onClick = onOpenPages,
+            )
+            SettingsNavRow(
+                title = stringResource(R.string.settings_privacy_blocking),
+                icon = Icons.Outlined.Shield,
+                onClick = onOpenPrivacy,
+            )
+        }
+    }
+}
+
+/**
+ * The Search sub-screen: every engine in one list (custom ones with a delete
+ * button), adding a new one, and whether the app opens into a search tab.
+ */
+@Composable
+internal fun SettingsSearchBody(
     preferences: PreferencesState,
     onSetSearchEngine: (SearchEngine) -> Unit,
+    onDeleteSearchEngine: (String) -> Unit,
     onOpenAddSearchEngine: () -> Unit,
     onSetOpenIntoSearch: (Boolean) -> Unit,
+) {
+    val customIds = preferences.customSearchEngines.map { it.id }.toSet()
+    val engines = SearchEngines.builtIn + preferences.customSearchEngines
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SettingsSectionLabel(stringResource(R.string.settings_search_engine))
+
+        ZenListGroup {
+            engines.forEach { engine ->
+                val isSelected = engine.id == preferences.searchEngine.id
+                ZenListItem(
+                    headline = engine.displayName,
+                    onClick = { onSetSearchEngine(engine) },
+                    modifier = Modifier.semantics { selected = isSelected },
+                    leadingContent = {
+                        Box(modifier = Modifier.size(22.dp), contentAlignment = Alignment.Center) {
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        }
+                    },
+                    trailingContent = if (engine.id in customIds) {
+                        {
+                            IconButton(
+                                onClick = { onDeleteSearchEngine(engine.id) },
+                                shapes = IconButtonDefaults.shapes(),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Delete,
+                                    contentDescription = stringResource(R.string.settings_search_engine_delete),
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        }
+                    } else {
+                        null
+                    },
+                )
+            }
+
+            ZenListItem(
+                headline = stringResource(R.string.settings_search_engine_add_action),
+                onClick = onOpenAddSearchEngine,
+                leadingContent = {
+                    Icon(
+                        imageVector = Icons.Outlined.Add,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp),
+                    )
+                },
+            )
+        }
+    }
+
+    ZenListGroup {
+        ZenSwitchListItem(
+            headline = stringResource(R.string.settings_open_into_search),
+            supportingText = stringResource(R.string.settings_open_into_search_subtitle),
+            icon = Icons.Outlined.Keyboard,
+            checked = preferences.openIntoSearch,
+            onCheckedChange = onSetOpenIntoSearch,
+        )
+    }
+}
+
+/**
+ * The Pages & tabs sub-screen: which pages survive, how long kept pages live,
+ * whether tabs open in the default browser instead, and the system's browser
+ * role.
+ */
+@Composable
+internal fun SettingsPagesBody(
+    preferences: PreferencesState,
     onSetKeepOnlyChosenPages: (Boolean) -> Unit,
     onSetKeptPageLifetime: (KeptPageLifetime) -> Unit,
-    onOpenContentBlocking: () -> Unit,
     onSetAlwaysOpenExternally: (Boolean) -> Unit,
-    onClearWebsiteData: () -> Unit,
 ) {
-    var confirmClearData by remember { mutableStateOf(false) }
     val context = LocalContext.current
     // Asked in the role dialog or in the Settings app, so the rows update as
     // soon as the screen comes back.
@@ -105,6 +216,77 @@ internal fun SettingsBrowsingSection(
         // The system granted or kept the role; read it back once it is gone.
         isDefaultBrowser = DefaultBrowser.isDefault(context)
     }
+
+    ZenListGroup {
+        ZenSwitchListItem(
+            headline = stringResource(R.string.settings_keep_only_chosen),
+            supportingText = stringResource(R.string.settings_keep_only_chosen_subtitle),
+            icon = Icons.Outlined.BookmarkBorder,
+            checked = preferences.keepOnlyChosenPages,
+            onCheckedChange = onSetKeepOnlyChosenPages,
+        )
+
+        var lifetimeExpanded by remember { mutableStateOf(false) }
+        Box(modifier = Modifier.fillMaxWidth()) {
+            SettingsMenuRow(
+                title = stringResource(R.string.settings_kept_lifetime),
+                value = preferences.keptPageLifetime.label(),
+                icon = Icons.Outlined.Schedule,
+                onClick = { lifetimeExpanded = true },
+            )
+            Box(modifier = Modifier.align(Alignment.BottomEnd)) {
+                ZenMenu(
+                    expanded = lifetimeExpanded,
+                    onDismissRequest = { lifetimeExpanded = false },
+                ) {
+                    val options = KeptPageLifetime.entries
+                    ZenMenuGroup(index = 0, count = 1) {
+                        options.forEachIndexed { index, option ->
+                            ZenSelectableMenuItem(
+                                selected = option == preferences.keptPageLifetime,
+                                onClick = {
+                                    onSetKeptPageLifetime(option)
+                                    lifetimeExpanded = false
+                                },
+                                text = { Text(option.label()) },
+                                index = index,
+                                count = options.size,
+                                selectedLeadingIcon = { ZenMenuCheck() },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    ZenListGroup {
+        // As the default browser, "open in the default browser" would only
+        // open Z-Sync again, so the row goes. The stored choice stays and
+        // comes back with the row once another app takes the role.
+        if (!isDefaultBrowser) {
+            ZenSwitchListItem(
+                headline = stringResource(R.string.settings_external_browser),
+                icon = Icons.AutoMirrored.Outlined.OpenInNew,
+                checked = preferences.alwaysOpenExternally,
+                onCheckedChange = onSetAlwaysOpenExternally,
+            )
+        }
+
+        DefaultBrowserRow(
+            isDefault = isDefaultBrowser,
+            onRequestDefault = { browserRoleLauncher.launch(DefaultBrowser.requestIntent(context)) },
+        )
+    }
+}
+
+/**
+ * The Privacy & blocking sub-screen: the blocking switches for every site,
+ * and clearing what websites stored.
+ */
+@Composable
+internal fun SettingsPrivacyBody(onClearWebsiteData: () -> Unit) {
+    var confirmClearData by remember { mutableStateOf(false) }
     if (confirmClearData) {
         AlertDialog(
             onDismissRequest = { confirmClearData = false },
@@ -129,102 +311,13 @@ internal fun SettingsBrowsingSection(
             },
         )
     }
+
+    SettingsContentBlockingBody()
+
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SettingsSectionLabel(stringResource(R.string.settings_browsing_section))
+        SettingsSectionLabel(stringResource(R.string.settings_website_data_section))
 
         ZenListGroup {
-            SearchEngineRow(
-                selected = preferences.searchEngine,
-                engines = SearchEngines.builtIn + preferences.customSearchEngines,
-                onSelect = onSetSearchEngine,
-                onAdd = onOpenAddSearchEngine,
-            )
-
-            ZenSwitchListItem(
-                headline = stringResource(R.string.settings_open_into_search),
-                supportingText = stringResource(R.string.settings_open_into_search_subtitle),
-                icon = Icons.Outlined.Keyboard,
-                checked = preferences.openIntoSearch,
-                onCheckedChange = onSetOpenIntoSearch,
-            )
-
-            ZenSwitchListItem(
-                headline = stringResource(R.string.settings_keep_only_chosen),
-                supportingText = stringResource(R.string.settings_keep_only_chosen_subtitle),
-                icon = Icons.Outlined.BookmarkBorder,
-                checked = preferences.keepOnlyChosenPages,
-                onCheckedChange = onSetKeepOnlyChosenPages,
-            )
-
-            var lifetimeExpanded by remember { mutableStateOf(false) }
-            Box(modifier = Modifier.fillMaxWidth()) {
-                SettingsMenuRow(
-                    title = stringResource(R.string.settings_kept_lifetime),
-                    value = preferences.keptPageLifetime.label(),
-                    icon = Icons.Outlined.Schedule,
-                    onClick = { lifetimeExpanded = true },
-                )
-Box(modifier = Modifier.align(Alignment.BottomEnd)) {
-                    ZenMenu(
-                        expanded = lifetimeExpanded,
-                        onDismissRequest = { lifetimeExpanded = false },
-                    ) {
-                        val options = KeptPageLifetime.entries
-                        ZenMenuGroup(index = 0, count = 1) {
-                            options.forEachIndexed { index, option ->
-                                ZenSelectableMenuItem(
-                                    selected = option == preferences.keptPageLifetime,
-                                    onClick = {
-                                        onSetKeptPageLifetime(option)
-                                        lifetimeExpanded = false
-                                    },
-                                    text = { Text(option.label()) },
-                                    index = index,
-                                    count = options.size,
-                                    selectedLeadingIcon = { ZenMenuCheck() },
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            ZenListItem(
-                headline = stringResource(R.string.settings_content_blocking),
-                onClick = onOpenContentBlocking,
-                leadingContent = {
-                    Icon(
-                        imageVector = Icons.Outlined.Shield,
-                        contentDescription = null,
-                        modifier = Modifier.size(22.dp),
-                    )
-                },
-                trailingContent = {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                    )
-                },
-            )
-
-            // As the default browser, "open in the default browser" would only
-            // open Z-Sync again, so the row goes. The stored choice stays and
-            // comes back with the row once another app takes the role.
-            if (!isDefaultBrowser) {
-                ZenSwitchListItem(
-                    headline = stringResource(R.string.settings_external_browser),
-                    icon = Icons.AutoMirrored.Outlined.OpenInNew,
-                    checked = preferences.alwaysOpenExternally,
-                    onCheckedChange = onSetAlwaysOpenExternally,
-                )
-            }
-
-            DefaultBrowserRow(
-                isDefault = isDefaultBrowser,
-                onRequestDefault = { browserRoleLauncher.launch(DefaultBrowser.requestIntent(context)) },
-            )
-
             SettingsActionRow(
                 title = stringResource(R.string.settings_clear_website_data),
                 icon = Icons.Outlined.DeleteOutline,
@@ -234,121 +327,31 @@ Box(modifier = Modifier.align(Alignment.BottomEnd)) {
     }
 }
 
-/**
- * The engine list as a menu on the row itself — the list is short enough that
- * a page would only add a tap. Custom engines are added from the same menu and
- * managed in their own card.
- */
+/** Row that opens a sub-screen: icon, title, chevron. */
 @Composable
-private fun SearchEngineRow(
-    selected: SearchEngine,
-    engines: List<SearchEngine>,
-    onSelect: (SearchEngine) -> Unit,
-    onAdd: () -> Unit,
+private fun SettingsNavRow(
+    title: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
 ) {
-    var menuExpanded by remember { mutableStateOf(false) }
-
-    Box(modifier = Modifier.fillMaxWidth()) {
-        ZenListItem(
-            headline = stringResource(R.string.settings_search_engine),
-            onClick = { menuExpanded = true },
-            leadingContent = {
-                Icon(
-                    imageVector = Icons.Outlined.Search,
-                    contentDescription = null,
-                    modifier = Modifier.size(22.dp),
-                )
-            },
-            trailingContent = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    ZenListValue(selected.displayName)
-                    Spacer(Modifier.width(4.dp))
-                    Icon(
-                        imageVector = Icons.Outlined.ArrowDropDown,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-            },
-        )
-
-        // The value and its arrow sit at the row's end: the menu opens there.
-        Box(modifier = Modifier.align(Alignment.BottomEnd)) {
-            ZenMenu(
-                expanded = menuExpanded,
-                onDismissRequest = { menuExpanded = false },
-            ) {
-                ZenMenuGroup(index = 0, count = 2) {
-                    engines.forEachIndexed { index, engine ->
-                        ZenSelectableMenuItem(
-                            selected = engine == selected,
-                            onClick = {
-                                onSelect(engine)
-                                menuExpanded = false
-                            },
-                            text = { Text(engine.displayName) },
-                            index = index,
-                            count = engines.size,
-                            selectedLeadingIcon = { ZenMenuCheck() },
-                        )
-                    }
-                }
-                ZenMenuGroupGap()
-                ZenMenuGroup(index = 1, count = 2) {
-                    ZenMenuItem(
-                        text = {
-                            Text(
-                                text = stringResource(R.string.settings_search_engine_add_action),
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        },
-                        onClick = {
-                            menuExpanded = false
-                            onAdd()
-                        },
-                        index = 0,
-                        count = 1,
-                        colors = zenMenuItemColors(textColor = MaterialTheme.colorScheme.primary),
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Custom engines stay removable without opening the picker, so they get a card
- * of their own. Hidden until the user adds one.
- */
-@Composable
-internal fun SettingsCustomEnginesCard(
-    engines: List<SearchEngine>,
-    onDeleteSearchEngine: (String) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SettingsSectionLabel(stringResource(R.string.settings_search_engine_custom_section))
-
-        ZenListGroup {
-            engines.forEach { engine ->
-                ZenListItem(
-                    headline = engine.displayName,
-                    trailingContent = {
-                        IconButton(
-                            onClick = { onDeleteSearchEngine(engine.id) },
-                            shapes = IconButtonDefaults.shapes(),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Delete,
-                                contentDescription = stringResource(R.string.settings_search_engine_delete),
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
-                    },
-                )
-            }
-        }
-    }
+    ZenListItem(
+        headline = title,
+        onClick = onClick,
+        leadingContent = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(22.dp),
+            )
+        },
+        trailingContent = {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+            )
+        },
+    )
 }
 
 /** "Layout": how the essentials grid and the action bar look. */

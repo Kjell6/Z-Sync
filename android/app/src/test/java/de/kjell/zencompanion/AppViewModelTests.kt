@@ -728,11 +728,11 @@ class AppViewModelTests {
     @Test
     fun whatsNewPresentsOncePerRelease() = runTest(mainDispatcherRule.testDispatcher) {
         val repo = FakeWhatsNewRepository()
-        val vm = newViewModel(whatsNew = repo, appVersion = "1.5")
+        val vm = newViewModel(whatsNew = repo, appVersion = "1.6")
 
         vm.presentWhatsNewIfNeeded()
         assertTrue(vm.whatsNewVisible.value)
-        assertEquals("1.5", repo.version)
+        assertEquals("1.6", repo.version)
 
         vm.dismissWhatsNew()
         vm.presentWhatsNewIfNeeded()
@@ -753,19 +753,19 @@ class AppViewModelTests {
     @Test
     fun whatsNewPresentsAgainForANewerStoredVersion() = runTest(mainDispatcherRule.testDispatcher) {
         val repo = FakeWhatsNewRepository(version = "1.4.0")
-        val vm = newViewModel(whatsNew = repo, appVersion = "1.5")
+        val vm = newViewModel(whatsNew = repo, appVersion = "1.6")
 
         vm.presentWhatsNewIfNeeded()
 
         assertTrue(vm.whatsNewVisible.value)
-        assertEquals("1.5", repo.version)
+        assertEquals("1.6", repo.version)
     }
 
     @Test
     fun whatsNewCanBeReopenedFromSettingsEvenAfterItWasShown() = runTest(mainDispatcherRule.testDispatcher) {
         val vm = newViewModel(
-            whatsNew = FakeWhatsNewRepository(version = "1.5"),
-            appVersion = "1.5",
+            whatsNew = FakeWhatsNewRepository(version = "1.6"),
+            appVersion = "1.6",
         )
         assertFalse(vm.whatsNewVisible.value)
 
@@ -780,7 +780,7 @@ class AppViewModelTests {
     fun whatsNewDoesNotAutoPresentInDemoMode() = runTest(mainDispatcherRule.testDispatcher) {
         val browser = FakeBrowserRepository().apply { demo = true }
         val repo = FakeWhatsNewRepository()
-        val vm = newViewModel(browser = browser, whatsNew = repo, appVersion = "1.5")
+        val vm = newViewModel(browser = browser, whatsNew = repo, appVersion = "1.6")
 
         vm.presentWhatsNewIfNeeded()
 

@@ -1,26 +1,17 @@
 package de.kjell.zencompanion.data
 
 import android.content.Context
+import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import de.kjell.zencompanion.R
 
-/** Badge artwork for one release note. Mapped to a Material icon in the UI. */
-enum class WhatsNewIcon {
-    SHARE,
-    TABS,
-    SEARCH,
-    MORE,
-}
-
 /**
- * One user-facing change in a release. Copy stays in `strings.xml` because it
- * is UI text, and the list is replaced wholesale each release.
+ * One feature pill under the hero. Copy stays in `strings.xml` because it is
+ * UI text, and the list is replaced wholesale each release.
  */
 data class WhatsNewItem(
     val id: String,
     @StringRes val titleRes: Int,
-    @StringRes val detailRes: Int,
-    val icon: WhatsNewIcon,
 )
 
 /**
@@ -29,33 +20,35 @@ data class WhatsNewItem(
  * belong to, not the build currently running.
  */
 object WhatsNewRelease {
-    const val version: String = "1.5"
+    const val version: String = "1.6"
+
+    @StringRes
+    val eyebrowRes: Int = R.string.whats_new_eyebrow
+
+    @StringRes
+    val headlineRes: Int = R.string.whats_new_headline
+
+    @StringRes
+    val subtitleRes: Int = R.string.whats_new_subtitle
+
+    @StringRes
+    val heroDescriptionRes: Int = R.string.whats_new_hero_description
+
+    /** Hero screenshot of the app's tab card deck. */
+    @DrawableRes
+    val heroImageRes: Int = R.drawable.whats_new_browser
+
+    /** Small caption above the feature pills. */
+    @StringRes
+    val featuresHeadingRes: Int = R.string.whats_new_features_heading
 
     val items: List<WhatsNewItem> = listOf(
-        WhatsNewItem(
-            id = "share-save-kind",
-            titleRes = R.string.whats_new_item_share_title,
-            detailRes = R.string.whats_new_item_share_detail,
-            icon = WhatsNewIcon.SHARE,
-        ),
-        WhatsNewItem(
-            id = "tab-controls",
-            titleRes = R.string.whats_new_item_tab_controls_title,
-            detailRes = R.string.whats_new_item_tab_controls_detail,
-            icon = WhatsNewIcon.TABS,
-        ),
-        WhatsNewItem(
-            id = "open-into-search",
-            titleRes = R.string.whats_new_item_search_title,
-            detailRes = R.string.whats_new_item_search_detail,
-            icon = WhatsNewIcon.SEARCH,
-        ),
-        WhatsNewItem(
-            id = "more",
-            titleRes = R.string.whats_new_item_more_title,
-            detailRes = R.string.whats_new_item_more_detail,
-            icon = WhatsNewIcon.MORE,
-        ),
+        WhatsNewItem("history", R.string.whats_new_item_history),
+        WhatsNewItem("ad-blocking", R.string.whats_new_item_ad_blocking),
+        WhatsNewItem("suggestions", R.string.whats_new_item_suggestions),
+        WhatsNewItem("downloads", R.string.whats_new_item_downloads),
+        WhatsNewItem("bottom-bar", R.string.whats_new_item_bottom_bar),
+        WhatsNewItem("more", R.string.whats_new_item_more),
     )
 }
 
@@ -68,7 +61,7 @@ interface WhatsNewRepository {
 /**
  * Once-per-release decision, kept free of Android types so it is testable on
  * the JVM. The notes only appear once the running app reaches their release
- * version, and then only until they have been shown for it. A fresh 1.5
+ * version, and then only until they have been shown for it. A fresh 1.6
  * install also presents them, which is safer than guessing whether the app
  * was updated.
  */

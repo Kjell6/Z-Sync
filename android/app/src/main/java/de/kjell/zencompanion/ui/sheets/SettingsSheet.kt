@@ -4,6 +4,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -310,8 +314,11 @@ private fun SettingsAccountCard(
         return
     }
 
+    // The button takes the card's height, whatever the card's lines make it.
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -344,7 +351,9 @@ private fun SettingsAccountCard(
                 containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
                 contentColor = MaterialTheme.colorScheme.error,
             ),
-            modifier = Modifier.size(56.dp),
+            modifier = Modifier
+                .width(56.dp)
+                .fillMaxHeight(),
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Outlined.ExitToApp,
@@ -399,26 +408,29 @@ private fun SettingsSaveKindCard(
                     },
                 )
 
-                ZenMenu(
-                    expanded = menuExpanded,
-                    onDismissRequest = { menuExpanded = false },
-                ) {
-                    ZenMenuGroup(index = 0, count = 1) {
-                        SaveKind.entries.forEachIndexed { index, kind ->
-                            val enabled = kind != SaveKind.NORMAL ||
-                                normalTabsCapability == ZenSpaces.NormalTabsCapability.ENABLED
-                            ZenSelectableMenuItem(
-                                selected = kind == displayed,
-                                onClick = {
-                                    onSetSaveKind(kind)
-                                    menuExpanded = false
-                                },
-                                text = { Text(stringResource(kind.labelRes())) },
-                                index = index,
-                                count = SaveKind.entries.size,
-                                enabled = enabled,
-                                selectedLeadingIcon = { ZenMenuCheck() },
-                            )
+                // The value and its arrow sit at the row's end: the menu opens there.
+                Box(modifier = Modifier.align(Alignment.BottomEnd)) {
+                    ZenMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                    ) {
+                        ZenMenuGroup(index = 0, count = 1) {
+                            SaveKind.entries.forEachIndexed { index, kind ->
+                                val enabled = kind != SaveKind.NORMAL ||
+                                    normalTabsCapability == ZenSpaces.NormalTabsCapability.ENABLED
+                                ZenSelectableMenuItem(
+                                    selected = kind == displayed,
+                                    onClick = {
+                                        onSetSaveKind(kind)
+                                        menuExpanded = false
+                                    },
+                                    text = { Text(stringResource(kind.labelRes())) },
+                                    index = index,
+                                    count = SaveKind.entries.size,
+                                    enabled = enabled,
+                                    selectedLeadingIcon = { ZenMenuCheck() },
+                                )
+                            }
                         }
                     }
                 }

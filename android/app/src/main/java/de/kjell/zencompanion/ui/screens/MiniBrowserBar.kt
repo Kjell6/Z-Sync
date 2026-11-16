@@ -1082,11 +1082,7 @@ private fun SuggestionPanel(
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            // The card's own height follows the row count instead of jumping
-            // when an answer brings a longer list.
-            .animateContentSize(animationSpec = tween(motionMs)),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 12.dp,
@@ -1096,6 +1092,11 @@ private fun SuggestionPanel(
         // inside its own card instead of pushing the bar off the screen.
         Column(
             modifier = Modifier
+                // The card's own height follows the row count instead of jumping
+                // when an answer brings a longer list. Inside the card: on the
+                // card itself, the size animation clips the card's shadow to a
+                // square and leaves hard corners behind the round ones.
+                .animateContentSize(animationSpec = tween(motionMs))
                 .verticalScroll(rememberScrollState())
                 .padding(vertical = 6.dp),
         ) {

@@ -269,42 +269,45 @@ private fun SearchEngineRow(
             },
         )
 
-        ZenMenu(
-            expanded = menuExpanded,
-            onDismissRequest = { menuExpanded = false },
-        ) {
-            ZenMenuGroup(index = 0, count = 2) {
-                engines.forEachIndexed { index, engine ->
-                    ZenSelectableMenuItem(
-                        selected = engine == selected,
-                        onClick = {
-                            onSelect(engine)
-                            menuExpanded = false
+        // The value and its arrow sit at the row's end: the menu opens there.
+        Box(modifier = Modifier.align(Alignment.BottomEnd)) {
+            ZenMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false },
+            ) {
+                ZenMenuGroup(index = 0, count = 2) {
+                    engines.forEachIndexed { index, engine ->
+                        ZenSelectableMenuItem(
+                            selected = engine == selected,
+                            onClick = {
+                                onSelect(engine)
+                                menuExpanded = false
+                            },
+                            text = { Text(engine.displayName) },
+                            index = index,
+                            count = engines.size,
+                            selectedLeadingIcon = { ZenMenuCheck() },
+                        )
+                    }
+                }
+                ZenMenuGroupGap()
+                ZenMenuGroup(index = 1, count = 2) {
+                    ZenMenuItem(
+                        text = {
+                            Text(
+                                text = stringResource(R.string.settings_search_engine_add_action),
+                                color = MaterialTheme.colorScheme.primary,
+                            )
                         },
-                        text = { Text(engine.displayName) },
-                        index = index,
-                        count = engines.size,
-                        selectedLeadingIcon = { ZenMenuCheck() },
+                        onClick = {
+                            menuExpanded = false
+                            onAdd()
+                        },
+                        index = 0,
+                        count = 1,
+                        colors = zenMenuItemColors(textColor = MaterialTheme.colorScheme.primary),
                     )
                 }
-            }
-            ZenMenuGroupGap()
-            ZenMenuGroup(index = 1, count = 2) {
-                ZenMenuItem(
-                    text = {
-                        Text(
-                            text = stringResource(R.string.settings_search_engine_add_action),
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    },
-                    onClick = {
-                        menuExpanded = false
-                        onAdd()
-                    },
-                    index = 0,
-                    count = 1,
-                    colors = zenMenuItemColors(textColor = MaterialTheme.colorScheme.primary),
-                )
             }
         }
     }

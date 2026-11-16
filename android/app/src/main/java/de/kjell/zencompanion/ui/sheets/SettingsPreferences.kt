@@ -49,8 +49,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleEventEffect
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.EssentialsColumns
 import de.kjell.zencompanion.data.KeptPageLifetime
@@ -59,6 +57,7 @@ import de.kjell.zencompanion.data.SearchEngines
 import de.kjell.zencompanion.data.ToolbarPlacement
 import de.kjell.zencompanion.ui.PreferencesState
 import de.kjell.zencompanion.ui.components.DefaultBrowser
+import de.kjell.zencompanion.ui.components.rememberIsDefaultBrowser
 import de.kjell.zencompanion.ui.theme.LiftCard
 import de.kjell.zencompanion.ui.theme.LocalZenColors
 
@@ -92,16 +91,13 @@ internal fun SettingsBrowsingSection(
 ) {
     var confirmClearData by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    var isDefaultBrowser by remember { mutableStateOf(DefaultBrowser.isDefault(context)) }
+    // Asked in the role dialog or in the Settings app, so the rows update as
+    // soon as the screen comes back.
+    var isDefaultBrowser by rememberIsDefaultBrowser()
     val browserRoleLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) {
         // The system granted or kept the role; read it back once it is gone.
-        isDefaultBrowser = DefaultBrowser.isDefault(context)
-    }
-    // Asked in the role dialog or in the Settings app, so the row updates as
-    // soon as the screen comes back.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         isDefaultBrowser = DefaultBrowser.isDefault(context)
     }
     if (confirmClearData) {
@@ -215,14 +211,20 @@ internal fun SettingsBrowsingSection(
 
                 SettingsDivider()
 
-                ToggleRow(
-                    title = stringResource(R.string.settings_external_browser),
-                    icon = Icons.AutoMirrored.Outlined.OpenInNew,
-                    checked = preferences.alwaysOpenExternally,
-                    onCheckedChange = onSetAlwaysOpenExternally,
-                )
+                // As the default browser, "open in the default browser" would
+                // only open Z-Sync again, so the row goes. The stored choice
+                // stays and comes back with the row once another app takes
+                // the role.
+                if (!isDefaultBrowser) {
+                    ToggleRow(
+                        title = stringResource(R.string.settings_external_browser),
+                        icon = Icons.AutoMirrored.Outlined.OpenInNew,
+                        checked = preferences.alwaysOpenExternally,
+                        onCheckedChange = onSetAlwaysOpenExternally,
+                    )
 
-                SettingsDivider()
+                    SettingsDivider()
+                }
 
                 DefaultBrowserRow(
                     isDefault = isDefaultBrowser,

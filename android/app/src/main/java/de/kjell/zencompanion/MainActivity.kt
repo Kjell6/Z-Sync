@@ -31,6 +31,7 @@ import de.kjell.zencompanion.review.PlayInAppReview
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.AppViewModel
 import de.kjell.zencompanion.ui.browser.BrowserPages
+import de.kjell.zencompanion.ui.components.DefaultBrowser
 import de.kjell.zencompanion.ui.components.openURLExternally
 import de.kjell.zencompanion.ui.screens.MiniBrowserScreen
 import de.kjell.zencompanion.ui.screens.MozillaSignInScreen
@@ -201,7 +202,14 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
     ) {
         // A link another app handed over always opens here: sending it out
         // again would hand it straight back once Z-Sync is the default browser.
-        if (!fromAnotherApp && url != null && preferences.alwaysOpenExternally) {
+        // For the same reason the setting is ignored (and hidden in Settings)
+        // while Z-Sync holds the browser role; it applies again once it doesn't.
+        if (
+            !fromAnotherApp &&
+            url != null &&
+            preferences.alwaysOpenExternally &&
+            !DefaultBrowser.isDefault(context)
+        ) {
             openURLExternally(context, url)
         } else {
             pages.updateSpaces(spaces, currentSpace.id)

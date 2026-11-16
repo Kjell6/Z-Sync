@@ -3,17 +3,13 @@ package de.kjell.zencompanion.ui.sheets
 import android.text.format.DateUtils
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,10 +19,10 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -42,15 +38,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.favicon.FaviconResolver
 import de.kjell.zencompanion.sync.SyncedActivityService
 import de.kjell.zencompanion.ui.ActivityState
 import de.kjell.zencompanion.ui.components.Favicon
-import de.kjell.zencompanion.ui.theme.LiftCard
 import de.kjell.zencompanion.ui.theme.LocalZenColors
+import de.kjell.zencompanion.ui.theme.ZenListGroup
+import de.kjell.zencompanion.ui.theme.ZenListItem
+import de.kjell.zencompanion.ui.theme.ZenLoadingIndicator
 import de.kjell.zencompanion.ui.theme.liftBorder
 import java.net.URL
 import java.util.Date
@@ -58,7 +55,7 @@ import java.util.Date
 /**
  * Port of `SyncedActivitySheet` (iOS): read-only view over the synced
  * browsing history. Nothing here writes to sync. Card design mirrors the
- * Settings sheet: `ZenColors.lift` cards with rounded corners on the paper
+ * Settings sheet: grouped Material 3 lists with rounded corners on the paper
  * background, app colors only.
  */
 @Composable
@@ -78,14 +75,14 @@ fun SyncedActivitySheet(
         Column(
             Modifier
                 .fillMaxSize()
-                .background(colors.background)
-                .statusBarsPadding(),
+                .background(colors.background),
         ) {
-            // Title bar
+            // Title bar. The sheet's own drag handle and status-bar inset sit
+            // above this, so only a normal row inset is needed here.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                    .padding(start = 20.dp, end = 12.dp, top = SheetContentTopSpacing, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -95,7 +92,7 @@ fun SyncedActivitySheet(
                     color = colors.ink,
                     modifier = Modifier.weight(1f),
                 )
-                IconButton(onClick = onDismiss) {
+                IconButton(onClick = onDismiss, shapes = IconButtonDefaults.shapes()) {
                     Icon(
                         Icons.Outlined.Close,
                         contentDescription = stringResource(R.string.common_done),
@@ -130,7 +127,7 @@ fun SyncedActivitySheet(
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
+                    .padding(horizontal = 20.dp, vertical = 4.dp)
                     .border(liftBorder(), RoundedCornerShape(16.dp)),
             )
 
@@ -142,7 +139,7 @@ fun SyncedActivitySheet(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    CircularProgressIndicator(color = colors.coral)
+                    ZenLoadingIndicator(color = colors.coral)
                     Text(
                         stringResource(R.string.activity_connecting),
                         style = MaterialTheme.typography.bodyMedium,
@@ -169,7 +166,7 @@ fun SyncedActivitySheet(
                         color = colors.ink.copy(alpha = 0.7f),
                         textAlign = TextAlign.Center,
                     )
-                    Button(onClick = onLoad) {
+                    Button(onClick = onLoad, shapes = ButtonDefaults.shapes()) {
                         Text(stringResource(R.string.spaces_retry))
                     }
                 }
@@ -209,25 +206,21 @@ private fun ActivityList(
     Column(Modifier.fillMaxSize()) {
         SectionHeader(stringResource(R.string.activity_section_history))
 
-        // One card for the whole list, so the card chrome (fill + rim + corner)
-        // matches the Settings sheet instead of a flat run of rows.
-        LiftCard(
+        // One grouped list for the whole history, so the card chrome (fill +
+        // rim + corner) matches the Settings sheet.
+        ZenListGroup(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
+                // The card hugs a short history and only fills the sheet when
+                // the list is long enough to scroll.
+                .weight(1f, fill = false)
                 .padding(horizontal = 20.dp),
         ) {
             // One lazy item per row: a 400-entry history only composes what
             // is on screen instead of one giant card item.
-            LazyColumn(Modifier.fillMaxSize()) {
-                itemsIndexed(history) { index, entry ->
+            LazyColumn {
+                itemsIndexed(history) { _, entry ->
                     HistoryRow(entry = entry, onOpenUrl = onOpenUrl)
-                    if (index < history.size - 1) {
-                        HorizontalDivider(
-                            color = colors.ink.copy(alpha = 0.08f),
-                            modifier = Modifier.padding(start = 52.dp),
-                        )
-                    }
                 }
             }
         }
@@ -258,41 +251,24 @@ private fun HistoryRow(
     onOpenUrl: (String, String?) -> Unit,
 ) {
     val colors = LocalZenColors.current
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onOpenUrl(entry.url, entry.title.ifEmpty { null }) }
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-    ) {
-        if (FaviconResolver.isLocalURL(entry.url)) {
-            Icon(
-                Icons.Outlined.Settings,
-                contentDescription = null,
-                tint = colors.ink.copy(alpha = 0.55f),
-                modifier = Modifier.size(24.dp),
-            )
-        } else {
-            Favicon(urlString = entry.url, size = 24.dp)
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = entry.title.ifEmpty { entry.url },
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.ink,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = historySecondary(entry),
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.ink.copy(alpha = 0.4f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
+    ZenListItem(
+        headline = entry.title.ifEmpty { entry.url },
+        supportingText = historySecondary(entry),
+        singleLine = true,
+        onClick = { onOpenUrl(entry.url, entry.title.ifEmpty { null }) },
+        leadingContent = {
+            if (FaviconResolver.isLocalURL(entry.url)) {
+                Icon(
+                    Icons.Outlined.Settings,
+                    contentDescription = null,
+                    tint = colors.ink.copy(alpha = 0.55f),
+                    modifier = Modifier.size(24.dp),
+                )
+            } else {
+                Favicon(urlString = entry.url, size = 24.dp)
+            }
+        },
+    )
 }
 
 // MARK: - Helpers

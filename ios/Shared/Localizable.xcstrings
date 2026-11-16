@@ -1452,12 +1452,42 @@
         }
       }
     },
-    "settings.content_blocking": {
+    "settings.pages_tabs": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Content blocking"
+            "value": "Pages & tabs"
+          }
+        }
+      }
+    },
+    "settings.privacy_blocking": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Privacy & blocking"
+          }
+        }
+      }
+    },
+    "settings.search": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search"
+          }
+        }
+      }
+    },
+    "settings.website_data": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Website data"
           }
         }
       }
@@ -1590,16 +1620,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Add custom search engine"
-          }
-        }
-      }
-    },
-    "settings.search_engine.custom_section": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Custom engines"
           }
         }
       }

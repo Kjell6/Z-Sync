@@ -28,6 +28,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Box
@@ -65,11 +66,13 @@ import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -154,10 +157,15 @@ import de.kjell.zencompanion.data.SaveKind
 import de.kjell.zencompanion.ui.components.PinDestinationPicker
 import de.kjell.zencompanion.ui.components.SaveKindMenuButton
 import de.kjell.zencompanion.ui.components.openURLExternally
+import de.kjell.zencompanion.ui.components.rememberIsDefaultBrowser
 import de.kjell.zencompanion.ui.theme.LocalZenColors
+import de.kjell.zencompanion.ui.theme.ZenMenu
+import de.kjell.zencompanion.ui.theme.ZenMenuGroup
+import de.kjell.zencompanion.ui.theme.ZenMenuItem
 import de.kjell.zencompanion.ui.theme.ZenTheme
 import de.kjell.zencompanion.ui.theme.ZenType
 import de.kjell.zencompanion.ui.theme.liftBorder
+import de.kjell.zencompanion.ui.theme.zenMenuItemColors
 import de.kjell.zencompanion.util.Haptics
 import de.kjell.zencompanion.util.PageTitle
 import kotlin.math.abs
@@ -751,14 +759,24 @@ fun MiniBrowserScreen(
                     }
                 },
                 plusMenu = {
-                    DropdownMenu(expanded = plusMenuOpen, onDismissRequest = { plusMenuOpen = false }) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.kept_close_all), color = MaterialTheme.colorScheme.error) },
-                            onClick = {
-                                plusMenuOpen = false
-                                confirmCloseAll = true
-                            },
-                        )
+                    ZenMenu(expanded = plusMenuOpen, onDismissRequest = { plusMenuOpen = false }) {
+                        ZenMenuGroup(index = 0, count = 1) {
+                            ZenMenuItem(
+                                text = {
+                                    Text(
+                                        stringResource(R.string.kept_close_all),
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                },
+                                onClick = {
+                                    plusMenuOpen = false
+                                    confirmCloseAll = true
+                                },
+                                index = 0,
+                                count = 1,
+                                colors = zenMenuItemColors(textColor = MaterialTheme.colorScheme.error),
+                            )
+                        }
                     }
                 },
             )
@@ -770,15 +788,18 @@ fun MiniBrowserScreen(
                 title = { Text(stringResource(R.string.kept_close_all_title)) },
                 text = { Text(stringResource(R.string.kept_close_all_message)) },
                 confirmButton = {
-                    TextButton(onClick = {
-                        confirmCloseAll = false
-                        pages.closeAll()
-                    }) {
+                    TextButton(
+                        onClick = {
+                            confirmCloseAll = false
+                            pages.closeAll()
+                        },
+                        shapes = ButtonDefaults.shapes(),
+                    ) {
                         Text(stringResource(R.string.kept_close_all), color = MaterialTheme.colorScheme.error)
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { confirmCloseAll = false }) {
+                    TextButton(onClick = { confirmCloseAll = false }, shapes = ButtonDefaults.shapes()) {
                         Text(stringResource(R.string.common_cancel))
                     }
                 },
@@ -791,7 +812,9 @@ fun MiniBrowserScreen(
                 title = { Text(stringResource(R.string.browser_pin_failed)) },
                 text = { Text(stringResource(message)) },
                 confirmButton = {
-                    TextButton(onClick = { pinErrorRes = null }) { Text(stringResource(R.string.common_done)) }
+                    TextButton(onClick = { pinErrorRes = null }, shapes = ButtonDefaults.shapes()) {
+                        Text(stringResource(R.string.common_done))
+                    }
                 },
             )
         }
@@ -1227,6 +1250,7 @@ private fun BrowserPageScreen(
                 }
 
                 state.pageError?.let { error ->
+                    val isDefaultBrowser by rememberIsDefaultBrowser()
                     BrowserErrorPanel(
                         error = error,
                         host = addressDisplay(state.failedUrl),
@@ -1237,7 +1261,9 @@ private fun BrowserPageScreen(
                             openAddressTarget(target)
                         },
                         onSearch = { openAddressTarget(viewModel.searchForFailedHost()) },
-                        onOpenExternally = { openURLExternally(context, state.failedUrl) },
+                        onOpenExternally = if (isDefaultBrowser) null else {
+                            { openURLExternally(context, state.failedUrl) }
+                        },
                         onLeave = {
                             val web = webView
                             when (browserErrorExit(web?.url, state.failedUrl, web?.canGoBack() == true)) {
@@ -1774,23 +1800,24 @@ private fun BoxScope.PageKeyboardDone(
     onClick: () -> Unit,
 ) {
     val zen = LocalZenColors.current
-    val shape = RoundedCornerShape(14.dp)
-    Box(
+    Surface(
+        onClick = onClick,
         modifier = Modifier
             .align(Alignment.BottomEnd)
             .padding(end = 20.dp, bottom = bottomInset)
-            .size(44.dp)
-            .background(zen.lift, shape)
-            .border(liftBorder(), shape)
-            .barClickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
+            .size(44.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = zen.lift,
+        border = liftBorder(),
     ) {
-        Icon(
-            imageVector = Icons.Outlined.Check,
-            contentDescription = stringResource(R.string.common_done),
-            tint = zen.ink,
-            modifier = Modifier.size(20.dp),
-        )
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = Icons.Outlined.Check,
+                contentDescription = stringResource(R.string.common_done),
+                tint = zen.ink,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
 
@@ -2122,17 +2149,20 @@ private fun FindStep(
     onClick: () -> Unit,
 ) {
     val zen = LocalZenColors.current
-    // The platform's least touch target; the 20 dp glyph stays as it is.
-    Box(
-        modifier = Modifier
-            .size(48.dp)
-            .barClickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
+    // Material's icon button keeps the platform's 48 dp touch target around
+    // the smaller visible circle.
+    IconButton(
+        onClick = onClick,
+        shapes = IconButtonDefaults.shapes(shape = CircleShape),
+        modifier = Modifier.size(36.dp),
+        colors = IconButtonDefaults.iconButtonColors(
+            containerColor = Color.Transparent,
+            contentColor = zen.ink.copy(alpha = 0.75f),
+        ),
     ) {
         Icon(
             imageVector = icon,
             contentDescription = description,
-            tint = zen.ink.copy(alpha = 0.75f),
             modifier = Modifier.size(20.dp),
         )
     }

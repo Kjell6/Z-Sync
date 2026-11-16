@@ -1,9 +1,7 @@
 package de.kjell.zencompanion.ui.sheets
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -21,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -56,18 +55,6 @@ fun WhatsNewSheet(onDismiss: () -> Unit) {
     ZenSheet(
         onDismiss = onDismiss,
         skipPartiallyExpanded = true,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        dragHandle = {
-            Box(
-                modifier = Modifier
-                    .padding(top = 12.dp, bottom = 8.dp)
-                    .size(width = 36.dp, height = 4.dp)
-                    .background(
-                        color = zen.ink.copy(alpha = 0.4f),
-                        shape = RoundedCornerShape(2.dp),
-                    ),
-            )
-        },
     ) {
         Column(Modifier.fillMaxSize()) {
             Column(
@@ -112,7 +99,7 @@ fun WhatsNewSheet(onDismiss: () -> Unit) {
                     .padding(horizontal = 24.dp)
                     .padding(top = 4.dp, bottom = 20.dp)
                     .heightIn(min = 52.dp),
-                shape = RoundedCornerShape(14.dp),
+                shapes = ButtonDefaults.shapes(shape = RoundedCornerShape(14.dp)),
                 contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp),
             ) {
                 Text(

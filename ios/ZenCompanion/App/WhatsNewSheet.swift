@@ -100,12 +100,9 @@ struct WhatsNewSheet: View {
                 .foregroundStyle(Palette.onCoral(scheme))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 15)
-                .background(
-                    Palette.coral(scheme),
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                )
+                .modifier(DomedFill(shape: RoundedRectangle(cornerRadius: 14, style: .continuous), scheme: scheme, fill: Palette.coral(scheme)))
         }
-        .buttonStyle(PressedButtonStyle())
+        .buttonStyle(LiquidPressButtonStyle())
     }
 }
 

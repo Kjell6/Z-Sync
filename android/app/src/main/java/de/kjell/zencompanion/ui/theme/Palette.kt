@@ -6,8 +6,11 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MotionScheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -15,6 +18,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 
 /**
  * Port of `Shared/ZenTheme.swift` `Palette` — paper/ink/coral, never the
@@ -82,6 +86,18 @@ fun zenColors(isDark: Boolean): ZenColors = if (isDark) {
 }
 
 val LocalZenColors = compositionLocalOf { zenColors(false) }
+
+/**
+ * The Expressive shape scale the app draws with (4 / 8 / 12 / 16 / 28), so
+ * buttons, cards, menus and list items all round off the same way.
+ */
+val ZenShapes = Shapes(
+    extraSmall = RoundedCornerShape(4.dp),
+    small = RoundedCornerShape(8.dp),
+    medium = RoundedCornerShape(12.dp),
+    large = RoundedCornerShape(16.dp),
+    extraLarge = RoundedCornerShape(28.dp),
+)
 
 @Composable
 fun ZenTheme(
@@ -172,8 +188,15 @@ fun ZenTheme(
     )
 
     CompositionLocalProvider(LocalZenColors provides zen) {
-        MaterialTheme(
+        // Expressive theme so components (buttons, lists, menus, sheets) pick
+        // up the Expressive motion scheme, the shared shape scale and the
+        // app's type voice. Colors stay the app's own palette: no dynamic
+        // color, no expressive color tokens.
+        MaterialExpressiveTheme(
             colorScheme = colorScheme,
+            motionScheme = MotionScheme.expressive(),
+            shapes = ZenShapes,
+            typography = ZenTypography,
             content = content,
         )
     }

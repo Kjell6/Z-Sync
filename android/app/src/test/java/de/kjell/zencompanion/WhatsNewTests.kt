@@ -79,7 +79,6 @@ class WhatsNewTests {
 
     @Test
     fun releaseHasHeaderResources() {
-        assertNotEquals(0, WhatsNewRelease.eyebrowRes)
         assertNotEquals(0, WhatsNewRelease.headlineRes)
         assertNotEquals(0, WhatsNewRelease.subtitleRes)
         assertNotEquals(0, WhatsNewRelease.featuresHeadingRes)
@@ -107,11 +106,7 @@ class WhatsNewTests {
     }
 
     @Test
-    fun heroShowsTheThreeScreenshotsInOrder() {
-        val cards = WhatsNewRelease.heroCards
-        assertEquals(
-            listOf(R.drawable.whats_new_search, R.drawable.whats_new_deck, R.drawable.whats_new_page),
-            listOf(cards.leading, cards.center, cards.trailing),
-        )
+    fun heroUsesTheSingleHeroImage() {
+        assertEquals(R.drawable.whats_new_hero, WhatsNewRelease.heroImageRes)
     }
 }

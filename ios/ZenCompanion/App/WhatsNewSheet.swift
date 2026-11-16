@@ -2,10 +2,10 @@ import SwiftUI
 
 /// The What's New sheet: one short, scrollable release note in the platform's
 /// own idiom (large title, system text styles) with the app's coral as the
-/// only accent. A brand panel shows three phone screenshots fanned out, then
-/// a short row of feature pills that wraps onto as many lines as the text size needs,
+/// only accent. One hero image, then a short row of feature pills that wraps onto as many lines as the text size needs,
 /// so the content scrolls rather than clipping. The Done button is pinned
-/// below the scroll area.
+/// below the scroll area; there is no close button, so Done or a swipe down
+/// dismisses the sheet.
 struct WhatsNewSheet: View {
     let release: WhatsNewRelease
     let scheme: ColorScheme
@@ -16,11 +16,6 @@ struct WhatsNewSheet: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    HStack {
-                        Spacer(minLength: 12)
-                        closeButton
-                    }
-
                     header
                     hero
                     features
@@ -28,7 +23,7 @@ struct WhatsNewSheet: View {
                 .frame(maxWidth: 560, alignment: .leading)
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 24)
-                .padding(.top, 8)
+                .padding(.top, 28)
                 .padding(.bottom, 24)
             }
 
@@ -47,11 +42,6 @@ struct WhatsNewSheet: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(release.eyebrow)
-                .zenFont(12, weight: .semibold)
-                .tracking(1.2)
-                .foregroundStyle(Palette.coral(scheme))
-
             Text(release.title)
                 .font(.largeTitle.bold())
                 .foregroundStyle(Palette.ink(scheme))
@@ -64,56 +54,17 @@ struct WhatsNewSheet: View {
         }
     }
 
-    private var closeButton: some View {
-        Button {
-            dismiss()
-        } label: {
-            Image(systemName: "xmark")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Palette.ink(scheme).opacity(0.65))
-                .frame(width: 36, height: 36)
-                .background(Palette.lift(scheme), in: Circle())
-                .contentShape(Circle())
-        }
-        .buttonStyle(PressedButtonStyle())
-        .accessibilityLabel(Text("common.done"))
-    }
-
-    /// The brand-coloured panel with three phone screenshots: one upright in
-    /// the middle and two behind it leaning outwards. The screenshots are
-    /// decorative; the panel carries one label for VoiceOver.
+    /// The hero image, full width at its own aspect ratio. It is decorative
+    /// apart from one label for VoiceOver.
     private var hero: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .fill(Palette.coral(scheme))
-
-            heroCard(release.heroCards.leading, height: 216, cornerRadius: 14)
-                .rotationEffect(.degrees(-9))
-                .offset(x: -104, y: 10)
-
-            heroCard(release.heroCards.trailing, height: 216, cornerRadius: 14)
-                .rotationEffect(.degrees(9))
-                .offset(x: 104, y: 10)
-
-            heroCard(release.heroCards.center, height: 252, cornerRadius: 16)
-                .shadow(color: .black.opacity(0.28), radius: 15, y: 10)
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: 280)
-        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(release.heroAccessibilityLabel))
-    }
-
-    /// One phone screenshot, shown at the screenshot's own aspect ratio.
-    private func heroCard(_ name: String, height: CGFloat, cornerRadius: CGFloat) -> some View {
-        Image(name)
+        Image(release.heroImage)
             .resizable()
             .scaledToFit()
-            .frame(height: height)
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
-            .accessibilityHidden(true)
+            .frame(maxWidth: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(release.heroAccessibilityLabel))
+            .accessibilityAddTraits(.isImage)
     }
 
     /// A caption and the remaining features as small pills. VoiceOver reads

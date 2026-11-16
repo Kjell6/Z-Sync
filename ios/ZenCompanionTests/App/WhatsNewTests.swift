@@ -46,10 +46,9 @@ final class WhatsNewTests: XCTestCase {
 
         let nextRelease = WhatsNewRelease(
             version: "1.7",
-            eyebrow: WhatsNewRelease.latest.eyebrow,
             title: WhatsNewRelease.latest.title,
             subtitle: WhatsNewRelease.latest.subtitle,
-            heroCards: WhatsNewRelease.latest.heroCards,
+            heroImage: WhatsNewRelease.latest.heroImage,
             heroAccessibilityLabel: WhatsNewRelease.latest.heroAccessibilityLabel,
             featuresHeading: WhatsNewRelease.latest.featuresHeading,
             items: WhatsNewRelease.latest.items
@@ -75,7 +74,6 @@ final class WhatsNewTests: XCTestCase {
     func testReleaseHasCompleteHeaderContent() {
         let release = WhatsNewRelease.latest
 
-        XCTAssertEqual(release.eyebrow, "Z-SYNC 1.6")
         XCTAssertEqual(release.title, "Meet the new browser")
         XCTAssertEqual(
             release.subtitle,
@@ -85,13 +83,11 @@ final class WhatsNewTests: XCTestCase {
         XCTAssertFalse(release.heroAccessibilityLabel.isEmpty)
     }
 
-    func testHeroShowsTheThreeScreenshotsInOrder() {
-        let cards = WhatsNewRelease.latest.heroCards
-        XCTAssertEqual([cards.leading, cards.center, cards.trailing], ["WhatsNewSearch", "WhatsNewDeck", "WhatsNewPage"])
-        // A missing asset renders as an empty card, so check every name.
-        for name in [cards.leading, cards.center, cards.trailing] {
-            XCTAssertNotNil(UIImage(named: name), "missing hero asset \(name)")
-        }
+    func testHeroImageShipsWithTheApp() {
+        let name = WhatsNewRelease.latest.heroImage
+        XCTAssertEqual(name, "WhatsNewHero")
+        // A missing asset renders as nothing, so check it is bundled.
+        XCTAssertNotNil(UIImage(named: name), "missing hero asset \(name)")
     }
 
     func testItemsHaveUniqueIdsAndCompleteCopy() {

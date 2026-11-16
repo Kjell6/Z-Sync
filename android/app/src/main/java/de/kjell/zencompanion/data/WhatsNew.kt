@@ -14,13 +14,6 @@ data class WhatsNewItem(
     @StringRes val titleRes: Int,
 )
 
-/** Drawable resources for the hero's three phone screenshots. */
-data class HeroCards(
-    @DrawableRes val leading: Int,
-    @DrawableRes val center: Int,
-    @DrawableRes val trailing: Int,
-)
-
 /**
  * The notes the What's New sheet shows. Keep this to genuinely user-visible
  * changes, in reading order. The version is the store release these notes
@@ -28,9 +21,6 @@ data class HeroCards(
  */
 object WhatsNewRelease {
     const val version: String = "1.6"
-
-    @StringRes
-    val eyebrowRes: Int = R.string.whats_new_eyebrow
 
     @StringRes
     val headlineRes: Int = R.string.whats_new_headline
@@ -42,14 +32,11 @@ object WhatsNewRelease {
     val heroDescriptionRes: Int = R.string.whats_new_hero_description
 
     /**
-     * The three phone screenshots in the hero: left, upright centre, right.
-     * The side ones lean outwards.
+     * The hero image, shown full width at its own aspect ratio, so its design
+     * (and colours) live in the image itself.
      */
-    val heroCards: HeroCards = HeroCards(
-        leading = R.drawable.whats_new_search,
-        center = R.drawable.whats_new_deck,
-        trailing = R.drawable.whats_new_page,
-    )
+    @DrawableRes
+    val heroImageRes: Int = R.drawable.whats_new_hero
 
     /** Small caption above the feature pills. */
     @StringRes

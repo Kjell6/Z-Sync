@@ -44,8 +44,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleEventEffect
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.EssentialsColumns
 import de.kjell.zencompanion.data.KeptPageLifetime
@@ -54,6 +52,7 @@ import de.kjell.zencompanion.data.SearchEngines
 import de.kjell.zencompanion.data.ToolbarPlacement
 import de.kjell.zencompanion.ui.PreferencesState
 import de.kjell.zencompanion.ui.components.DefaultBrowser
+import de.kjell.zencompanion.ui.components.rememberIsDefaultBrowser
 import de.kjell.zencompanion.ui.theme.LocalZenColors
 import de.kjell.zencompanion.ui.theme.ZenListGroup
 import de.kjell.zencompanion.ui.theme.ZenListItem
@@ -97,16 +96,13 @@ internal fun SettingsBrowsingSection(
 ) {
     var confirmClearData by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    var isDefaultBrowser by remember { mutableStateOf(DefaultBrowser.isDefault(context)) }
+    // Asked in the role dialog or in the Settings app, so the rows update as
+    // soon as the screen comes back.
+    var isDefaultBrowser by rememberIsDefaultBrowser()
     val browserRoleLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) {
         // The system granted or kept the role; read it back once it is gone.
-        isDefaultBrowser = DefaultBrowser.isDefault(context)
-    }
-    // Asked in the role dialog or in the Settings app, so the row updates as
-    // soon as the screen comes back.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         isDefaultBrowser = DefaultBrowser.isDefault(context)
     }
     if (confirmClearData) {
@@ -168,24 +164,26 @@ internal fun SettingsBrowsingSection(
                     icon = Icons.Outlined.Schedule,
                     onClick = { lifetimeExpanded = true },
                 )
-                ZenMenu(
-                    expanded = lifetimeExpanded,
-                    onDismissRequest = { lifetimeExpanded = false },
-                ) {
-                    val options = KeptPageLifetime.entries
-                    ZenMenuGroup(index = 0, count = 1) {
-                        options.forEachIndexed { index, option ->
-                            ZenSelectableMenuItem(
-                                selected = option == preferences.keptPageLifetime,
-                                onClick = {
-                                    onSetKeptPageLifetime(option)
-                                    lifetimeExpanded = false
-                                },
-                                text = { Text(option.label()) },
-                                index = index,
-                                count = options.size,
-                                selectedLeadingIcon = { ZenMenuCheck() },
-                            )
+Box(modifier = Modifier.align(Alignment.BottomEnd)) {
+                    ZenMenu(
+                        expanded = lifetimeExpanded,
+                        onDismissRequest = { lifetimeExpanded = false },
+                    ) {
+                        val options = KeptPageLifetime.entries
+                        ZenMenuGroup(index = 0, count = 1) {
+                            options.forEachIndexed { index, option ->
+                                ZenSelectableMenuItem(
+                                    selected = option == preferences.keptPageLifetime,
+                                    onClick = {
+                                        onSetKeptPageLifetime(option)
+                                        lifetimeExpanded = false
+                                    },
+                                    text = { Text(option.label()) },
+                                    index = index,
+                                    count = options.size,
+                                    selectedLeadingIcon = { ZenMenuCheck() },
+                                )
+                            }
                         }
                     }
                 }
@@ -210,12 +208,17 @@ internal fun SettingsBrowsingSection(
                 },
             )
 
-            ZenSwitchListItem(
-                headline = stringResource(R.string.settings_external_browser),
-                icon = Icons.AutoMirrored.Outlined.OpenInNew,
-                checked = preferences.alwaysOpenExternally,
-                onCheckedChange = onSetAlwaysOpenExternally,
-            )
+            // As the default browser, "open in the default browser" would only
+            // open Z-Sync again, so the row goes. The stored choice stays and
+            // comes back with the row once another app takes the role.
+            if (!isDefaultBrowser) {
+                ZenSwitchListItem(
+                    headline = stringResource(R.string.settings_external_browser),
+                    icon = Icons.AutoMirrored.Outlined.OpenInNew,
+                    checked = preferences.alwaysOpenExternally,
+                    onCheckedChange = onSetAlwaysOpenExternally,
+                )
+            }
 
             DefaultBrowserRow(
                 isDefault = isDefaultBrowser,
@@ -375,24 +378,26 @@ internal fun SettingsLayoutSection(
                         icon = Icons.Outlined.GridView,
                         onClick = { columnsExpanded = true },
                     )
-                    ZenMenu(
-                        expanded = columnsExpanded,
-                        onDismissRequest = { columnsExpanded = false },
-                    ) {
-                        val options = EssentialsColumns.entries
-                        ZenMenuGroup(index = 0, count = 1) {
-                            options.forEachIndexed { index, option ->
-                                ZenSelectableMenuItem(
-                                    selected = option == columns,
-                                    onClick = {
-                                        onSetEssentialsColumns(option)
-                                        columnsExpanded = false
-                                    },
-                                    text = { Text(option.label()) },
-                                    index = index,
-                                    count = options.size,
-                                    selectedLeadingIcon = { ZenMenuCheck() },
-                                )
+                    Box(modifier = Modifier.align(Alignment.BottomEnd)) {
+                        ZenMenu(
+                            expanded = columnsExpanded,
+                            onDismissRequest = { columnsExpanded = false },
+                        ) {
+                            val options = EssentialsColumns.entries
+                            ZenMenuGroup(index = 0, count = 1) {
+                                options.forEachIndexed { index, option ->
+                                    ZenSelectableMenuItem(
+                                        selected = option == columns,
+                                        onClick = {
+                                            onSetEssentialsColumns(option)
+                                            columnsExpanded = false
+                                        },
+                                        text = { Text(option.label()) },
+                                        index = index,
+                                        count = options.size,
+                                        selectedLeadingIcon = { ZenMenuCheck() },
+                                    )
+                                }
                             }
                         }
                     }
@@ -406,24 +411,26 @@ internal fun SettingsLayoutSection(
                     icon = Icons.Outlined.SwapVert,
                     onClick = { toolbarExpanded = true },
                 )
-                ZenMenu(
-                    expanded = toolbarExpanded,
-                    onDismissRequest = { toolbarExpanded = false },
-                ) {
-                    val options = ToolbarPlacement.entries
-                    ZenMenuGroup(index = 0, count = 1) {
-                        options.forEachIndexed { index, option ->
-                            ZenSelectableMenuItem(
-                                selected = option == toolbar,
-                                onClick = {
-                                    onSetToolbarPlacement(option)
-                                    toolbarExpanded = false
-                                },
-                                text = { Text(stringResource(option.labelRes())) },
-                                index = index,
-                                count = options.size,
-                                selectedLeadingIcon = { ZenMenuCheck() },
-                            )
+                Box(modifier = Modifier.align(Alignment.BottomEnd)) {
+                    ZenMenu(
+                        expanded = toolbarExpanded,
+                        onDismissRequest = { toolbarExpanded = false },
+                    ) {
+                        val options = ToolbarPlacement.entries
+                        ZenMenuGroup(index = 0, count = 1) {
+                            options.forEachIndexed { index, option ->
+                                ZenSelectableMenuItem(
+                                    selected = option == toolbar,
+                                    onClick = {
+                                        onSetToolbarPlacement(option)
+                                        toolbarExpanded = false
+                                    },
+                                    text = { Text(stringResource(option.labelRes())) },
+                                    index = index,
+                                    count = options.size,
+                                    selectedLeadingIcon = { ZenMenuCheck() },
+                                )
+                            }
                         }
                     }
                 }

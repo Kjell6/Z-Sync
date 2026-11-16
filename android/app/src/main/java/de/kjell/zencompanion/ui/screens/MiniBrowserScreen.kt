@@ -157,6 +157,7 @@ import de.kjell.zencompanion.data.SaveKind
 import de.kjell.zencompanion.ui.components.PinDestinationPicker
 import de.kjell.zencompanion.ui.components.SaveKindMenuButton
 import de.kjell.zencompanion.ui.components.openURLExternally
+import de.kjell.zencompanion.ui.components.rememberIsDefaultBrowser
 import de.kjell.zencompanion.ui.theme.LocalZenColors
 import de.kjell.zencompanion.ui.theme.ZenMenu
 import de.kjell.zencompanion.ui.theme.ZenMenuGroup
@@ -1249,6 +1250,7 @@ private fun BrowserPageScreen(
                 }
 
                 state.pageError?.let { error ->
+                    val isDefaultBrowser by rememberIsDefaultBrowser()
                     BrowserErrorPanel(
                         error = error,
                         host = addressDisplay(state.failedUrl),
@@ -1259,7 +1261,9 @@ private fun BrowserPageScreen(
                             openAddressTarget(target)
                         },
                         onSearch = { openAddressTarget(viewModel.searchForFailedHost()) },
-                        onOpenExternally = { openURLExternally(context, state.failedUrl) },
+                        onOpenExternally = if (isDefaultBrowser) null else {
+                            { openURLExternally(context, state.failedUrl) }
+                        },
                         onLeave = {
                             val web = webView
                             when (browserErrorExit(web?.url, state.failedUrl, web?.canGoBack() == true)) {

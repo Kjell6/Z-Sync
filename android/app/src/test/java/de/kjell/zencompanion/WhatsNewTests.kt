@@ -1,11 +1,11 @@
 package de.kjell.zencompanion
 
 import de.kjell.zencompanion.data.WhatsNewController
-import de.kjell.zencompanion.data.WhatsNewIcon
 import de.kjell.zencompanion.data.WhatsNewRelease
 import de.kjell.zencompanion.data.WhatsNewRepository
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -20,39 +20,39 @@ class WhatsNewTests {
     }
 
     @Test
-    fun releaseTargetsVersion15() {
-        assertEquals("1.5", WhatsNewRelease.version)
+    fun releaseTargetsVersion16() {
+        assertEquals("1.6", WhatsNewRelease.version)
     }
 
     @Test
     fun presentsOnceForTheReleaseVersion() {
         val repository = MemoryWhatsNewRepository()
-        val controller = WhatsNewController(repository, "1.5")
+        val controller = WhatsNewController(repository, "1.6")
 
         assertTrue(controller.shouldPresent(isDemo = false))
 
         controller.markPresented()
 
         assertFalse(controller.shouldPresent(isDemo = false))
-        assertFalse(WhatsNewController(repository, "1.5").shouldPresent(isDemo = false))
+        assertFalse(WhatsNewController(repository, "1.6").shouldPresent(isDemo = false))
     }
 
     @Test
     fun doesNotPresentBeforeTheReleaseVersion() {
-        assertFalse(WhatsNewController(MemoryWhatsNewRepository(), "1.4.1").shouldPresent(isDemo = false))
-        assertFalse(WhatsNewController(MemoryWhatsNewRepository(), "1.5.1").shouldPresent(isDemo = false))
-        assertTrue(WhatsNewController(MemoryWhatsNewRepository(), "1.5").shouldPresent(isDemo = false))
+        assertFalse(WhatsNewController(MemoryWhatsNewRepository(), "1.5").shouldPresent(isDemo = false))
+        assertFalse(WhatsNewController(MemoryWhatsNewRepository(), "1.6.1").shouldPresent(isDemo = false))
+        assertTrue(WhatsNewController(MemoryWhatsNewRepository(), "1.6").shouldPresent(isDemo = false))
     }
 
     @Test
     fun presentsAgainForANewerRelease() {
         val repository = MemoryWhatsNewRepository()
-        WhatsNewController(repository, "1.5").markPresented()
+        WhatsNewController(repository, "1.6").markPresented()
 
-        assertFalse(WhatsNewController(repository, "1.5").shouldPresent(isDemo = false))
         assertFalse(WhatsNewController(repository, "1.6").shouldPresent(isDemo = false))
+        assertFalse(WhatsNewController(repository, "1.7").shouldPresent(isDemo = false))
         assertTrue(
-            WhatsNewController(repository, "1.6", releaseVersion = "1.6")
+            WhatsNewController(repository, "1.7", releaseVersion = "1.7")
                 .shouldPresent(isDemo = false),
         )
     }
@@ -60,7 +60,7 @@ class WhatsNewTests {
     @Test
     fun neverMarksTheSheetInDemoMode() {
         val repository = MemoryWhatsNewRepository()
-        val controller = WhatsNewController(repository, "1.5")
+        val controller = WhatsNewController(repository, "1.6")
 
         assertFalse(controller.shouldPresent(isDemo = true))
         assertNull(repository.version)
@@ -69,12 +69,20 @@ class WhatsNewTests {
     @Test
     fun markingTwiceKeepsTheSameVersion() {
         val repository = MemoryWhatsNewRepository()
-        val controller = WhatsNewController(repository, "1.5")
+        val controller = WhatsNewController(repository, "1.6")
 
         controller.markPresented()
         controller.markPresented()
 
-        assertEquals("1.5", repository.version)
+        assertEquals("1.6", repository.version)
+    }
+
+    @Test
+    fun releaseHasHeaderResources() {
+        assertNotEquals(0, WhatsNewRelease.headlineRes)
+        assertNotEquals(0, WhatsNewRelease.subtitleRes)
+        assertNotEquals(0, WhatsNewRelease.featuresHeadingRes)
+        assertNotEquals(0, WhatsNewRelease.heroDescriptionRes)
     }
 
     @Test
@@ -86,27 +94,19 @@ class WhatsNewTests {
         items.forEach { item ->
             assertTrue(item.id.isNotBlank())
             assertTrue("${item.id} needs a title", item.titleRes != 0)
-            assertTrue("${item.id} needs a detail", item.detailRes != 0)
         }
     }
 
     @Test
-    fun releaseCoversTheShareSaveKindAndTabControls() {
-        val ids = WhatsNewRelease.items.map { it.id }.toSet()
-
-        // PR #45 must be listed even while it is still open. Tab controls
-        // cover moving pinned tabs into folders and pinning normal tabs.
-        assertTrue(ids.contains("share-save-kind"))
-        assertTrue(ids.contains("tab-controls"))
+    fun pillsCoverTheNewBrowserInOrder() {
+        assertEquals(
+            listOf("history", "ad-blocking", "suggestions", "downloads", "bottom-bar", "more"),
+            WhatsNewRelease.items.map { it.id },
+        )
     }
 
     @Test
-    fun everyIconIsMapped() {
-        // The sheet maps every enum case to a Material icon; a new case must
-        // not silently render as a blank badge.
-        assertEquals(
-            WhatsNewIcon.entries.toSet(),
-            WhatsNewRelease.items.map { it.icon }.toSet(),
-        )
+    fun heroUsesTheSingleHeroImage() {
+        assertEquals(R.drawable.whats_new_hero, WhatsNewRelease.heroImageRes)
     }
 }

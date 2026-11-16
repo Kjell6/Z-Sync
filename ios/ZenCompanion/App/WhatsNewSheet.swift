@@ -1,33 +1,29 @@
 import SwiftUI
 
 /// The What's New sheet: one short, scrollable release note in the platform's
-/// own idiom (large title, SF Symbols, system text styles) with the app's
-/// coral used only as an accent. Text uses Dynamic Type styles throughout, so
-/// the list scrolls rather than clipping. The Done button is pinned below the
-/// scroll area.
+/// own idiom (large title, system text styles) with the app's coral as the
+/// only accent. One hero image, then a short row of feature pills that wraps onto as many lines as the text size needs,
+/// so the content scrolls rather than clipping. The Done button is pinned
+/// below the scroll area; there is no close button, so Done or a swipe down
+/// dismisses the sheet.
 struct WhatsNewSheet: View {
     let release: WhatsNewRelease
     let scheme: ColorScheme
 
     @Environment(\.dismiss) private var dismiss
-    @ScaledMetric(relativeTo: .body) private var badgeSize: CGFloat = 44
 
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 28) {
+                VStack(alignment: .leading, spacing: 24) {
                     header
-
-                    VStack(alignment: .leading, spacing: 30) {
-                        ForEach(release.items) { item in
-                            row(item)
-                        }
-                    }
+                    hero
+                    features
                 }
                 .frame(maxWidth: 560, alignment: .leading)
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 24)
-                .padding(.top, 8)
+                .padding(.top, 28)
                 .padding(.bottom, 24)
             }
 
@@ -45,65 +41,54 @@ struct WhatsNewSheet: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Spacer(minLength: 12)
-                closeButton
-            }
-
-            Text("whats_new.title")
+        VStack(alignment: .leading, spacing: 8) {
+            Text(release.title)
                 .font(.largeTitle.bold())
                 .foregroundStyle(Palette.ink(scheme))
                 .accessibilityAddTraits(.isHeader)
 
-            Text("whats_new.subtitle")
+            Text(release.subtitle)
                 .font(.body)
                 .foregroundStyle(Palette.ink(scheme).opacity(0.65))
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    private var closeButton: some View {
-        Button {
-            dismiss()
-        } label: {
-            Image(systemName: "xmark")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Palette.ink(scheme).opacity(0.65))
-                .frame(width: 36, height: 36)
-                .modifier(DomedFill(shape: Circle(), scheme: scheme))
-                .contentShape(Circle())
-        }
-        .buttonStyle(LiquidPressButtonStyle())
-        .accessibilityLabel(Text("common.done"))
+    /// The hero image, full width at its own aspect ratio. It is decorative
+    /// apart from one label for VoiceOver.
+    private var hero: some View {
+        Image(release.heroImage)
+            .resizable()
+            .scaledToFit()
+            .frame(maxWidth: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(release.heroAccessibilityLabel))
+            .accessibilityAddTraits(.isImage)
     }
 
-    private func row(_ item: WhatsNewItem) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(systemName: item.systemImage)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(Palette.coral(scheme))
-                .frame(width: min(badgeSize, 60), height: min(badgeSize, 60))
-                .background(
-                    Palette.coral(scheme).opacity(0.12),
-                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                )
-                .accessibilityHidden(true)
+    /// A caption and the remaining features as small pills. VoiceOver reads
+    /// the caption as a header and each pill as plain text.
+    private var features: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(release.featuresHeading)
+                .zenFont(13, weight: .semibold)
+                .tracking(0.5)
+                .foregroundStyle(Palette.ink(scheme).opacity(0.65))
+                .accessibilityAddTraits(.isHeader)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.title)
-                    .font(.headline)
-                    .foregroundStyle(Palette.ink(scheme))
-                Text(item.detail)
-                    .font(.body)
-                    .foregroundStyle(Palette.ink(scheme).opacity(0.7))
-                    .fixedSize(horizontal: false, vertical: true)
+            PillFlowLayout(spacing: 8) {
+                ForEach(release.items) { item in
+                    Text(item.title)
+                        .zenFont(14)
+                        .foregroundStyle(Palette.ink(scheme))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(Palette.lift(scheme), in: Capsule(style: .continuous))
+                        .glassRimCapsule()
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(item.title))
-        .accessibilityValue(Text(item.detail))
     }
 
     private var doneButton: some View {
@@ -118,5 +103,57 @@ struct WhatsNewSheet: View {
                 .modifier(DomedFill(shape: RoundedRectangle(cornerRadius: 14, style: .continuous), scheme: scheme, fill: Palette.coral(scheme)))
         }
         .buttonStyle(LiquidPressButtonStyle())
+    }
+}
+
+/// Lays pills out left to right and wraps them onto new lines, so the row
+/// grows with Dynamic Type instead of clipping.
+private struct PillFlowLayout: Layout {
+    var spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = arrange(subviews, maxWidth: proposal.width ?? .infinity)
+        let width = rows.map(\.width).max() ?? 0
+        let height = rows.map(\.height).reduce(0, +) + spacing * CGFloat(max(rows.count - 1, 0))
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in arrange(subviews, maxWidth: bounds.width) {
+            var x = bounds.minX
+            for index in row.indices {
+                let size = subviews[index].sizeThatFits(.init(width: bounds.width, height: nil))
+                subviews[index].place(at: CGPoint(x: x, y: y), proposal: .init(size))
+                x += size.width + spacing
+            }
+            y += row.height + spacing
+        }
+    }
+
+    private struct Row {
+        var indices: [Int] = []
+        var width: CGFloat = 0
+        var height: CGFloat = 0
+    }
+
+    private func arrange(_ subviews: Subviews, maxWidth: CGFloat) -> [Row] {
+        var rows: [Row] = []
+        var current = Row()
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.init(width: maxWidth, height: nil))
+            let needed = current.indices.isEmpty ? size.width : current.width + spacing + size.width
+            if needed > maxWidth, !current.indices.isEmpty {
+                rows.append(current)
+                current = Row()
+            }
+            current.width = current.indices.isEmpty ? size.width : current.width + spacing + size.width
+            current.height = max(current.height, size.height)
+            current.indices.append(index)
+        }
+        if !current.indices.isEmpty {
+            rows.append(current)
+        }
+        return rows
     }
 }

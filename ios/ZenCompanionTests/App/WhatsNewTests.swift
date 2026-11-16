@@ -7,7 +7,7 @@ import XCTest
 final class WhatsNewTests: XCTestCase {
     private func makeStore(
         _ preferences: FakePreferences = FakePreferences(),
-        version: String = "1.5",
+        version: String = "1.6",
         release: WhatsNewRelease = .latest
     ) -> WhatsNewStore {
         WhatsNewStore(preferences: preferences, currentVersion: version, release: release)
@@ -15,8 +15,8 @@ final class WhatsNewTests: XCTestCase {
 
     // MARK: - Once per release
 
-    func testReleaseTargetsVersion15() {
-        XCTAssertEqual(WhatsNewRelease.latest.version, "1.5")
+    func testReleaseTargetsVersion16() {
+        XCTAssertEqual(WhatsNewRelease.latest.version, "1.6")
     }
 
     func testPresentsOnceForTheReleaseVersion() {
@@ -32,20 +32,28 @@ final class WhatsNewTests: XCTestCase {
     }
 
     func testDoesNotPresentBeforeTheReleaseVersion() {
-        XCTAssertFalse(makeStore(FakePreferences(), version: "1.4.1").shouldPresent)
-        XCTAssertFalse(makeStore(FakePreferences(), version: "1.5.1").shouldPresent)
-        XCTAssertTrue(makeStore(FakePreferences(), version: "1.5").shouldPresent)
+        XCTAssertFalse(makeStore(FakePreferences(), version: "1.5").shouldPresent)
+        XCTAssertFalse(makeStore(FakePreferences(), version: "1.6.1").shouldPresent)
+        XCTAssertTrue(makeStore(FakePreferences(), version: "1.6").shouldPresent)
     }
 
     func testPresentsAgainForANewerRelease() {
         let preferences = FakePreferences()
-        makeStore(preferences, version: "1.5").markPresented()
+        makeStore(preferences, version: "1.6").markPresented()
 
-        XCTAssertFalse(makeStore(preferences, version: "1.5").shouldPresent)
         XCTAssertFalse(makeStore(preferences, version: "1.6").shouldPresent)
+        XCTAssertFalse(makeStore(preferences, version: "1.7").shouldPresent)
 
-        let nextRelease = WhatsNewRelease(version: "1.6", items: WhatsNewRelease.latest.items)
-        XCTAssertTrue(makeStore(preferences, version: "1.6", release: nextRelease).shouldPresent)
+        let nextRelease = WhatsNewRelease(
+            version: "1.7",
+            title: WhatsNewRelease.latest.title,
+            subtitle: WhatsNewRelease.latest.subtitle,
+            heroImage: WhatsNewRelease.latest.heroImage,
+            heroAccessibilityLabel: WhatsNewRelease.latest.heroAccessibilityLabel,
+            featuresHeading: WhatsNewRelease.latest.featuresHeading,
+            items: WhatsNewRelease.latest.items
+        )
+        XCTAssertTrue(makeStore(preferences, version: "1.7", release: nextRelease).shouldPresent)
     }
 
     func testMarkingTwiceKeepsTheSameVersion() {
@@ -57,11 +65,30 @@ final class WhatsNewTests: XCTestCase {
 
         XCTAssertEqual(
             preferences.string(PreferenceKeys.whatsNewShownVersion, scope: .standard),
-            "1.5"
+            "1.6"
         )
     }
 
     // MARK: - Release notes model
+
+    func testReleaseHasCompleteHeaderContent() {
+        let release = WhatsNewRelease.latest
+
+        XCTAssertEqual(release.title, "Meet the new Quick Browser")
+        XCTAssertEqual(
+            release.subtitle,
+            "Rebuilt from the ground up, with real tabs that stay open."
+        )
+        XCTAssertEqual(release.featuresHeading, "WITH EVERYTHING A BROWSER NEEDS")
+        XCTAssertFalse(release.heroAccessibilityLabel.isEmpty)
+    }
+
+    func testHeroImageShipsWithTheApp() {
+        let name = WhatsNewRelease.latest.heroImage
+        XCTAssertEqual(name, "WhatsNewHero")
+        // A missing asset renders as nothing, so check it is bundled.
+        XCTAssertNotNil(UIImage(named: name), "missing hero asset \(name)")
+    }
 
     func testItemsHaveUniqueIdsAndCompleteCopy() {
         let items = WhatsNewRelease.latest.items
@@ -70,47 +97,22 @@ final class WhatsNewTests: XCTestCase {
         XCTAssertEqual(Set(items.map(\.id)).count, items.count, "item ids must be unique")
         for item in items {
             XCTAssertFalse(item.id.isEmpty)
-            XCTAssertFalse(item.systemImage.isEmpty, "\(item.id) needs an icon")
             XCTAssertFalse(item.title.isEmpty, "\(item.id) needs a title")
-            XCTAssertFalse(item.detail.isEmpty, "\(item.id) needs a detail")
         }
     }
 
-    func testReleaseCoversTheShareSaveKindAndTabControls() {
-        let ids = Set(WhatsNewRelease.latest.items.map(\.id))
-
-        // PR #45 must be listed even while it is still open. Tab controls
-        // cover moving pinned tabs into folders and pinning normal tabs.
-        XCTAssertTrue(ids.contains("share-save-kind"))
-        XCTAssertTrue(ids.contains("tab-controls"))
+    func testPillsCoverTheNewBrowserInOrder() {
+        XCTAssertEqual(
+            WhatsNewRelease.latest.items.map(\.title),
+            ["History", "Ad blocking", "Search suggestions", "Downloads", "New bottom bar", "and more"]
+        )
     }
 
-    func testFolderIconsAndEssentialsLiveInTheMoreItem() {
-        let more = WhatsNewRelease.latest.items.first { $0.id == "more" }
-
-        XCTAssertNotNil(more)
-        XCTAssertTrue(more?.detail.localizedCaseInsensitiveContains("folder icons") == true)
-        XCTAssertTrue(more?.detail.localizedCaseInsensitiveContains("essentials") == true)
-        XCTAssertFalse(WhatsNewRelease.latest.items.contains { $0.id == "folder-icons" })
-        XCTAssertFalse(WhatsNewRelease.latest.items.contains { $0.id == "essentials-per-row" })
-    }
-
-    func testCopyStaysConcise() {
+    func testPillCopyStaysShort() {
+        // Pills are one short phrase each; anything longer belongs in a
+        // sentence, not a pill.
         for item in WhatsNewRelease.latest.items {
-            XCTAssertLessThanOrEqual(item.title.count, 48, "\(item.id) title is too long")
-            // Two lines at the default text size; Dynamic Type may wrap more.
-            XCTAssertLessThanOrEqual(item.detail.count, 74, "\(item.id) detail is too long")
-        }
-    }
-
-    func testEveryNotificationStyleIconExists() {
-        // A missing SF Symbol renders as a blank badge, so pin the names used
-        // by the release instead of discovering it visually.
-        for item in WhatsNewRelease.latest.items {
-            XCTAssertNotNil(
-                UIImage(systemName: item.systemImage),
-                "\(item.id) uses an unknown SF Symbol: \(item.systemImage)"
-            )
+            XCTAssertLessThanOrEqual(item.title.count, 24, "\(item.id) is too long for a pill")
         }
     }
 }

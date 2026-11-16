@@ -2420,17 +2420,6 @@
         }
       }
     },
-    "whats_new.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Here’s what changed in this update."
-          }
-        }
-      }
-    },
     "whats_new.done": {
       "extractionState": "manual",
       "localizations": {

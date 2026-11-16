@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -569,16 +570,22 @@ private fun PermissionDialog(prompt: BrowserPrompt.Permission, onClose: () -> Un
         title = { Text(title) },
         text = { Text(stringResource(R.string.browser_permission_message)) },
         confirmButton = {
-            TextButton(onClick = {
-                onClose()
-                prompt.send(true)
-            }) { Text(stringResource(R.string.browser_permission_allow)) }
+            TextButton(
+                onClick = {
+                    onClose()
+                    prompt.send(true)
+                },
+                shapes = ButtonDefaults.shapes(),
+            ) { Text(stringResource(R.string.browser_permission_allow)) }
         },
         dismissButton = {
-            TextButton(onClick = {
-                onClose()
-                prompt.send(false)
-            }) { Text(stringResource(R.string.browser_permission_deny)) }
+            TextButton(
+                onClick = {
+                    onClose()
+                    prompt.send(false)
+                },
+                shapes = ButtonDefaults.shapes(),
+            ) { Text(stringResource(R.string.browser_permission_deny)) }
         },
     )
 }
@@ -610,16 +617,22 @@ private fun HttpLoginDialog(prompt: BrowserPrompt.HttpLogin, onClose: () -> Unit
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                onClose()
-                prompt.signIn(user, password)
-            }) { Text(stringResource(R.string.browser_dialog_sign_in)) }
+            TextButton(
+                onClick = {
+                    onClose()
+                    prompt.signIn(user, password)
+                },
+                shapes = ButtonDefaults.shapes(),
+            ) { Text(stringResource(R.string.browser_dialog_sign_in)) }
         },
         dismissButton = {
-            TextButton(onClick = {
-                onClose()
-                prompt.dismiss()
-            }) { Text(stringResource(R.string.common_cancel)) }
+            TextButton(
+                onClick = {
+                    onClose()
+                    prompt.dismiss()
+                },
+                shapes = ButtonDefaults.shapes(),
+            ) { Text(stringResource(R.string.common_cancel)) }
         },
     )
 }
@@ -637,15 +650,20 @@ private fun SystemAccessOffDialog(kinds: List<SitePermission>, onClose: () -> Un
         title = { Text(stringResource(title)) },
         text = { Text(stringResource(R.string.browser_permission_off_message)) },
         confirmButton = {
-            TextButton(onClick = {
-                onClose()
-                context.startActivity(
-                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)),
-                )
-            }) { Text(stringResource(R.string.browser_permission_open_settings)) }
+            TextButton(
+                onClick = {
+                    onClose()
+                    context.startActivity(
+                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)),
+                    )
+                },
+                shapes = ButtonDefaults.shapes(),
+            ) { Text(stringResource(R.string.browser_permission_open_settings)) }
         },
         dismissButton = {
-            TextButton(onClick = onClose) { Text(stringResource(R.string.common_cancel)) }
+            TextButton(onClick = onClose, shapes = ButtonDefaults.shapes()) {
+                Text(stringResource(R.string.common_cancel))
+            }
         },
     )
 }

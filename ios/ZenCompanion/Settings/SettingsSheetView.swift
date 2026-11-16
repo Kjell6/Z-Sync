@@ -178,7 +178,9 @@ struct SettingsSheet: View {
                 .foregroundStyle(Color.red)
                 .offset(x: 2.5) // balances the asymmetric glyph
                 .frame(width: 44)
-                .frame(minHeight: 54)
+                // As tall as the account card beside it, however many lines
+                // the card shows.
+                .frame(minHeight: 54, maxHeight: .infinity)
                 .modifier(DomedFill(shape: RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous), scheme: scheme, fill: Color.red.opacity(scheme == .dark ? 0.15 : 0.08)))
                 .glassRim(cornerRadius: Palette.liftCornerRadius)
         }
@@ -203,6 +205,7 @@ struct SettingsSheet: View {
                         accountBadge(account)
                         signOutButton(account)
                     }
+                    .fixedSize(horizontal: false, vertical: true)
                 }
             } else {
                 signInCard

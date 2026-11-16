@@ -11,9 +11,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -53,7 +55,10 @@ internal fun SettingsAddSearchEngineScreen(
             .settingsSheetPage()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp)
-            .padding(top = 28.dp, bottom = 28.dp),
+            .padding(
+                top = SheetContentTopSpacing,
+                bottom = SheetContentBottomSpacing,
+            ),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Row(
@@ -62,7 +67,11 @@ internal fun SettingsAddSearchEngineScreen(
                 .fillMaxWidth()
                 .padding(start = 4.dp),
         ) {
-            IconButton(onClick = onBack, modifier = Modifier.padding(end = 4.dp)) {
+            IconButton(
+                onClick = onBack,
+                shapes = IconButtonDefaults.shapes(),
+                modifier = Modifier.padding(end = 4.dp),
+            ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
                     contentDescription = stringResource(R.string.common_back),
@@ -76,7 +85,11 @@ internal fun SettingsAddSearchEngineScreen(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
             )
-            IconButton(onClick = onDone, modifier = Modifier.padding(end = 4.dp)) {
+            IconButton(
+                onClick = onDone,
+                shapes = IconButtonDefaults.shapes(),
+                modifier = Modifier.padding(end = 4.dp),
+            ) {
                 Icon(
                     imageVector = Icons.Outlined.Close,
                     contentDescription = stringResource(R.string.common_done),
@@ -143,6 +156,7 @@ internal fun SettingsAddSearchEngineScreen(
                 val result = onSubmit(name, template)
                 if (result == null) onBack() else error = result
             },
+            shapes = ButtonDefaults.shapes(),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(stringResource(R.string.settings_search_engine_add))

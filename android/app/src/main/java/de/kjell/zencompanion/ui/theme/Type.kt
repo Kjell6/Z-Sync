@@ -1,5 +1,6 @@
 package de.kjell.zencompanion.ui.theme
 
+import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
@@ -69,5 +70,33 @@ object ZenType {
         fontWeight = FontWeight.SemiBold,
         fontSize = 11.sp,
         letterSpacing = 0.6.sp,
+    )
+}
+
+/**
+ * The Material type scale, kept from the library defaults (sizes, line
+ * heights, platform text metrics) but drawn in the app's system face and with
+ * the weights the rest of the app already uses: semibold headings, medium
+ * titles and labels, regular body. This is what `MaterialTheme.typography`
+ * resolves to, so native components (list items, menus, buttons) share one
+ * voice with [ZenType].
+ */
+val ZenTypography: Typography = Typography().run {
+    copy(
+        displayLarge = displayLarge.copy(fontFamily = SystemFont, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.5).sp),
+        displayMedium = displayMedium.copy(fontFamily = SystemFont, fontWeight = FontWeight.SemiBold),
+        displaySmall = displaySmall.copy(fontFamily = SystemFont, fontWeight = FontWeight.SemiBold),
+        headlineLarge = headlineLarge.copy(fontFamily = SystemFont, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.3).sp),
+        headlineMedium = headlineMedium.copy(fontFamily = SystemFont, fontWeight = FontWeight.SemiBold),
+        headlineSmall = headlineSmall.copy(fontFamily = SystemFont, fontWeight = FontWeight.Bold),
+        titleLarge = titleLarge.copy(fontFamily = SystemFont, fontWeight = FontWeight.SemiBold),
+        titleMedium = titleMedium.copy(fontFamily = SystemFont, fontWeight = FontWeight.Medium),
+        titleSmall = titleSmall.copy(fontFamily = SystemFont, fontWeight = FontWeight.Medium),
+        bodyLarge = bodyLarge.copy(fontFamily = SystemFont),
+        bodyMedium = bodyMedium.copy(fontFamily = SystemFont),
+        bodySmall = bodySmall.copy(fontFamily = SystemFont),
+        labelLarge = labelLarge.copy(fontFamily = SystemFont, fontWeight = FontWeight.Medium),
+        labelMedium = labelMedium.copy(fontFamily = SystemFont, fontWeight = FontWeight.Medium),
+        labelSmall = labelSmall.copy(fontFamily = SystemFont, fontWeight = FontWeight.Medium),
     )
 }

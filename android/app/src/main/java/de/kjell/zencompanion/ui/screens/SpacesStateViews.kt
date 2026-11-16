@@ -21,9 +21,11 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -37,7 +39,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.ui.theme.LocalZenColors
+import de.kjell.zencompanion.ui.theme.ZenLoadingIndicator
 import de.kjell.zencompanion.ui.theme.liftBorder
+import de.kjell.zencompanion.ui.theme.zenListItemColors
 
 /** Sync works but zero spaces: Zen Sync not enabled on desktop yet. */
 @Composable
@@ -69,6 +73,7 @@ internal fun ZeroSpacesHelp(loading: Boolean, onSetup: () -> Unit, onRetry: () -
         )
         Button(
             onClick = onSetup,
+            shapes = ButtonDefaults.shapes(),
             contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
         ) {
             Icon(
@@ -83,13 +88,9 @@ internal fun ZeroSpacesHelp(loading: Boolean, onSetup: () -> Unit, onRetry: () -
             )
         }
         if (loading) {
-            CircularProgressIndicator(
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp),
-                strokeWidth = 2.dp,
-            )
+            ZenLoadingIndicator(modifier = Modifier.size(24.dp))
         } else {
-            TextButton(onClick = onRetry) {
+            TextButton(onClick = onRetry, shapes = ButtonDefaults.shapes()) {
                 Icon(
                     imageVector = Icons.Outlined.Refresh,
                     contentDescription = null,
@@ -118,53 +119,49 @@ internal fun SyncSetupHint(
         border = liftBorder(),
         modifier = modifier,
     ) {
-        Row(
-            modifier = Modifier.padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .clickableNoIndication(onClick = onOpen)
-                    .clip(RoundedCornerShape(12.dp))
-                    .padding(vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(34.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Sync,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.sync_setup_hint_title),
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ListItem(
+                onClick = onOpen,
+                modifier = Modifier.weight(1f),
+                leadingContent = {
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Sync,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                },
+                supportingContent = {
                     Text(
                         text = stringResource(R.string.sync_setup_hint_body),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.size(18.dp),
+                },
+                trailingContent = {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(18.dp),
+                    )
+                },
+                colors = zenListItemColors(),
+            ) {
+                Text(
+                    text = stringResource(R.string.sync_setup_hint_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
             }
-            IconButton(onClick = onDismiss) {
+            IconButton(onClick = onDismiss, shapes = IconButtonDefaults.shapes()) {
                 Icon(
                     imageVector = Icons.Outlined.Close,
                     contentDescription = stringResource(R.string.common_dismiss),
@@ -214,7 +211,7 @@ internal fun ShareExtensionTip(onDismiss: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            IconButton(onClick = onDismiss) {
+            IconButton(onClick = onDismiss, shapes = IconButtonDefaults.shapes()) {
                 Icon(
                     imageVector = Icons.Outlined.Close,
                     contentDescription = stringResource(R.string.common_dismiss),
@@ -233,10 +230,7 @@ internal fun StateArea(loading: Boolean, errorRes: Int?, onRetry: () -> Unit) { 
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            CircularProgressIndicator(
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(36.dp),
-            )
+            ZenLoadingIndicator(modifier = Modifier.size(36.dp))
             Text(
                 stringResource(R.string.spaces_connecting),
                 style = MaterialTheme.typography.bodyLarge,
@@ -265,6 +259,7 @@ internal fun StateArea(loading: Boolean, errorRes: Int?, onRetry: () -> Unit) { 
             )
             Button(
                 onClick = onRetry,
+                shapes = ButtonDefaults.shapes(),
                 contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
             ) {
                 Icon(

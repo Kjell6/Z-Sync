@@ -3,7 +3,6 @@ package de.kjell.zencompanion.ui.components
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,16 +23,16 @@ import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,8 +55,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.sync.ZenSpaces
-import de.kjell.zencompanion.ui.theme.pressFeedback
+import de.kjell.zencompanion.ui.theme.ZenLoadingIndicator
+import de.kjell.zencompanion.ui.theme.ZenMenu
+import de.kjell.zencompanion.ui.theme.ZenMenuGroup
+import de.kjell.zencompanion.ui.theme.ZenMenuItem
+import de.kjell.zencompanion.ui.theme.rowPressFeedback
 import de.kjell.zencompanion.ui.theme.rowTitleMaxLines
+import de.kjell.zencompanion.ui.theme.zenListItemColors
+import de.kjell.zencompanion.ui.theme.zenMenuItemColors
 
 internal fun displayTitle(tab: ZenSpaces.ZenTab): String = tab.displayTitle
 
@@ -90,12 +95,12 @@ fun SplitRow(
         color = Color.Transparent,
         shape = RoundedCornerShape(12.dp),
         modifier = modifier
-            .pressFeedback(source)
+            .rowPressFeedback(source)
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .combinedClickable(
                 interactionSource = source,
-                indication = null,
+                indication = ripple(color = MaterialTheme.colorScheme.onSurface),
                 onClick = {},
                 onLongClick = { menuOpen = true },
             )
@@ -135,29 +140,40 @@ fun SplitRow(
             }
         }
 
-        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        deleteText,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = SplitRowGlyph,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(20.dp),
-                    )
-                },
-                onClick = {
-                    menuOpen = false
-                    onDelete()
-                },
-            )
+        ZenMenu(
+            expanded = menuOpen,
+            onDismissRequest = { menuOpen = false },
+        ) {
+            ZenMenuGroup(index = 0, count = 1) {
+                ZenMenuItem(
+                    text = {
+                        Text(
+                            deleteText,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    },
+                    onClick = {
+                        menuOpen = false
+                        onDelete()
+                    },
+                    index = 0,
+                    count = 1,
+                    leadingIcon = {
+                        Icon(
+                            imageVector = SplitRowGlyph,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    },
+                    colors = zenMenuItemColors(
+                        textColor = MaterialTheme.colorScheme.error,
+                        iconColor = MaterialTheme.colorScheme.error,
+                    ),
+                )
+            }
         }
     }
 }
@@ -175,10 +191,10 @@ private fun SplitCell(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
-            .pressFeedback(source)
+            .rowPressFeedback(source)
             .combinedClickable(
                 interactionSource = source,
-                indication = null,
+                indication = ripple(color = MaterialTheme.colorScheme.onSurface),
                 onClick = { onOpenUrl(tab.url, tab.displayTitle) },
                 onLongClick = onLongPress,
             ),
@@ -283,12 +299,12 @@ fun TabRow(
         color = Color.Transparent,
         shape = RoundedCornerShape(12.dp),
         modifier = modifier
-            .pressFeedback(source)
+            .rowPressFeedback(source)
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .combinedClickable(
                 interactionSource = source,
-                indication = null,
+                indication = ripple(color = MaterialTheme.colorScheme.onSurface),
                 onClick = {
                     if (onOpenUrl != null) {
                         onOpenUrl(tab.url, tab.displayTitle)
@@ -330,102 +346,119 @@ fun TabRow(
             )
 
             if (deleting) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(16.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                ZenLoadingIndicator(modifier = Modifier.size(16.dp))
             }
         }
 
-        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-            if (TabPin.offersPin(isNormalTab)) {
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            pinText,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                        )
-                    },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Outlined.PushPin,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    },
-                    onClick = {
-                        menuOpen = false
-                        onPin()
-                    },
-                )
-            }
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        renameText,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
+        ZenMenu(
+            expanded = menuOpen,
+            onDismissRequest = { menuOpen = false },
+        ) {
+            val offersPin = TabPin.offersPin(isNormalTab)
+            val itemCount = (if (offersPin) 1 else 0) + 1 +
+                (if (offersMove) 1 else 0) + (if (deletable) 1 else 0)
+            ZenMenuGroup(index = 0, count = 1) {
+                var itemIndex = 0
+                if (offersPin) {
+                    ZenMenuItem(
+                        text = {
+                            Text(
+                                pinText,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Outlined.PushPin,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            onPin()
+                        },
+                        index = itemIndex++,
+                        count = itemCount,
                     )
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Outlined.Edit,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
+                }
+                ZenMenuItem(
+                    text = {
+                        Text(
+                            renameText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.Edit,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    },
+                    onClick = {
+                        menuOpen = false
+                        showRename = true
+                    },
+                    index = itemIndex++,
+                    count = itemCount,
+                )
+                if (offersMove) {
+                    ZenMenuItem(
+                        text = {
+                            Text(
+                                moveText,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Outlined.DriveFileMove,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            showMove = true
+                        },
+                        index = itemIndex++,
+                        count = itemCount,
                     )
-                },
-                onClick = {
-                    menuOpen = false
-                    showRename = true
-                },
-            )
-            if (offersMove) {
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            moveText,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                        )
-                    },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.DriveFileMove,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    },
-                    onClick = {
-                        menuOpen = false
-                        showMove = true
-                    },
-                )
-            }
-            if (deletable) {
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            deleteText,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                        )
-                    },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Outlined.Delete,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    },
-                    onClick = {
-                        menuOpen = false
-                        onDelete()
-                    },
-                )
+                }
+                if (deletable) {
+                    ZenMenuItem(
+                        text = {
+                            Text(
+                                deleteText,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Outlined.Delete,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            onDelete()
+                        },
+                        index = itemIndex,
+                        count = itemCount,
+                        colors = zenMenuItemColors(
+                            textColor = MaterialTheme.colorScheme.error,
+                            iconColor = MaterialTheme.colorScheme.error,
+                        ),
+                    )
+                }
             }
         }
     }
@@ -476,12 +509,15 @@ internal fun RenameTabDialog(
             )
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(draft) }) {
+            TextButton(
+                onClick = { onConfirm(draft) },
+                shapes = ButtonDefaults.shapes(),
+            ) {
                 Text(stringResource(R.string.tabs_rename))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = onDismiss, shapes = ButtonDefaults.shapes()) {
                 Text(stringResource(R.string.common_cancel))
             }
         },
@@ -515,17 +551,18 @@ private fun MoveTabDialog(
                         destination.folderId == null -> rootFallback
                         else -> folderFallback
                     }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { selected = destination.folderId }
-                            .padding(start = (destination.depth * 16).dp),
+                    ListItem(
+                        selected = TabMove.samePlace(selected, destination.folderId),
+                        onClick = { selected = destination.folderId },
+                        modifier = Modifier.padding(start = (destination.depth * 16).dp),
+                        leadingContent = {
+                            RadioButton(
+                                selected = TabMove.samePlace(selected, destination.folderId),
+                                onClick = null,
+                            )
+                        },
+                        colors = zenListItemColors(),
                     ) {
-                        RadioButton(
-                            selected = TabMove.samePlace(selected, destination.folderId),
-                            onClick = { selected = destination.folderId },
-                        )
                         Text(
                             text = name,
                             style = MaterialTheme.typography.bodyLarge,
@@ -540,12 +577,13 @@ private fun MoveTabDialog(
             TextButton(
                 enabled = canConfirm,
                 onClick = { if (canConfirm) onConfirm(TabMove.normalize(selected)) },
+                shapes = ButtonDefaults.shapes(),
             ) {
                 Text(stringResource(R.string.tabs_move_confirm))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = onDismiss, shapes = ButtonDefaults.shapes()) {
                 Text(stringResource(R.string.common_cancel))
             }
         },

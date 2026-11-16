@@ -18,15 +18,31 @@ struct WhatsNewRelease: Equatable {
     let eyebrow: String
     let title: String
     let subtitle: String
+    /// The three phone screenshots in the hero, as asset names: left,
+    /// upright centre, right. The side ones lean outwards.
+    let heroCards: HeroCards
+    let heroAccessibilityLabel: String
     /// Small caption above the feature pills.
     let featuresHeading: String
     let items: [WhatsNewItem]
+
+    struct HeroCards: Equatable {
+        let leading: String
+        let center: String
+        let trailing: String
+    }
 
     static let latest = WhatsNewRelease(
         version: "1.6",
         eyebrow: "Z-SYNC 1.6",
         title: "Meet the new browser",
         subtitle: "Rebuilt from the ground up, with real tabs that stay open.",
+        heroCards: HeroCards(
+            leading: "WhatsNewSearch",
+            center: "WhatsNewDeck",
+            trailing: "WhatsNewPage"
+        ),
+        heroAccessibilityLabel: "The new browser: search suggestions, open pages as cards, and a page with the new bottom bar",
         featuresHeading: "AND EVERYTHING A BROWSER NEEDS",
         items: [
             WhatsNewItem(id: "history", title: "History"),

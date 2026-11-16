@@ -1,6 +1,7 @@
 package de.kjell.zencompanion.data
 
 import android.content.Context
+import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import de.kjell.zencompanion.R
 
@@ -11,6 +12,13 @@ import de.kjell.zencompanion.R
 data class WhatsNewItem(
     val id: String,
     @StringRes val titleRes: Int,
+)
+
+/** Drawable resources for the hero's three phone screenshots. */
+data class HeroCards(
+    @DrawableRes val leading: Int,
+    @DrawableRes val center: Int,
+    @DrawableRes val trailing: Int,
 )
 
 /**
@@ -29,6 +37,19 @@ object WhatsNewRelease {
 
     @StringRes
     val subtitleRes: Int = R.string.whats_new_subtitle
+
+    @StringRes
+    val heroDescriptionRes: Int = R.string.whats_new_hero_description
+
+    /**
+     * The three phone screenshots in the hero: left, upright centre, right.
+     * The side ones lean outwards.
+     */
+    val heroCards: HeroCards = HeroCards(
+        leading = R.drawable.whats_new_search,
+        center = R.drawable.whats_new_deck,
+        trailing = R.drawable.whats_new_page,
+    )
 
     /** Small caption above the feature pills. */
     @StringRes

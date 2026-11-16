@@ -1,3 +1,4 @@
+import UIKit
 import XCTest
 
 @testable import ZenCompanion
@@ -48,6 +49,8 @@ final class WhatsNewTests: XCTestCase {
             eyebrow: WhatsNewRelease.latest.eyebrow,
             title: WhatsNewRelease.latest.title,
             subtitle: WhatsNewRelease.latest.subtitle,
+            heroCards: WhatsNewRelease.latest.heroCards,
+            heroAccessibilityLabel: WhatsNewRelease.latest.heroAccessibilityLabel,
             featuresHeading: WhatsNewRelease.latest.featuresHeading,
             items: WhatsNewRelease.latest.items
         )
@@ -79,6 +82,16 @@ final class WhatsNewTests: XCTestCase {
             "Rebuilt from the ground up, with real tabs that stay open."
         )
         XCTAssertEqual(release.featuresHeading, "AND EVERYTHING A BROWSER NEEDS")
+        XCTAssertFalse(release.heroAccessibilityLabel.isEmpty)
+    }
+
+    func testHeroShowsTheThreeScreenshotsInOrder() {
+        let cards = WhatsNewRelease.latest.heroCards
+        XCTAssertEqual([cards.leading, cards.center, cards.trailing], ["WhatsNewSearch", "WhatsNewDeck", "WhatsNewPage"])
+        // A missing asset renders as an empty card, so check every name.
+        for name in [cards.leading, cards.center, cards.trailing] {
+            XCTAssertNotNil(UIImage(named: name), "missing hero asset \(name)")
+        }
     }
 
     func testItemsHaveUniqueIdsAndCompleteCopy() {

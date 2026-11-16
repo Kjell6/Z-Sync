@@ -2,27 +2,28 @@ import SwiftUI
 
 /// The What's New sheet: one short, scrollable release note in the platform's
 /// own idiom (large title, SF Symbols, system text styles) with the app's
-/// coral used only as an accent. Text uses Dynamic Type styles throughout, so
-/// the list scrolls rather than clipping. The Done button is pinned below the
-/// scroll area.
+/// coral as the hero and the only accent. The rest of the release is a short
+/// row of feature pills that wraps onto as many lines as the text size needs,
+/// so the content scrolls rather than clipping. The Done button is pinned
+/// below the scroll area.
 struct WhatsNewSheet: View {
     let release: WhatsNewRelease
     let scheme: ColorScheme
 
     @Environment(\.dismiss) private var dismiss
-    @ScaledMetric(relativeTo: .body) private var badgeSize: CGFloat = 44
 
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 28) {
-                    header
-
-                    VStack(alignment: .leading, spacing: 30) {
-                        ForEach(release.items) { item in
-                            row(item)
-                        }
+                VStack(alignment: .leading, spacing: 24) {
+                    HStack {
+                        Spacer(minLength: 12)
+                        closeButton
                     }
+
+                    header
+                    hero
+                    features
                 }
                 .frame(maxWidth: 560, alignment: .leading)
                 .frame(maxWidth: .infinity)
@@ -45,18 +46,18 @@ struct WhatsNewSheet: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Spacer(minLength: 12)
-                closeButton
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            Text(release.eyebrow)
+                .zenFont(12, weight: .semibold)
+                .tracking(1.2)
+                .foregroundStyle(Palette.coral(scheme))
 
-            Text("whats_new.title")
+            Text(release.title)
                 .font(.largeTitle.bold())
                 .foregroundStyle(Palette.ink(scheme))
                 .accessibilityAddTraits(.isHeader)
 
-            Text("whats_new.subtitle")
+            Text(release.subtitle)
                 .font(.body)
                 .foregroundStyle(Palette.ink(scheme).opacity(0.65))
                 .fixedSize(horizontal: false, vertical: true)
@@ -78,32 +79,50 @@ struct WhatsNewSheet: View {
         .accessibilityLabel(Text("common.done"))
     }
 
-    private func row(_ item: WhatsNewItem) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(systemName: item.systemImage)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(Palette.coral(scheme))
-                .frame(width: min(badgeSize, 60), height: min(badgeSize, 60))
-                .background(
-                    Palette.coral(scheme).opacity(0.12),
-                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                )
-                .accessibilityHidden(true)
+    /// The brand-coloured panel holding the browser screenshot, shown like a
+    /// phone screen. The screenshot itself is decorative; the panel carries
+    /// one label for VoiceOver.
+    private var hero: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(Palette.coral(scheme))
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.title)
-                    .font(.headline)
-                    .foregroundStyle(Palette.ink(scheme))
-                Text(item.detail)
-                    .font(.body)
-                    .foregroundStyle(Palette.ink(scheme).opacity(0.7))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            Image(release.heroImage)
+                .resizable()
+                .scaledToFit()
+                .frame(height: 248)
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .shadow(color: .black.opacity(0.25), radius: 14, y: 8)
+                .accessibilityHidden(true)
         }
+        .frame(maxWidth: .infinity)
+        .frame(height: 280)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(item.title))
-        .accessibilityValue(Text(item.detail))
+        .accessibilityLabel(Text(release.heroAccessibilityLabel))
+    }
+
+    /// A caption and the remaining features as small pills. VoiceOver reads
+    /// the caption as a header and each pill as plain text.
+    private var features: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(release.featuresHeading)
+                .zenFont(13, weight: .semibold)
+                .tracking(0.5)
+                .foregroundStyle(Palette.ink(scheme).opacity(0.65))
+                .accessibilityAddTraits(.isHeader)
+
+            PillFlowLayout(spacing: 8) {
+                ForEach(release.items) { item in
+                    Text(item.title)
+                        .zenFont(14)
+                        .foregroundStyle(Palette.ink(scheme))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(Palette.lift(scheme), in: Capsule(style: .continuous))
+                        .glassRimCapsule()
+                }
+            }
+        }
     }
 
     private var doneButton: some View {
@@ -121,5 +140,57 @@ struct WhatsNewSheet: View {
                 )
         }
         .buttonStyle(PressedButtonStyle())
+    }
+}
+
+/// Lays pills out left to right and wraps them onto new lines, so the row
+/// grows with Dynamic Type instead of clipping.
+private struct PillFlowLayout: Layout {
+    var spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = arrange(subviews, maxWidth: proposal.width ?? .infinity)
+        let width = rows.map(\.width).max() ?? 0
+        let height = rows.map(\.height).reduce(0, +) + spacing * CGFloat(max(rows.count - 1, 0))
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in arrange(subviews, maxWidth: bounds.width) {
+            var x = bounds.minX
+            for index in row.indices {
+                let size = subviews[index].sizeThatFits(.init(width: bounds.width, height: nil))
+                subviews[index].place(at: CGPoint(x: x, y: y), proposal: .init(size))
+                x += size.width + spacing
+            }
+            y += row.height + spacing
+        }
+    }
+
+    private struct Row {
+        var indices: [Int] = []
+        var width: CGFloat = 0
+        var height: CGFloat = 0
+    }
+
+    private func arrange(_ subviews: Subviews, maxWidth: CGFloat) -> [Row] {
+        var rows: [Row] = []
+        var current = Row()
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.init(width: maxWidth, height: nil))
+            let needed = current.indices.isEmpty ? size.width : current.width + spacing + size.width
+            if needed > maxWidth, !current.indices.isEmpty {
+                rows.append(current)
+                current = Row()
+            }
+            current.width = current.indices.isEmpty ? size.width : current.width + spacing + size.width
+            current.height = max(current.height, size.height)
+            current.indices.append(index)
+        }
+        if !current.indices.isEmpty {
+            rows.append(current)
+        }
+        return rows
     }
 }

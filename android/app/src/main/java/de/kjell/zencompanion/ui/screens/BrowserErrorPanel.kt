@@ -26,7 +26,8 @@ import androidx.compose.material.icons.outlined.GppMaybe
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.WifiOff
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -45,6 +46,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
 import de.kjell.zencompanion.ui.theme.LocalZenColors
+import de.kjell.zencompanion.ui.theme.ZenLoadingIndicator
 import de.kjell.zencompanion.ui.theme.liftCard
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -133,9 +135,8 @@ internal fun BrowserErrorPanel(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    CircularProgressIndicator(
+                    ZenLoadingIndicator(
                         modifier = Modifier.size(12.dp),
-                        strokeWidth = 2.dp,
                         color = zen.ink60,
                     )
                     Text(
@@ -152,13 +153,17 @@ internal fun BrowserErrorPanel(
 @Composable
 private fun PrimaryButton(label: String, isLoading: Boolean, onClick: () -> Unit) {
     val zen = LocalZenColors.current
-    TextButton(
+    Button(
         onClick = onClick,
         enabled = !isLoading,
-        shape = CircleShape,
-        modifier = Modifier
-            .heightIn(min = 48.dp)
-            .background(zen.ink, CircleShape),
+        shapes = ButtonDefaults.shapes(shape = CircleShape),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = zen.ink,
+            contentColor = zen.paper,
+            disabledContainerColor = zen.ink,
+            disabledContentColor = zen.paper,
+        ),
+        modifier = Modifier.heightIn(min = 48.dp),
     ) {
         Box(contentAlignment = Alignment.Center) {
             Text(
@@ -169,9 +174,8 @@ private fun PrimaryButton(label: String, isLoading: Boolean, onClick: () -> Unit
                 modifier = Modifier.padding(horizontal = 12.dp),
             )
             if (isLoading) {
-                CircularProgressIndicator(
+                ZenLoadingIndicator(
                     modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
                     color = zen.paper,
                 )
             }
@@ -182,7 +186,11 @@ private fun PrimaryButton(label: String, isLoading: Boolean, onClick: () -> Unit
 @Composable
 private fun SecondaryButton(label: String, onClick: () -> Unit) {
     val zen = LocalZenColors.current
-    TextButton(onClick = onClick, modifier = Modifier.heightIn(min = 48.dp)) {
+    TextButton(
+        onClick = onClick,
+        shapes = ButtonDefaults.shapes(),
+        modifier = Modifier.heightIn(min = 48.dp),
+    ) {
         Text(
             text = label,
             color = zen.ink,

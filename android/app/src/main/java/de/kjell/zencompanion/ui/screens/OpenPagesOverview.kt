@@ -38,13 +38,9 @@ import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -97,7 +93,12 @@ import de.kjell.zencompanion.ui.components.Favicon
 import de.kjell.zencompanion.ui.components.PinDestination
 import de.kjell.zencompanion.ui.components.PinDestinationModel
 import de.kjell.zencompanion.ui.theme.LocalZenColors
+import de.kjell.zencompanion.ui.theme.ZenMenu
+import de.kjell.zencompanion.ui.theme.ZenMenuGroup
+import de.kjell.zencompanion.ui.theme.ZenMenuGroupGap
+import de.kjell.zencompanion.ui.theme.ZenMenuItem
 import de.kjell.zencompanion.ui.theme.ZenType
+import de.kjell.zencompanion.ui.theme.zenMenuItemColors
 import de.kjell.zencompanion.util.Haptics
 import de.kjell.zencompanion.util.PageTitle
 import kotlin.math.abs
@@ -787,65 +788,129 @@ private fun PageCardMenu(
     onClose: () -> Unit,
 ) {
     var pinning by remember(expanded) { mutableStateOf(false) }
-    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+    ZenMenu(expanded = expanded, onDismissRequest = onDismiss) {
         if (pinning) {
-            spaces.forEach { space ->
-                DropdownMenuItem(
-                    text = { Text(space.name) },
-                    onClick = { onPin(PinDestination(spaceId = space.id)) },
-                )
-                if (pinsIntoFolders) {
-                    PinDestinationModel.folderEntries(space).forEach { folder ->
-                        DropdownMenuItem(
-                            text = { Text(folder.name) },
-                            modifier = Modifier.padding(start = 16.dp + 12.dp * folder.depth),
-                            onClick = { onPin(PinDestination(spaceId = space.id, folderId = folder.folderId)) },
+            // Every space, then its folders, in the one group of destinations.
+            val targets = spaces.flatMap { space ->
+                val spaceEntry = Triple(PinDestination(spaceId = space.id), space.name, 0)
+                val folders = if (pinsIntoFolders) {
+                    PinDestinationModel.folderEntries(space).map { folder ->
+                        Triple(
+                            PinDestination(spaceId = space.id, folderId = folder.folderId),
+                            folder.name,
+                            folder.depth,
                         )
                     }
+                } else {
+                    emptyList()
+                }
+                listOf(spaceEntry) + folders
+            }
+            ZenMenuGroup(index = 0, count = 1) {
+                targets.forEachIndexed { index, (destination, name, depth) ->
+                    ZenMenuItem(
+                        text = { Text(name) },
+                        onClick = { onPin(destination) },
+                        index = index,
+                        count = targets.size,
+                        modifier = if (depth > 0) Modifier.padding(start = 12.dp * depth) else Modifier,
+                    )
                 }
             }
-            return@DropdownMenu
+            return@ZenMenu
         }
-        if (canKeep) {
-            DropdownMenuItem(
-                text = { Text(stringResource(if (page.isKept) R.string.browser_kept else R.string.browser_keep_page)) },
-                leadingIcon = {
-                    Icon(if (page.isKept) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder, contentDescription = null)
-                },
-                onClick = onToggleKeep,
-            )
-        }
-        if (page.url.isNotEmpty()) {
-            if (canPin) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.kept_pin_to_space)) },
-                    leadingIcon = { Icon(Icons.Outlined.PushPin, contentDescription = null) },
-                    trailingIcon = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null) },
-                    enabled = spaces.isNotEmpty(),
-                    onClick = { pinning = true },
-                )
+        val hasUrl = page.url.isNotEmpty()
+        val showsPin = hasUrl && canPin
+        val actionCount = (if (canKeep) 1 else 0) + (if (showsPin) 1 else 0) + (if (hasUrl) 2 else 0)
+        if (actionCount > 0) {
+            val keepIndex = if (canKeep) 0 else -1
+            val pinIndex = if (canKeep) 1 else 0
+            val copyIndex = if (showsPin) pinIndex + 1 else pinIndex
+            val shareIndex = copyIndex + 1
+            ZenMenuGroup(index = 0, count = 2) {
+                if (canKeep) {
+                    ZenMenuItem(
+                        text = {
+                            Text(
+                                stringResource(
+                                    if (page.isKept) R.string.browser_kept else R.string.browser_keep_page,
+                                ),
+                            )
+                        },
+                        onClick = onToggleKeep,
+                        index = keepIndex,
+                        count = actionCount,
+                        leadingIcon = {
+                            Icon(
+                                imageVector = if (page.isKept) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
+                                contentDescription = null,
+                            )
+                        },
+                    )
+                }
+                if (showsPin) {
+                    ZenMenuItem(
+                        text = { Text(stringResource(R.string.kept_pin_to_space)) },
+                        onClick = { pinning = true },
+                        index = pinIndex,
+                        count = actionCount,
+                        enabled = spaces.isNotEmpty(),
+                        leadingIcon = { Icon(Icons.Outlined.PushPin, contentDescription = null) },
+                        trailingContent = {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                                contentDescription = null,
+                            )
+                        },
+                    )
+                }
+                if (hasUrl) {
+                    ZenMenuItem(
+                        text = { Text(stringResource(R.string.kept_copy_link)) },
+                        onClick = onCopy,
+                        index = copyIndex,
+                        count = actionCount,
+                        leadingIcon = { Icon(Icons.Outlined.ContentCopy, contentDescription = null) },
+                    )
+                    ZenMenuItem(
+                        text = { Text(stringResource(R.string.browser_share)) },
+                        onClick = onShare,
+                        index = shareIndex,
+                        count = actionCount,
+                        leadingIcon = { Icon(Icons.Outlined.Share, contentDescription = null) },
+                    )
+                }
             }
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.kept_copy_link)) },
-                leadingIcon = { Icon(Icons.Outlined.ContentCopy, contentDescription = null) },
-                onClick = onCopy,
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.browser_share)) },
-                leadingIcon = { Icon(Icons.Outlined.Share, contentDescription = null) },
-                onClick = onShare,
+            ZenMenuGroupGap()
+        }
+        ZenMenuGroup(index = 1, count = 2) {
+            ZenMenuItem(
+                text = {
+                    Text(
+                        stringResource(R.string.kept_close_page),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                },
+                onClick = onClose,
+                index = 0,
+                count = 1,
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                },
+                colors = zenMenuItemColors(
+                    textColor = MaterialTheme.colorScheme.error,
+                    iconColor = MaterialTheme.colorScheme.error,
+                ),
             )
         }
-        HorizontalDivider()
-        DropdownMenuItem(
-            text = { Text(stringResource(R.string.kept_close_page), color = MaterialTheme.colorScheme.error) },
-            leadingIcon = { Icon(Icons.Outlined.Close, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-            onClick = onClose,
-        )
     }
 }
 
-/** Long press on a link or an image in a page. */
+/** Long press on a link or an image in a page: the same grouped menus, in a dialog. */
 @Composable
 internal fun LinkMenu(
     menu: BrowserHitMenu,
@@ -864,33 +929,48 @@ internal fun LinkMenu(
         },
         text = {
             Column(Modifier.fillMaxWidth()) {
-                if (menu.link != null) {
-                    TextButton(onClick = onOpenInNewPage, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.browser_open_in_new_page), modifier = Modifier.fillMaxWidth())
-                    }
-                    TextButton(onClick = onCopy, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.kept_copy_link), modifier = Modifier.fillMaxWidth())
-                    }
-                    TextButton(onClick = onShare, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.browser_share), modifier = Modifier.fillMaxWidth())
+                val link = menu.link
+                if (link != null) {
+                    ZenMenuGroup(index = 0, count = if (menu.hasImageActions) 2 else 1) {
+                        ZenMenuItem(
+                            text = { Text(stringResource(R.string.browser_open_in_new_page)) },
+                            onClick = onOpenInNewPage,
+                            index = 0,
+                            count = 3,
+                        )
+                        ZenMenuItem(
+                            text = { Text(stringResource(R.string.kept_copy_link)) },
+                            onClick = onCopy,
+                            index = 1,
+                            count = 3,
+                        )
+                        ZenMenuItem(
+                            text = { Text(stringResource(R.string.browser_share)) },
+                            onClick = onShare,
+                            index = 2,
+                            count = 3,
+                        )
                     }
                 }
                 if (menu.hasImageActions) {
                     // The image's own actions sit below the link's, as two groups.
-                    if (menu.link != null) HorizontalDivider()
-                    if (menu.canSaveImage) {
-                        TextButton(onClick = onSaveImage, modifier = Modifier.fillMaxWidth()) {
-                            Text(stringResource(R.string.browser_image_save), modifier = Modifier.fillMaxWidth())
-                        }
+                    if (link != null) ZenMenuGroupGap()
+                    val imageActions = buildList {
+                        if (menu.canSaveImage) add(R.string.browser_image_save to onSaveImage)
+                        if (menu.canOpenImage) add(R.string.browser_image_open to onOpenImageInNewPage)
+                        if (menu.canCopyImage) add(R.string.browser_image_copy to onCopyImage)
                     }
-                    if (menu.canOpenImage) {
-                        TextButton(onClick = onOpenImageInNewPage, modifier = Modifier.fillMaxWidth()) {
-                            Text(stringResource(R.string.browser_image_open), modifier = Modifier.fillMaxWidth())
-                        }
-                    }
-                    if (menu.canCopyImage) {
-                        TextButton(onClick = onCopyImage, modifier = Modifier.fillMaxWidth()) {
-                            Text(stringResource(R.string.browser_image_copy), modifier = Modifier.fillMaxWidth())
+                    ZenMenuGroup(
+                        index = if (link != null) 1 else 0,
+                        count = if (link != null) 2 else 1,
+                    ) {
+                        imageActions.forEachIndexed { index, (label, action) ->
+                            ZenMenuItem(
+                                text = { Text(stringResource(label)) },
+                                onClick = action,
+                                index = index,
+                                count = imageActions.size,
+                            )
                         }
                     }
                 }

@@ -19,7 +19,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.setValue
@@ -50,6 +49,7 @@ import de.kjell.zencompanion.ui.components.PinDestinationPickerStyle
 import de.kjell.zencompanion.ui.components.ZenSpaceGradientBackground
 import de.kjell.zencompanion.ui.components.SaveKindMenuButton
 import de.kjell.zencompanion.ui.theme.LocalZenColors
+import de.kjell.zencompanion.ui.theme.ZenLoadingIndicator
 import de.kjell.zencompanion.ui.theme.ZenType
 import de.kjell.zencompanion.util.Haptics
 import de.kjell.zencompanion.util.PageTitle
@@ -116,7 +116,7 @@ fun ShareScreen(
             ) {
             when (phase) {
                 SharePhase.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = colors.coral)
+                    ZenLoadingIndicator(color = colors.coral)
                 }
 
                 SharePhase.signedOut -> StatusView(
@@ -213,7 +213,7 @@ private fun StatusView(
         if (actionLabel != null) {
             Button(
                 onClick = onAction,
-                shape = CircleShape,
+                shapes = ButtonDefaults.shapes(shape = CircleShape),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = colors.ink,
                     contentColor = colors.paper,
@@ -337,7 +337,7 @@ private fun Picker(
             Button(
                 onClick = onSave,
                 enabled = canSave && !saving,
-                shape = Capsule,
+                shapes = ButtonDefaults.shapes(shape = Capsule),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = colors.ink,
                     contentColor = colors.paper,
@@ -348,7 +348,7 @@ private fun Picker(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 if (saving) {
-                    CircularProgressIndicator(color = colors.paper, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                    ZenLoadingIndicator(color = colors.paper, modifier = Modifier.size(22.dp))
                 } else {
                     Text(
                         text = stringResource(
@@ -361,6 +361,7 @@ private fun Picker(
 
             TextButton(
                 onClick = onCancel,
+                shapes = ButtonDefaults.shapes(),
                 colors = ButtonDefaults.textButtonColors(contentColor = colors.ink50),
                 modifier = Modifier.fillMaxWidth(),
             ) {

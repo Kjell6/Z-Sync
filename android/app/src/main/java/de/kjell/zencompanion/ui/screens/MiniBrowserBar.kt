@@ -1,32 +1,28 @@
 package de.kjell.zencompanion.ui.screens
 
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.scaleIn
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Box
@@ -35,9 +31,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -45,7 +42,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -56,6 +52,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.History
@@ -66,14 +63,12 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.FormatSize
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Laptop
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
-import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Print
+import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Restore
@@ -81,14 +76,20 @@ import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material.icons.outlined.Remove
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -98,11 +99,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.LocationOn
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -163,9 +162,18 @@ import de.kjell.zencompanion.ui.motion.rememberReducedMotion
 import de.kjell.zencompanion.ui.sheets.icon
 import de.kjell.zencompanion.ui.sheets.title
 import de.kjell.zencompanion.ui.theme.LocalZenColors
+import de.kjell.zencompanion.ui.theme.ZenListGroup
+import de.kjell.zencompanion.ui.theme.ZenListItem
+import de.kjell.zencompanion.ui.theme.ZenLoadingIndicator
+import de.kjell.zencompanion.ui.theme.ZenMenu
+import de.kjell.zencompanion.ui.theme.ZenMenuCheck
+import de.kjell.zencompanion.ui.theme.ZenMenuGroup
+import de.kjell.zencompanion.ui.theme.ZenMenuGroupGap
+import de.kjell.zencompanion.ui.theme.ZenMenuItem
+import de.kjell.zencompanion.ui.theme.ZenSelectableMenuItem
 import de.kjell.zencompanion.ui.theme.ZenType
 import de.kjell.zencompanion.ui.theme.liftBorder
-import de.kjell.zencompanion.ui.theme.pressFeedback
+import de.kjell.zencompanion.ui.theme.rowPressFeedback
 import kotlinx.coroutines.flow.collectLatest
 
 /**
@@ -182,29 +190,10 @@ internal fun Color.nudgedForBar(amount: Float = 0.08f): Color {
     )
 }
 
-/**
- * The app's press feel: shrink and dim while the finger is down, no ripple. The
- * default ripple draws a dark rectangle over the control's square bounds, which
- * does not match the action bar and the tiles.
- */
-@Composable
-internal fun Modifier.barClickable(enabled: Boolean = true, onClick: () -> Unit): Modifier {
-    val source = remember { MutableInteractionSource() }
-    return this
-        .pressFeedback(source)
-        .clickable(
-            interactionSource = source,
-            indication = null,
-            enabled = enabled,
-            onClick = onClick,
-        )
-}
-
 // MARK: - Metrics
 
 /** A solid surface, not glass: the platform has no Liquid Glass, so the bar is
  * a hard pane that sits on the page. */
-private val PanelShape = RoundedCornerShape(20.dp)
 private val DockShape = RoundedCornerShape(20.dp)
 private val TileShape = RoundedCornerShape(16.dp)
 
@@ -212,18 +201,11 @@ private val BarHeight = 44.dp
 private val DockSide = 44.dp
 private val CloseWidth = 92.dp
 private val CloseHeight = 42.dp
-private val RowHeight = 44.dp
 private val TileHeight = 60.dp
-private val PanelInset = 14.dp
 private val RowGap = 8.dp
 
 /** The bar turning into the composer, and the dock fading as it does. */
 internal const val BarMorphMs = 160
-
-/** The menu card unfolding from the bar, as on iOS. */
-private const val FloatingPanelMs = 260
-/** How long the suggestion list takes to grow, shrink or fade a row in. */
-private const val SuggestionMs = 260
 /** How far the dock drops into the gesture area: the safe area is not touched,
  * only the slack above it is used up. */
 private val BottomLift = 15.dp
@@ -312,197 +294,201 @@ internal fun MiniBrowserBar(
 ) {
     val zen = LocalZenColors.current
 
+    val motion = MaterialTheme.motionScheme
     Column(modifier = modifier.fillMaxWidth()) {
-    // The menu and the suggestions float over the page as cards of their own,
-    // as on iOS: the bar below keeps its height and its plate.
-    val floatMs = if (rememberReducedMotion()) 0 else FloatingPanelMs
-    AnimatedVisibility(
-        visible = state.menuExpanded,
-        enter = scaleIn(tween(floatMs, easing = FastOutSlowInEasing), initialScale = 0.88f, transformOrigin = TransformOrigin(0.5f, 1f)) +
-            fadeIn(tween(floatMs)),
-        exit = scaleOut(tween(floatMs), targetScale = 0.95f, transformOrigin = TransformOrigin(0.5f, 1f)) +
-            fadeOut(tween(floatMs)),
-        label = "menu",
-    ) {
-            Column(
+        // The open menu is its own layer: it floats over the page, above the
+        // bar, and leaves the bar and the page where they are.
+        AnimatedVisibility(
+            visible = state.menuExpanded,
+            // Shares the column with the bar, which is measured first, so a
+            // tall menu scrolls instead of pushing the bar off the screen.
+            modifier = Modifier.weight(1f, fill = false),
+            enter = fadeIn(motion.fastEffectsSpec()) +
+                scaleIn(motion.fastSpatialSpec(), initialScale = 0.92f, transformOrigin = MenuGrowOrigin),
+            exit = fadeOut(motion.fastEffectsSpec()) +
+                scaleOut(motion.fastSpatialSpec(), targetScale = 0.92f, transformOrigin = MenuGrowOrigin),
+        ) {
+            Surface(
                 modifier = Modifier
-                    .padding(start = 16.dp, end = 16.dp, bottom = RowGap)
                     .fillMaxWidth()
-                    .floatingPanel(PanelShape, liveBarColor, zen.lift)
-                    .border(liftBorder(), PanelShape)
-                    .padding(PanelInset),
+                    .padding(start = 12.dp, end = 12.dp, bottom = RowGap),
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 12.dp,
+                border = liftBorder(),
             ) {
-                // One panel, two pages: the tools, and the site's own switches.
-                // The swap happens inside the same surface, so Site Settings
-                // never opens as a second sheet on top of the menu.
-                AnimatedContent(
-                    targetState = state.menuSiteSettings && blockingHost != null,
-                    transitionSpec = {
-                        fadeIn(tween(MenuPageFadeMs)) togetherWith fadeOut(tween(MenuPageFadeMs))
-                    },
-                    label = "menuPage",
-                ) { showSiteSettings ->
-                    if (showSiteSettings && blockingHost != null) {
-                        SiteSettingsMenuPage(
-                            host = blockingHost,
-                            settings = blockingSettings,
-                            onBack = viewModel::closeSiteSettings,
-                            onChange = onSiteBlockingChange,
-                        )
-                    } else {
-                        ExpandedMenu(
-                            state = state,
-                            viewModel = viewModel,
-                            signedIn = signedIn,
-                            showsKeep = showsKeep,
-                            isKept = isKept,
-                            canKeep = canKeep,
-                            onToggleKeep = onToggleKeep,
-                            canPin = canPin,
-                            canPrint = canPrint,
-                            onPrint = onPrint,
-                            barColor = barColor,
-                            onCopyLink = onCopyLink,
-                            onFind = onFind,
-                            onShare = onShare,
-                            onOpenExternal = onOpenExternal,
-                            onPin = onPin,
-                            blockingCard = blockingCard,
-                            onBlockingCard = onBlockingCard,
-                        )
-                    }
+                Column(
+                    modifier = Modifier
+                        .verticalScroll(rememberScrollState())
+                        .padding(8.dp),
+                ) {
+                        // One menu, two pages: the tools, and the site's own switches.
+                        // The swap happens inside the same menu, so Site Settings never
+                        // opens as a second sheet on top of it. Every page is a set of
+                        // Expressive menu groups (MenuChrome), the same system the rest
+                        // of the app's menus use.
+                        AnimatedContent(
+                            targetState = state.menuSiteSettings && blockingHost != null,
+                            transitionSpec = {
+                                fadeIn(tween(MenuPageFadeMs)) togetherWith fadeOut(tween(MenuPageFadeMs))
+                            },
+                            label = "menuPage",
+                        ) { showSiteSettings ->
+                            if (showSiteSettings && blockingHost != null) {
+                                SiteSettingsMenuPage(
+                                    host = blockingHost,
+                                    settings = blockingSettings,
+                                    onBack = viewModel::closeSiteSettings,
+                                    onChange = onSiteBlockingChange,
+                                )
+                            } else {
+                                ExpandedMenu(
+                                    state = state,
+                                    viewModel = viewModel,
+                                    showsKeep = showsKeep,
+                                    isKept = isKept,
+                                    canKeep = canKeep,
+                                    onToggleKeep = onToggleKeep,
+                                    signedIn = signedIn,
+                                    canPin = canPin,
+                                    canPrint = canPrint,
+                                    onPrint = onPrint,
+                                    onCopyLink = onCopyLink,
+                                    onFind = onFind,
+                                    onShare = onShare,
+                                    onOpenExternal = onOpenExternal,
+                                    onPin = onPin,
+                                    blockingCard = blockingCard,
+                                    onBlockingCard = onBlockingCard,
+                                )
+                            }
+                        }
                 }
             }
         }
 
-        // Part of the address editing state: the list sits in the space
-        // above the composer, on the same plate, and goes away with it. It
-        // grows out of the bar and keeps each row's identity, so an answer
-        // that arrives only adds rows to what is already on screen.
+        // Part of the address editing state: the list floats over the page
+        // above the composer, like the menu, and goes away with it. It keeps
+        // each row's identity, so an answer that arrives only adds rows to
+        // what is already on screen.
         val suggestionMs = if (rememberReducedMotion()) 0 else SuggestionMs
         AnimatedVisibility(
             visible = state.isAddressFocused && state.suggestionRows.isNotEmpty(),
-            enter = scaleIn(tween(suggestionMs, easing = FastOutSlowInEasing), initialScale = 0.88f, transformOrigin = TransformOrigin(0.5f, 1f)) +
-                fadeIn(animationSpec = tween(suggestionMs, easing = FastOutSlowInEasing)),
-            exit = scaleOut(tween(suggestionMs, easing = FastOutSlowInEasing), targetScale = 0.95f, transformOrigin = TransformOrigin(0.5f, 1f)) +
-                fadeOut(animationSpec = tween(suggestionMs, easing = FastOutSlowInEasing)),
-            label = "suggestions",
+            modifier = Modifier.weight(1f, fill = false),
+            enter = fadeIn(motion.fastEffectsSpec()) +
+                scaleIn(motion.fastSpatialSpec(), initialScale = 0.92f, transformOrigin = SuggestionGrowOrigin),
+            exit = fadeOut(motion.fastEffectsSpec()) +
+                scaleOut(motion.fastSpatialSpec(), targetScale = 0.92f, transformOrigin = SuggestionGrowOrigin),
         ) {
             SuggestionPanel(
                 rows = state.suggestionRows,
                 motionMs = suggestionMs,
-                plate = liveBarColor,
                 onSelectVisit = onPickVisit,
                 onSelect = onPickSuggestion,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = RowGap),
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = RowGap),
             )
         }
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            // The bar area has its own background already (the page ends above
-            // it). Painting it here keeps the translucent tiles compositing
-            // against that background instead of the page.
-            .drawBehind { drawRect(liveBarColor()) }
-            // The background starts above the address row: it should not end
-            // hard against it.
-            .padding(start = 16.dp, end = 16.dp, top = TopGap),
-        verticalArrangement = Arrangement.spacedBy(RowGap),
-    ) {
-
-        // The bar turns into the composer in place.
-        Crossfade(
-            targetState = state.isAddressFocused,
-            animationSpec = tween(BarMorphMs),
-            label = "addressBar",
-        ) { composing ->
-            if (composing) {
-                ComposerBar(
-                    addressText = addressText,
-                    onAddressTextChange = onAddressTextChange,
-                    focusRequester = focusRequester,
-                    onAddressFocusedChange = onAddressFocusedChange,
-                    onSubmitAddress = onSubmitAddress,
-                    onCancel = onCancelAddressEdit,
-                    barColor = barColor,
-                )
-            } else {
-                SwipeableNavBar(swipe = swipe) {
-                    NavBar(
-                        canGoBack = state.canGoBack || canReturnToOpener,
-                        canGoForward = state.canGoForward,
-                        effectiveUrl = effectiveUrl,
-                        pageFailed = state.pageError != null,
-                        title = state.currentTitle,
-                        isLoading = state.isLoading,
-                        progress = state.progress,
-                        onBack = if (state.canGoBack) onBack else onReturnToOpener,
-                        onForward = onForward,
-                        onReload = onReload,
-                        onStop = onStop,
-                        onBeginAddressEdit = onBeginAddressEdit,
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                // The bar area has its own background already (the page ends above
+                // it). Painting it here keeps the translucent tiles compositing
+                // against that background instead of the page.
+                .drawBehind { drawRect(liveBarColor()) }
+                // The background starts above the address row: it should not end
+                // hard against it.
+                .padding(start = 16.dp, end = 16.dp, top = TopGap),
+            verticalArrangement = Arrangement.spacedBy(RowGap),
+        ) {
+            // The bar turns into the composer in place.
+            Crossfade(
+                targetState = state.isAddressFocused,
+                animationSpec = tween(BarMorphMs),
+                label = "addressBar",
+            ) { composing ->
+                if (composing) {
+                    ComposerBar(
+                        addressText = addressText,
+                        onAddressTextChange = onAddressTextChange,
+                        focusRequester = focusRequester,
+                        onAddressFocusedChange = onAddressFocusedChange,
+                        onSubmitAddress = onSubmitAddress,
+                        onCancel = onCancelAddressEdit,
                         barColor = barColor,
+                    )
+                } else {
+                    SwipeableNavBar(swipe = swipe) {
+                        NavBar(
+                            canGoBack = state.canGoBack || canReturnToOpener,
+                            canGoForward = state.canGoForward,
+                            effectiveUrl = effectiveUrl,
+                        pageFailed = state.pageError != null,
+                            title = state.currentTitle,
+                            isLoading = state.isLoading,
+                            progress = state.progress,
+                            onBack = if (state.canGoBack) onBack else onReturnToOpener,
+                            onForward = onForward,
+                            onReload = onReload,
+                            onStop = onStop,
+                            onBeginAddressEdit = onBeginAddressEdit,
+                            barColor = barColor,
+                        )
+                    }
+                }
+            }
+
+            val navigationInset = WindowInsets.navigationBars
+                .asPaddingValues()
+                .calculateBottomPadding()
+            val keyboard = WindowInsets.ime
+            val dockAlpha by animateFloatAsState(
+                targetValue = if (state.isAddressFocused) 0f else 1f,
+                animationSpec = tween(BarMorphMs),
+                label = "dockAlpha",
+            )
+            // The dock's room stays when the composer takes over: the keyboard
+            // uses it up as it rises, so the bar holds its place until the keys
+            // reach it and goes up in one move, never down first. Once it rides
+            // them, only a small gap keeps the row off the keys.
+            Box(
+                Modifier.layout { measurable, constraints ->
+                    val placeable = measurable.measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
+                    val resting = (DockSide + RowGap + barBottomGap(navigationInset)).roundToPx()
+                    val lifted = if (ridesKeyboard) keyboard.getBottom(this) else 0
+                    val height = if (lifted > 0) maxOf(resting - lifted, 8.dp.roundToPx()) else resting
+                    layout(constraints.maxWidth, height) { placeable.place(0, 0) }
+                },
+            ) {
+                if (dockAlpha > 0f) {
+                    Dock(
+                        modifier = Modifier.graphicsLayer { alpha = dockAlpha },
+                        menuOpen = state.menuExpanded,
+                        ink = zen.ink,
+                        pageCount = pageCount,
+                        onOpenPages = onOpenPages,
+                        onClose = onClose,
+                        onToggleMenu = {
+                            if (state.menuExpanded) viewModel.collapseMenu() else viewModel.toggleMenu()
+                        },
                     )
                 }
             }
         }
-
-        val navigationInset = WindowInsets.navigationBars
-            .asPaddingValues()
-            .calculateBottomPadding()
-        val keyboard = WindowInsets.ime
-        val dockAlpha by animateFloatAsState(
-            targetValue = if (state.isAddressFocused) 0f else 1f,
-            animationSpec = tween(BarMorphMs),
-            label = "dockAlpha",
-        )
-        // The dock's room stays when the composer takes over: the keyboard
-        // uses it up as it rises, so the bar holds its place until the keys
-        // reach it and goes up in one move, never down first. Once it rides
-        // them, only a small gap keeps the row off the keys.
-        Box(
-            Modifier.layout { measurable, constraints ->
-                val placeable = measurable.measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
-                val resting = (DockSide + RowGap + barBottomGap(navigationInset)).roundToPx()
-                val lifted = if (ridesKeyboard) keyboard.getBottom(this) else 0
-                val height = if (lifted > 0) maxOf(resting - lifted, 8.dp.roundToPx()) else resting
-                layout(constraints.maxWidth, height) { placeable.place(0, 0) }
-            },
-        ) {
-            if (dockAlpha > 0f) {
-                Dock(
-                    modifier = Modifier.graphicsLayer { alpha = dockAlpha },
-                    menuOpen = state.menuExpanded,
-                    ink = zen.ink,
-                    pageCount = pageCount,
-                    onOpenPages = onOpenPages,
-                    onClose = onClose,
-                    onToggleMenu = {
-                        if (state.menuExpanded) viewModel.collapseMenu() else viewModel.toggleMenu()
-                    },
-                )
-            }
-        }
-    }
     }
 }
 
-/**
- * A card over the page: the page's own color under the bar's lift, the dock's
- * hairline and a soft shadow, so it reads as lying on top.
- */
-private fun Modifier.floatingPanel(shape: Shape, plate: () -> Color, lift: Color): Modifier = this
-    .shadow(12.dp, shape, ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.25f))
-    .clip(shape)
-    .drawBehind {
-        drawRect(plate())
-        drawRect(lift)
-    }
+/** The menu grows out of its button, at the bar's trailing end. */
+private val MenuGrowOrigin = TransformOrigin(0.9f, 1f)
+
+/** The address list grows up out of the composer. */
+private val SuggestionGrowOrigin = TransformOrigin(0.5f, 1f)
+
+/** How long the suggestion list takes to resize or fade a row in. */
+private const val SuggestionMs = 260
 
 /**
- * A pane, not a floating sheet: same fill and hairline as the dock buttons, no
- * shadow. Nothing in this chrome hovers over the page.
+ * A pane in the bar: same fill and hairline as the dock buttons, no shadow.
  */
 @Composable
 private fun Modifier.pane(shape: Shape, color: Color): Modifier = this
@@ -808,30 +794,37 @@ private fun NavBar(
                 onClick = onForward,
             )
 
-            Row(
+            Surface(
+                onClick = onBeginAddressEdit,
                 modifier = Modifier
                     .weight(1f)
-                    .height(BarHeight - 12.dp)
-                    .barClickable(onClick = onBeginAddressEdit)
-                    .padding(horizontal = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .height(BarHeight - 12.dp),
+                shape = RoundedCornerShape(10.dp),
+                color = Color.Transparent,
             ) {
-                SiteIcon(effectiveUrl = effectiveUrl, pageFailed = pageFailed)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    // Same fallback as the iOS bar: a page without a title -
-                    // still loading, or one that failed to load - is named by
-                    // its address instead of an empty placeholder.
-                    text = when {
-                        title.isNotBlank() -> title
-                        effectiveUrl.isNotEmpty() -> addressDisplay(effectiveUrl)
-                        else -> stringResource(R.string.browser_search_placeholder)
-                    },
-                    style = ZenType.rounded(16, FontWeight.SemiBold),
-                    color = zen.ink,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    SiteIcon(effectiveUrl = effectiveUrl, pageFailed = pageFailed)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        // Same fallback as the iOS bar: a page without a title -
+                        // still loading, or one that failed to load - is named by
+                        // its address instead of an empty placeholder.
+                        text = when {
+                            title.isNotBlank() -> title
+                            effectiveUrl.isNotEmpty() -> addressDisplay(effectiveUrl)
+                            else -> stringResource(R.string.browser_search_placeholder)
+                        },
+                        style = ZenType.rounded(16, FontWeight.SemiBold),
+                        color = zen.ink,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
 
             NavGlyph(
@@ -846,11 +839,7 @@ private fun NavBar(
     }
 }
 
-/**
- * Icon-only glyph for the navigation bar: no chrome of its own. The box is
- * 48 dp wide for a thumb; the bar is 44 dp tall, which is as much height as
- * the target can take here. The glyph inside keeps its 18 dp and its place.
- */
+/** Icon-only glyph for the navigation bar: no chrome of its own. */
 @Composable
 private fun NavGlyph(
     icon: ImageVector,
@@ -859,16 +848,20 @@ private fun NavGlyph(
     onClick: () -> Unit,
 ) {
     val zen = LocalZenColors.current
-    Box(
-        modifier = Modifier
-            .size(width = 48.dp, height = BarHeight)
-            .barClickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center,
+    IconButton(
+        onClick = onClick,
+        shapes = IconButtonDefaults.shapes(shape = RoundedCornerShape(10.dp)),
+        modifier = Modifier.size(width = 34.dp, height = BarHeight - 12.dp),
+        enabled = enabled,
+        colors = IconButtonDefaults.iconButtonColors(
+            containerColor = Color.Transparent,
+            contentColor = zen.ink.copy(alpha = 0.8f),
+            disabledContentColor = zen.ink.copy(alpha = 0.3f),
+        ),
     ) {
         Icon(
             imageVector = icon,
             contentDescription = description,
-            tint = zen.ink.copy(alpha = if (enabled) 0.8f else 0.3f),
             modifier = Modifier.size(18.dp),
         )
     }
@@ -894,16 +887,18 @@ private fun Dock(
     ) {
         val zen = LocalZenColors.current
         val pagesDescription = pluralStringResource(R.plurals.browser_page_count, pageCount, pageCount)
-        Box(
+        Surface(
+            onClick = onOpenPages,
             modifier = Modifier
                 .size(DockSide)
-                .background(zen.lift, DockShape)
-                .border(liftBorder(), DockShape)
-                .barClickable(onClick = onOpenPages)
                 .semantics { contentDescription = pagesDescription },
-            contentAlignment = Alignment.Center,
+            shape = DockShape,
+            color = zen.lift,
+            border = liftBorder(),
         ) {
-            PageCountBadge(count = pageCount, color = ink.copy(alpha = 0.8f))
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                PageCountBadge(count = pageCount, color = ink.copy(alpha = 0.8f))
+            }
         }
 
         Spacer(Modifier.weight(1f))
@@ -999,65 +994,80 @@ private fun DockButton(
     icon: ImageVector,
     description: String,
     tint: Color,
-    width: androidx.compose.ui.unit.Dp = DockSide,
-    height: androidx.compose.ui.unit.Dp = DockSide,
+    width: Dp = DockSide,
+    height: Dp = DockSide,
     onLongClick: (() -> Unit)? = null,
     onLongClickLabel: String? = null,
     onClick: () -> Unit,
 ) {
     val zen = LocalZenColors.current
-    Box(
-        modifier = Modifier
-            .width(width)
-            .height(height)
-            .background(zen.lift, DockShape)
-            .border(liftBorder(), DockShape)
-            .then(
-                if (onLongClick != null) {
-                    Modifier
-                        .combinedClickable(
-                            onClick = onClick,
-                            onLongClick = onLongClick,
-                            onLongClickLabel = onLongClickLabel,
-                        )
-                        // TalkBack only finds a long press by holding the
-                        // finger down. The same action as its own entry makes
-                        // it reachable from the actions list as well.
-                        .then(
-                            if (onLongClickLabel != null) {
-                                Modifier.semantics {
-                                    customActions = listOf(
-                                        CustomAccessibilityAction(onLongClickLabel) {
-                                            onLongClick()
-                                            true
-                                        },
-                                    )
-                                }
-                            } else {
-                                Modifier
-                            },
-                        )
-                } else {
-                    Modifier.barClickable(onClick = onClick)
-                },
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = description,
-            tint = tint.copy(alpha = 0.8f),
-            modifier = Modifier.size(20.dp),
+    val content: @Composable () -> Unit = {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = icon,
+                contentDescription = description,
+                tint = tint.copy(alpha = 0.8f),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+    if (onLongClick == null) {
+        // A native Material surface: the theme's ripple and press motion.
+        Surface(
+            onClick = onClick,
+            modifier = Modifier.size(width, height),
+            shape = DockShape,
+            color = zen.lift,
+            border = liftBorder(),
+            content = content,
         )
+    } else {
+        // The overview's plus also has a long press, which a Material surface
+        // does not expose: the same look with the theme's press and ripple.
+        val source = remember { MutableInteractionSource() }
+        Box(
+            modifier = Modifier
+                .size(width, height)
+                .rowPressFeedback(source)
+                .clip(DockShape)
+                .background(zen.lift)
+                .border(liftBorder(), DockShape)
+                .combinedClickable(
+                    interactionSource = source,
+                    indication = ripple(color = zen.ink),
+                    onClick = onClick,
+                    onLongClick = onLongClick,
+                    onLongClickLabel = onLongClickLabel,
+                )
+                // TalkBack only finds a long press by holding the finger
+                // down. The same action as its own entry makes it reachable
+                // from the actions list as well.
+                .then(
+                    if (onLongClickLabel != null) {
+                        Modifier.semantics {
+                            customActions = listOf(
+                                CustomAccessibilityAction(onLongClickLabel) {
+                                    onLongClick()
+                                    true
+                                },
+                            )
+                        }
+                    } else {
+                        Modifier
+                    },
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            content()
+        }
     }
 }
 
 // MARK: - Suggestions
 
 /**
- * Same rows as the iOS list, on the hard surface this chrome uses. The panel
- * grows above the composer row, so the list reads as part of typing an
- * address rather than as a layer over the page.
+ * The address list, as a card floating over the page with the app's native
+ * list rows, the same layer as the open menu.
  *
  * One list, keyed by what each row says: the model puts the pages from the
  * history first and appends the engine's phrases, so a row that stays is not
@@ -1067,30 +1077,34 @@ private fun DockButton(
 private fun SuggestionPanel(
     rows: List<AddressSuggestion>,
     motionMs: Int,
-    plate: () -> Color,
     onSelectVisit: (BrowserVisit) -> Unit,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val zen = LocalZenColors.current
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .floatingPanel(DockShape, plate, zen.lift)
-            .border(liftBorder(), DockShape)
-            // The panel's own height, plate and all, follows the row count
-            // instead of jumping when an answer brings a longer list.
-            .animateContentSize(animationSpec = tween(motionMs)),
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 12.dp,
+        border = liftBorder(),
     ) {
-        rows.forEachIndexed { index, row ->
-            key(row.id) {
-                SuggestionRowFade(tween(motionMs, easing = FastOutSlowInEasing)) {
-                    SuggestionRow(
-                        row = row,
-                        last = index == rows.lastIndex,
-                        onSelectVisit = onSelectVisit,
-                        onSelect = onSelect,
-                    )
+        // The list can outgrow the space over the keyboard, so it scrolls
+        // inside its own card instead of pushing the bar off the screen.
+        Column(
+            modifier = Modifier
+                // The card's own height follows the row count instead of jumping
+                // when an answer brings a longer list. Inside the card: on the
+                // card itself, the size animation clips the card's shadow to a
+                // square and leaves hard corners behind the round ones.
+                .animateContentSize(animationSpec = tween(motionMs))
+                .verticalScroll(rememberScrollState())
+                .padding(vertical = 6.dp),
+        ) {
+            rows.forEach { row ->
+                key(row.id) {
+                    SuggestionRowFade(tween(motionMs)) {
+                        SuggestionRow(row = row, onSelectVisit = onSelectVisit, onSelect = onSelect)
+                    }
                 }
             }
         }
@@ -1111,73 +1125,23 @@ private fun SuggestionRowFade(motion: FiniteAnimationSpec<Float>, content: @Comp
 @Composable
 private fun SuggestionRow(
     row: AddressSuggestion,
-    last: Boolean,
     onSelectVisit: (BrowserVisit) -> Unit,
     onSelect: (String) -> Unit,
 ) {
-    val zen = LocalZenColors.current
     val visit = row.visit
-    if (visit == null) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(RowHeight)
-                .barClickable { onSelect(row.text) }
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+    ZenListItem(
+        headline = row.text,
+        supportingText = visit?.displayAddress,
+        singleLine = true,
+        onClick = { if (visit != null) onSelectVisit(visit) else onSelect(row.text) },
+        leadingContent = {
             Icon(
-                imageVector = Icons.Outlined.Search,
+                imageVector = if (visit != null) Icons.Outlined.Schedule else Icons.Outlined.Search,
                 contentDescription = null,
-                // Same quiet ink as the composer's glyph.
-                tint = zen.ink.copy(alpha = 0.45f),
                 modifier = Modifier.size(18.dp),
             )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                text = row.text,
-                style = ZenType.rounded(16, FontWeight.Medium),
-                color = zen.ink,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-        }
-    } else {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = RowHeight)
-                .barClickable { onSelectVisit(visit) }
-                .padding(horizontal = 16.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Schedule,
-                contentDescription = null,
-                tint = zen.ink.copy(alpha = 0.45f),
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = row.text,
-                    style = ZenType.rounded(16, FontWeight.Medium),
-                    color = zen.ink,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = visit.displayAddress,
-                    style = ZenType.rounded(13, FontWeight.Normal),
-                    color = zen.ink.copy(alpha = 0.6f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-    if (!last) RowDivider()
+        },
+    )
 }
 
 // MARK: - Composer
@@ -1209,15 +1173,21 @@ private fun ComposerBar(
     ) {
         // Left: leave the field. Android browsers put the way back here, and
         // keep the trailing side for clearing the text.
-        Icon(
-            imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-            contentDescription = stringResource(R.string.common_cancel),
-            tint = zen.ink.copy(alpha = 0.8f),
-            modifier = Modifier
-                .size(32.dp)
-                .barClickable(onClick = onCancel)
-                .padding(8.dp),
-        )
+        IconButton(
+            onClick = onCancel,
+            shapes = IconButtonDefaults.shapes(shape = CircleShape),
+            modifier = Modifier.size(32.dp),
+            colors = IconButtonDefaults.iconButtonColors(
+                containerColor = Color.Transparent,
+                contentColor = zen.ink.copy(alpha = 0.8f),
+            ),
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                contentDescription = stringResource(R.string.common_cancel),
+                modifier = Modifier.size(18.dp),
+            )
+        }
         BasicTextField(
             value = addressText,
             onValueChange = onAddressTextChange,
@@ -1233,6 +1203,10 @@ private fun ComposerBar(
             modifier = Modifier
                 .weight(1f)
                 .focusRequester(focusRequester)
+                // Only a focus *gain* is reported: the composer is composed by
+                // the address state, so its first attach reports `false` and
+                // would close the field again on the same frame. Closing is
+                // explicit (Cancel, submit, back).
                 .onFocusChanged { focus ->
                     if (focus.isFocused) {
                         hadFocus = true
@@ -1258,15 +1232,21 @@ private fun ComposerBar(
             },
         )
         if (addressText.text.isNotEmpty()) {
-            Icon(
-                imageVector = Icons.Outlined.Cancel,
-                contentDescription = stringResource(R.string.browser_clear_search),
-                tint = zen.ink.copy(alpha = 0.55f),
-                modifier = Modifier
-                    .size(32.dp)
-                    .barClickable { onAddressTextChange(TextFieldValue("", selection = TextRange.Zero)) }
-                    .padding(8.dp),
-            )
+            IconButton(
+                onClick = { onAddressTextChange(TextFieldValue("", selection = TextRange.Zero)) },
+                shapes = IconButtonDefaults.shapes(shape = CircleShape),
+                modifier = Modifier.size(32.dp),
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = Color.Transparent,
+                    contentColor = zen.ink.copy(alpha = 0.55f),
+                ),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Cancel,
+                    contentDescription = stringResource(R.string.browser_clear_search),
+                    modifier = Modifier.size(18.dp),
+                )
+            }
         }
     }
 }
@@ -1285,7 +1265,6 @@ private fun ExpandedMenu(
     canPin: Boolean,
     canPrint: Boolean,
     onPrint: () -> Unit,
-    barColor: Color,
     onCopyLink: () -> Unit,
     onFind: () -> Unit,
     onShare: () -> Unit,
@@ -1295,158 +1274,158 @@ private fun ExpandedMenu(
     onBlockingCard: () -> Unit,
 ) {
     val zen = LocalZenColors.current
+    val showsBlocking = blockingCard != BlockingCard.Hidden
+    // The groups round their own ends, so the count is the number of groups
+    // actually drawn: the first and last read as the ends of the menu.
+    val toolsGroup = if (showsBlocking) 1 else 0
+    val siteGroup = toolsGroup + 1
+    val groupCount = siteGroup + 1
+
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(RowGap),
     ) {
         // At the top: the menu grows up from the bar, so this is the far end,
         // where Arc keeps the same status at the bottom of its sheet.
-        if (blockingCard != BlockingCard.Hidden) {
-            BlockingCardRow(card = blockingCard, onClick = onBlockingCard)
+        if (showsBlocking) {
+            ZenMenuGroup(index = 0, count = groupCount) {
+                BlockingCardItem(card = blockingCard, onClick = onBlockingCard)
+            }
+            ZenMenuGroupGap()
         }
 
-        // The page tools, one block, divided inside. On Android the rows stay
-        // straight on the panel: the dividers and the gap between the blocks
-        // do the grouping, no second card under them.
-        Column(Modifier.fillMaxWidth()) {
+        // The page tools: one menu group, so the rows round off together and
+        // morph under the finger like every other menu in the app.
+        val toolCount = (if (showsKeep) 1 else 0) + 5
+        val keepIndex = if (showsKeep) 0 else -1
+        val copyIndex = if (showsKeep) 1 else 0
+        val readerIndex = copyIndex + 1
+        val printIndex = readerIndex + 1
+        val desktopIndex = printIndex + 1
+        val zoomIndex = desktopIndex + 1
+        ZenMenuGroup(index = toolsGroup, count = groupCount) {
             if (showsKeep) {
-                MenuRow(
-                    icon = if (isKept) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
-                    title = stringResource(if (isKept) R.string.browser_kept else R.string.browser_keep_page),
-                    tint = zen.ink,
-                    onClick = onToggleKeep.takeIf { canKeep },
+                ZenMenuItem(
+                    text = {
+                        Text(stringResource(if (isKept) R.string.browser_kept else R.string.browser_keep_page))
+                    },
+                    onClick = onToggleKeep,
+                    index = keepIndex,
+                    count = toolCount,
+                    leadingIcon = {
+                        Icon(
+                            imageVector = if (isKept) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
+                            contentDescription = null,
+                        )
+                    },
+                    enabled = canKeep,
                 )
-                RowDivider()
             }
-            MenuRow(
+            ZenMenuItem(
+                text = {
+                    Text(
+                        stringResource(
+                            if (state.copyConfirmed) R.string.browser_copied else R.string.browser_copy_link,
+                        ),
+                    )
+                },
+                onClick = onCopyLink,
+                index = copyIndex,
+                count = toolCount,
                 // Copied: the glyph turns into the checkmark the iOS menu
                 // shows, beside the label that already says so.
-                icon = if (state.copyConfirmed) Icons.Outlined.Check else Icons.Outlined.ContentCopy,
-                title = stringResource(
-                    if (state.copyConfirmed) R.string.browser_copied else R.string.browser_copy_link,
-                ),
-                tint = zen.ink,
-                onClick = onCopyLink,
+                leadingIcon = {
+                    Icon(
+                        imageVector = if (state.copyConfirmed) Icons.Outlined.Check else Icons.Outlined.ContentCopy,
+                        contentDescription = null,
+                    )
+                },
             )
-            RowDivider()
-            MenuRow(
-                icon = Icons.Outlined.Description,
-                title = stringResource(R.string.browser_reader),
-                tint = zen.ink,
-                trailing = {
+            ZenMenuItem(
+                text = { Text(stringResource(R.string.browser_reader)) },
+                onClick = viewModel::toggleReader,
+                index = readerIndex,
+                count = toolCount,
+                leadingIcon = { Icon(Icons.Outlined.Description, contentDescription = null) },
+                trailingContent = {
                     when {
-                        state.readerLoading -> CircularProgressIndicator(
+                        state.readerLoading -> ZenLoadingIndicator(
                             modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = zen.ink,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
 
                         state.readerArticle != null -> Icon(
                             imageVector = Icons.Outlined.Check,
                             contentDescription = null,
-                            tint = zen.ink,
-                            modifier = Modifier.size(18.dp),
                         )
                     }
                 },
-                onClick = viewModel::toggleReader,
             )
-            RowDivider()
-            MenuRow(
-                icon = Icons.Outlined.Print,
-                title = stringResource(R.string.browser_print),
+            ZenMenuItem(
+                text = { Text(stringResource(R.string.browser_print)) },
+                onClick = onPrint,
+                index = printIndex,
+                count = toolCount,
+                leadingIcon = { Icon(Icons.Outlined.Print, contentDescription = null) },
                 // Nothing to print without a page, under the error panel or
                 // with the reader lifted out of it.
-                tint = if (canPrint) zen.ink else zen.ink.copy(alpha = 0.38f),
-                onClick = onPrint.takeIf { canPrint },
+                enabled = canPrint,
             )
-            RowDivider()
-            MenuRow(
-                icon = Icons.Outlined.Laptop,
-                title = stringResource(R.string.browser_desktop_site),
-                tint = zen.ink,
-                trailing = {
+            ZenMenuItem(
+                text = { Text(stringResource(R.string.browser_desktop_site)) },
+                onClick = viewModel::toggleDesktopSite,
+                index = desktopIndex,
+                count = toolCount,
+                leadingIcon = { Icon(Icons.Outlined.Laptop, contentDescription = null) },
+                trailingContent = {
                     Switch(
                         checked = state.requestsDesktopSite,
                         onCheckedChange = { viewModel.toggleDesktopSite() },
                     )
                 },
-                onClick = viewModel::toggleDesktopSite,
             )
-            RowDivider()
-            MenuRow(
-                icon = Icons.Outlined.FormatSize,
-                title = stringResource(R.string.browser_page_zoom),
-                tint = zen.ink,
-                trailing = {
-                    val resetLabel = stringResource(R.string.browser_zoom_reset)
-                    val canReset = MiniBrowserZoom.canReset(state.pageZoom)
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .background(barColor, CircleShape)
-                            .padding(horizontal = 2.dp),
-                    ) {
-                        ZoomStep(
-                            icon = Icons.Outlined.KeyboardArrowDown,
-                            description = stringResource(R.string.browser_zoom_out),
-                            enabled = MiniBrowserZoom.canZoomOut(state.pageZoom),
-                            onClick = viewModel::zoomOut,
-                        )
-                        // The readout is the reset: same gesture as a browser's
-                        // zoom percentage, and it keeps the row to one control.
-                        Box(
-                            modifier = Modifier
-                                .widthIn(min = 54.dp)
-                                .height(32.dp)
-                                .barClickable(
-                                    enabled = canReset,
-                                    onClick = viewModel::resetPageZoom,
-                                )
-                                // At 100% the readout is plain text and announces
-                                // itself; zoomed, it is the reset button.
-                                .semantics {
-                                    if (canReset) contentDescription = resetLabel
-                                },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = MiniBrowserZoom.percentLabel(state.pageZoom),
-                                style = ZenType.rounded(15, FontWeight.SemiBold),
-                                color = zen.ink,
-                                textAlign = TextAlign.Center,
-                                softWrap = false,
-                            )
-                        }
-                        ZoomStep(
-                            icon = Icons.Outlined.KeyboardArrowUp,
-                            description = stringResource(R.string.browser_zoom_in),
-                            enabled = MiniBrowserZoom.canZoomIn(state.pageZoom),
-                            onClick = viewModel::zoomIn,
-                        )
-                    }
+            ZenMenuItem(
+                text = { Text(stringResource(R.string.browser_page_zoom)) },
+                // The readout is the reset; the whole row resets too, so the
+                // row is a real menu item rather than an inert one.
+                onClick = { if (MiniBrowserZoom.canReset(state.pageZoom)) viewModel.resetPageZoom() },
+                index = zoomIndex,
+                count = toolCount,
+                leadingIcon = { Icon(Icons.Outlined.FormatSize, contentDescription = null) },
+                trailingContent = {
+                    ZoomControls(
+                        zoom = state.pageZoom,
+                        onZoomOut = viewModel::zoomOut,
+                        onZoomIn = viewModel::zoomIn,
+                        onReset = viewModel::resetPageZoom,
+                    )
                 },
             )
         }
 
-        // Its own block: one destination, not a group.
-        MenuRow(
-            icon = Icons.Outlined.Tune,
-            title = stringResource(R.string.browser_site_settings),
-            tint = zen.ink,
-            trailing = {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = zen.ink.copy(alpha = 0.5f),
-                    modifier = Modifier.size(20.dp),
-                )
-            },
-            onClick = viewModel::openSiteSettings,
-        )
+        ZenMenuGroupGap()
+
+        // Its own group: one destination, not a pair of tools.
+        ZenMenuGroup(index = siteGroup, count = groupCount) {
+            ZenMenuItem(
+                text = { Text(stringResource(R.string.browser_site_settings)) },
+                onClick = viewModel::openSiteSettings,
+                index = 0,
+                count = 1,
+                leadingIcon = { Icon(Icons.Outlined.Tune, contentDescription = null) },
+                trailingContent = {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
+                },
+            )
+        }
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = RowGap),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             MenuTile(
@@ -1454,7 +1433,6 @@ private fun ExpandedMenu(
                 title = stringResource(R.string.browser_find_short),
                 description = stringResource(R.string.browser_find_on_page),
                 tint = zen.ink,
-                background = barColor,
                 onClick = onFind,
             )
             MenuTile(
@@ -1462,7 +1440,6 @@ private fun ExpandedMenu(
                 title = stringResource(R.string.browser_share),
                 description = stringResource(R.string.browser_share),
                 tint = zen.ink,
-                background = barColor,
                 onClick = onShare,
             )
             // As the default browser, "open in the browser" would only come
@@ -1475,13 +1452,12 @@ private fun ExpandedMenu(
                     title = stringResource(R.string.browser_open_short),
                     description = stringResource(R.string.browser_open_in_browser),
                     tint = zen.ink,
-                    background = barColor,
                     onClick = onOpenExternal,
                 )
             }
             // Without the capability the save lands as a pin, whatever the
             // setting says. Signed out there is no space to save into, so the
-            // tile is gone and the row's three others share the width.
+            // tile is gone and the row's other tiles share the width.
             if (signedIn) {
                 val effectiveKind = if (viewModel.allowsNormalTabs) state.saveKind else SaveKind.PINNED
                 MenuTile(
@@ -1493,7 +1469,6 @@ private fun ExpandedMenu(
                         if (effectiveKind == SaveKind.NORMAL) R.string.browser_save_to_space else R.string.browser_pin_to_space,
                     ),
                     tint = if (canPin) zen.ink else zen.ink.copy(alpha = 0.38f),
-                    background = barColor,
                     onClick = onPin,
                     enabled = canPin,
                 )
@@ -1506,10 +1481,10 @@ private fun ExpandedMenu(
 private const val MenuPageFadeMs = 160
 
 /**
- * The menu's second page: the site's own blocking switches, in the panel's row
- * style. Its first row goes back, so the sub-page reads as one step inside the
- * menu instead of a sheet on top of it. A switch that is off in Settings stays
- * off here, with a note saying so.
+ * The menu's second page: the site's own blocking switches, in the same
+ * Expressive menu groups as the tools page. Its first row goes back, so the
+ * sub-page reads as one step inside the menu instead of a sheet on top of it.
+ * A switch that is off in Settings stays off here, with a note saying so.
  */
 @Composable
 private fun SiteSettingsMenuPage(
@@ -1520,58 +1495,55 @@ private fun SiteSettingsMenuPage(
 ) {
     val zen = LocalZenColors.current
     val site = blockingSiteKey(host)
+    // Header, the site's switches, the site's permissions.
+    val groupCount = 3
+
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(RowGap),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .barClickable(onClick = onBack)
-                .heightIn(min = RowHeight),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // The chevron sits in the space the menu rows use for their glyphs,
-            // so the title lines up with the rows on the other page.
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                contentDescription = stringResource(R.string.browser_back),
-                tint = zen.ink.copy(alpha = 0.75f),
-                modifier = Modifier.size(20.dp),
+        ZenMenuGroup(index = 0, count = groupCount) {
+            ZenMenuItem(
+                text = { Text(stringResource(R.string.browser_site_settings)) },
+                onClick = onBack,
+                index = 0,
+                count = 1,
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                        contentDescription = stringResource(R.string.browser_back),
+                    )
+                },
+                supportingText = { Text(site) },
             )
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.browser_site_settings),
-                    style = ZenType.rounded(16, FontWeight.Medium),
-                    color = zen.ink,
-                )
-                Text(
-                    text = site,
-                    style = ZenType.rounded(13, FontWeight.Normal),
-                    color = zen.ink.copy(alpha = 0.6f),
-                )
-            }
         }
-        // One block, divided inside, like the page tools on the menu's first
-        // page: no card under them, the gap separates the block from the header.
-        Column(Modifier.fillMaxWidth()) {
+
+        ZenMenuGroupGap()
+
+        ZenMenuGroup(index = 1, count = groupCount) {
             BlockCategory.entries.forEachIndexed { index, category ->
-                if (index > 0) RowDivider()
-                SiteBlockingRow(
+                SiteBlockingItem(
                     category = category,
                     host = host,
                     settings = settings,
                     onChange = onChange,
+                    index = index,
+                    count = BlockCategory.entries.size,
                 )
             }
         }
-        SitePermissionRows(host)
+
+        ZenMenuGroupGap()
+
+        ZenMenuGroup(index = 2, count = groupCount) {
+            SitePermissionRows(host)
+        }
+
         Text(
             text = stringResource(R.string.site_settings_footer, site),
             style = ZenType.rounded(13, FontWeight.Normal),
             color = zen.ink.copy(alpha = 0.6f),
-            modifier = Modifier.padding(start = 4.dp, end = 4.dp),
+            // Inset from the card's rounded bottom, so the last line clears the curve.
+            modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = RowGap, bottom = 8.dp),
         )
     }
 }
@@ -1579,65 +1551,50 @@ private fun SiteSettingsMenuPage(
 /** What the site may ask for. Ask lets the site's question come back. */
 @Composable
 private fun SitePermissionRows(host: String) {
-    val zen = LocalZenColors.current
     val choices by SitePermissions.choices.collectAsState()
-    Column(Modifier.fillMaxWidth()) {
-        SitePermission.entries.forEachIndexed { index, kind ->
-            if (index > 0) RowDivider()
-            // Read through the collected map, so a change redraws the row.
-            val current = choices.let { SitePermissions.choice(kind, host) }
-            var expanded by remember { mutableStateOf(false) }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .barClickable { expanded = true }
-                    .heightIn(min = RowHeight)
-                    .padding(vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = when (kind) {
-                        SitePermission.CAMERA -> Icons.Outlined.PhotoCamera
-                        SitePermission.MICROPHONE -> Icons.Outlined.Mic
-                        SitePermission.LOCATION -> Icons.Outlined.LocationOn
-                    },
-                    contentDescription = null,
-                    tint = zen.ink.copy(alpha = 0.6f),
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(Modifier.width(14.dp))
-                Text(
-                    text = stringResource(
-                        when (kind) {
-                            SitePermission.CAMERA -> R.string.site_permission_camera
-                            SitePermission.MICROPHONE -> R.string.site_permission_microphone
-                            SitePermission.LOCATION -> R.string.site_permission_location
-                        },
-                    ),
-                    style = ZenType.rounded(16, FontWeight.Medium),
-                    color = zen.ink,
-                    modifier = Modifier.weight(1f),
-                )
+    val count = SitePermission.entries.size
+    SitePermission.entries.forEachIndexed { index, kind ->
+        // Read through the collected map, so a change redraws the row.
+        val current = choices.let { SitePermissions.choice(kind, host) }
+        var expanded by remember { mutableStateOf(false) }
+        ZenMenuItem(
+            text = { Text(stringResource(kind.title)) },
+            onClick = { expanded = true },
+            index = index,
+            count = count,
+            leadingIcon = { Icon(kind.icon, contentDescription = null) },
+            trailingContent = {
+                // Anchored to the value, the way the chooser sits on its row.
                 Box {
-                    Text(
-                        text = stringResource(choiceTitle(current)),
-                        style = ZenType.rounded(15, FontWeight.Normal),
-                        color = zen.ink.copy(alpha = 0.6f),
-                    )
-                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                        listOf(null, SitePermissionChoice.ALLOW, SitePermissionChoice.BLOCK).forEach { choice ->
-                            DropdownMenuItem(
-                                text = { Text(stringResource(choiceTitle(choice))) },
-                                onClick = {
-                                    expanded = false
-                                    SitePermissions.set(choice, listOf(kind), host)
-                                },
-                            )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(stringResource(choiceTitle(current)))
+                        Icon(
+                            imageVector = Icons.Outlined.ArrowDropDown,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                    ZenMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        val options = listOf(null, SitePermissionChoice.ALLOW, SitePermissionChoice.BLOCK)
+                        ZenMenuGroup(index = 0, count = 1) {
+                            options.forEachIndexed { optionIndex, choice ->
+                                ZenSelectableMenuItem(
+                                    selected = choice == current,
+                                    onClick = {
+                                        expanded = false
+                                        SitePermissions.set(choice, listOf(kind), host)
+                                    },
+                                    text = { Text(stringResource(choiceTitle(choice))) },
+                                    index = optionIndex,
+                                    count = options.size,
+                                    selectedLeadingIcon = { ZenMenuCheck() },
+                                )
+                            }
                         }
                     }
                 }
-            }
-        }
+            },
+        )
     }
 }
 
@@ -1647,59 +1604,57 @@ private fun choiceTitle(choice: SitePermissionChoice?): Int = when (choice) {
     null -> R.string.site_permission_ask
 }
 
-/** One site switch as a plain menu row: like the menu's tools, the rows sit
- *  straight on the panel and the dividers do the grouping. */
+private val SitePermission.title: Int
+    get() = when (this) {
+        SitePermission.CAMERA -> R.string.site_permission_camera
+        SitePermission.MICROPHONE -> R.string.site_permission_microphone
+        SitePermission.LOCATION -> R.string.site_permission_location
+    }
+
+private val SitePermission.icon: ImageVector
+    get() = when (this) {
+        SitePermission.CAMERA -> Icons.Outlined.PhotoCamera
+        SitePermission.MICROPHONE -> Icons.Outlined.Mic
+        SitePermission.LOCATION -> Icons.Outlined.LocationOn
+    }
+
+/** One site switch, as a menu item with the native switch on its right. */
 @Composable
-private fun SiteBlockingRow(
+private fun SiteBlockingItem(
     category: BlockCategory,
     host: String,
     settings: ContentBlockingSettings,
     onChange: (BlockCategory, Boolean) -> Unit,
+    index: Int,
+    count: Int,
 ) {
-    val zen = LocalZenColors.current
     val enabled = settings.isOn(category)
     val on = settings.isOn(category, host)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .barClickable(enabled = enabled) { onChange(category, !on) }
-            .heightIn(min = RowHeight)
-            .padding(vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = category.icon,
-            contentDescription = null,
-            tint = zen.ink.copy(alpha = 0.6f),
-            modifier = Modifier.size(20.dp),
-        )
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = stringResource(category.title),
-                style = ZenType.rounded(16, FontWeight.Medium),
-                color = zen.ink,
+    ZenMenuItem(
+        text = { Text(stringResource(category.title)) },
+        onClick = { onChange(category, !on) },
+        index = index,
+        count = count,
+        leadingIcon = { Icon(category.icon, contentDescription = null) },
+        supportingText = if (!enabled) {
+            ({ Text(stringResource(R.string.blocking_off_in_settings)) })
+        } else {
+            null
+        },
+        trailingContent = {
+            Switch(
+                checked = on,
+                onCheckedChange = { onChange(category, it) },
+                enabled = enabled,
             )
-            if (!enabled) {
-                Text(
-                    text = stringResource(R.string.blocking_off_in_settings),
-                    style = ZenType.rounded(13, FontWeight.Normal),
-                    color = zen.ink.copy(alpha = 0.6f),
-                )
-            }
-        }
-        Switch(
-            checked = on,
-            onCheckedChange = { onChange(category, it) },
-            enabled = enabled,
-        )
-    }
+        },
+        enabled = enabled,
+    )
 }
 
 /** The blocked count, or what blocking does on this page, with what a tap does. */
 @Composable
-private fun BlockingCardRow(card: BlockingCard, onClick: () -> Unit) {
-    val zen = LocalZenColors.current
+private fun BlockingCardItem(card: BlockingCard, onClick: () -> Unit) {
     val (icon, title, detail) = when (card) {
         is BlockingCard.Blocked -> {
             val text = pluralStringResource(R.plurals.blocking_card_blocked, card.count, card.count)
@@ -1731,86 +1686,73 @@ private fun BlockingCardRow(card: BlockingCard, onClick: () -> Unit) {
         )
         BlockingCard.Hidden -> return
     }
-    // True white or black rather than the cream ink: this row sits on the
-    // page's own colour through the glass, where cream loses contrast.
-    val strong = if (zen.isDark) Color.White else Color.Black
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .barClickable(onClick = onClick)
-            .heightIn(min = RowHeight)
-            .padding(vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = strong,
-            modifier = Modifier.size(20.dp),
-        )
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = ZenType.rounded(16, FontWeight.Medium),
-                color = strong,
-            )
-            Text(
-                text = detail,
-                style = ZenType.rounded(13, FontWeight.Normal),
-                color = strong.copy(alpha = 0.72f),
-            )
-        }
-    }
-}
-
-@Composable
-private fun MenuRow(
-    icon: ImageVector,
-    title: String,
-    tint: Color,
-    onClick: (() -> Unit)? = null,
-    trailing: (@Composable () -> Unit)? = null,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(onClick?.let { action -> Modifier.barClickable(onClick = action) } ?: Modifier)
-            .height(RowHeight),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = tint,
-            modifier = Modifier.size(20.dp),
-        )
-        Spacer(Modifier.width(14.dp))
-        Text(
-            text = title,
-            style = ZenType.rounded(16, FontWeight.Medium),
-            color = tint,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        Spacer(Modifier.width(8.dp))
-        trailing?.invoke()
-    }
-}
-
-@Composable
-private fun RowDivider() {
-    val zen = LocalZenColors.current
-    Spacer(
-        Modifier
-            .fillMaxWidth()
-            .padding(start = 34.dp)
-            .height(0.5.dp)
-            .background(zen.ink.copy(alpha = 0.08f)),
+    ZenMenuItem(
+        text = { Text(title) },
+        onClick = onClick,
+        index = 0,
+        count = 1,
+        leadingIcon = { Icon(imageVector = icon, contentDescription = null) },
+        supportingText = { Text(detail) },
     )
 }
 
+/** Minus, the readout that resets, plus: the menu's one inline control. */
+@Composable
+private fun ZoomControls(
+    zoom: Float,
+    onZoomOut: () -> Unit,
+    onZoomIn: () -> Unit,
+    onReset: () -> Unit,
+) {
+    val zen = LocalZenColors.current
+    val resetLabel = stringResource(R.string.browser_zoom_reset)
+    val canReset = MiniBrowserZoom.canReset(zoom)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        ZoomStep(
+            icon = Icons.Outlined.Remove,
+            description = stringResource(R.string.browser_zoom_out),
+            enabled = MiniBrowserZoom.canZoomOut(zoom),
+            onClick = onZoomOut,
+        )
+        // The readout is the reset: same gesture as a browser's zoom
+        // percentage, and it keeps the row to one control.
+        Surface(
+            onClick = onReset,
+            enabled = canReset,
+            shape = CircleShape,
+            color = Color.Transparent,
+            modifier = Modifier
+                .width(56.dp)
+                .height(40.dp)
+                // At 100% the readout is plain text and announces itself;
+                // zoomed, it is the reset button.
+                .semantics {
+                    if (canReset) contentDescription = resetLabel
+                },
+        ) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = MiniBrowserZoom.percentLabel(zoom),
+                    style = ZenType.rounded(15, FontWeight.SemiBold),
+                    color = zen.ink,
+                    textAlign = TextAlign.Center,
+                    softWrap = false,
+                )
+            }
+        }
+        ZoomStep(
+            icon = Icons.Outlined.Add,
+            description = stringResource(R.string.browser_zoom_in),
+            enabled = MiniBrowserZoom.canZoomIn(zoom),
+            onClick = onZoomIn,
+        )
+    }
+}
+
+/** One zoom step: a tonal Material icon button. */
 @Composable
 private fun ZoomStep(
     icon: ImageVector,
@@ -1819,19 +1761,22 @@ private fun ZoomStep(
     onClick: () -> Unit,
 ) {
     val zen = LocalZenColors.current
-    // 48 dp wide for a thumb. The capsule around the readout is 32 dp tall, so
-    // the box stops there: a taller one would stretch that capsule with it.
-    Box(
-        modifier = Modifier
-            .size(width = 48.dp, height = 32.dp)
-            .barClickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center,
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        shapes = IconButtonDefaults.shapes(shape = CircleShape),
+        modifier = Modifier.size(40.dp),
+        colors = IconButtonDefaults.iconButtonColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = zen.ink.copy(alpha = 0.9f),
+            disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            disabledContentColor = zen.ink.copy(alpha = 0.3f),
+        ),
     ) {
         Icon(
             imageVector = icon,
             contentDescription = description,
-            tint = zen.ink.copy(alpha = if (enabled) 0.9f else 0.3f),
-            modifier = Modifier.size(18.dp),
+            modifier = Modifier.size(20.dp),
         )
     }
 }
@@ -1842,35 +1787,39 @@ private fun RowScope.MenuTile(
     title: String,
     description: String,
     tint: Color,
-    background: Color,
     onClick: () -> Unit,
     enabled: Boolean = true,
 ) {
-    val zen = LocalZenColors.current
-    Column(
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
         modifier = Modifier
             .weight(1f)
-            .height(TileHeight)
-            .background(background, TileShape)
-            .border(liftBorder(), TileShape)
-            .barClickable(enabled = enabled, onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+            .height(TileHeight),
+        shape = TileShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = liftBorder(),
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = description,
-            tint = tint,
-            modifier = Modifier.size(22.dp),
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = title,
-            style = ZenType.rounded(11, FontWeight.SemiBold),
-            color = tint,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = description,
+                tint = tint,
+                modifier = Modifier.size(22.dp),
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = title,
+                style = ZenType.rounded(11, FontWeight.SemiBold),
+                color = tint,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 

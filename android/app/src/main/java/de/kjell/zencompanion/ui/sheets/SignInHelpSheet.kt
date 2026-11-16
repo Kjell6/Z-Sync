@@ -1,20 +1,18 @@
 package de.kjell.zencompanion.ui.sheets
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,25 +39,16 @@ fun SignInHelpSheet(
     ZenSheet(
         onDismiss = onDone,
         skipPartiallyExpanded = true,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        dragHandle = {
-            Box(
-                modifier = Modifier
-                    .padding(top = 12.dp, bottom = 8.dp)
-                    .size(width = 36.dp, height = 4.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                        shape = RoundedCornerShape(2.dp),
-                    ),
-            )
-        },
     ) {
         Column(
             Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
-                .padding(top = 28.dp, bottom = 28.dp),
+                .padding(
+                    top = SheetContentTopSpacing,
+                    bottom = SheetContentBottomSpacing,
+                ),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             Row(
@@ -75,7 +64,11 @@ fun SignInHelpSheet(
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
                 )
-                IconButton(onClick = onDone, modifier = Modifier.padding(end = 4.dp)) {
+                IconButton(
+                    onClick = onDone,
+                    shapes = IconButtonDefaults.shapes(),
+                    modifier = Modifier.padding(end = 4.dp),
+                ) {
                     Icon(
                         imageVector = Icons.Outlined.Close,
                         contentDescription = stringResource(R.string.common_done),
@@ -90,7 +83,7 @@ fun SignInHelpSheet(
                 body = stringResource(R.string.signin_help_passkey),
             )
 
-            TextButton(onClick = onOpenMozilla) {
+            TextButton(onClick = onOpenMozilla, shapes = ButtonDefaults.shapes()) {
                 Text(
                     text = stringResource(R.string.signin_help_open_mozilla),
                     style = MaterialTheme.typography.titleSmall,

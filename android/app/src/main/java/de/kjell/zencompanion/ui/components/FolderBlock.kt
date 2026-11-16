@@ -6,7 +6,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,7 +30,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -40,6 +39,7 @@ import de.kjell.zencompanion.R
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.motion.DampingFolderBody
 import de.kjell.zencompanion.ui.motion.StiffnessFolderBody
+import de.kjell.zencompanion.ui.theme.rowPressFeedback
 import de.kjell.zencompanion.ui.theme.rowTitleMaxLines
 
 /**
@@ -61,6 +61,7 @@ fun FolderBlock(
 ) {
     val fallbackName = stringResource(R.string.tabs_folder)
     var isExpanded by remember { mutableStateOf(false) }
+    val source = remember { MutableInteractionSource() }
 
     // Horizontal padding comes from the CALLER (top-level = 20.dp, matching
     // the tab rows). Nested FolderBlocks receive no extra padding, so tabs
@@ -69,12 +70,14 @@ fun FolderBlock(
     Column(modifier) {
         Box(Modifier.fillMaxWidth()) {
             Surface(
+                onClick = { isExpanded = !isExpanded },
                 color = Color.Transparent,
+                contentColor = MaterialTheme.colorScheme.onSurface,
                 shape = RoundedCornerShape(12.dp),
+                interactionSource = source,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable { isExpanded = !isExpanded },
+                    .rowPressFeedback(source),
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -185,11 +188,11 @@ private fun LiveFolderSource(
         else -> stringResource(R.string.folder_live_other)
     }
     Surface(
+        onClick = { onOpenSource(source, provider) },
         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
+        contentColor = MaterialTheme.colorScheme.onSurface,
         shape = RoundedCornerShape(10.dp),
-        modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .clickable { onOpenSource(source, provider) },
+        modifier = modifier,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,

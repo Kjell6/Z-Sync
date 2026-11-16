@@ -39,12 +39,18 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         # The app's own link form, zsync://open?url=<address>, works without
         # the browser entitlement: a Shortcut can open a page here today.
-        # http/https wait for Apple to grant it (see docs/release.md).
+        # http/https are declared for the default-browser entitlement request;
+        # iOS ignores them until Apple grants it (see docs/release.md).
         CFBundleURLTypes:
           - CFBundleTypeRole: Viewer
             CFBundleURLName: de.kjell.zencompanion.zsync
             CFBundleURLSchemes:
               - zsync
+          - CFBundleTypeRole: Viewer
+            CFBundleURLName: de.kjell.zencompanion.web
+            CFBundleURLSchemes:
+              - http
+              - https
         UILaunchScreen: {}
         CFBundleDevelopmentRegion: en
         UIRequiresFullScreen: true

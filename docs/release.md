@@ -107,10 +107,11 @@ Remaining maintainer steps, in order:
    entitlements — both `ios/ZenCompanion/ZenCompanion.entitlements` and the
    `entitlements.properties` block in `ios/project.yml`, so a later `xcodegen`
    run keeps it. Re-issue the provisioning profile afterwards.
-3. Add the `http` and `https` URL schemes to `CFBundleURLTypes` in
-   `ios/project.yml` and `ios/ZenCompanion/Info.plist`. `HomeView` already
-   routes `onOpenURL` links into the in-app browser. The app's own `zsync`
-   scheme is declared in both files already.
+3. Done since 1.6: the `http` and `https` URL schemes are declared in
+   `CFBundleURLTypes` in `ios/project.yml` and `ios/ZenCompanion/Info.plist`,
+   so the build Apple looks at for the request already has them. They do
+   nothing until the entitlement is granted. `HomeView` already routes
+   `onOpenURL` links into the in-app browser.
 4. Check Apple's requirements for default-browser apps before submitting:
    - **A text field for a URL on launch, or search tools.** Met: the app opens
      on the home screen, whose action bar has a search field, signed in or out;
@@ -126,7 +127,7 @@ Remaining maintainer steps, in order:
 5. Add a Settings row that opens the app's page in the Settings app, where the
    reader can pick the default browser (`UIApplication.openSettingsURLString`).
 
-Until steps 1–3 are done, Z-Sync is not a selectable browser on iOS; only its
+Until steps 1 and 2 are done, Z-Sync is not a selectable browser on iOS; only its
 own `zsync://open?url=` links reach it.
 
 ## Related

@@ -17,8 +17,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -41,7 +39,10 @@ import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.EssentialsColumns
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.theme.liftBorder
-import de.kjell.zencompanion.ui.theme.pressFeedback
+import de.kjell.zencompanion.ui.theme.ZenMenu
+import de.kjell.zencompanion.ui.theme.ZenMenuGroup
+import de.kjell.zencompanion.ui.theme.ZenMenuItem
+import de.kjell.zencompanion.ui.theme.rememberTilePress
 
 /**
  * Native Material 3 Essentials Grid.
@@ -95,10 +96,11 @@ private fun EssentialTile(
     val zen = de.kjell.zencompanion.ui.theme.LocalZenColors.current
     val shape = RoundedCornerShape(16.dp)
     val source = remember { MutableInteractionSource() }
+    val press = rememberTilePress(source, shape)
 
     Card(
         modifier = Modifier
-            .pressFeedback(source)
+            .then(press.modifier)
             .fillMaxWidth()
             .height(56.dp)
             .combinedClickable(
@@ -117,7 +119,7 @@ private fun EssentialTile(
                 contentDescription = label
                 customActions = listOf(CustomAccessibilityAction(renameText) { showRename = true; true })
             },
-        shape = shape,
+        shape = press.shape,
         border = liftBorder(),
         colors = CardDefaults.cardColors(
             // Same lift color as the top-bar cards (iOS: Palette.lift) so all
@@ -130,27 +132,34 @@ private fun EssentialTile(
             contentAlignment = Alignment.Center,
         ) {
             ZenTabIcon(tab = tab, size = 26.dp)
-            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            renameText,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                        )
-                    },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Outlined.Edit,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    },
-                    onClick = {
-                        menuOpen = false
-                        showRename = true
-                    },
-                )
+            ZenMenu(
+                expanded = menuOpen,
+                onDismissRequest = { menuOpen = false },
+            ) {
+                ZenMenuGroup(index = 0, count = 1) {
+                    ZenMenuItem(
+                        text = {
+                            Text(
+                                renameText,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Outlined.Edit,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            showRename = true
+                        },
+                        index = 0,
+                        count = 1,
+                    )
+                }
             }
         }
     }

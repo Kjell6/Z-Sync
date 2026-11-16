@@ -1,10 +1,8 @@
 package de.kjell.zencompanion.ui.sheets
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,9 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -23,10 +19,8 @@ import androidx.compose.material.icons.outlined.Cookie
 import androidx.compose.material.icons.outlined.PanTool
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -34,7 +28,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -44,8 +37,9 @@ import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.BlockCategory
 import de.kjell.zencompanion.data.ContentBlocking
 import de.kjell.zencompanion.data.ContentBlockingSettings
-import de.kjell.zencompanion.ui.theme.LiftCard
 import de.kjell.zencompanion.ui.theme.LocalZenColors
+import de.kjell.zencompanion.ui.theme.ZenListGroup
+import de.kjell.zencompanion.ui.theme.ZenSwitchListItem
 
 internal val BlockCategory.icon: ImageVector
     get() = when (this) {
@@ -61,7 +55,7 @@ internal val BlockCategory.title: Int
         BlockCategory.COOKIE_BANNERS -> R.string.blocking_cookie_banners
     }
 
-/** The three switches, in the card style of the settings sheet. */
+/** The three switches, in the grouped list style of the settings sheet. */
 @Composable
 private fun BlockingSwitches(
     isOn: (BlockCategory) -> Boolean,
@@ -69,55 +63,23 @@ private fun BlockingSwitches(
     isEnabled: (BlockCategory) -> Boolean = { true },
     showDetail: Boolean = true,
 ) {
-    LiftCard(modifier = Modifier.fillMaxWidth()) {
-        BlockCategory.entries.forEachIndexed { index, category ->
-            if (index > 0) {
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                )
-            }
+    ZenListGroup {
+        for (category in BlockCategory.entries) {
             val enabled = isEnabled(category)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(enabled = enabled) { onChange(category, !isOn(category)) }
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = category.icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(22.dp),
-                )
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(category.title),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    val detail = when {
-                        !enabled -> stringResource(R.string.blocking_off_in_settings)
-                        showDetail && category == BlockCategory.COOKIE_BANNERS ->
-                            stringResource(R.string.blocking_cookie_banners_detail)
-                        else -> null
-                    }
-                    if (detail != null) {
-                        Text(
-                            text = detail,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                Switch(
-                    checked = isOn(category),
-                    onCheckedChange = { onChange(category, it) },
-                    enabled = enabled,
-                )
+            val detail = when {
+                !enabled -> stringResource(R.string.blocking_off_in_settings)
+                showDetail && category == BlockCategory.COOKIE_BANNERS ->
+                    stringResource(R.string.blocking_cookie_banners_detail)
+                else -> null
             }
+            ZenSwitchListItem(
+                headline = stringResource(category.title),
+                supportingText = detail,
+                icon = category.icon,
+                checked = isOn(category),
+                onCheckedChange = { onChange(category, it) },
+                enabled = enabled,
+            )
         }
     }
 }
@@ -194,10 +156,11 @@ internal fun ContentBlockingSetupScreen() {
         }
         Button(
             onClick = { ContentBlocking.answerSetup(choice) },
-            shape = RoundedCornerShape(16.dp),
+            shapes = ButtonDefaults.shapes(shape = RoundedCornerShape(16.dp)),
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 56.dp),
+                .heightIn(min = 56.dp)
+                .padding(top = 16.dp),
         ) {
             Text(
                 text = stringResource(R.string.blocking_setup_continue),

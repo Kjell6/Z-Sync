@@ -23,9 +23,12 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Tab
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -42,6 +45,7 @@ import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.WhatsNewIcon
 import de.kjell.zencompanion.data.WhatsNewItem
 import de.kjell.zencompanion.data.WhatsNewRelease
+import de.kjell.zencompanion.ui.theme.zenListItemColors
 
 /**
  * Material 3 What's New sheet: a single scrollable list of release highlights
@@ -54,18 +58,6 @@ fun WhatsNewSheet(onDismiss: () -> Unit) {
     ZenSheet(
         onDismiss = onDismiss,
         skipPartiallyExpanded = true,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        dragHandle = {
-            Box(
-                modifier = Modifier
-                    .padding(top = 12.dp, bottom = 8.dp)
-                    .size(width = 36.dp, height = 4.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                        shape = RoundedCornerShape(2.dp),
-                    ),
-            )
-        },
     ) {
         Column(Modifier.fillMaxSize()) {
             Column(
@@ -103,7 +95,9 @@ fun WhatsNewSheet(onDismiss: () -> Unit) {
 
                 Spacer(Modifier.height(28.dp))
 
-                Column(verticalArrangement = Arrangement.spacedBy(30.dp)) {
+                // The rows are native list items with their own vertical
+                // padding, so they need only a small gap between them.
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     WhatsNewRelease.items.forEach { item ->
                         WhatsNewRow(item)
                     }
@@ -119,7 +113,7 @@ fun WhatsNewSheet(onDismiss: () -> Unit) {
                     .padding(horizontal = 24.dp)
                     .padding(top = 4.dp, bottom = 20.dp)
                     .heightIn(min = 52.dp),
-                shape = RoundedCornerShape(14.dp),
+                shapes = ButtonDefaults.shapes(shape = RoundedCornerShape(14.dp)),
                 contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp),
             ) {
                 Text(
@@ -134,7 +128,7 @@ fun WhatsNewSheet(onDismiss: () -> Unit) {
 
 @Composable
 private fun CloseButton(onClose: () -> Unit) {
-    IconButton(onClick = onClose) {
+    IconButton(onClick = onClose, shapes = IconButtonDefaults.shapes()) {
         Icon(
             imageVector = Icons.Outlined.Close,
             contentDescription = stringResource(R.string.common_close),
@@ -145,41 +139,38 @@ private fun CloseButton(onClose: () -> Unit) {
 
 @Composable
 private fun WhatsNewRow(item: WhatsNewItem) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .semantics(mergeDescendants = true) {},
-    ) {
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-            contentColor = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(44.dp),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = item.icon.imageVector,
-                    contentDescription = null,
-                    modifier = Modifier.size(22.dp),
-                )
+    ListItem(
+        modifier = Modifier.semantics(mergeDescendants = true) {},
+        leadingContent = {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                contentColor = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(44.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = item.icon.imageVector,
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
             }
-        }
-
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = stringResource(item.titleRes),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(Modifier.height(4.dp))
+        },
+        supportingContent = {
             Text(
                 text = stringResource(item.detailRes),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
+        },
+        colors = zenListItemColors(),
+    ) {
+        Text(
+            text = stringResource(item.titleRes),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 

@@ -48,8 +48,6 @@ final class WhatsNewTests: XCTestCase {
             eyebrow: WhatsNewRelease.latest.eyebrow,
             title: WhatsNewRelease.latest.title,
             subtitle: WhatsNewRelease.latest.subtitle,
-            heroImage: WhatsNewRelease.latest.heroImage,
-            heroAccessibilityLabel: WhatsNewRelease.latest.heroAccessibilityLabel,
             featuresHeading: WhatsNewRelease.latest.featuresHeading,
             items: WhatsNewRelease.latest.items
         )
@@ -71,7 +69,7 @@ final class WhatsNewTests: XCTestCase {
 
     // MARK: - Release notes model
 
-    func testReleaseHasCompleteHeroContent() {
+    func testReleaseHasCompleteHeaderContent() {
         let release = WhatsNewRelease.latest
 
         XCTAssertEqual(release.eyebrow, "Z-SYNC 1.6")
@@ -79,11 +77,6 @@ final class WhatsNewTests: XCTestCase {
         XCTAssertEqual(
             release.subtitle,
             "Rebuilt from the ground up, with real tabs that stay open."
-        )
-        XCTAssertEqual(release.heroImage, "WhatsNewBrowser")
-        XCTAssertEqual(
-            release.heroAccessibilityLabel,
-            "The new tab overview with open pages as cards"
         )
         XCTAssertEqual(release.featuresHeading, "AND EVERYTHING A BROWSER NEEDS")
     }

@@ -1,9 +1,8 @@
 import SwiftUI
 
 /// The What's New sheet: one short, scrollable release note in the platform's
-/// own idiom (large title, SF Symbols, system text styles) with the app's
-/// coral as the hero and the only accent. The rest of the release is a short
-/// row of feature pills that wraps onto as many lines as the text size needs,
+/// own idiom (large title, system text styles) with the app's coral as the
+/// only accent. The release is a short row of feature pills that wraps onto as many lines as the text size needs,
 /// so the content scrolls rather than clipping. The Done button is pinned
 /// below the scroll area.
 struct WhatsNewSheet: View {
@@ -22,7 +21,6 @@ struct WhatsNewSheet: View {
                     }
 
                     header
-                    hero
                     features
                 }
                 .frame(maxWidth: 560, alignment: .leading)
@@ -77,28 +75,6 @@ struct WhatsNewSheet: View {
         }
         .buttonStyle(PressedButtonStyle())
         .accessibilityLabel(Text("common.done"))
-    }
-
-    /// The brand-coloured panel holding the browser screenshot, shown like a
-    /// phone screen. The screenshot itself is decorative; the panel carries
-    /// one label for VoiceOver.
-    private var hero: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .fill(Palette.coral(scheme))
-
-            Image(release.heroImage)
-                .resizable()
-                .scaledToFit()
-                .frame(height: 248)
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .shadow(color: .black.opacity(0.25), radius: 14, y: 8)
-                .accessibilityHidden(true)
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: 280)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(release.heroAccessibilityLabel))
     }
 
     /// A caption and the remaining features as small pills. VoiceOver reads

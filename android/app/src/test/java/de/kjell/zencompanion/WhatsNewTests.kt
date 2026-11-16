@@ -78,12 +78,10 @@ class WhatsNewTests {
     }
 
     @Test
-    fun releaseHasHeroAndHeaderResources() {
+    fun releaseHasHeaderResources() {
         assertNotEquals(0, WhatsNewRelease.eyebrowRes)
         assertNotEquals(0, WhatsNewRelease.headlineRes)
         assertNotEquals(0, WhatsNewRelease.subtitleRes)
-        assertNotEquals(0, WhatsNewRelease.heroDescriptionRes)
-        assertNotEquals(0, WhatsNewRelease.heroImageRes)
         assertNotEquals(0, WhatsNewRelease.featuresHeadingRes)
     }
 

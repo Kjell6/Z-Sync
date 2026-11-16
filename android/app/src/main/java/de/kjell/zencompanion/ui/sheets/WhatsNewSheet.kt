@@ -1,6 +1,5 @@
 package de.kjell.zencompanion.ui.sheets
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,7 +9,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -30,13 +28,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -50,9 +42,8 @@ import de.kjell.zencompanion.ui.theme.LocalZenColors
 import de.kjell.zencompanion.ui.theme.liftCard
 
 /**
- * Material 3 What's New sheet: one short, scrollable release note with the
- * brand-coloured hero screenshot, a short row of feature pills and a pinned
- * Done button. All type is sized in sp so font scaling is respected; the pills
+ * Material 3 What's New sheet: one short, scrollable release note with a
+ * short row of feature pills and a pinned Done button. All type is sized in sp so font scaling is respected; the pills
  * wrap onto more lines at large font scales and the content scrolls instead
  * of clipping.
  */
@@ -123,10 +114,6 @@ fun WhatsNewSheet(onDismiss: () -> Unit) {
 
                 Spacer(Modifier.height(24.dp))
 
-                Hero()
-
-                Spacer(Modifier.height(24.dp))
-
                 Features()
 
                 Spacer(Modifier.height(24.dp))
@@ -160,47 +147,6 @@ private fun CloseButton(onClose: () -> Unit) {
             imageVector = Icons.Outlined.Close,
             contentDescription = stringResource(R.string.common_close),
             tint = zen.ink.copy(alpha = 0.65f),
-        )
-    }
-}
-
-/**
- * The brand-coloured panel holding the browser screenshot, shown like a phone
- * screen. The screenshot itself is decorative; the panel carries one
- * description for TalkBack. Android's elevation shadow has no vertical-offset
- * control, so the shadow is the closest match to the design's offset.
- */
-@Composable
-private fun Hero() {
-    val zen = LocalZenColors.current
-    val description = stringResource(WhatsNewRelease.heroDescriptionRes)
-    val shape = RoundedCornerShape(22.dp)
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(280.dp)
-            .clip(RoundedCornerShape(26.dp))
-            .background(zen.coral)
-            .semantics(mergeDescendants = true) { contentDescription = description },
-        contentAlignment = Alignment.Center,
-    ) {
-        val painter = painterResource(WhatsNewRelease.heroImageRes)
-        val imageSize = painter.intrinsicSize
-        Image(
-            painter = painter,
-            contentDescription = null,
-            contentScale = ContentScale.Fit,
-            modifier = Modifier
-                .height(248.dp)
-                .aspectRatio(imageSize.width / imageSize.height)
-                .shadow(
-                    elevation = 14.dp,
-                    shape = shape,
-                    ambientColor = Color.Black.copy(alpha = 0.25f),
-                    spotColor = Color.Black.copy(alpha = 0.25f),
-                )
-                .clip(shape),
         )
     }
 }

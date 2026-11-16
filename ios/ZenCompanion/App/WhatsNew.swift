@@ -1,6 +1,6 @@
 import Foundation
 
-/// One feature pill under the hero. Copy lives here rather than in the
+/// One feature pill in the sheet. Copy lives here rather than in the
 /// String Catalog because release notes are content, not chrome: they are
 /// replaced wholesale each release and stay English-only like the rest of the
 /// app.
@@ -18,9 +18,6 @@ struct WhatsNewRelease: Equatable {
     let eyebrow: String
     let title: String
     let subtitle: String
-    /// Asset name of the hero screenshot.
-    let heroImage: String
-    let heroAccessibilityLabel: String
     /// Small caption above the feature pills.
     let featuresHeading: String
     let items: [WhatsNewItem]
@@ -30,8 +27,6 @@ struct WhatsNewRelease: Equatable {
         eyebrow: "Z-SYNC 1.6",
         title: "Meet the new browser",
         subtitle: "Rebuilt from the ground up, with real tabs that stay open.",
-        heroImage: "WhatsNewBrowser",
-        heroAccessibilityLabel: "The new tab overview with open pages as cards",
         featuresHeading: "AND EVERYTHING A BROWSER NEEDS",
         items: [
             WhatsNewItem(id: "history", title: "History"),

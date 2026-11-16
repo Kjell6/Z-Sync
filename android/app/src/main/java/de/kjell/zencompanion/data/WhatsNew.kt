@@ -1,12 +1,11 @@
 package de.kjell.zencompanion.data
 
 import android.content.Context
-import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import de.kjell.zencompanion.R
 
 /**
- * One feature pill under the hero. Copy stays in `strings.xml` because it is
+ * One feature pill in the sheet. Copy stays in `strings.xml` because it is
  * UI text, and the list is replaced wholesale each release.
  */
 data class WhatsNewItem(
@@ -30,13 +29,6 @@ object WhatsNewRelease {
 
     @StringRes
     val subtitleRes: Int = R.string.whats_new_subtitle
-
-    @StringRes
-    val heroDescriptionRes: Int = R.string.whats_new_hero_description
-
-    /** Hero screenshot of the app's tab card deck. */
-    @DrawableRes
-    val heroImageRes: Int = R.drawable.whats_new_browser
 
     /** Small caption above the feature pills. */
     @StringRes

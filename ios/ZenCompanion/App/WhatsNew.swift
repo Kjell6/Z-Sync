@@ -29,7 +29,7 @@ struct WhatsNewRelease: Equatable {
         title: "Meet the new browser",
         subtitle: "Rebuilt from the ground up, with real tabs that stay open.",
         heroImage: "WhatsNewHero",
-        heroAccessibilityLabel: "The new tab overview with open pages as cards",
+        heroAccessibilityLabel: "Three phones showing the new browser: the open pages as cards, a page with the new bottom bar, and search suggestions",
         featuresHeading: "AND EVERYTHING A BROWSER NEEDS",
         items: [
             WhatsNewItem(id: "history", title: "History"),

@@ -1,5 +1,7 @@
 package de.kjell.zencompanion.ui.sheets
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +25,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Keyboard
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SwapVert
@@ -44,6 +47,7 @@ import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +59,8 @@ import de.kjell.zencompanion.data.SearchEngine
 import de.kjell.zencompanion.data.SearchEngines
 import de.kjell.zencompanion.data.ToolbarPlacement
 import de.kjell.zencompanion.ui.PreferencesState
+import de.kjell.zencompanion.ui.components.DefaultBrowser
+import de.kjell.zencompanion.ui.components.rememberIsDefaultBrowser
 import de.kjell.zencompanion.ui.theme.LiftCard
 import de.kjell.zencompanion.ui.theme.LocalZenColors
 
@@ -211,7 +217,8 @@ internal fun SettingsSearchBody(
 
 /**
  * The Pages & tabs sub-screen: which pages survive, how long kept pages live,
- * and whether tabs open in the default browser instead.
+ * whether tabs open in the default browser instead, and the system's browser
+ * role.
  */
 @Composable
 internal fun SettingsPagesBody(
@@ -220,6 +227,17 @@ internal fun SettingsPagesBody(
     onSetKeptPageLifetime: (KeptPageLifetime) -> Unit,
     onSetAlwaysOpenExternally: (Boolean) -> Unit,
 ) {
+    val context = LocalContext.current
+    // Asked in the role dialog or in the Settings app, so the rows update as
+    // soon as the screen comes back.
+    var isDefaultBrowser by rememberIsDefaultBrowser()
+    val browserRoleLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) {
+        // The system granted or kept the role; read it back once it is gone.
+        isDefaultBrowser = DefaultBrowser.isDefault(context)
+    }
+
     LiftCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.fillMaxWidth()) {
             ToggleRow(
@@ -261,12 +279,27 @@ internal fun SettingsPagesBody(
     }
 
     LiftCard(modifier = Modifier.fillMaxWidth()) {
-        ToggleRow(
-            title = stringResource(R.string.settings_external_browser),
-            icon = Icons.AutoMirrored.Outlined.OpenInNew,
-            checked = preferences.alwaysOpenExternally,
-            onCheckedChange = onSetAlwaysOpenExternally,
-        )
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // As the default browser, "open in the default browser" would
+            // only open Z-Sync again, so the row goes. The stored choice
+            // stays and comes back with the row once another app takes
+            // the role.
+            if (!isDefaultBrowser) {
+                ToggleRow(
+                    title = stringResource(R.string.settings_external_browser),
+                    icon = Icons.AutoMirrored.Outlined.OpenInNew,
+                    checked = preferences.alwaysOpenExternally,
+                    onCheckedChange = onSetAlwaysOpenExternally,
+                )
+
+                SettingsDivider()
+            }
+
+            DefaultBrowserRow(
+                isDefault = isDefaultBrowser,
+                onRequestDefault = { browserRoleLauncher.launch(DefaultBrowser.requestIntent(context)) },
+            )
+        }
     }
 }
 
@@ -277,6 +310,16 @@ internal fun SettingsPagesBody(
 @Composable
 internal fun SettingsPrivacyBody(onClearWebsiteData: () -> Unit) {
     var confirmClearData by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    // Asked in the role dialog or in the Settings app, so the rows update as
+    // soon as the screen comes back.
+    var isDefaultBrowser by rememberIsDefaultBrowser()
+    val browserRoleLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) {
+        // The system granted or kept the role; read it back once it is gone.
+        isDefaultBrowser = DefaultBrowser.isDefault(context)
+    }
     if (confirmClearData) {
         AlertDialog(
             onDismissRequest = { confirmClearData = false },
@@ -367,6 +410,7 @@ private fun NavRow(
 /** "Layout": how the essentials grid and the action bar look. */
 @Composable
 internal fun SettingsLayoutSection(
+    signedIn: Boolean,
     preferences: PreferencesState,
     onSetEssentialsColumns: (EssentialsColumns) -> Unit,
     onSetToolbarPlacement: (ToolbarPlacement) -> Unit,
@@ -381,31 +425,35 @@ internal fun SettingsLayoutSection(
                 val columns = preferences.essentialsColumns
                 val toolbar = preferences.toolbarPlacement
 
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    MenuRow(
-                        title = stringResource(R.string.settings_essentials_columns),
-                        value = columns.label(),
-                        icon = Icons.Outlined.GridView,
-                        onClick = { columnsExpanded = true },
-                    )
-                    DropdownMenu(
-                        expanded = columnsExpanded,
-                        onDismissRequest = { columnsExpanded = false },
-                    ) {
-                        EssentialsColumns.entries.forEach { option ->
-                            DropdownMenuItem(
-                                text = { MenuItemText(option.label(), option == columns) },
-                                trailingIcon = if (option == columns) ({ MenuItemCheck() }) else null,
-                                onClick = {
-                                    onSetEssentialsColumns(option)
-                                    columnsExpanded = false
-                                },
-                            )
+                // The grid only exists with an account; the toolbar placement
+                // shapes the signed-out home too, so that row always stays.
+                if (AccountOnlySettings.showsEssentialsColumns(signedIn)) {
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        MenuRow(
+                            title = stringResource(R.string.settings_essentials_columns),
+                            value = columns.label(),
+                            icon = Icons.Outlined.GridView,
+                            onClick = { columnsExpanded = true },
+                        )
+                        DropdownMenu(
+                            expanded = columnsExpanded,
+                            onDismissRequest = { columnsExpanded = false },
+                        ) {
+                            EssentialsColumns.entries.forEach { option ->
+                                DropdownMenuItem(
+                                    text = { MenuItemText(option.label(), option == columns) },
+                                    trailingIcon = if (option == columns) ({ MenuItemCheck() }) else null,
+                                    onClick = {
+                                        onSetEssentialsColumns(option)
+                                        columnsExpanded = false
+                                    },
+                                )
+                            }
                         }
                     }
-                }
 
-                SettingsDivider()
+                    SettingsDivider()
+                }
 
                 Box(modifier = Modifier.fillMaxWidth()) {
                     MenuRow(
@@ -481,6 +529,54 @@ private fun MenuRow(
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(20.dp),
         )
+    }
+}
+
+/** "Default browser": the system's browser role, or the way to ask for it. */
+@Composable
+private fun DefaultBrowserRow(isDefault: Boolean, onRequestDefault: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            // Once held, the system decides; the row is a statement, not a button.
+            .clickable(enabled = !isDefault, onClick = onRequestDefault)
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Public,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(22.dp),
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.settings_default_browser),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = stringResource(R.string.settings_default_browser_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (isDefault) {
+            Text(
+                text = stringResource(R.string.settings_default_browser_value),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
 

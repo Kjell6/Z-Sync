@@ -128,6 +128,18 @@ enum FilterListUpdates {
         return list.ruleCount >= minRules ? list : nil
     }
 
+    /// The copy to use when both parse: the downloaded one only when it is at
+    /// least as new as the bundled one, so a newer list that came with an app
+    /// update isn't held back by an older download. Versions are fixed-width
+    /// timestamps (`202610242150`), so plain string order is newness; a version
+    /// missing on either side keeps the download, as before.
+    static func chooseList(bundled: BlockList?, downloaded: BlockList?) -> BlockList? {
+        guard let downloaded else { return bundled }
+        guard let bundled else { return downloaded }
+        guard let bundledVersion = bundled.version, let downloadedVersion = downloaded.version else { return downloaded }
+        return downloadedVersion >= bundledVersion ? downloaded : bundled
+    }
+
     /// `24 Oct 2026 21:50 UTC` from the list header becomes `24 Oct 2026`.
     static func displayDate(_ lastModified: String) -> String? {
         let parts = lastModified.split(separator: " ").prefix(3)
@@ -274,14 +286,15 @@ final class ContentBlocker {
         lastModified = loaded[.ads]?.lastModified
     }
 
-    /// The downloaded copy when it is usable, otherwise the one in the app.
+    /// The list to use: the downloaded copy when it is accepted and at least as
+    /// new as the bundled one, otherwise the copy in the app.
     private nonisolated static func readList(_ list: FilterList) -> BlockList? {
-        if let text = try? String(contentsOf: downloadedFile(list), encoding: .utf8), let parsed = FilterListUpdates.accept(text) {
-            return parsed
-        }
-        guard let url = Bundle.main.url(forResource: list.rawValue, withExtension: "txt"),
-              let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
-        return BlockList.parse(text)
+        let bundled = Bundle.main.url(forResource: list.rawValue, withExtension: "txt")
+            .flatMap { try? String(contentsOf: $0, encoding: .utf8) }
+            .map { BlockList.parse($0) }
+        let downloadedText = try? String(contentsOf: downloadedFile(list), encoding: .utf8)
+        let downloaded = downloadedText.flatMap { FilterListUpdates.accept($0) }
+        return FilterListUpdates.chooseList(bundled: bundled, downloaded: downloaded)
     }
 
     /// Looks up the compiled list for this version, compiling it when needed.

@@ -183,4 +183,21 @@ final class FxAClientAuthTests: XCTestCase {
             XCTAssertFalse(sessionInvalid)
         }
     }
+
+    /// A cancelled request is not a failed sign-in. It must come out as the
+    /// cancellation it is, without a BrowserID attempt, so the caller can
+    /// retry instead of showing "Sync sign-in failed".
+    func testSyncCredentialsPassesACancelledRequestOnUnwrapped() async throws {
+        let transport = FakeSyncTransport()
+        transport.stubs = [.init(error: URLError(.cancelled))]
+        let client = FxAClient(transport: transport)
+
+        do {
+            _ = try await client.syncCredentials(sessionToken: sessionToken, kB: kB)
+            return XCTFail("expected the cancellation")
+        } catch {
+            XCTAssertEqual((error as? URLError)?.code, .cancelled, "got \(error)")
+        }
+        XCTAssertEqual(transport.requests.count, 1, "BrowserID fallback must not be attempted")
+    }
 }

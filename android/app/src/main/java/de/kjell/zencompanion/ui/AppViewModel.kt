@@ -6,8 +6,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import de.kjell.zencompanion.BuildConfig
-import de.kjell.zencompanion.data.BrowserHistory
-import de.kjell.zencompanion.data.SitePermissions
 import de.kjell.zencompanion.data.AccountStore
 import de.kjell.zencompanion.data.AppEvents
 import de.kjell.zencompanion.data.AndroidWhatsNewRepository
@@ -32,7 +30,9 @@ import de.kjell.zencompanion.sync.SpacesSyncService
 import de.kjell.zencompanion.sync.SyncError
 import de.kjell.zencompanion.sync.SyncedActivityService
 import de.kjell.zencompanion.sync.ZenSpaces
+import de.kjell.zencompanion.ui.screens.FxAWeb
 import de.kjell.zencompanion.ui.screens.FxAWebLogin
+import de.kjell.zencompanion.ui.screens.sameTabUrl
 import de.kjell.zencompanion.util.FriendlyError
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
@@ -322,8 +322,8 @@ class AppViewModel(
     private val _session = MutableStateFlow<AccountStore.AccountSnapshot?>(AccountStore.load(appContext))
     val session: StateFlow<AccountStore.AccountSnapshot?> = _session
 
-    /** Explains an automatic sign-out on the landing screen (e.g. the
-     * Mozilla account password changed on another device). */
+    /** Explains an automatic sign-out in the sign-in card (e.g. the Mozilla
+     * account password changed on another device). */
     private val _sessionNotice = MutableStateFlow<Int?>(null)
     val sessionNotice: StateFlow<Int?> = _sessionNotice
 
@@ -349,6 +349,11 @@ class AppViewModel(
     // consumes it by opening a new tab.
     private val _searchOnOpenPending = MutableStateFlow(false)
     val searchOnOpenPending: StateFlow<Boolean> = _searchOnOpenPending
+
+    // A web link another app handed to Z-Sync, opened by the spaces screen as
+    // soon as it is up — signed in or not. Never kept for a later sign-in.
+    private val _incomingLink = MutableStateFlow<String?>(null)
+    val incomingLink: StateFlow<String?> = _incomingLink
 
     private var reloadJob: Job? = null
     /** A reload asked for while one was running; it runs right after. */
@@ -391,10 +396,12 @@ class AppViewModel(
         _browser.value = _browser.value.copy(
             syncSetupHintDismissed = preferencesRepository.syncSetupHintDismissed(),
         )
-        browserRepository.cachedSnapshot?.let { cached ->
-            if (cached.spaces.isNotEmpty()) FaviconLoader.prefetch(cached)
-        }
+        // Nothing of the account is read without one: no cached spaces and no
+        // favicon work before sign-in.
         if (_session.value != null) {
+            browserRepository.cachedSnapshot?.let { cached ->
+                if (cached.spaces.isNotEmpty()) FaviconLoader.prefetch(cached)
+            }
             considerReviewPrompt()
             initialLoad()
         }
@@ -462,13 +469,17 @@ class AppViewModel(
         SnapshotCache.deleteCachedSnapshot(appContext)
         SnapshotCache.invalidateMemory()
         FaviconLoader.clear()
-        // Here and not in the Settings button: a session that dies signs out too.
-        SitePermissions.clear()
-        BrowserHistory.clear()
+        // Only the account goes. The mini-browser belongs to this phone, so its
+        // open pages, history, website data and site permissions all stay, and
+        // signing out of Mozilla leaves the websites' own logins alone. The one
+        // web session that has to go is the sign-in page's own: the next
+        // sign-in must not reuse it.
+        runCatching { FxAWeb.wipeWebSession() }
         preferencesRepository.setSyncSetupHintDismissed(false)
         _browser.value = BrowserState()
         _activity.value = ActivityState()
         _whatsNewVisible.value = false
+        _searchOnOpenPending.value = false
         _sessionNotice.value = null
         if (account != null) {
             // Best effort, and not tied to this screen's lifetime.
@@ -481,8 +492,8 @@ class AppViewModel(
 
     /**
      * The server rejected the stored session (e.g. the Mozilla account
-     * password changed elsewhere): sign out and say why on the landing
-     * screen. Temporary sync failures never reach this.
+     * password changed elsewhere): sign out and say why in the sign-in card.
+     * Temporary sync failures never reach this.
      */
     private fun sessionExpired() {
         if (_session.value == null || browserRepository.isDemo()) return
@@ -534,6 +545,8 @@ class AppViewModel(
      * again instead of silently doing nothing.
      */
     fun refresh() {
+        // Pull-to-refresh only exists with spaces, which only exist signed in.
+        if (_session.value == null) return
         viewModelScope.launch {
             var waited = 0L
             while (reloading && waited < 15_000L) {
@@ -546,6 +559,8 @@ class AppViewModel(
 
     /** Automatic refresh (app start, foreground, stale snapshot) — silent when content is visible. */
     fun reload() {
+        // No account, nothing to sync: the signed-out home never loads a space.
+        if (_session.value == null) return
         if (reloading) {
             // A write's stale signal landed mid-fetch: that fetch may predate
             // the write, so fetch again once it finishes instead of dropping it.
@@ -858,13 +873,15 @@ class AppViewModel(
 
     /**
      * The spaces screen started: on launch, or back from the background. Asks
-     * for a new tab once per open when the setting is on and there is a space
-     * to pin into, so a first launch without cached spaces shows the spaces.
+     * for a new tab once per open when the setting is on. Signed in it waits
+     * for a space to pin into; signed out there is none, so the tab opens
+     * right away.
      */
     fun appCameToForeground() {
         if (!searchOnOpenArmed) return
         searchOnOpenArmed = false
-        if (_preferences.value.openIntoSearch && _browser.value.snapshot.spaces.isNotEmpty()) {
+        val hasWhereToOpen = _session.value == null || _browser.value.snapshot.spaces.isNotEmpty()
+        if (_preferences.value.openIntoSearch && hasWhereToOpen) {
             _searchOnOpenPending.value = true
         }
     }
@@ -877,8 +894,26 @@ class AppViewModel(
         _searchOnOpenPending.value = false
     }
 
+    /**
+     * Takes a web link from another app, to be opened once the spaces screen is
+     * up — signed out it opens over the skeleton home at once. Only
+     * `http`/`https` is kept, so a crafted intent cannot put anything else in
+     * front of the browser.
+     */
+    fun openLinkFromAnotherApp(url: String) {
+        val address = sameTabUrl(url) ?: return
+        _incomingLink.value = address
+    }
+
+    /** The spaces screen took the link: it opens exactly once. */
+    fun consumeIncomingLink() {
+        _incomingLink.value = null
+    }
+
     /** Loads (or retries) the synced browsing history into [activity]. */
     fun loadActivity() {
+        // The synced history is the account's; signed out there is nothing to ask for.
+        if (_session.value == null) return
         activityJob?.cancel()
         activityJob = viewModelScope.launch {
             val current = _activity.value

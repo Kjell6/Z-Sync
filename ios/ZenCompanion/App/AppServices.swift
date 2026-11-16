@@ -220,11 +220,44 @@ protocol SessionSigningOut {
 }
 
 struct LiveSessionSigningOut: SessionSigningOut {
-    nonisolated init() {}
+    /// The mini-browser's own data, which signing out keeps.
+    private let pages: @MainActor () -> OpenPagesStore
+    private let history: @MainActor () -> BrowserHistoryStore
+    /// Everything that belongs to the account; a test leaves the device's own alone.
+    private let endAccount: @MainActor () -> Void
+    /// Where the app hears of it; a test keeps the running app out of it.
+    private let notifications: NotificationCenter
+
+    nonisolated init(
+        pages: @escaping @MainActor () -> OpenPagesStore = { .shared },
+        history: @escaping @MainActor () -> BrowserHistoryStore = { .shared },
+        endAccount: @escaping @MainActor () -> Void = { LiveSessionSigningOut.endAccount() },
+        notifications: NotificationCenter = .default
+    ) {
+        self.pages = pages
+        self.history = history
+        self.endAccount = endAccount
+        self.notifications = notifications
+    }
 
     func signOut() {
-        // Sign-in runs in an ephemeral (nonPersistent) store, so sign-out
-        // purges that one; the default store (mini browser) keeps its data.
+        endAccount()
+        // The browser's pages and history stay; they are written down now so
+        // nothing of them waits on a save that may not come.
+        pages().writeKeptPages()
+        history().saveNow()
+        notifications.post(name: .zenCompanionSignedOut, object: nil)
+    }
+
+    @MainActor
+    private static func endAccount() {
+        // Sign-in runs in its own ephemeral (nonPersistent) store, so its
+        // website data is emptied here: the next sign-in starts without the
+        // previous one's Mozilla login. The mini-browser's store is left alone:
+        // it belongs to this phone, not to the account, so its open pages,
+        // history, website data and site permissions all stay. Signing out
+        // removes the account: its stored credentials, its cached spaces and
+        // the icons loaded for them.
         WKWebsiteDataStore.nonPersistent().removeData(
             ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
             modifiedSince: Date.distantPast
@@ -237,11 +270,7 @@ struct LiveSessionSigningOut: SessionSigningOut {
         }
         AccountStore.clear()
         FaviconLoader.shared.removeAll()
-        OpenPagesStore.shared.closeAll()
-        SitePermissionStore.shared.removeAll()
-        BrowserHistoryStore.shared.removeAll()
         SpacesSyncService.deleteCachedSnapshot()
-        NotificationCenter.default.post(name: .zenCompanionSignedOut, object: nil)
     }
 }
 

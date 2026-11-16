@@ -12,6 +12,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.Message
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
@@ -36,8 +37,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.webkit.ScriptHandler
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
@@ -48,9 +52,11 @@ import de.kjell.zencompanion.ui.browser.BrowserDownload
 import de.kjell.zencompanion.ui.browser.BrowserPrompt
 import de.kjell.zencompanion.ui.browser.MiniBrowserZoom
 import de.kjell.zencompanion.ui.browser.PageBlocker
+import de.kjell.zencompanion.ui.browser.downloadReferrer
 import de.kjell.zencompanion.ui.browser.grantableResources
 import de.kjell.zencompanion.ui.browser.sitePermissionsFor
 import de.kjell.zencompanion.ui.components.openURLExternally
+import de.kjell.zencompanion.ui.theme.LocalZenColors
 import java.io.ByteArrayInputStream
 import java.util.Locale
 
@@ -67,6 +73,8 @@ internal fun MiniBrowserWebView(
     desktopSite: Boolean,
     /** 1.0 = 100%. Page zoom for the page's document. */
     pageZoom: Float,
+    /** The page's own colour: the pull indicator has to sit on it and contrast. */
+    pageThemeColor: Color?,
     /** The back and forward list to come back to, if the page has one. */
     savedHistory: () -> Bundle?,
     /** The `window.open` this WebView answers, if it is a popup's page. */
@@ -78,11 +86,17 @@ internal fun MiniBrowserWebView(
     onOpenPopup: (Message) -> Unit,
     /** `window.close()`. */
     onCloseWindow: () -> Unit,
-    /** Long press on a web link. */
-    onLinkLongPress: (String) -> Unit,
+    /** Long press on a link or an image. */
+    onHitLongPress: (BrowserHitMenu) -> Unit,
     onLoadingChange: (Boolean) -> Unit,
     /** The document finished loading. */
     onPageLoaded: () -> Unit,
+    /** The WebView drew the new page for the first time. */
+    onPageDrawn: () -> Unit = {},
+    /** The reader pulled the page down: reload it as the bar's button does. */
+    onPullRefresh: () -> Unit,
+    /** False while something over the page owns the gestures. */
+    pullToRefreshEnabled: Boolean,
     onSiteThemeColorChange: (Color?) -> Unit,
     onCurrentUrlChange: (String) -> Unit,
     onCanGoBackChange: (Boolean) -> Unit,
@@ -98,7 +112,8 @@ internal fun MiniBrowserWebView(
     onLinkUnavailable: () -> Unit,
     /** What the page asks of the reader or the system. */
     requests: PageRequests,
-    onScrollChange: (scrollY: Int) -> Unit,
+    /** The page's scroll offset, and whether the reader's own scrolling moved it. */
+    onScrollChange: (scrollY: Int, userDriven: Boolean) -> Unit,
     onFindResult: (active: Int, total: Int) -> Unit,
     /** Decides which requests get an empty answer, and counts them. */
     blocker: PageBlocker,
@@ -121,22 +136,36 @@ internal fun MiniBrowserWebView(
     val linkUnavailable by rememberUpdatedState(onLinkUnavailable)
     val openPopup by rememberUpdatedState(onOpenPopup)
     val closeWindow by rememberUpdatedState(onCloseWindow)
-    val linkLongPress by rememberUpdatedState(onLinkLongPress)
+    val hitLongPress by rememberUpdatedState(onHitLongPress)
+    val pullRefresh by rememberUpdatedState(onPullRefresh)
     val webViewReleased by rememberUpdatedState(onWebViewReleased)
     val consent = remember { ConsentScriptSlot(handledReload = blockingReload) }
     val pageZoomSlot = remember { PageZoomSlot() }
+    // The indicator sits on the page, so it takes the app's own ink and paper.
+    val zen = LocalZenColors.current
 
-    // Native Android WebView
+    // Native Android WebView, inside the platform's pull-to-refresh indicator.
     AndroidView(
         factory = { ctx ->
             // The page a tapped link is loading. A certificate error reports only
             // its own address, and the WebView may still show the previous page.
             var mainFrameRequest: String? = null
-            WebView(ctx).apply {
-                layoutParams = ViewGroup.LayoutParams(
+            val page = BrowserPullRefresh(ctx)
+            val webView = WebView(ctx)
+            page.addView(
+                webView,
+                ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT,
-                )
+                ),
+            )
+            page.webView = webView
+            page.setOnRefreshListener {
+                // A page that never reports back must not keep the spinner going.
+                page.beginRefreshTimeout()
+                pullRefresh()
+            }
+            webView.apply {
                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
                 // Logins set up on one site often read their cookie from another.
                 CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
@@ -162,6 +191,8 @@ internal fun MiniBrowserWebView(
                 webViewClient = object : WebViewClient() {
                     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                         super.onPageStarted(view, url, favicon)
+                        // A new document cannot still be reading the old one's file.
+                        requests.closePageFiles()
                         // Back and forward can skip the main-frame request.
                         url?.let { blocker.pageStarted(it, isReload = false) }
                         // Leaving the page shown as the original: this document
@@ -179,6 +210,8 @@ internal fun MiniBrowserWebView(
 
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
+                        // However the load ended, the pull's indicator is done.
+                        page.finishRefresh()
                         // Whatever the document-start script did, the finished
                         // document gets the zoom the reader picked.
                         view?.let(pageZoomSlot::applyNow)
@@ -227,6 +260,7 @@ internal fun MiniBrowserWebView(
                     // cookie banner and page zoom then run once the page is visible.
                     override fun onPageCommitVisible(view: WebView?, url: String?) {
                         super.onPageCommitVisible(view, url)
+                        onPageDrawn()
                         if (!consent.atDocumentStart) consent.current?.let { view?.evaluateJavascript(it, null) }
                         if (!pageZoomSlot.atDocumentStart) view?.let(pageZoomSlot::applyNow)
                     }
@@ -234,6 +268,8 @@ internal fun MiniBrowserWebView(
                     override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
                         super.onReceivedError(view, request, error)
                         if (request?.isForMainFrame != true || error == null) return
+                        // A failed load ends the pull's wait just like a finished one.
+                        page.finishRefresh()
                         val kind = pageErrorFor(
                             errorCode = error.errorCode,
                             description = error.description?.toString(),
@@ -248,6 +284,7 @@ internal fun MiniBrowserWebView(
                         handler?.cancel()
                         val url = error?.url ?: return
                         if (isPageCertificateError(url, listOf(view?.url, mainFrameRequest))) {
+                            page.finishRefresh()
                             loadFailed(BrowserPageError.INSECURE, url)
                         }
                     }
@@ -270,6 +307,7 @@ internal fun MiniBrowserWebView(
 
                     // Without this the whole app dies with the page's renderer.
                     override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
+                        page.finishRefresh()
                         rendererGone(view?.url)
                         return true
                     }
@@ -307,12 +345,14 @@ internal fun MiniBrowserWebView(
                         }
                     }
                 }
-                // The WebView has no download UI of its own.
+                // The WebView has no download UI of its own. The page's own
+                // downloads ask the reader first; the page's question queue owns
+                // the answer, so it can wait behind the page's other questions.
                 setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
                     if (url.isNullOrEmpty()) return@setDownloadListener
-                    requests.download(
+                    requests.askDownload(
                         this,
-                        BrowserDownload(url, userAgent, contentDisposition, mimeType, referer = this.url),
+                        BrowserDownload(url, userAgent, contentDisposition, mimeType, referer = downloadReferrer(this.url, url)),
                     )
                 }
                 webChromeClient = object : WebChromeClient() {
@@ -399,16 +439,33 @@ internal fun MiniBrowserWebView(
 
                 setOnLongClickListener {
                     val hit = hitTestResult
-                    val link = tappedLinkUrl(hit.type, hit.extra)
-                    when {
-                        link != null -> {
-                            linkLongPress(link)
+                    when (hit.type) {
+                        WebView.HitTestResult.SRC_ANCHOR_TYPE -> {
+                            val link = tappedLinkUrl(hit.type, hit.extra)
+                                ?: return@setOnLongClickListener false
+                            hitLongPress(BrowserHitMenu(link = link))
                             true
                         }
-                        hit.type == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE -> {
+                        WebView.HitTestResult.IMAGE_TYPE -> {
+                            val image = hit.extra?.trim().orEmpty()
+                            val menu = BrowserHitMenu(image = image)
+                            // An address no action can take opens no empty menu.
+                            if (image.isEmpty() || !menu.hasImageActions) {
+                                return@setOnLongClickListener false
+                            }
+                            hitLongPress(menu)
+                            true
+                        }
+                        WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE -> {
                             // The hit test reports the image; the link has to be asked for.
+                            // Both come back together, so one menu carries link and image.
+                            val image = hit.extra?.trim()?.takeIf { it.isNotEmpty() }
                             val answer = Handler(Looper.getMainLooper()) { message ->
-                                sameTabUrl(message.data.getString("url"))?.let(linkLongPress)
+                                val menu = BrowserHitMenu(
+                                    link = sameTabUrl(message.data.getString("url")),
+                                    image = image,
+                                )
+                                if (menu.link != null || menu.hasImageActions) hitLongPress(menu)
                                 true
                             }
                             requestFocusNodeHref(answer.obtainMessage())
@@ -421,9 +478,15 @@ internal fun MiniBrowserWebView(
                 setFindListener { active, total, _ -> onFindResult(active, total) }
                 // A WebView scrolls its content internally, so its own
                 // `setOnScrollChangeListener` never fires. The page reports its
-                // scroll offset instead; only that int crosses the bridge.
+                // scroll offset instead; only that int crosses the bridge. It
+                // also says whether this touch may pull the page down.
                 addJavascriptInterface(
-                    ScrollBridge { scrollY -> post { onScrollChange(scrollY) } },
+                    ScrollBridge(
+                        onScroll = { scrollY, userDriven ->
+                            post { onScrollChange(scrollY, userDriven) }
+                        },
+                        onPull = { allowed -> post { page.pageAllowsPull = allowed } },
+                    ),
                     SCROLL_BRIDGE_NAME,
                 )
 
@@ -445,10 +508,20 @@ internal fun MiniBrowserWebView(
                         post { linkUnavailable() }
                     }
                 }
-                onWebViewCreated(this)
             }
+            onWebViewCreated(webView)
+            page
         },
-        update = { view ->
+        update = { page ->
+            val view = page.webView
+            // With a sheet or a panel over the page, a pull belongs to that.
+            page.isEnabled = pullToRefreshEnabled
+            // The indicator sits on the page: its tint follows the page's own
+            // colour instead of the app's, so it stays visible on white.
+            page.setRefreshColors(
+                circle = (pageThemeColor ?: zen.background).toArgb(),
+                arrow = pullRefreshTint(pageThemeColor).toArgb(),
+            )
             pageZoomSlot.sync(view, pageZoom)
             consent.sync(view, blocker, consentBundle, runNow = false)
             if (blockingReload != consent.handledReload) {
@@ -464,7 +537,8 @@ internal fun MiniBrowserWebView(
         },
         modifier = Modifier.fillMaxSize(),
         // Stop audio, video and timers when the browser closes.
-        onRelease = { web ->
+        onRelease = { page ->
+            val web = page.webView
             webViewReleased(web)
             web.stopLoading()
             web.destroy()
@@ -472,22 +546,266 @@ internal fun MiniBrowserWebView(
     )
 }
 
-/** Receives the page's scroll offset. Called on a WebView thread. */
-private class ScrollBridge(private val onScroll: (Int) -> Unit) {
+/**
+ * The page's WebView inside the platform's pull-to-refresh indicator.
+ *
+ * A WebView scrolls its content itself and never says whether it can scroll
+ * up. The page answers that over the scroll bridge, but only after the touch
+ * has started: the layout first asks while it hands the touch down to itself,
+ * and the page's `touchstart` listener answers once the WebView has seen that
+ * same event. So the down is let through at the top of the document, which is
+ * where the layout records the pointer and the offset the pull is measured
+ * from; every move after it waits for the page's answer. A move that arrives
+ * before the answer is ignored, and the next one after it starts the pull. A
+ * pull therefore only refreshes at the document's very top and never inside a
+ * map, a chat list or any other element that scrolls on its own.
+ */
+internal class BrowserPullRefresh(context: Context) : SwipeRefreshLayout(context) {
+    lateinit var webView: WebView
+
+    /** Whether the page allowed the touch under way to pull. It is reset at every touch down. */
+    @Volatile
+    var pageAllowsPull = false
+
+    /**
+     * Whether the event being intercepted right now is the one that starts a
+     * touch. Set only around the call that hands that event to the layout.
+     */
+    private var interceptingDown = false
+
+    private val endRefresh = Runnable { isRefreshing = false }
+    private var circleColor: Int? = null
+    private var arrowColor: Int? = null
+
+    init {
+        setOnChildScrollUpCallback { _, _ ->
+            childCanScrollUp(
+                isDownEvent = interceptingDown,
+                scrollY = webView.scrollY,
+                pageAllowsPull = pageAllowsPull,
+            )
+        }
+    }
+
+    /** A pull started a load: the indicator goes when it ends, or after ten seconds. */
+    fun beginRefreshTimeout() {
+        removeCallbacks(endRefresh)
+        postDelayed(endRefresh, REFRESH_TIMEOUT_MS)
+    }
+
+    /** The page finished or failed: nothing is left to wait for. */
+    fun finishRefresh() {
+        removeCallbacks(endRefresh)
+        if (isRefreshing) isRefreshing = false
+    }
+
+    fun setRefreshColors(circle: Int, arrow: Int) {
+        if (circle == circleColor && arrow == arrowColor) return
+        circleColor = circle
+        arrowColor = arrow
+        setProgressBackgroundColorSchemeColor(circle)
+        setColorSchemeColors(arrow)
+    }
+
+    override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+        // The page has to allow this very touch: a page that allowed the last
+        // one says nothing about this one. The reset lands before the layout
+        // handles the down, so the answer can only be about the moves.
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
+            pageAllowsPull = false
+            interceptingDown = true
+        }
+        return try {
+            super.onInterceptTouchEvent(ev)
+        } finally {
+            // Any other event, a second finger included, waits for the answer.
+            interceptingDown = false
+        }
+    }
+
+    override fun onDetachedFromWindow() {
+        removeCallbacks(endRefresh)
+        super.onDetachedFromWindow()
+    }
+
+    private companion object {
+        const val REFRESH_TIMEOUT_MS = 10_000L
+    }
+}
+
+/**
+ * Whether the page inside the pull layout can still scroll up.
+ *
+ * The layout asks this before it looks at the event itself, and an answer of
+ * true drops the touch before the pointer is recorded. [isDownEvent] is the
+ * event that starts a touch: the page's `touchstart` listener has not answered
+ * yet, so only the document's own position may keep the layout from recording
+ * the touch. Every event after it follows the page's permission: a pull starts
+ * only at the document's top ([scrollY] is 0) and only when the page allowed
+ * the touch.
+ */
+internal fun childCanScrollUp(
+    isDownEvent: Boolean,
+    scrollY: Int,
+    pageAllowsPull: Boolean,
+): Boolean = if (isDownEvent) {
+    scrollY > 0
+} else {
+    !(pageAllowsPull && scrollY == 0)
+}
+
+/** Receives the page's scroll offset and pull permission. Called on a WebView thread. */
+private class ScrollBridge(
+    private val onScroll: (scrollY: Int, userDriven: Boolean) -> Unit,
+    private val onPull: (Boolean) -> Unit,
+) {
     @JavascriptInterface
-    fun update(scrollY: Int) = onScroll(scrollY)
+    fun update(scrollY: Int) = onScroll(scrollY, true)
+
+    /**
+     * An offset the reader's own scrolling did not move: a back or a forward
+     * puts the previous page at its old offset before any finger is on it, and
+     * a page's own `scrollTo` is not the reader either. Those offsets are the
+     * baseline from here on.
+     */
+    @JavascriptInterface
+    fun sync(scrollY: Int) = onScroll(scrollY, false)
+
+    @JavascriptInterface
+    fun pull(allowed: Boolean) = onPull(allowed)
+}
+
+/** What one scroll event does to the browser bar. */
+internal enum class BarScrollDecision { KEEP, SHOW, HIDE }
+
+/** A bar decision, with the downward travel to carry into the next event. */
+internal data class BarScrollStep(val decision: BarScrollDecision, val downRun: Int)
+
+/**
+ * The bar's hide-on-scroll rule.
+ *
+ * Only the reader's own scrolling may tuck the bar away: a back or a forward
+ * puts the previous page back at its old offset without a finger, and that
+ * move must leave the bar alone. A move without a finger only becomes the new
+ * baseline.
+ *
+ * iOS port: `MiniBrowserBarScroll.decision` in `Browser/MiniBrowserModel.swift`.
+ */
+internal fun barScrollStep(
+    delta: Int,
+    scrollY: Int,
+    downRun: Int,
+    userDriven: Boolean,
+): BarScrollStep {
+    if (!userDriven) return BarScrollStep(BarScrollDecision.KEEP, 0)
+    // A short page, or the top of a long one, always keeps the bar.
+    if (scrollY <= 40) return BarScrollStep(BarScrollDecision.SHOW, 0)
+    if (delta > 0) {
+        val run = downRun + delta
+        return if (run > 24 && scrollY > 80) {
+            BarScrollStep(BarScrollDecision.HIDE, run)
+        } else {
+            BarScrollStep(BarScrollDecision.KEEP, run)
+        }
+    }
+    if (delta < -2) return BarScrollStep(BarScrollDecision.SHOW, 0)
+    return BarScrollStep(BarScrollDecision.KEEP, downRun)
+}
+
+/**
+ * The pull-to-refresh spinner's tint over a page of [pageColor]: dark on a
+ * light page, light on a dark one, and a mid grey when the page's own colour
+ * is not known, so it stays visible on white and on black.
+ *
+ * iOS port: `MiniBrowserRefresh.spinnerTint(pageIsDark:)` in
+ * `Browser/MiniBrowserModel.swift`.
+ */
+internal fun pullRefreshTint(pageColor: Color?): Color = when {
+    pageColor == null -> Color(0.55f, 0.55f, 0.55f)
+    pageColor.luminance() < 0.5f -> Color(0.92f, 0.92f, 0.92f)
+    else -> Color(0.22f, 0.22f, 0.22f)
 }
 
 private const val SCROLL_BRIDGE_NAME = "ZenScroll"
 
-/** Binds the page's scroll offset to the bridge once per document. */
+/**
+ * Binds the page's scroll offset and its pull permission to the bridge once
+ * per document. A pull is allowed only at the document's own top, with no
+ * scroller under the finger that scrolls or keeps its overscroll, and no
+ * overscroll claimed by the page.
+ */
 private const val SCROLL_BINDING_SCRIPT = """
     (function() {
       if (window.__zenScrollBound) return;
       window.__zenScrollBound = true;
+      // Only the reader's own gesture may hide the bar. A back or a forward
+      // puts the previous page back at its old offset without a finger, and so
+      // does a page's own `scrollTo`: those offsets are the baseline instead.
+      var active = false;
+      var idle = 0;
+      // Momentum keeps the page scrolling after the finger lifts. That is still
+      // the reader, until the page has been quiet for a moment.
+      function keepActive() {
+        active = true;
+        clearTimeout(idle);
+        idle = setTimeout(function() { active = false; }, 150);
+      }
       window.addEventListener('scroll', function() {
-        try { ZenScroll.update(Math.round(window.scrollY)); } catch (e) {}
+        var y = Math.round(window.scrollY);
+        if (active) {
+          keepActive();
+          try { ZenScroll.update(y); } catch (e) {}
+        } else {
+          try { ZenScroll.sync(y); } catch (e) {}
+        }
       }, { passive: true });
+
+      function overscrollAllows(style) {
+        var value = style.overscrollBehaviorY || style.getPropertyValue('overscroll-behavior-y');
+        return value !== 'contain' && value !== 'none';
+      }
+
+      function mayPull(target) {
+        if (window.scrollY > 0) return false;
+        // A map, a chat list or a web app scrolls inside an element of its own;
+        // pulling there belongs to that element, not to the page.
+        for (var node = target; node && node !== document.documentElement; node = node.parentNode) {
+          if (node.nodeType !== 1) continue;
+          var style = getComputedStyle(node);
+          var scrollable = (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+            node.scrollHeight > node.clientHeight;
+          if (!scrollable) continue;
+          // A panel that keeps its overscroll to itself never hands the pull
+          // to the page, even while it sits at its own top.
+          if (!overscrollAllows(style)) return false;
+          if (node.scrollTop > 0) return false;
+        }
+        if (!overscrollAllows(getComputedStyle(document.documentElement))) return false;
+        if (document.body && !overscrollAllows(getComputedStyle(document.body))) return false;
+        return true;
+      }
+
+      document.addEventListener('touchstart', function(event) {
+        try {
+          keepActive();
+          ZenScroll.sync(Math.round(window.scrollY));
+          ZenScroll.pull(mayPull(event.target));
+        } catch (e) {}
+      }, { passive: true, capture: true });
+
+      document.addEventListener('touchmove', function() {
+        try { keepActive(); } catch (e) {}
+      }, { passive: true, capture: true });
+
+      document.addEventListener('touchend', function() {
+        // The lift itself may start a momentum scroll: it stays the reader's
+        // until that goes quiet.
+        if (active) keepActive();
+      }, { passive: true, capture: true });
+
+      document.addEventListener('touchcancel', function() {
+        if (active) keepActive();
+      }, { passive: true, capture: true });
     })()
 """
 

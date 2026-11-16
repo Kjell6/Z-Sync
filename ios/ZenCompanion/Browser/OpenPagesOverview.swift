@@ -134,9 +134,11 @@ private struct DeckCardPlacement: ViewModifier, Animatable {
 }
 
 /// Cards the deck is not resting on sit a little in the dark, the ones behind
-/// more than the one lying on top, so the focused card stands out.
+/// more than the one lying on top, so the focused card stands out. On a dark
+/// background the shadows hardly show, so the dimming does more of the work.
 private struct DeckCardDim: ViewModifier, Animatable {
     var offset: CGFloat
+    let isDark: Bool
 
     var animatableData: CGFloat {
         get { offset }
@@ -144,7 +146,10 @@ private struct DeckCardDim: ViewModifier, Animatable {
     }
 
     func body(content: Content) -> some View {
-        content.opacity(Double(offset < 0 ? min(0.3, -offset * 0.2) : min(0.16, offset * 0.14)))
+        let dim = isDark
+            ? (offset < 0 ? min(0.45, -offset * 0.3) : min(0.26, offset * 0.22))
+            : (offset < 0 ? min(0.3, -offset * 0.2) : min(0.16, offset * 0.14))
+        return content.opacity(Double(dim))
     }
 }
 
@@ -276,11 +281,12 @@ struct OpenPagesOverview: View {
             .simultaneousGesture(deckGesture(deck))
         }
         .ignoresSafeArea()
-        .onChange(of: pages.pages.map(\.id)) { _, ids in
+        .onChange(of: pages.pages.map(\.id)) { _, _ in
             // A page can go without passing through `close`: a popup that
             // closes itself, a page that expires. The deck must rest on a
-            // card that still exists.
-            let last = CGFloat(max(0, ids.count - 1))
+            // card that still exists: the cards it shows, which leave out the
+            // one the page on screen stands in for.
+            let last = CGFloat(max(0, visiblePages.count - 1))
             if focus > last { focus = last }
         }
         .alert(
@@ -509,30 +515,31 @@ struct OpenPagesOverview: View {
         }
 
         if let url = page.url {
-            Menu {
-                ForEach(spaces) { space in
-                    let folders = saveKind == .pinned ? PinDestinationModel.folderEntries(in: space) : []
-                    if folders.isEmpty {
-                        Button(space.name) { pin(page, url: url, to: PinDestination(spaceId: space.id)) }
-                    } else {
-                        Menu(space.name) {
+            if !spaces.isEmpty {
+                Menu {
+                    ForEach(spaces) { space in
+                        let folders = saveKind == .pinned ? PinDestinationModel.folderEntries(in: space) : []
+                        if folders.isEmpty {
                             Button(space.name) { pin(page, url: url, to: PinDestination(spaceId: space.id)) }
-                            ForEach(folders, id: \.folderId) { folder in
-                                Button(String(repeating: "   ", count: folder.depth) + folder.name) {
-                                    pin(page, url: url, to: PinDestination(spaceId: space.id, folderId: folder.folderId))
+                        } else {
+                            Menu(space.name) {
+                                Button(space.name) { pin(page, url: url, to: PinDestination(spaceId: space.id)) }
+                                ForEach(folders, id: \.folderId) { folder in
+                                    Button(String(repeating: "   ", count: folder.depth) + folder.name) {
+                                        pin(page, url: url, to: PinDestination(spaceId: space.id, folderId: folder.folderId))
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            } label: {
-                Label {
-                    Text("kept.pin_to_space")
-                } icon: {
-                    Image(systemName: "pin")
+                } label: {
+                    Label {
+                        Text("kept.pin_to_space")
+                    } icon: {
+                        Image(systemName: "pin")
+                    }
                 }
             }
-            .disabled(spaces.isEmpty)
 
             Button {
                 UIPasteboard.general.url = url
@@ -615,6 +622,17 @@ struct OpenPagesOverview: View {
     }
 }
 
+/// Cards this far from the deck's focus hold their picture; the others let go
+/// of it once the disk can give it back. A card ahead is off screen past about
+/// 1.4 cards (`PageDeckGeometry.frame`); cards behind tuck in with a sliver of
+/// at least a few points up to about 5 cards back. One card of margin on top.
+private let pictureCardsAhead: CGFloat = 3
+private let pictureCardsBehind: CGFloat = 6
+/// `focus` jumps to where an animation ends, so a card can still be crossing
+/// the screen after it left the window: it lets go only once the deck's
+/// longest move (0.42 s) is over.
+private let pictureDropDelay: Duration = .milliseconds(600)
+
 /// One page: the whole screen in small, its icon and name above it.
 private struct OpenPageCard<Menu: View>: View {
     let page: OpenPage
@@ -634,11 +652,18 @@ private struct OpenPageCard<Menu: View>: View {
     var onClose: () -> Void
     @ViewBuilder var menu: () -> Menu
 
+    @Environment(\.colorScheme) private var scheme
+
     private let iconSide: CGFloat = 22
     private let headerInset: CGFloat = 20
     private let iconGap: CGFloat = 8
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: PageDeckGeometry.cornerRadius, style: .continuous)
+    }
+
+    /// Near enough the deck's focus to hold its picture.
+    private var isNear: Bool {
+        offset > -pictureCardsBehind && offset < pictureCardsAhead
     }
 
     /// Up to the icon of the card lying on top.
@@ -652,10 +677,19 @@ private struct OpenPageCard<Menu: View>: View {
             .frame(width: size.width, height: size.height)
             .overlay {
                 Color.black
-                    .modifier(DeckCardDim(offset: offset))
+                    .modifier(DeckCardDim(offset: offset, isDark: scheme == .dark))
                     .allowsHitTesting(false)
             }
             .clipShape(shape)
+            // Dark: the shadow is lost on the background, so a faint light rim
+            // draws each card's edge over the one below.
+            .overlay {
+                if scheme == .dark && !isExpanding {
+                    shape
+                        .strokeBorder(Color.white.opacity(0.14), lineWidth: 0.75)
+                        .allowsHitTesting(false)
+                }
+            }
             // One picture, so the page's color under it never shows through
             // while the card fades.
             .compositingGroup()
@@ -675,6 +709,16 @@ private struct OpenPageCard<Menu: View>: View {
             .accessibilityAction(.default, onOpen)
             .accessibilityAction(named: Text("kept.close_page")) { onClose() }
             .accessibilityHidden(hidesPicture)
+            .task(id: isNear) {
+                if isNear {
+                    await store.loadShot(of: page)
+                } else {
+                    // Cancelled when the card comes back before the deck has settled.
+                    try? await Task.sleep(for: pictureDropDelay)
+                    guard !Task.isCancelled else { return }
+                    store.dropShot(of: page)
+                }
+            }
     }
 
     private var header: some View {
@@ -710,7 +754,8 @@ private struct OpenPageCard<Menu: View>: View {
 }
 
 /// The page as it looked when it was last on screen, on its own color, which
-/// also fills the status bar's strip above it; its favicon until then.
+/// also fills the status bar's strip above it; its favicon until then. The
+/// card loads and lets go of the picture.
 struct OpenPageShot: View {
     let page: OpenPage
     let store: OpenPagesStore
@@ -734,7 +779,6 @@ struct OpenPageShot: View {
                 Favicon(urlString: url.absoluteString, size: 36)
             }
         }
-        .task(id: page.id) { await store.loadShot(of: page) }
     }
 }
 

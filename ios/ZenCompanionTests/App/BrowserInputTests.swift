@@ -110,4 +110,99 @@ final class BrowserInputTests: XCTestCase {
             "about:config"
         )
     }
+
+    /// Links from other apps may only be web addresses: anything else would
+    /// reach the browser as script, a file or another app's data.
+    func testOnlyWebAddressesAreAcceptedFromOtherApps() {
+        XCTAssertTrue(BrowserInput.isWebAddress(URL(string: "https://example.com/a?b=1")!))
+        XCTAssertTrue(BrowserInput.isWebAddress(URL(string: "http://localhost:8765/x")!))
+        XCTAssertTrue(BrowserInput.isWebAddress(URL(string: "HTTPS://Example.com")!))
+        for raw in [
+            "file:///etc/hosts",
+            "javascript:alert(1)",
+            "data:text/html,hi",
+            "mailto:nobody@example.com",
+            "tel:+391234567",
+            "about:blank",
+        ] {
+            XCTAssertFalse(BrowserInput.isWebAddress(URL(string: raw)!), raw)
+        }
+    }
+
+    // MARK: - zsync:// links
+
+    /// The app's own `zsync://open?url=` form opens a page in Z-Sync before
+    /// Apple grants the browser role, so a Shortcut can hand one over.
+    func testZsyncOpenLinkNamesItsTargetPage() {
+        let cases: [(String, String)] = [
+            (
+                "zsync://open?url=https%3A%2F%2Fexample.com%2Fa%3Fb%3D1%26c%3D2",
+                "https://example.com/a?b=1&c=2"
+            ),
+            // Encoded parameters inside the target survive exactly one decode.
+            (
+                "zsync://open?url=https%3A%2F%2Fexample.com%2Fsearch%3Fq%3Da%2520b%26page%3D2",
+                "https://example.com/search?q=a%20b&page=2"
+            ),
+            // An http target, and a plus that is part of the address.
+            (
+                "zsync://open?url=http%3A%2F%2Flocalhost%3A8765%2Fx",
+                "http://localhost:8765/x"
+            ),
+            (
+                "zsync://open?url=https%3A%2F%2Fexample.com%2Fa+b",
+                "https://example.com/a+b"
+            ),
+            // Scheme and host match like any URI; a bare slash is the same
+            // host.
+            (
+                "ZSYNC://OPEN/?url=https%3A%2F%2Fexample.com%2F",
+                "https://example.com/"
+            ),
+        ]
+        for (raw, expected) in cases {
+            XCTAssertEqual(
+                BrowserInput.incomingWebAddress(URL(string: raw)!)?.absoluteString,
+                expected,
+                raw
+            )
+        }
+    }
+
+    /// A `zsync://` link is ignored silently unless it is exactly
+    /// `zsync://open?url=<http(s) address with a host>`.
+    func testZsyncOpenLinkAcceptsNothingElse() {
+        for raw in [
+            "zsync://other?url=https%3A%2F%2Fexample.com",
+            "zsync://open/elsewhere?url=https%3A%2F%2Fexample.com",
+            "zsync://open",
+            "zsync://open?url=",
+            "zsync://open?target=https%3A%2F%2Fexample.com",
+            "zsync://open?url=https%3A%2F%2Fexample.com&x=1",
+            "zsync://open?url=https%3A%2F%2F",
+            "zsync:open?url=https%3A%2F%2Fexample.com",
+        ] {
+            XCTAssertNil(BrowserInput.incomingWebAddress(URL(string: raw)!), raw)
+        }
+        for encoded in [
+            "javascript%3Aalert(1)",
+            "file%3A%2F%2F%2Fetc%2Fhosts",
+            "data%3Atext%2Fhtml%2Chi",
+            "intent%3A%2F%2Fscan%2F%23Intent%3Bscheme%3Dzxing%3Bend",
+            "mailto%3Anobody%40example.com",
+        ] {
+            let raw = "zsync://open?url=\(encoded)"
+            XCTAssertNil(BrowserInput.incomingWebAddress(URL(string: raw)!), encoded)
+        }
+    }
+
+    /// A plain web link from another app still passes through untouched, and
+    /// a web address without a host does not.
+    func testIncomingWebAddressPassesPlainWebLinks() {
+        XCTAssertEqual(
+            BrowserInput.incomingWebAddress(URL(string: "https://example.com/a?b=1")!)?.absoluteString,
+            "https://example.com/a?b=1"
+        )
+        XCTAssertNil(BrowserInput.incomingWebAddress(URL(string: "https://")!))
+    }
 }

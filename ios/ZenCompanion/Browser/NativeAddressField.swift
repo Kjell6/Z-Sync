@@ -5,9 +5,8 @@ import UIKit
 ///
 /// Safari's address field is a plain `UITextField` in a capsule, so the
 /// native text field is what makes that state look standard: system caret and
-/// selection, the system clear button while editing, the `.webSearch`
-/// keyboard, dictation and the normal edit menu. Re-drawing any of that in
-/// SwiftUI only approximates it.
+/// selection, the `.webSearch` keyboard, dictation and the normal edit menu.
+/// Re-drawing any of that in SwiftUI only approximates it.
 struct NativeAddressField: UIViewRepresentable {
     @Binding var text: String
     var placeholder: String
@@ -28,7 +27,10 @@ struct NativeAddressField: UIViewRepresentable {
         field.delegate = context.coordinator
         field.borderStyle = .none
         field.backgroundColor = .clear
-        field.clearButtonMode = .whileEditing
+        // The pill draws its own clear button: the system one carries a
+        // trailing inset of its own inside the field, which left more air on
+        // that side of the pill than the text has on the other.
+        field.clearButtonMode = .never
         field.returnKeyType = .go
         field.keyboardType = .webSearch
         field.textContentType = .URL
@@ -108,11 +110,6 @@ struct NativeAddressField: UIViewRepresentable {
         func textFieldShouldReturn(_ textField: UITextField) -> Bool {
             parent.onSubmit()
             return false
-        }
-
-        func textFieldShouldClear(_ textField: UITextField) -> Bool {
-            parent.text = ""
-            return true
         }
     }
 }

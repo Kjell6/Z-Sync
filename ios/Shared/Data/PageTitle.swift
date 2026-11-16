@@ -6,9 +6,23 @@ import Foundation
 /// trailing slash or a `www` prefix). A browser tab shows `document.title`,
 /// so a string that is only the address is not a title.
 enum PageTitle {
+    /// Unicode bidirectional controls (U+200E, U+200F, U+202A...U+202E,
+    /// U+2066...U+2069). A page can put them in its title to reorder the text
+    /// around it, so its name reads like another site's in the bar and the
+    /// history. Ordinary Arabic and Hebrew letters are untouched.
+    private static func stripBidiControls(_ raw: String) -> String {
+        String(String.UnicodeScalarView(raw.unicodeScalars.filter { !isBidiControl($0.value) }))
+    }
+
+    private static func isBidiControl(_ value: UInt32) -> Bool {
+        value == 0x200E || value == 0x200F
+            || (0x202A...0x202E).contains(value)
+            || (0x2066...0x2069).contains(value)
+    }
+
     /// Trimmed title, or nil when it is empty or just the page address.
     static func usable(_ raw: String, url: URL?) -> String? {
-        let collapsed = collapse(raw)
+        let collapsed = collapse(stripBidiControls(raw))
         guard !collapsed.isEmpty else { return nil }
         if isAbsoluteHTTP(collapsed) { return nil }
         if let url, identifies(collapsed, url) { return nil }

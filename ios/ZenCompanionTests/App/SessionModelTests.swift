@@ -30,6 +30,23 @@ final class SessionModelTests: XCTestCase {
         XCTAssertEqual(accounts.republishCount, 1)
     }
 
+    func testStoredAccountIsSignedInBeforeLoad() {
+        let accounts = FakeAccountSession()
+        accounts.stored = snapshot()
+
+        let model = SessionModel(
+            accounts: accounts,
+            spaces: FakeSessionSpaces(),
+            preferences: FakePreferences(),
+            haptics: FakeSessionHaptics()
+        )
+
+        // The first view is built from this model before any `.onAppear` runs:
+        // a signed-in reader must never start on the signed-out home.
+        XCTAssertEqual(model.account?.uid, "u1")
+        XCTAssertEqual(accounts.republishCount, 0, "creating the model only reads the session")
+    }
+
     func testCompleteSignInPersistsAndEntersSession() {
         let accounts = FakeAccountSession()
         let model = SessionModel(
@@ -150,6 +167,43 @@ final class SessionModelTests: XCTestCase {
         XCTAssertEqual(model.account?.isDemo, true)
     }
 
+    /// The mini-browser belongs to the phone, not to the account: signing out
+    /// keeps its open pages (kept ones included) and its history.
+    func testSigningOutKeepsTheBrowsersPagesAndHistory() {
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+        let preferences = FakePreferences()
+        let pages = OpenPagesStore(
+            directory: folder.appendingPathComponent("OpenPages", isDirectory: true),
+            preferences: preferences,
+            makeModel: { MiniBrowserModel(initialURL: $0, preferences: preferences) }
+        )
+        let history = BrowserHistoryStore(fileURL: folder.appendingPathComponent("history.json"))
+        let address = URL(string: "https://sign-out-keeps.example/kept")!
+        let page = pages.open(url: address, title: "Kept")
+        pages.toggleKeep(page.id)
+        history.record(address, title: "Kept")
+
+        // The account side is left out: the simulator's own account stays, and
+        // the app hosting the tests never hears of a sign-out.
+        LiveSessionSigningOut(
+            pages: { pages },
+            history: { history },
+            endAccount: {},
+            notifications: NotificationCenter()
+        ).signOut()
+
+        XCTAssertEqual(pages.page(page.id)?.url, address)
+        XCTAssertEqual(pages.page(page.id)?.isKept, true)
+        XCTAssertTrue(history.visits.contains { $0.url == address.absoluteString })
+        // Written down by the sign-out itself, so an app ended right after it
+        // still finds both.
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: folder.appendingPathComponent("history.json").path
+        ))
+    }
+
     func testFiveDemoTapsWithinWindowEnterDemo() {
         let accounts = FakeAccountSession()
         let spaces = FakeSessionSpaces()
@@ -219,6 +273,92 @@ final class SessionModelTests: XCTestCase {
 
         XCTAssertNotEqual(spaces.cached?.spaces.first?.id, "old")
         XCTAssertEqual(model.account?.uid, DemoCatalog.account.uid)
+    }
+
+    // MARK: - Links from other apps
+
+    func testIncomingWebLinkIsReadyToOpenWhileSignedOut() {
+        let model = SessionModel(
+            accounts: FakeAccountSession(),
+            spaces: FakeSessionSpaces(),
+            preferences: FakePreferences(),
+            haptics: FakeSessionHaptics()
+        )
+        let url = URL(string: "https://example.com/from-another-app")!
+
+        model.openLinkFromAnotherApp(url)
+
+        // Signed out the home screen takes the link at once: no account or
+        // cached spaces are involved in opening it.
+        XCTAssertNil(model.account)
+        XCTAssertEqual(model.pendingOpenURL, url)
+
+        model.consumePendingOpenURL()
+        XCTAssertNil(model.pendingOpenURL)
+    }
+
+    func testIncomingWebLinkStaysReadyThroughSignIn() {
+        let model = SessionModel(
+            accounts: FakeAccountSession(),
+            spaces: FakeSessionSpaces(),
+            preferences: FakePreferences(),
+            haptics: FakeSessionHaptics()
+        )
+        let url = URL(string: "https://example.com/from-another-app")!
+        model.openLinkFromAnotherApp(url)
+
+        model.completeSignIn(snapshot())
+
+        // Sign-in does not take it: the spaces screen opens it, once.
+        XCTAssertEqual(model.pendingOpenURL, url)
+
+        model.consumePendingOpenURL()
+        XCTAssertNil(model.pendingOpenURL)
+    }
+
+    func testIncomingLinkIgnoresNonWebSchemes() {
+        let model = SessionModel(
+            accounts: FakeAccountSession(),
+            spaces: FakeSessionSpaces(),
+            preferences: FakePreferences(),
+            haptics: FakeSessionHaptics()
+        )
+
+        for raw in [
+            "javascript:alert(1)",
+            "file:///etc/hosts",
+            "data:text/html,hi",
+            "mailto:nobody@example.com",
+            "about:blank",
+        ] {
+            model.openLinkFromAnotherApp(URL(string: raw)!)
+            XCTAssertNil(model.pendingOpenURL, raw)
+        }
+    }
+
+    func testRoundTripHandOffIsRecognisedForTheSameAddressOnly() {
+        let url = URL(string: "https://example.com/a")!
+        let start = Date(timeIntervalSince1970: 1_000)
+
+        ExternalBrowser.recordHandOff(url, at: start)
+        XCTAssertTrue(ExternalBrowser.consumeOwnHandOff(url, now: start.addingTimeInterval(1)))
+
+        // Taken already: a later arrival is a link from somewhere else.
+        XCTAssertFalse(ExternalBrowser.consumeOwnHandOff(url, now: start.addingTimeInterval(1)))
+
+        ExternalBrowser.recordHandOff(url, at: start)
+        XCTAssertFalse(
+            ExternalBrowser.consumeOwnHandOff(
+                URL(string: "https://example.com/other")!,
+                now: start.addingTimeInterval(1)
+            )
+        )
+
+        ExternalBrowser.recordHandOff(url, at: start)
+        XCTAssertFalse(
+            ExternalBrowser.consumeOwnHandOff(url, now: start.addingTimeInterval(11)),
+            "too late to be the system handing this app's own link back"
+        )
     }
 }
 

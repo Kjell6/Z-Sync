@@ -2,6 +2,7 @@ package de.kjell.zencompanion
 
 import de.kjell.zencompanion.data.BrowserVisit
 import de.kjell.zencompanion.data.SearchSuggestions
+import de.kjell.zencompanion.data.cleanedHistory
 import de.kjell.zencompanion.data.historyAddress
 import de.kjell.zencompanion.data.searchVisits
 import de.kjell.zencompanion.data.visitSuggestions
@@ -27,6 +28,44 @@ class BrowserHistoryTests {
         assertNull(historyAddress(null))
         val visits = emptyList<BrowserVisit>()
         assertSame(visits, withVisit(visits, "data:text/plain,hi", "", 1L))
+    }
+
+    @Test
+    fun anAddressNeverKeepsItsPassword() {
+        assertEquals("https://example.com/private", historyAddress("https://reader:secret@example.com/private"))
+        assertEquals("https://example.com/a@b", historyAddress("https://example.com/a@b"))
+        assertEquals("example.com/private", BrowserVisit("https://example.com/private", "", 1L, 1).displayAddress)
+    }
+
+    @Test
+    fun aStoredEntryNeverKeepsItsPassword() {
+        val stored = listOf(
+            BrowserVisit("https://reader:secret@example.com/private", "Private", 2L, 1),
+            BrowserVisit("about:blank", "", 3L, 1),
+        )
+        assertEquals(listOf(BrowserVisit("https://example.com/private", "Private", 2L, 1)), cleanedHistory(stored))
+    }
+
+    @Test
+    fun twoStoredEntriesOfOnePageBecomeOne() {
+        val stored = listOf(
+            BrowserVisit("https://reader:secret@example.com/a", "Old", 1L, 2),
+            BrowserVisit("https://b.example", "B", 2L, 1),
+            BrowserVisit("https://example.com/a", "", 5L, 3),
+        )
+        assertEquals(
+            listOf(
+                BrowserVisit("https://example.com/a", "Old", 5L, 5),
+                BrowserVisit("https://b.example", "B", 2L, 1),
+            ),
+            cleanedHistory(stored),
+        )
+    }
+
+    @Test
+    fun aCleanListNeedsNoRewrite() {
+        val clean = listOf(BrowserVisit("https://example.com/a", "A", 1L, 1))
+        assertNull(cleanedHistory(clean))
     }
 
     @Test

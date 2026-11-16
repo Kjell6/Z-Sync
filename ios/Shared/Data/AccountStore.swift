@@ -65,9 +65,15 @@ enum AccountStore {
         storeInMemory(snapshot)
     }
 
+    /// Writes the session the app already holds back to the keychain, so the
+    /// share extension finds it. Nothing about the sign-in changes, so the
+    /// generation and the cached credentials stay: bumping them here would
+    /// fail a refresh already in flight at launch as "not signed in".
     static func republishForShareExtension() {
-        guard let snapshot = load() else { return }
-        try? save(snapshot)
+        guard let snapshot = load(), let data = try? JSONEncoder().encode(snapshot) else { return }
+        if !secureStore.write(data) {
+            os_log("AccountStore: keychain republish failed", log: .default, type: .error)
+        }
     }
 
     static func load() -> AccountSnapshot? {

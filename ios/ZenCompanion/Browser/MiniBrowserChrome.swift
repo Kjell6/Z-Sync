@@ -46,6 +46,9 @@ struct MiniBrowserChrome<NavBar: View>: View {
     var pages: OpenPagesStore
     let space: ZenSpace
     let allSpaces: [ZenSpace]
+    /// Whether saving into a space is offered. Signed out the pin tile and its
+    /// saved-to row are gone, and the row of page tools closes up.
+    var canSave = true
     var onToggleMenu: () -> Void
     /// Closes the mini-browser. The dock's middle control used to be a
     /// placeholder; it is the way out now that there is no sheet to swipe down.
@@ -87,6 +90,13 @@ struct MiniBrowserChrome<NavBar: View>: View {
         reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.24, dampingFraction: 0.82)
     }
 
+    /// The suggestion list's motion: short and ease-out, with no bounce, so a
+    /// row arriving does not kick the panel. Reduce Motion keeps a quicker
+    /// fade and drops the travel.
+    private var suggestionMotion: Animation {
+        reduceMotion ? .easeOut(duration: 0.12) : .easeOut(duration: 0.26)
+    }
+
     private var menuOpen: Bool { model.menuExpanded }
 
     /// The kind the next save will use: the setting, unless this account cannot
@@ -114,7 +124,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
 
             // Only while the address field is open. The list grows out of the
             // bar the same way the page menu does, and shares its glass.
-            if addressEditing, !model.suggestions.isEmpty || !model.historySuggestions.isEmpty {
+            if addressEditing, !model.suggestionRows.isEmpty {
                 suggestionList
                     .frame(maxWidth: .infinity)
                     .fixedSize(horizontal: false, vertical: true)
@@ -161,6 +171,9 @@ struct MiniBrowserChrome<NavBar: View>: View {
         .animation(motion, value: overviewShown)
         .animation(motion, value: model.menuExpanded)
         .animation(motion, value: model.menuSiteSettings)
+        // The list arrives on its own, so its own motion is what carries it:
+        // the column's height and the rows' opacity together.
+        .animation(suggestionMotion, value: model.suggestionRows)
         // Chrome, not content: the rows have fixed 44pt metrics, so type stops
         // at the first accessibility size instead of overflowing the bar.
         .dynamicTypeSize(...DynamicTypeSize.accessibility1)
@@ -171,79 +184,64 @@ struct MiniBrowserChrome<NavBar: View>: View {
     /// Part of the address editing state, not a new layer: the rows use the
     /// same ink and row height as the menu, and the panel sits in the space
     /// above the bar that only exists while typing.
-    private var shownSuggestions: [String] {
-        SearchSuggestions.fitting(model.suggestions, beside: model.historySuggestions.count)
-    }
-
+    ///
+    /// One list, keyed by what each row says. The model merges the history and
+    /// the answer, so the answer arriving can only add a row: a page from the
+    /// history keeps its place at the top, and a row that stays is not rebuilt
+    /// when the rows around it change.
     private var suggestionList: some View {
         VStack(spacing: 0) {
-            ForEach(model.historySuggestions) { visit in
+            ForEach(Array(model.suggestionRows.enumerated()), id: \.element.id) { index, row in
                 Button {
-                    onPickVisit(visit)
+                    if let visit = row.visit {
+                        onPickVisit(visit)
+                    } else {
+                        onPickSuggestion(row.text)
+                    }
                 } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "clock")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Palette.ink(scheme).opacity(0.45))
-                            .frame(width: 22, height: 22)
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text(verbatim: visit.title.isEmpty ? visit.host : visit.title)
-                                .zenFont(16, weight: .medium, design: .rounded)
-                                .foregroundStyle(Palette.ink(scheme))
-                                .lineLimit(1)
-                            Text(verbatim: visit.displayAddress)
-                                .zenFont(13, design: .rounded)
-                                .foregroundStyle(Palette.ink(scheme).opacity(0.6))
-                                .lineLimit(1)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(.horizontal, 20)
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
-                    .overlay(alignment: .bottom) {
-                        if visit != model.historySuggestions.last || !model.suggestions.isEmpty {
-                            Rectangle()
-                                .fill(Color.primary.opacity(0.08))
-                                .frame(height: 0.5)
-                                .padding(.leading, 52)
-                        }
-                    }
+                    suggestionRow(row, last: index == model.suggestionRows.count - 1)
                 }
                 .buttonStyle(SuggestionPressStyle())
-            }
-            ForEach(Array(shownSuggestions.enumerated()), id: \.offset) { index, suggestion in
-                Button {
-                    onPickSuggestion(suggestion)
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Palette.ink(scheme).opacity(0.45))
-                            .frame(width: 22, height: 22)
-                        Text(suggestion)
-                            .zenFont(16, weight: .medium, design: .rounded)
-                            .foregroundStyle(Palette.ink(scheme))
-                            .lineLimit(1)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(.horizontal, 20)
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
-                    .overlay(alignment: .bottom) {
-                        if index < shownSuggestions.count - 1 {
-                            Rectangle()
-                                .fill(Color.primary.opacity(0.08))
-                                .frame(height: 0.5)
-                                .padding(.leading, 52)
-                        }
-                    }
-                }
-                .buttonStyle(SuggestionPressStyle())
+                // Only the rows that come or go fade; the rest stay still.
+                .transition(.opacity)
             }
         }
         .padding(.vertical, 6)
         .accessibilityElement(children: .contain)
+    }
+
+    /// A page prints its name over its address, a search phrase prints alone.
+    private func suggestionRow(_ row: AddressSuggestion, last: Bool) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: row.visit == nil ? "magnifyingglass" : "clock")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Palette.ink(scheme).opacity(0.45))
+                .frame(width: 22, height: 22)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(verbatim: row.text)
+                    .zenFont(16, weight: .medium, design: .rounded)
+                    .foregroundStyle(Palette.ink(scheme))
+                    .lineLimit(1)
+                if let visit = row.visit {
+                    Text(verbatim: visit.displayAddress)
+                        .zenFont(13, design: .rounded)
+                        .foregroundStyle(Palette.ink(scheme).opacity(0.6))
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 20)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .overlay(alignment: .bottom) {
+            if !last {
+                Rectangle()
+                    .fill(Color.primary.opacity(0.08))
+                    .frame(height: 0.5)
+                    .padding(.leading, 52)
+            }
+        }
     }
 
     /// The open pages, or the history once the overview is up. One piece of
@@ -444,7 +442,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
 
             actionRow
 
-            if model.showPinBanner {
+            if model.showPinBanner, canSave {
                 // No opacity transition. The sheet just grows by this card.
                 pinSavedSection
                     .transition(.identity)
@@ -476,17 +474,19 @@ struct MiniBrowserChrome<NavBar: View>: View {
                     model.collapseMenu()
                 }
             }
-            tile(
-                systemName: "pin",
-                // Without the capability the save lands as a pin, whatever the
-                // setting says.
-                title: effectiveSaveKind == .normal ? "browser.save_short" : "browser.pin_short",
-                accessibility: effectiveSaveKind == .normal ? "browser.save_short" : "browser.pin_to_space",
-                // A page that failed to load has nothing worth pinning.
-                enabled: model.pageError == nil
-            ) {
-                // Stay open. The saved-to row grows the sheet instead of a banner.
-                model.triggerPinBanner(spaces: allSpaces, fallbackSpace: space)
+            if canSave {
+                tile(
+                    systemName: "pin",
+                    // Without the capability the save lands as a pin, whatever the
+                    // setting says.
+                    title: effectiveSaveKind == .normal ? "browser.save_short" : "browser.pin_short",
+                    accessibility: effectiveSaveKind == .normal ? "browser.save_short" : "browser.pin_to_space",
+                    // A page that failed to load has nothing worth pinning.
+                    enabled: model.pageError == nil
+                ) {
+                    // Stay open. The saved-to row grows the sheet instead of a banner.
+                    model.triggerPinBanner(spaces: allSpaces, fallbackSpace: space)
+                }
             }
         }
     }
@@ -502,7 +502,8 @@ struct MiniBrowserChrome<NavBar: View>: View {
                     kind: model.pinSaveKind,
                     scheme: scheme,
                     style: .compact,
-                    onOpen: { model.pinMenuWillOpen() }
+                    onOpen: { model.pinMenuWillOpen() },
+                    onMenuDidDismiss: { model.pinMenuDidDismiss() }
                 ) { kind in
                     model.selectPinSaveKind(kind)
                 }
@@ -540,9 +541,13 @@ struct MiniBrowserChrome<NavBar: View>: View {
     }
 
     @ViewBuilder
+    /// The system share sheet, which also carries Print for the page, as in
+    /// Safari: the menu keeps no print row of its own.
     private var shareTile: some View {
-        if let url = model.effectiveURL {
-            SwiftUI.ShareLink(item: url) {
+        if model.effectiveURL != nil {
+            Button {
+                model.presentShare()
+            } label: {
                 tileLabel(systemName: "square.and.arrow.up", title: "browser.share")
             }
             .buttonStyle(CardPressStyle())
@@ -1152,6 +1157,9 @@ struct MiniBrowserTopBar: View {
             .font(.system(size: 18, weight: .semibold))
             .foregroundStyle(Palette.ink(scheme).opacity(enabled ? 0.85 : 0.3))
             .frame(width: 32, height: barHeight - 8)
+            // The same 44pt slot the real bar's glyphs take, so the bar that
+            // slides in matches the one it replaces.
+            .frame(minWidth: 44, minHeight: 44)
     }
 
     private var swipeGesture: some Gesture {
@@ -1256,8 +1264,15 @@ struct MiniBrowserTopBar: View {
                 }
                 .contentShape(Rectangle())
             }
+            // The icon is the only sign of an encrypted page, so VoiceOver
+            // hears it too (Android's padlock says the same to TalkBack).
+            .accessibilityValue(Text(connectionLabel ?? ""))
             .buttonStyle(AddressPressStyle())
-            .accessibilityLabel(Text("browser.search_placeholder"))
+            // The page's own title, so the collapsed bar does not hide where
+            // the reader is; only an empty title falls back to the prompt.
+            .accessibilityLabel(
+                Text(displayTitle.isEmpty ? String(localized: "browser.search_placeholder") : displayTitle)
+            )
 
             iconButton(
                 systemName: model.isLoading ? "xmark" : "arrow.clockwise",
@@ -1276,9 +1291,27 @@ struct MiniBrowserTopBar: View {
         return host.isEmpty ? String(localized: "browser.search_placeholder") : host
     }
 
+    /// Whether the page came over an encrypted connection, for VoiceOver.
+    /// An error page (a bad certificate among them) made no connection to
+    /// vouch for, so it says nothing.
+    private var connectionLabel: String? {
+        guard model.pageError == nil else { return nil }
+        switch model.effectiveURL?.scheme?.lowercased() {
+        case "https": return String(localized: "browser.connection_secure")
+        case "http": return String(localized: "browser.connection_insecure")
+        default: return nil
+        }
+    }
+
     private var siteIcon: some View {
         Group {
-            if let url = model.effectiveURL, url.scheme == "http" || url.scheme == "https" {
+            if let url = model.effectiveURL, url.scheme?.lowercased() == "http" {
+                // An unencrypted page must not look like a trusted one: an
+                // open padlock instead of its icon, as on Android.
+                Image(systemName: "lock.open")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.85))
+            } else if let url = model.effectiveURL, url.scheme == "https" {
                 Favicon(urlString: url.absoluteString, size: 16)
             } else {
                 Image(systemName: "magnifyingglass")
@@ -1300,6 +1333,9 @@ struct MiniBrowserTopBar: View {
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(Palette.ink(scheme).opacity(enabled ? 0.85 : 0.3))
                 .frame(width: 32, height: barHeight - 8)
+                // The glyph keeps its slot; the button around it takes the
+                // platform's least touch target, filling the bar's height.
+                .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(GlyphPressStyle())
@@ -1308,17 +1344,26 @@ struct MiniBrowserTopBar: View {
     }
 
     private var editor: some View {
-        NativeAddressField(
-            text: Binding(get: { model.addressText }, set: { model.addressText = $0 }),
-            placeholder: String(localized: "browser.search_placeholder"),
-            ink: UIColor(Palette.ink(scheme)),
-            // The system tint, so caret and selection use the usual iOS accent.
-            caret: UIColor.tintColor,
-            isFocused: isAddressFocused,
-            onSubmit: onSubmit,
-            onFocusChange: { focused in isAddressFocused = focused }
-        )
-        .padding(.horizontal, 16)
+        HStack(spacing: 0) {
+            NativeAddressField(
+                text: Binding(get: { model.addressText }, set: { model.addressText = $0 }),
+                placeholder: String(localized: "browser.search_placeholder"),
+                ink: UIColor(Palette.ink(scheme)),
+                // The system tint, so caret and selection use the usual iOS accent.
+                caret: UIColor.tintColor,
+                isFocused: isAddressFocused,
+                onSubmit: onSubmit,
+                onFocusChange: { focused in isAddressFocused = focused }
+            )
+            if !model.addressText.isEmpty {
+                clearButton
+            }
+        }
+        .padding(.leading, 16)
+        // The clear glyph ends on the same inset the text starts on. The
+        // button fills the pill's end, so the target stays large without the
+        // air that made the right side look wider.
+        .padding(.trailing, 2)
         .frame(height: barHeight)
         .floatingGlassCapsule()
         .accessibilityLabel(Text("browser.search_placeholder"))
@@ -1329,6 +1374,26 @@ struct MiniBrowserTopBar: View {
                 isAddressFocused = true
             }
         }
+    }
+
+    /// Clears the address while typing. Drawn here rather than by the text
+    /// field: the system button brings its own trailing inset inside the
+    /// field, which left a wider gap on that side than the text has on the
+    /// other, and its touch area is only as big as its glyph.
+    private var clearButton: some View {
+        Button {
+            model.addressText = ""
+        } label: {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Palette.ink(scheme).opacity(0.35))
+                // A full-height slot in the capsule's round end: 44pt of
+                // target, with the glyph in the middle of it.
+                .frame(width: barHeight, height: barHeight)
+                .contentShape(Circle())
+        }
+        .buttonStyle(GlyphPressStyle())
+        .accessibilityLabel(Text("browser.clear_search"))
     }
 
     /// The way out of editing. Safari keeps it outside the field, as a circle.

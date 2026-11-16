@@ -93,6 +93,29 @@ class BlockListTests {
         assertFalse(BlockList.isSameSite("bbc.co.uk", "itv.co.uk"))
         assertTrue(BlockList.isSameSite("a.example.com", "b.example.com"))
         assertFalse(BlockList.isSameSite("example.com", "example.net"))
+        assertFalse(BlockList.isSameSite("example.com", "example.org"))
+        assertTrue(BlockList.isSameSite("example.com", "cdn.example.com"))
+        // A short site name under a two-letter country domain is one site, not two.
+        assertTrue(BlockList.isSameSite("a.zdf.de", "b.zdf.de"))
+        assertTrue(BlockList.isSameSite("a.example.co.uk", "b.example.co.uk"))
+        assertFalse(BlockList.isSameSite("one.co.uk", "two.co.uk"))
+        assertTrue(BlockList.isSameSite("a.example.com.au", "b.example.com.au"))
+        assertFalse(BlockList.isSameSite("one.com.au", "two.com.au"))
+        assertTrue(BlockList.isSameSite("a.example.id.au", "b.example.id.au"))
+        assertFalse(BlockList.isSameSite("one.id.au", "two.id.au"))
+    }
+
+    @Test
+    fun shortLabelsAreOnlySuffixUnderTheirOwnCountryDomain() {
+        // `id` and `asn` are site names under most country domains, so only the
+        // complete suffixes `id.au` and `asn.au` keep three labels.
+        assertTrue(BlockList.isSameSite("cdn.id.de", "id.de"))
+        assertFalse(BlockList.isSameSite("a.id.au", "b.id.au"))
+        assertFalse(BlockList.isSameSite("a.asn.au", "b.asn.au"))
+        val ownSite = BlockList.parse("||cdn.id.de^\$third-party")
+        // The rule itself fires, so the next line proves the same-site exception.
+        assertTrue("a resource on another site", ownSite.blocks("cdn.id.de", "other.example"))
+        assertFalse("a resource on the page's own site", ownSite.blocks("cdn.id.de", "id.de"))
     }
 
     @Test

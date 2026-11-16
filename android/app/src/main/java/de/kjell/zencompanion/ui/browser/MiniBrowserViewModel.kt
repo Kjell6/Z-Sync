@@ -21,12 +21,15 @@ import de.kjell.zencompanion.ui.screens.formatBrowserInput
 import de.kjell.zencompanion.util.FriendlyError
 import de.kjell.zencompanion.util.PageTitle
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.net.URI
 import kotlin.math.roundToInt
 
@@ -51,6 +54,24 @@ object MiniBrowserZoom {
 }
 
 /**
+ * One row of the address list: a page from the history, or a search phrase.
+ * [id] is the row's own content, so a row that stays in the list keeps its
+ * identity when the rows around it change.
+ */
+data class AddressSuggestion(
+    val text: String,
+    /** The page the row opens, or null for a search phrase. */
+    val visit: BrowserVisit? = null,
+) {
+    val id: String get() = visit?.let { "history:${it.url}" } ?: "search:$text"
+
+    companion object {
+        /** A page prints its name, or its host when it has none. */
+        fun page(visit: BrowserVisit) = AddressSuggestion(visit.title.ifEmpty { visit.host }, visit)
+    }
+}
+
+/**
  * Chrome and deferred-pin state for the mini browser (port of the state
  * machine that used to live inline in `MiniBrowserScreen`).
  */
@@ -62,6 +83,10 @@ class MiniBrowserViewModel(
     currentSpaceId: String,
     private val suggestionClient: SearchSuggestionClient = LiveSearchSuggestionClient(),
     private val suggestionDebounceMs: Long = SearchSuggestions.DEBOUNCE_MS,
+    /** Where the reader parse runs; tests hand in their own dispatcher. */
+    private val readerParseDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /** Whether an account can take a save; asked each time, so a sign-out lands. */
+    private val isSignedIn: () -> Boolean = { true },
 ) : ViewModel() {
 
     private var initialUrl: String? = initialUrl
@@ -109,6 +134,8 @@ class MiniBrowserViewModel(
         /** Pages from the history for the same text, above the suggestions. */
         val historySuggestions: List<BrowserVisit> = emptyList(),
         val suggestions: List<String> = emptyList(),
+        /** What the panel draws: the history first, then the phrases. */
+        val suggestionRows: List<AddressSuggestion> = emptyList(),
         /** Ads and trackers blocked on the current page. */
         val blockedCount: Int = 0,
         /** The page was reloaded once with nothing blocked. */
@@ -144,6 +171,11 @@ class MiniBrowserViewModel(
     private var hasPendingPinSave = false
     /** Set after a pick or submit so the following text write does not suggest. */
     private var suggestionsSuspended = false
+    /**
+     * Numbers reader requests. A navigation or a close bumps it, so the parse
+     * of a page that is gone can't publish over the one on screen.
+     */
+    private var readerRequest = 0
 
     /**
      * Live `document.title` from the WebView. The screen installs this.
@@ -171,9 +203,11 @@ class MiniBrowserViewModel(
     private var pendingPin: Pair<String, String>? = null
 
     /** Whether this account can write normal tabs at all. Without it the save
-     *  banner offers pinned only, like the share sheet. */
+     *  banner offers pinned only, like the share sheet. Signed out there is no
+     *  account data to read at all. */
     val allowsNormalTabs: Boolean
-        get() = repository.cachedSnapshot?.normalTabsCapability == ZenSpaces.NormalTabsCapability.ENABLED
+        get() = isSignedIn() &&
+            repository.cachedSnapshot?.normalTabsCapability == ZenSpaces.NormalTabsCapability.ENABLED
 
     /** The spaces a pin can go to changed while the page was asleep. */
     fun updateSpaces(spaces: List<ZenSpaces.ZenSpace>, currentSpaceId: String) {
@@ -205,7 +239,12 @@ class MiniBrowserViewModel(
                 ),
             )
         }
-        if (focused) refreshSuggestions() else suggestionJob?.cancel()
+        if (focused) {
+            refreshSuggestions()
+        } else {
+            suggestionJob?.cancel()
+            publishSuggestionRows()
+        }
     }
 
     /**
@@ -240,12 +279,6 @@ class MiniBrowserViewModel(
         showNotice(Notice(R.string.browser_scheme_unavailable))
     }
 
-    fun onDownloadStarted() = showNotice(Notice(R.string.browser_download_started))
-
-    fun onDownloadFinished(saved: Boolean) = showNotice(
-        Notice(if (saved) R.string.browser_download_finished else R.string.browser_download_failed),
-    )
-
     /**
      * A load that never finishes must not leave the bar in its "stop" state:
      * a failed navigation gets no `onPageFinished` on some WebView versions.
@@ -263,6 +296,9 @@ class MiniBrowserViewModel(
     }
 
     fun onCurrentUrlChange(url: String) {
+        // A fresh document ends the reading view; a request still running for
+        // the old page keeps its number and is dropped when it answers.
+        if (!PageTitle.sameDocument(_state.value.currentUrl, url)) readerRequest++
         _state.update { state ->
             if (PageTitle.sameDocument(state.currentUrl, url)) {
                 state.copy(currentUrl = url)
@@ -349,6 +385,7 @@ class MiniBrowserViewModel(
         suggestionsSuspended = true
         suggestionJob?.cancel()
         _state.update { it.copy(suggestions = emptyList(), historySuggestions = emptyList()) }
+        publishSuggestionRows()
         return formatBrowserInput(input)
     }
 
@@ -366,6 +403,7 @@ class MiniBrowserViewModel(
                 addressText = TextFieldValue(suggestion),
             )
         }
+        publishSuggestionRows()
         return SearchSuggestions.target(suggestion, SearchEngines.current)
     }
 
@@ -374,6 +412,7 @@ class MiniBrowserViewModel(
         suggestionsSuspended = true
         suggestionJob?.cancel()
         _state.update { it.copy(suggestions = emptyList(), historySuggestions = emptyList()) }
+        publishSuggestionRows()
         return visit.url
     }
 
@@ -386,14 +425,17 @@ class MiniBrowserViewModel(
         suggestionJob?.cancel()
         if (suggestionsSuspended || !_state.value.isAddressFocused) {
             _state.update { it.copy(suggestions = emptyList(), historySuggestions = emptyList()) }
+            publishSuggestionRows()
             return
         }
         val raw = _state.value.addressText.text
         // Local, so it answers right away and also for a typed address.
         _state.update { it.copy(historySuggestions = BrowserHistory.suggestions(raw, it.currentUrl)) }
+        publishSuggestionRows()
         val url = SearchSuggestions.requestUrl(raw, SearchEngines.current)
         if (url == null) {
             _state.update { it.copy(suggestions = emptyList()) }
+            publishSuggestionRows()
             return
         }
         suggestionJob = viewModelScope.launch {
@@ -407,10 +449,34 @@ class MiniBrowserViewModel(
             }
             if (body == null) {
                 _state.update { it.copy(suggestions = emptyList()) }
+                publishSuggestionRows()
                 return@launch
             }
             if (_state.value.addressText.text != raw || !_state.value.isAddressFocused) return@launch
             _state.update { it.copy(suggestions = SearchSuggestions.parse(body)) }
+            publishSuggestionRows()
+        }
+    }
+
+    /**
+     * Rebuilds the one list the panel draws: the history first, then the
+     * engine's phrases the history does not already name. The cap counts the
+     * history rows first, so the phrases are what gets cut, never a page the
+     * reader already visited, and an answer that arrives late can only add rows.
+     */
+    private fun publishSuggestionRows() {
+        _state.update { state ->
+            val rows = state.historySuggestions.map { AddressSuggestion.page(it) }.toMutableList()
+            // The history row already prints the page's name and address, so a
+            // phrase that repeats either one is the same row twice.
+            val named = HashSet<String>()
+            state.historySuggestions.forEach {
+                named += it.title.lowercase()
+                named += it.displayAddress.lowercase()
+            }
+            val unseen = state.suggestions.filter { named.add(it.lowercase()) }
+            rows += SearchSuggestions.fitting(unseen, rows.size).map { AddressSuggestion(it) }
+            state.copy(suggestionRows = rows)
         }
     }
 
@@ -448,6 +514,8 @@ class MiniBrowserViewModel(
     // MARK: - Deferred pin banner
 
     fun triggerPinBanner() {
+        // Signed out there is no space and no account: never ask where to save.
+        if (!isSignedIn()) return
         val urlToPin = effectiveUrl()
         // No spaces to attach the pin to: never open a banner that would save
         // an unattached record. A failed page is not worth pinning either.
@@ -536,6 +604,11 @@ class MiniBrowserViewModel(
     fun commitPendingPinSave() {
         if (!hasPendingPinSave) return
         hasPendingPinSave = false
+        // A save started before a sign-out never lands anywhere afterwards.
+        if (!isSignedIn()) {
+            pendingPin = null
+            return
+        }
         // No spaces to attach the pin to: refuse rather than write an
         // unattached record.
         if (spaces.isEmpty()) return
@@ -696,11 +769,14 @@ class MiniBrowserViewModel(
     }
 
     fun closeReader() {
+        // A parse still running for this page must not open the reader again.
+        readerRequest++
         _state.update { it.copy(readerArticle = null, readerLoading = false) }
     }
 
     private fun loadReader() {
         if (_state.value.readerLoading) return
+        val request = ++readerRequest
         _state.update { it.copy(readerLoading = true, menuExpanded = false) }
         viewModelScope.launch {
             val payload = try {
@@ -710,13 +786,23 @@ class MiniBrowserViewModel(
             } catch (_: Exception) {
                 null
             }
-            val article = ReaderExtractor.parse(payload)
+            // Long articles carry a payload of hundreds of kilobytes: the
+            // parse belongs off the main thread.
+            val article = withContext(readerParseDispatcher) { ReaderExtractor.parse(payload) }
+            // The page changed or the reader was closed while this ran, so the
+            // article and the "no article" notice both belong to a page that
+            // is no longer showing.
+            if (request != readerRequest) return@launch
             _state.update { it.copy(readerLoading = false, readerArticle = article) }
             if (article == null) showNotice(Notice(R.string.browser_reader_unavailable))
         }
     }
 
-    private fun effectiveUrl(): String = _state.value.currentUrl.ifEmpty { initialUrl ?: "" }
+    private fun effectiveUrl(): String {
+        val state = _state.value
+        return state.failedUrl.takeIf { state.pageError != null && it.isNotEmpty() }
+            ?: state.currentUrl.ifEmpty { initialUrl ?: "" }
+    }
 
     companion object {
         private fun displayHost(url: String?): String {

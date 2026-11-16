@@ -87,7 +87,8 @@ object KeptPagesPolicy {
  * Every page open on this phone, the one on screen and what stays on disk.
  *
  * Kept pages live under [dir] as one JSON file plus a picture and a history
- * file per page, and go on sign-out. The app's backup rules leave them out.
+ * file per page. They belong to the phone and not to the account, so signing
+ * out keeps them. The app's backup rules leave them out.
  * The store knows nothing about WebViews; `BrowserPages` holds those.
  */
 class OpenPagesStore(
@@ -372,8 +373,13 @@ class OpenPagesStore(
             _pages.value = next
             dir.mkdirs()
             val temp = File(dir, "$FILE_NAME.tmp")
-            temp.writeText(encode(next.filter { it.isKept }))
-            if (!temp.renameTo(File(dir, FILE_NAME))) temp.delete()
+            // A full disk must not take the app down: the list in memory still
+            // holds and the next write tries again.
+            val written = runCatching {
+                temp.writeText(encode(next.filter { it.isKept }))
+                temp.renameTo(File(dir, FILE_NAME))
+            }.getOrDefault(false)
+            if (!written) temp.delete()
         }
     }
 

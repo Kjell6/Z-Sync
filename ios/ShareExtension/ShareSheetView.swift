@@ -161,10 +161,7 @@ struct ShareSheetView: View {
                 .padding(.leading, 17)
                 .padding(.trailing, 18)
                 .padding(.vertical, 11)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(Palette.lift(effectiveScheme))
-                )
+                .modifier(DomedFill(shape: Capsule(style: .continuous), scheme: effectiveScheme))
                 .glassRimCapsule()
                 .accessibilityLabel(Text("share.workspace"))
 
@@ -204,10 +201,10 @@ struct ShareSheetView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                     .foregroundStyle(Palette.paper(effectiveScheme))
-                    .background(model.canSave ? Palette.ink(effectiveScheme) : Palette.ink(effectiveScheme).opacity(0.28), in: Capsule())
+                    .modifier(DomedFill(shape: Capsule(), scheme: effectiveScheme, fill: model.canSave ? Palette.ink(effectiveScheme) : Palette.ink(effectiveScheme).opacity(0.28)))
                     .contentShape(Capsule())
                 }
-                .buttonStyle(PressedButtonStyle())
+                .buttonStyle(LiquidPressButtonStyle())
                 .disabled(!model.canSave)
 
                 Button(action: cancel) {
@@ -251,10 +248,10 @@ struct ShareSheetView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .foregroundStyle(Palette.paper(effectiveScheme))
-                        .background(Palette.ink(effectiveScheme), in: Capsule())
+                        .modifier(DomedFill(shape: Capsule(), scheme: effectiveScheme, fill: Palette.ink(effectiveScheme)))
                         .contentShape(Capsule())
                 }
-                .buttonStyle(PressedButtonStyle())
+                .buttonStyle(LiquidPressButtonStyle())
                 .padding(.horizontal, 24)
                 .padding(.top, 8)
             }

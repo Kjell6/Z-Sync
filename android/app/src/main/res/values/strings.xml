@@ -162,11 +162,8 @@
     <string name="settings_about_section">About</string>
     <string name="settings_browser_section">Browser</string>
     <string name="settings_search">Search</string>
-    <string name="settings_search_subtitle">Search engines, open into search</string>
     <string name="settings_pages_tabs">Pages &amp; tabs</string>
-    <string name="settings_pages_tabs_subtitle">Keep only chosen, auto-close, default browser</string>
     <string name="settings_privacy_blocking">Privacy &amp; blocking</string>
-    <string name="settings_privacy_blocking_subtitle">Ads, trackers, cookie banners, website data</string>
     <string name="settings_website_data_section">Website data</string>
     <string name="settings_layout_section">Layout</string>
     <string name="settings_feedback_section">Feedback</string>

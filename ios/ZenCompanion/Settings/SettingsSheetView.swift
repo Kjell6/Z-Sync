@@ -222,8 +222,7 @@ struct SettingsSheet: View {
                     SettingsRow(
                         title: "settings.search",
                         systemImage: "magnifyingglass",
-                        scheme: scheme,
-                        subtitle: "settings.search.subtitle"
+                        scheme: scheme
                     ) {
                         SettingsChevron(scheme: scheme)
                     }
@@ -238,8 +237,7 @@ struct SettingsSheet: View {
                     SettingsRow(
                         title: "settings.pages_tabs",
                         systemImage: "bookmark",
-                        scheme: scheme,
-                        subtitle: "settings.pages_tabs.subtitle"
+                        scheme: scheme
                     ) {
                         SettingsChevron(scheme: scheme)
                     }
@@ -254,8 +252,7 @@ struct SettingsSheet: View {
                     SettingsRow(
                         title: "settings.privacy_blocking",
                         systemImage: "shield.lefthalf.filled",
-                        scheme: scheme,
-                        subtitle: "settings.privacy_blocking.subtitle"
+                        scheme: scheme
                     ) {
                         SettingsChevron(scheme: scheme)
                     }

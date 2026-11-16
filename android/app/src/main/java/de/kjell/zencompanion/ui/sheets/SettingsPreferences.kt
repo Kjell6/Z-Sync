@@ -86,21 +86,18 @@ internal fun SettingsBrowserSection(
             Column(modifier = Modifier.fillMaxWidth()) {
                 NavRow(
                     title = stringResource(R.string.settings_search),
-                    subtitle = stringResource(R.string.settings_search_subtitle),
                     icon = Icons.Outlined.Search,
                     onClick = onOpenSearch,
                 )
                 SettingsDivider()
                 NavRow(
                     title = stringResource(R.string.settings_pages_tabs),
-                    subtitle = stringResource(R.string.settings_pages_tabs_subtitle),
                     icon = Icons.Outlined.BookmarkBorder,
                     onClick = onOpenPages,
                 )
                 SettingsDivider()
                 NavRow(
                     title = stringResource(R.string.settings_privacy_blocking),
-                    subtitle = stringResource(R.string.settings_privacy_blocking_subtitle),
                     icon = Icons.Outlined.Shield,
                     onClick = onOpenPrivacy,
                 )
@@ -330,11 +327,10 @@ internal fun SettingsPrivacyBody(onClearWebsiteData: () -> Unit) {
     }
 }
 
-/** Row that opens a sub-screen: icon, title, what it holds, chevron. */
+/** Row that opens a sub-screen: icon, title, chevron. */
 @Composable
 private fun NavRow(
     title: String,
-    subtitle: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit,
 ) {
@@ -343,7 +339,7 @@ private fun NavRow(
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .heightIn(min = 56.dp)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
@@ -353,18 +349,12 @@ private fun NavRow(
             modifier = Modifier.size(22.dp),
         )
         Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
         Icon(
             imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
             contentDescription = null,

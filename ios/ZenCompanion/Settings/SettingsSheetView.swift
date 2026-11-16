@@ -181,13 +181,10 @@ struct SettingsSheet: View {
                 // As tall as the account card beside it, however many lines
                 // the card shows.
                 .frame(minHeight: 54, maxHeight: .infinity)
-                .background(
-                    Color.red.opacity(scheme == .dark ? 0.15 : 0.08),
-                    in: RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous)
-                )
+                .modifier(DomedFill(shape: RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous), scheme: scheme, fill: Color.red.opacity(scheme == .dark ? 0.15 : 0.08)))
                 .glassRim(cornerRadius: Palette.liftCornerRadius)
         }
-        .buttonStyle(PressedButtonStyle())
+        .buttonStyle(LiquidPressButtonStyle())
         .accessibilityLabel(Text(account.isDemo ? "demo.exit" : "home.sign_out"))
     }
 
@@ -405,7 +402,7 @@ struct SettingsSheet: View {
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundStyle(Color.red.opacity(0.8))
                             }
-                            .buttonStyle(PressedButtonStyle())
+                            .buttonStyle(LiquidPressButtonStyle())
                             .accessibilityLabel(Text("Delete"))
                         }
                         .padding(.horizontal, 16)
@@ -824,9 +821,9 @@ private struct AddSearchEngineView: View {
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: 48)
-                .background(Palette.coral(scheme), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .modifier(DomedFill(shape: RoundedRectangle(cornerRadius: 14, style: .continuous), scheme: scheme, fill: Palette.coral(scheme)))
         }
-        .buttonStyle(PressedButtonStyle())
+        .buttonStyle(LiquidPressButtonStyle())
     }
 
     private var fieldDivider: some View {

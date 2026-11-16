@@ -447,7 +447,7 @@ struct SpacesBrowserView: View {
         // between the bar and the screen edge, so the dock stays as short as
         // possible.
         .padding(.bottom, placement == .bottom ? 0 : 6)
-        // Chrome band: the pill and cards are 44pt tall, so type stops at the
+        // Chrome band: the bar's buttons have a fixed height, so type stops at the
         // first accessibility size. Content below scales fully.
         .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         // iPadOS 26 windowed mode puts the system window controls on the
@@ -455,6 +455,14 @@ struct SpacesBrowserView: View {
         // so the Activity button stays reachable. No-op when the insets are
         // zero (full screen, iPhone, iOS < 26).
         .containerCornerOffsetCompat(.horizontal)
+    }
+
+    /// A touch rounder than the 16pt lift corner, so the bar sits closer to the
+    /// system's softer squircles.
+    private static let actionBarRadius: CGFloat = 18
+
+    private var actionBarShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: Self.actionBarRadius, style: .continuous)
     }
 
     private func actionCard(
@@ -468,14 +476,11 @@ struct SpacesBrowserView: View {
                 .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(Palette.ink(scheme).opacity(0.75))
                 .frame(width: 44, height: 44)
-                .background(
-                    Palette.lift(scheme),
-                    in: RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous)
-                )
-                .glassRim(cornerRadius: Palette.liftCornerRadius)
-                .contentShape(RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous))
+                .modifier(DomedFill(shape: actionBarShape, scheme: scheme))
+                .glassRim(cornerRadius: Self.actionBarRadius)
+                .contentShape(actionBarShape)
         }
-        .buttonStyle(SquircleButtonStyle())
+        .buttonStyle(LiquidPressButtonStyle())
         .accessibilityLabel(Text(LocalizedStringKey(accessibilityKey)))
     }
 
@@ -495,17 +500,14 @@ struct SpacesBrowserView: View {
                     .lineLimit(1)
                 Spacer(minLength: 0)
             }
-            .padding(.leading, 16)
-            .padding(.trailing, pageCount > 0 ? 52 : 12)
-            .frame(height: 44)
-            .background(
-                Palette.lift(scheme),
-                in: RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous)
-            )
-            .glassRim(cornerRadius: Palette.liftCornerRadius)
-            .contentShape(RoundedRectangle(cornerRadius: Palette.liftCornerRadius, style: .continuous))
+            .padding(.leading, 18)
+            .padding(.trailing, pageCount > 0 ? 56 : 16)
+            .frame(height: 46)
+            .modifier(DomedFill(shape: actionBarShape, scheme: scheme))
+            .glassRim(cornerRadius: Self.actionBarRadius)
+            .contentShape(actionBarShape)
         }
-        .buttonStyle(SquircleButtonStyle())
+        .buttonStyle(LiquidPressButtonStyle())
         .accessibilityLabel(Text("browser.web_placeholder"))
         .overlay(alignment: .trailing) {
             if pageCount > 0 {
@@ -516,10 +518,10 @@ struct SpacesBrowserView: View {
                 } label: {
                     PageCountBadge(count: pageCount, side: 26)
                         .foregroundStyle(Palette.ink(scheme).opacity(0.8))
-                        .frame(width: 48, height: 44)
+                        .frame(width: 52, height: 46)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(SquircleButtonStyle())
+                .buttonStyle(LiquidPressButtonStyle())
                 .accessibilityLabel(Text("browser.page_count \(pageCount)"))
             }
         }
@@ -665,11 +667,11 @@ struct SpacesBrowserView: View {
                         .zenFont(16, weight: .semibold, design: .rounded)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 12)
-                        .background(Palette.lift(scheme), in: Capsule())
+                        .modifier(DomedFill(shape: Capsule(), scheme: scheme))
                         .glassRimCapsule()
                         .foregroundStyle(Palette.ink(scheme))
                 }
-                .buttonStyle(PressedButtonStyle())
+                .buttonStyle(LiquidPressButtonStyle())
             }
         }
     }
@@ -741,10 +743,10 @@ struct SpacesBrowserView: View {
                     .padding(.horizontal, 22)
                     .padding(.vertical, 11)
                     .foregroundStyle(Palette.paper(scheme))
-                    .background(Palette.ink(scheme), in: Capsule())
+                    .modifier(DomedFill(shape: Capsule(), scheme: scheme, fill: Palette.ink(scheme)))
                     .contentShape(Capsule())
             }
-            .buttonStyle(PressedButtonStyle())
+            .buttonStyle(LiquidPressButtonStyle())
             .padding(.top, 16)
 
             Button { onPresentSignInHelp() } label: {

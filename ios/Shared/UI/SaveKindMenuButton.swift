@@ -89,7 +89,8 @@ struct SaveKindMenuButton: UIViewRepresentable {
         config.baseForegroundColor = inked
         // The lift tile the whole app uses: a faint fill with one hairline rim.
         config.background.backgroundColor = UIColor(Palette.lift(scheme))
-        config.background.strokeColor = UIColor.label.withAlphaComponent(CGFloat(Palette.rimOpacity))
+        // Black in light and dark alike, like `glassRim`: a light rim glows in dark mode.
+        config.background.strokeColor = UIColor.black.withAlphaComponent(CGFloat(Palette.rimOpacity))
         config.background.strokeWidth = Palette.rimWidth
         switch style {
         case .circle:

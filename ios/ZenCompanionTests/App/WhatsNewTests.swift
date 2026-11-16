@@ -74,12 +74,12 @@ final class WhatsNewTests: XCTestCase {
     func testReleaseHasCompleteHeaderContent() {
         let release = WhatsNewRelease.latest
 
-        XCTAssertEqual(release.title, "Meet the new browser")
+        XCTAssertEqual(release.title, "Meet the new Quick Browser")
         XCTAssertEqual(
             release.subtitle,
             "Rebuilt from the ground up, with real tabs that stay open."
         )
-        XCTAssertEqual(release.featuresHeading, "AND EVERYTHING A BROWSER NEEDS")
+        XCTAssertEqual(release.featuresHeading, "WITH EVERYTHING A BROWSER NEEDS")
         XCTAssertFalse(release.heroAccessibilityLabel.isEmpty)
     }
 

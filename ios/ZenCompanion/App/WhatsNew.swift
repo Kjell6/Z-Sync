@@ -26,11 +26,11 @@ struct WhatsNewRelease: Equatable {
 
     static let latest = WhatsNewRelease(
         version: "1.6",
-        title: "Meet the new browser",
+        title: "Meet the new Quick Browser",
         subtitle: "Rebuilt from the ground up, with real tabs that stay open.",
         heroImage: "WhatsNewHero",
         heroAccessibilityLabel: "Three phones showing the new browser: the open pages as cards, a page with the new bottom bar, and search suggestions",
-        featuresHeading: "AND EVERYTHING A BROWSER NEEDS",
+        featuresHeading: "WITH EVERYTHING A BROWSER NEEDS",
         items: [
             WhatsNewItem(id: "history", title: "History"),
             WhatsNewItem(id: "ad-blocking", title: "Ad blocking"),

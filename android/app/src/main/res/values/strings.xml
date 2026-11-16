@@ -240,11 +240,11 @@
     <string name="browser_pin_short">Pin</string>
     <string name="browser_save_short">Save</string>
 
-    <string name="whats_new_headline">Meet the new browser</string>
+    <string name="whats_new_headline">Meet the new Quick Browser</string>
     <string name="whats_new_subtitle">Rebuilt from the ground up, with real tabs that stay open.</string>
     <string name="whats_new_done">Done</string>
     <string name="whats_new_hero_description">Three phones showing the new browser: the open pages as cards, a page with the new bottom bar, and search suggestions</string>
-    <string name="whats_new_features_heading">AND EVERYTHING A BROWSER NEEDS</string>
+    <string name="whats_new_features_heading">WITH EVERYTHING A BROWSER NEEDS</string>
     <string name="whats_new_item_history">History</string>
     <string name="whats_new_item_ad_blocking">Ad blocking</string>
     <string name="whats_new_item_suggestions">Search suggestions</string>

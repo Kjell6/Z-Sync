@@ -1467,10 +1467,8 @@ private fun ExpandedMenu(
             )
             // As the default browser, "open in the browser" would only come
             // back here, so the tile goes and the others share the width.
-            val context = androidx.compose.ui.platform.LocalContext.current
-            val isDefaultBrowser = remember(context) {
-                de.kjell.zencompanion.ui.components.DefaultBrowser.isDefault(context)
-            }
+            // Read again on resume, so a role change in Settings shows at once.
+            val isDefaultBrowser by de.kjell.zencompanion.ui.components.rememberIsDefaultBrowser()
             if (!isDefaultBrowser) {
                 MenuTile(
                     icon = Icons.AutoMirrored.Outlined.OpenInNew,

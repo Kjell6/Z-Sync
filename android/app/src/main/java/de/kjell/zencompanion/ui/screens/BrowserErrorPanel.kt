@@ -60,7 +60,8 @@ internal fun BrowserErrorPanel(
     isLoading: Boolean,
     onRetry: () -> Unit,
     onSearch: () -> Unit,
-    onOpenExternally: () -> Unit,
+    /** Null while Z-Sync is the default browser: it would only open here again. */
+    onOpenExternally: (() -> Unit)?,
     onLeave: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -117,7 +118,9 @@ internal fun BrowserErrorPanel(
                 }
                 BrowserPageError.NOT_RESPONDING -> {
                     PrimaryButton(stringResource(R.string.browser_error_try_again), isLoading, onRetry)
-                    SecondaryButton(stringResource(R.string.browser_open_in_browser), onOpenExternally)
+                    onOpenExternally?.let {
+                        SecondaryButton(stringResource(R.string.browser_open_in_browser), it)
+                    }
                 }
                 BrowserPageError.INSECURE ->
                     PrimaryButton(stringResource(R.string.browser_error_go_back), isLoading = false, onLeave)

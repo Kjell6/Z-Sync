@@ -7,6 +7,13 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 
 /**
  * The system's browser role: whether Z-Sync holds it and how to ask for it.
@@ -51,4 +58,20 @@ object DefaultBrowser {
             .resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
             ?.activityInfo
             ?.packageName
+}
+
+/**
+ * Whether Z-Sync is the default browser, read again every time the screen
+ * resumes: the role changes in the role dialog or the Settings app, and the
+ * user comes back here from either. While it is true, "open in the default
+ * browser" would only come back to Z-Sync, so callers hide that option.
+ */
+@Composable
+fun rememberIsDefaultBrowser(): MutableState<Boolean> {
+    val context = LocalContext.current
+    val isDefault = remember(context) { mutableStateOf(DefaultBrowser.isDefault(context)) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        isDefault.value = DefaultBrowser.isDefault(context)
+    }
+    return isDefault
 }

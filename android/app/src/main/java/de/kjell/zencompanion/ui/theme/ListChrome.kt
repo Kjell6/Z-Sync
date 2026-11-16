@@ -18,6 +18,11 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -144,7 +149,12 @@ internal fun ZenSwitchListItem(
 ) {
     ZenListItem(
         headline = headline,
-        modifier = modifier,
+        // One target for TalkBack: the row carries the label, the state and
+        // the switch role; the switch itself only shows it.
+        modifier = modifier.semantics {
+            role = Role.Switch
+            toggleableState = ToggleableState(checked)
+        },
         onClick = { onCheckedChange(!checked) },
         enabled = enabled,
         leadingContent = icon?.let { vector ->
@@ -154,7 +164,7 @@ internal fun ZenSwitchListItem(
         trailingContent = {
             Switch(
                 checked = checked,
-                onCheckedChange = onCheckedChange,
+                onCheckedChange = null,
                 enabled = enabled,
                 thumbContent = if (checked) {
                     {

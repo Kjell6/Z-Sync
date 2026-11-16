@@ -1,8 +1,12 @@
 package de.kjell.zencompanion.ui.theme
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
@@ -43,9 +47,22 @@ internal fun ZenMenu(
         expanded = expanded,
         onDismissRequest = onDismissRequest,
         modifier = modifier,
-        content = content,
-    )
+    ) {
+        // Unlike DropdownMenu, the popup does not scroll by itself: a long
+        // list (a space with many folders) must still reach its last row.
+        // The scroll clips to its bounds, so it leaves the groups' shadows
+        // room above and below instead of cutting them off square.
+        Column(
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(vertical = MenuShadowRoom),
+            content = content,
+        )
+    }
 }
+
+/** Room the scrolling menu leaves for its groups' shadows. */
+private val MenuShadowRoom = 6.dp
 
 /**
  * One rounded group inside [ZenMenu]. [index] of [count] decides whether the

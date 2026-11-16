@@ -126,10 +126,9 @@
     <string name="settings_preferences_section">Preferences</string>
     <string name="settings_advanced">Advanced</string>
     <string name="settings_search_engine">Search Engine</string>
-    <string name="settings_search_engine_add_action">Add custom engine…</string>
+    <string name="settings_search_engine_add_action">Add custom search engine</string>
     <string name="settings_search_engine_add_title">Add Search Engine</string>
     <string name="settings_search_engine_add">Add</string>
-    <string name="settings_search_engine_custom_section">Custom engines</string>
     <string name="settings_search_engine_delete">Delete</string>
     <string name="settings_search_engine_name">Name</string>
     <string name="settings_search_engine_url">Search URL</string>
@@ -161,7 +160,14 @@
     <string name="settings_toolbar_top">Top</string>
     <string name="settings_toolbar_bottom">Bottom</string>
     <string name="settings_about_section">About</string>
-    <string name="settings_browsing_section">Browsing</string>
+    <string name="settings_browser_section">Browser</string>
+    <string name="settings_search">Search</string>
+    <string name="settings_search_subtitle">Search engines, open into search</string>
+    <string name="settings_pages_tabs">Pages &amp; tabs</string>
+    <string name="settings_pages_tabs_subtitle">Keep only chosen, auto-close, default browser</string>
+    <string name="settings_privacy_blocking">Privacy &amp; blocking</string>
+    <string name="settings_privacy_blocking_subtitle">Ads, trackers, cookie banners, website data</string>
+    <string name="settings_website_data_section">Website data</string>
     <string name="settings_layout_section">Layout</string>
     <string name="settings_feedback_section">Feedback</string>
     <string name="settings_version">Version</string>
@@ -266,7 +272,6 @@
     <string name="blocking_cookie_banners_detail">Answers \"Reject all\" for you</string>
     <string name="blocking_off_in_settings">Off in Settings</string>
     <string name="site_settings_footer">Only for %s. To change blocking everywhere, open Settings.</string>
-    <string name="settings_content_blocking">Content blocking</string>
     <string name="settings_content_blocking_caption">Ad and tracker lists by EasyList, updated weekly. Last update: %s. Cookie banners are handled by DuckDuckGo\'s autoconsent.</string>
     <string name="settings_content_blocking_caption_undated">Ad and tracker lists by EasyList, updated weekly. Cookie banners are handled by DuckDuckGo\'s autoconsent.</string>
     <string name="blocking_setup_title">Block ads and trackers?</string>

@@ -1259,12 +1259,72 @@
         }
       }
     },
-    "settings.content_blocking": {
+    "settings.pages_tabs": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Content blocking"
+            "value": "Pages & tabs"
+          }
+        }
+      }
+    },
+    "settings.pages_tabs.subtitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep only chosen, auto-close, default browser"
+          }
+        }
+      }
+    },
+    "settings.privacy_blocking": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Privacy & blocking"
+          }
+        }
+      }
+    },
+    "settings.privacy_blocking.subtitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ads, trackers, cookie banners, website data"
+          }
+        }
+      }
+    },
+    "settings.search": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search"
+          }
+        }
+      }
+    },
+    "settings.search.subtitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search engines, open into search"
+          }
+        }
+      }
+    },
+    "settings.website_data": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Website data"
           }
         }
       }
@@ -1397,16 +1457,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Add custom search engine"
-          }
-        }
-      }
-    },
-    "settings.search_engine.custom_section": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Custom engines"
           }
         }
       }

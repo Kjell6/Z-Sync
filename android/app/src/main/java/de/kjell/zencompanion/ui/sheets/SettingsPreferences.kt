@@ -1,6 +1,7 @@
 package de.kjell.zencompanion.ui.sheets
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Delete
@@ -43,6 +45,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import de.kjell.zencompanion.R
@@ -67,21 +70,215 @@ internal fun SettingsSectionLabel(text: String) {
 }
 
 /**
- * "Browsing": how the app picks a search engine, opens links and blocks
- * content. Content blocking is the only row here that leaves the sheet.
+ * "Browser": three rows, each opening its own sub-screen. No values on the
+ * right: the choices are made on the page, not previewed here.
  */
 @Composable
-internal fun SettingsBrowsingSection(
+internal fun SettingsBrowserSection(
+    onOpenSearch: () -> Unit,
+    onOpenPages: () -> Unit,
+    onOpenPrivacy: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SettingsSectionLabel(stringResource(R.string.settings_browser_section))
+
+        LiftCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                NavRow(
+                    title = stringResource(R.string.settings_search),
+                    subtitle = stringResource(R.string.settings_search_subtitle),
+                    icon = Icons.Outlined.Search,
+                    onClick = onOpenSearch,
+                )
+                SettingsDivider()
+                NavRow(
+                    title = stringResource(R.string.settings_pages_tabs),
+                    subtitle = stringResource(R.string.settings_pages_tabs_subtitle),
+                    icon = Icons.Outlined.BookmarkBorder,
+                    onClick = onOpenPages,
+                )
+                SettingsDivider()
+                NavRow(
+                    title = stringResource(R.string.settings_privacy_blocking),
+                    subtitle = stringResource(R.string.settings_privacy_blocking_subtitle),
+                    icon = Icons.Outlined.Shield,
+                    onClick = onOpenPrivacy,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The Search sub-screen: every engine in one list (custom ones with a delete
+ * button), adding a new one, and whether the app opens into a search tab.
+ */
+@Composable
+internal fun SettingsSearchBody(
     preferences: PreferencesState,
     onSetSearchEngine: (SearchEngine) -> Unit,
+    onDeleteSearchEngine: (String) -> Unit,
     onOpenAddSearchEngine: () -> Unit,
     onSetOpenIntoSearch: (Boolean) -> Unit,
+) {
+    val customIds = preferences.customSearchEngines.map { it.id }.toSet()
+    val engines = SearchEngines.builtIn + preferences.customSearchEngines
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SettingsSectionLabel(stringResource(R.string.settings_search_engine))
+
+        LiftCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                engines.forEach { engine ->
+                    val selected = engine.id == preferences.searchEngine.id
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = selected,
+                                role = Role.RadioButton,
+                                onClick = { onSetSearchEngine(engine) },
+                            )
+                            .heightIn(min = 56.dp)
+                            .padding(start = 16.dp, end = if (engine.id in customIds) 8.dp else 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(modifier = Modifier.size(22.dp), contentAlignment = Alignment.Center) {
+                            if (selected) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = engine.displayName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (engine.id in customIds) {
+                            IconButton(onClick = { onDeleteSearchEngine(engine.id) }) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Delete,
+                                    contentDescription = stringResource(R.string.settings_search_engine_delete),
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        }
+                    }
+                    SettingsDivider()
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onOpenAddSearchEngine)
+                        .heightIn(min = 56.dp)
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Add,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp),
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = stringResource(R.string.settings_search_engine_add_action),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+        }
+    }
+
+    LiftCard(modifier = Modifier.fillMaxWidth()) {
+        ToggleRow(
+            title = stringResource(R.string.settings_open_into_search),
+            subtitle = stringResource(R.string.settings_open_into_search_subtitle),
+            icon = Icons.Outlined.Keyboard,
+            checked = preferences.openIntoSearch,
+            onCheckedChange = onSetOpenIntoSearch,
+        )
+    }
+}
+
+/**
+ * The Pages & tabs sub-screen: which pages survive, how long kept pages live,
+ * and whether tabs open in the default browser instead.
+ */
+@Composable
+internal fun SettingsPagesBody(
+    preferences: PreferencesState,
     onSetKeepOnlyChosenPages: (Boolean) -> Unit,
     onSetKeptPageLifetime: (KeptPageLifetime) -> Unit,
-    onOpenContentBlocking: () -> Unit,
     onSetAlwaysOpenExternally: (Boolean) -> Unit,
-    onClearWebsiteData: () -> Unit,
 ) {
+    LiftCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            ToggleRow(
+                title = stringResource(R.string.settings_keep_only_chosen),
+                subtitle = stringResource(R.string.settings_keep_only_chosen_subtitle),
+                icon = Icons.Outlined.BookmarkBorder,
+                checked = preferences.keepOnlyChosenPages,
+                onCheckedChange = onSetKeepOnlyChosenPages,
+            )
+
+            SettingsDivider()
+
+            var lifetimeExpanded by remember { mutableStateOf(false) }
+            Box(modifier = Modifier.fillMaxWidth()) {
+                MenuRow(
+                    title = stringResource(R.string.settings_kept_lifetime),
+                    value = preferences.keptPageLifetime.label(),
+                    icon = Icons.Outlined.Schedule,
+                    onClick = { lifetimeExpanded = true },
+                )
+                DropdownMenu(
+                    expanded = lifetimeExpanded,
+                    onDismissRequest = { lifetimeExpanded = false },
+                ) {
+                    KeptPageLifetime.entries.forEach { option ->
+                        val selected = option == preferences.keptPageLifetime
+                        DropdownMenuItem(
+                            text = { MenuItemText(option.label(), selected) },
+                            trailingIcon = if (selected) ({ MenuItemCheck() }) else null,
+                            onClick = {
+                                onSetKeptPageLifetime(option)
+                                lifetimeExpanded = false
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    LiftCard(modifier = Modifier.fillMaxWidth()) {
+        ToggleRow(
+            title = stringResource(R.string.settings_external_browser),
+            icon = Icons.AutoMirrored.Outlined.OpenInNew,
+            checked = preferences.alwaysOpenExternally,
+            onCheckedChange = onSetAlwaysOpenExternally,
+        )
+    }
+}
+
+/**
+ * The Privacy & blocking sub-screen: the blocking switches for every site,
+ * and clearing what websites stored.
+ */
+@Composable
+internal fun SettingsPrivacyBody(onClearWebsiteData: () -> Unit) {
     var confirmClearData by remember { mutableStateOf(false) }
     if (confirmClearData) {
         AlertDialog(
@@ -101,262 +298,79 @@ internal fun SettingsBrowsingSection(
             },
         )
     }
+
+    SettingsContentBlockingBody()
+
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SettingsSectionLabel(stringResource(R.string.settings_browsing_section))
+        SettingsSectionLabel(stringResource(R.string.settings_website_data_section))
 
         LiftCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                SearchEngineRow(
-                    selected = preferences.searchEngine,
-                    engines = SearchEngines.builtIn + preferences.customSearchEngines,
-                    onSelect = onSetSearchEngine,
-                    onAdd = onOpenAddSearchEngine,
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { confirmClearData = true }
+                    .heightIn(min = 56.dp)
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.DeleteOutline,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(22.dp),
                 )
-
-                SettingsDivider()
-
-                ToggleRow(
-                    title = stringResource(R.string.settings_open_into_search),
-                    subtitle = stringResource(R.string.settings_open_into_search_subtitle),
-                    icon = Icons.Outlined.Keyboard,
-                    checked = preferences.openIntoSearch,
-                    onCheckedChange = onSetOpenIntoSearch,
-                )
-
-                SettingsDivider()
-
-                ToggleRow(
-                    title = stringResource(R.string.settings_keep_only_chosen),
-                    subtitle = stringResource(R.string.settings_keep_only_chosen_subtitle),
-                    icon = Icons.Outlined.BookmarkBorder,
-                    checked = preferences.keepOnlyChosenPages,
-                    onCheckedChange = onSetKeepOnlyChosenPages,
-                )
-
-                SettingsDivider()
-
-                var lifetimeExpanded by remember { mutableStateOf(false) }
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    MenuRow(
-                        title = stringResource(R.string.settings_kept_lifetime),
-                        value = preferences.keptPageLifetime.label(),
-                        icon = Icons.Outlined.Schedule,
-                        onClick = { lifetimeExpanded = true },
-                    )
-                    DropdownMenu(
-                        expanded = lifetimeExpanded,
-                        onDismissRequest = { lifetimeExpanded = false },
-                    ) {
-                        KeptPageLifetime.entries.forEach { option ->
-                            val selected = option == preferences.keptPageLifetime
-                            DropdownMenuItem(
-                                text = { MenuItemText(option.label(), selected) },
-                                trailingIcon = if (selected) ({ MenuItemCheck() }) else null,
-                                onClick = {
-                                    onSetKeptPageLifetime(option)
-                                    lifetimeExpanded = false
-                                },
-                            )
-                        }
-                    }
-                }
-
-                SettingsDivider()
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(onClick = onOpenContentBlocking)
-                        .heightIn(min = 56.dp)
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Shield,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(22.dp),
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = stringResource(R.string.settings_content_blocking),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-
-                SettingsDivider()
-
-                ToggleRow(
-                    title = stringResource(R.string.settings_external_browser),
-                    icon = Icons.AutoMirrored.Outlined.OpenInNew,
-                    checked = preferences.alwaysOpenExternally,
-                    onCheckedChange = onSetAlwaysOpenExternally,
-                )
-
-                SettingsDivider()
-
-                MenuRow(
-                    title = stringResource(R.string.settings_clear_website_data),
-                    value = "",
-                    icon = Icons.Outlined.DeleteOutline,
-                    onClick = { confirmClearData = true },
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = stringResource(R.string.settings_clear_website_data),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
                 )
             }
         }
     }
 }
 
-/**
- * The engine list as a menu on the row itself — the list is short enough that
- * a page would only add a tap. Custom engines are added from the same menu and
- * managed in their own card.
- */
+/** Row that opens a sub-screen: icon, title, what it holds, chevron. */
 @Composable
-private fun SearchEngineRow(
-    selected: SearchEngine,
-    engines: List<SearchEngine>,
-    onSelect: (SearchEngine) -> Unit,
-    onAdd: () -> Unit,
+private fun NavRow(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
 ) {
-    var menuExpanded by remember { mutableStateOf(false) }
-
-    Box(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { menuExpanded = true }
-                .heightIn(min = 56.dp)
-                .padding(horizontal = 16.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Search,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp),
-            )
-            Spacer(modifier = Modifier.width(12.dp))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(22.dp),
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = stringResource(R.string.settings_search_engine),
+                text = title,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
             )
             Text(
-                text = selected.displayName,
-                style = MaterialTheme.typography.bodyMedium,
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(modifier = Modifier.width(4.dp))
-            Icon(
-                imageVector = Icons.Outlined.ArrowDropDown,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
-            )
         }
-
-        DropdownMenu(
-            expanded = menuExpanded,
-            onDismissRequest = { menuExpanded = false },
-        ) {
-            engines.forEach { engine ->
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            text = engine.displayName,
-                            fontWeight = if (engine == selected) FontWeight.SemiBold else FontWeight.Normal,
-                            color = if (engine == selected) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            },
-                        )
-                    },
-                    trailingIcon = if (engine == selected) {
-                        {
-                            Icon(
-                                imageVector = Icons.Outlined.Check,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                    } else null,
-                    onClick = {
-                        onSelect(engine)
-                        menuExpanded = false
-                    },
-                )
-            }
-
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        text = stringResource(R.string.settings_search_engine_add_action),
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                },
-                onClick = {
-                    menuExpanded = false
-                    onAdd()
-                },
-            )
-        }
-    }
-}
-
-/**
- * Custom engines stay removable without opening the picker, so they get a card
- * of their own. Hidden until the user adds one.
- */
-@Composable
-internal fun SettingsCustomEnginesCard(
-    engines: List<SearchEngine>,
-    onDeleteSearchEngine: (String) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SettingsSectionLabel(stringResource(R.string.settings_search_engine_custom_section))
-
-        LiftCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                engines.forEachIndexed { index, engine ->
-                    if (index > 0) SettingsDivider()
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 56.dp)
-                            .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = engine.displayName,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f),
-                        )
-                        IconButton(onClick = { onDeleteSearchEngine(engine.id) }) {
-                            Icon(
-                                imageVector = Icons.Outlined.Delete,
-                                contentDescription = stringResource(R.string.settings_search_engine_delete),
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
-                    }
-                }
-            }
-        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 

@@ -56,11 +56,11 @@ final class SessionModelTests: XCTestCase {
             haptics: FakeSessionHaptics()
         )
 
-        model.completeSignIn(snapshot())
+        let failure = model.completeSignIn(snapshot())
 
         XCTAssertEqual(model.account?.uid, "u1")
         XCTAssertEqual(accounts.stored?.uid, "u1")
-        XCTAssertNil(model.saveError)
+        XCTAssertNil(failure)
     }
 
     func testCompleteSignInSaveFailureKeepsSessionNil() {
@@ -73,11 +73,28 @@ final class SessionModelTests: XCTestCase {
             haptics: FakeSessionHaptics()
         )
 
-        model.completeSignIn(snapshot())
+        let failure = model.completeSignIn(snapshot())
 
         XCTAssertNil(model.account)
-        XCTAssertNotNil(model.saveError)
+        XCTAssertNotNil(failure, "the sign-in sheet shows this and stays open")
         XCTAssertNil(accounts.stored)
+    }
+
+    func testReloadIfSignedOutShowsAStoredSessionTheScreenMissed() {
+        let accounts = FakeAccountSession()
+        let model = SessionModel(
+            accounts: accounts,
+            spaces: FakeSessionSpaces(),
+            preferences: FakePreferences(),
+            haptics: FakeSessionHaptics()
+        )
+        XCTAssertNil(model.account)
+
+        // The keychain answers now; at launch it did not.
+        accounts.stored = snapshot()
+        model.reloadIfSignedOut()
+
+        XCTAssertEqual(model.account?.uid, "u1")
     }
 
     func testSignedOutClearsAccountAndSyncSetupHint() {

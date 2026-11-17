@@ -3,7 +3,10 @@ import SwiftUI
 /// Official Mozilla accounts page + WebChannel (same path as Firefox desktop).
 /// Direct POST /account/login is blocked by Mozilla's CDN (HTTP 406).
 struct MozillaSignInView: View {
-    var onSuccess: (AccountSnapshot) -> Void
+    /// Saves the finished account. Returns nil once the app is signed in, or
+    /// the message to show when the session could not be stored; the sheet
+    /// then stays open, since closing it would lose the sign-in without a word.
+    var onSuccess: (AccountSnapshot) -> String?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
     @State private var model = SignInModel()
@@ -83,8 +86,7 @@ struct MozillaSignInView: View {
                         ToolbarIconButton(systemName: "checkmark", accessibilityKey: "signin.confirm") {
                             Task {
                                 if let account = await model.confirmPending() {
-                                    onSuccess(account)
-                                    dismiss()
+                                    deliver(account)
                                 }
                             }
                         }
@@ -96,9 +98,17 @@ struct MozillaSignInView: View {
         .task(id: handoff?.id) {
             guard let handoff else { return }
             if let account = await model.received(login: handoff.login) {
-                onSuccess(account)
-                dismiss()
+                deliver(account)
             }
+        }
+    }
+
+    /// The sheet closes only once the app holds the session.
+    private func deliver(_ account: AccountSnapshot) {
+        if let message = onSuccess(account) {
+            model.saveFailed(message)
+        } else {
+            dismiss()
         }
     }
 }

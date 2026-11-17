@@ -14,6 +14,7 @@ enum Legal {
 /// same screen with the account's content as a placeholder and a sign-in card.
 struct HomeView: View {
     @State private var model = SessionModel()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         SpacesBrowserView(
@@ -25,8 +26,18 @@ struct HomeView: View {
             onPresentSignInHelp: { model.presentSignInHelp() },
             onDemoTap: { model.registerDemoTap() }
         )
+        // One screen per session. Signing in or out builds the home anew, the
+        // same way a launch does, instead of switching the old one in place:
+        // in place, the signed-out screen could stay on display after a
+        // sign-in until the next launch, although the session was stored and
+        // the spaces were already loading underneath. The open pages and the
+        // history live outside this screen and stay.
+        .id(model.account?.uid)
         .onAppear {
             model.load()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { model.reloadIfSignedOut() }
         }
         // A link that opens Z-Sync: a web link from another app, or the app's
         // own zsync:// link from a Shortcut. It opens in the in-app browser at
@@ -40,17 +51,14 @@ struct HomeView: View {
         .onReceive(NotificationCenter.default.publisher(for: .zenCompanionSessionInvalidated)) { _ in
             model.sessionExpired()
         }
-        .sheet(isPresented: $model.showMozilla) {
+        .sheet(isPresented: $model.showMozilla, onDismiss: {
+            // However the sheet closed: if a session got stored, show it now.
+            model.reloadIfSignedOut()
+        }) {
             MozillaSignInView { snap in
                 model.completeSignIn(snap)
             }
             .presentationBackground(Color(red: 251/255, green: 251/255, blue: 252/255))
-        }
-        .alert(model.saveError ?? "", isPresented: Binding(
-            get: { model.saveError != nil },
-            set: { if !$0 { model.clearSaveError() } }
-        )) {
-            Button("common.done", role: .cancel) { model.clearSaveError() }
         }
         .sheet(isPresented: $model.showSignInHelp) {
             SignInHelpSheet()

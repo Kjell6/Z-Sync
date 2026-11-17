@@ -7,7 +7,6 @@ import Observation
 @Observable
 final class SessionModel {
     var account: AccountSnapshot?
-    var saveError: String?
     var showMozilla = false
     var showSignInHelp = false
     /// Explains an automatic sign-out in the signed-out home's sign-in card
@@ -54,6 +53,16 @@ final class SessionModel {
         accounts.republishForShareExtension()
     }
 
+    /// Shows a stored session the screen has not picked up yet. Called when
+    /// the app comes to the front and when the sign-in sheet closes: a
+    /// session that sits in the keychain must never wait for the next launch
+    /// while the sign-in card stays up (a keychain read can fail for a moment,
+    /// a launch before the first unlock for one).
+    func reloadIfSignedOut() {
+        guard account == nil else { return }
+        load()
+    }
+
     func signedOut() {
         account = nil
         preferences.remove(PreferenceKeys.didDismissSyncSetupHint, scope: .standard)
@@ -71,19 +80,19 @@ final class SessionModel {
     }
 
     /// Called after `MozillaSignInView` finished. Never enters the signed-in
-    /// state when the secret could not be persisted securely.
-    func completeSignIn(_ snapshot: AccountSnapshot) {
+    /// state when the secret could not be persisted securely: the message
+    /// comes back instead, so the sign-in sheet can show it and stay open.
+    /// Nil means the session is saved and the app is signed in.
+    @discardableResult
+    func completeSignIn(_ snapshot: AccountSnapshot) -> String? {
         do {
             try accounts.save(snapshot)
             account = snapshot
             sessionNotice = nil
+            return nil
         } catch {
-            saveError = error.zenUserMessage
+            return error.zenUserMessage
         }
-    }
-
-    func clearSaveError() {
-        saveError = nil
     }
 
     /// Routes a link that arrived through `.onOpenURL`. Any app can hand one

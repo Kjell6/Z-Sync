@@ -74,6 +74,26 @@ final class SignInModelTests: XCTestCase {
         XCTAssertEqual(retry?.uid, "uid-2")
         XCTAssertEqual(completer.completionCount, 2)
     }
+
+    func testFailedSaveKeepsTheAccountForARetryWithoutAskingMozillaAgain() async {
+        let completer = FakeFxALoginCompleter()
+        completer.result = .success(
+            FxALoginCompletion(uid: "uid-1", sessionToken: "aa", kB: Data([0x01]))
+        )
+        let model = SignInModel(completer: completer)
+        let account = await model.received(login: login)
+        XCTAssertNotNil(account)
+
+        model.saveFailed("could not store")
+
+        XCTAssertFalse(model.finishing, "the sheet is usable again")
+        XCTAssertEqual(model.error, "could not store")
+
+        // The login keys work once: the retry must not fetch them again.
+        let retry = await model.confirmPending()
+        XCTAssertEqual(retry?.uid, "uid-1")
+        XCTAssertEqual(completer.completionCount, 1)
+    }
 }
 
 // MARK: - Fake

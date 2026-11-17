@@ -11,6 +11,9 @@ final class SignInModel {
     var hint: String?
     private(set) var pending: FxAWebLogin?
     private(set) var finishing = false
+    /// The account Mozilla already confirmed. The login keys work once, so a
+    /// retry after a failed save hands this back instead of asking again.
+    private var completed: AccountSnapshot?
 
     private let completer: FxALoginCompleting
 
@@ -30,7 +33,18 @@ final class SignInModel {
     /// Toolbar checkmark. Ignored while a finish is already running.
     func confirmPending() async -> AccountSnapshot? {
         guard let pending, !finishing else { return nil }
+        if let completed {
+            error = nil
+            return completed
+        }
         return await finish(pending)
+    }
+
+    /// The finished account could not be stored on the device. The sheet
+    /// stays open with the reason, and the checkmark tries the save again.
+    func saveFailed(_ message: String) {
+        finishing = false
+        error = message
     }
 
     func showUnverifiedHint() {
@@ -55,12 +69,14 @@ final class SignInModel {
         error = nil
         do {
             let result = try await completer.complete(login: login)
-            return AccountSnapshot(
+            let account = AccountSnapshot(
                 email: login.email,
                 uid: result.uid,
                 sessionTokenHex: result.sessionToken,
                 kBHex: FxACrypto.hex(result.kB)
             )
+            completed = account
+            return account
         } catch {
             finishing = false
             // One friendly line; HTTP bodies and server detail stay in the log.

@@ -27,7 +27,7 @@ final class ShareViewController: UIViewController {
             host.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
         host.didMove(toParent: self)
-        preferredContentSize = CGSize(width: UIScreen.main.bounds.width, height: 560)
+        preferredContentSize = CGSize(width: view.bounds.width, height: 560)
     }
 
     private var extensionItems: [NSExtensionItem] {

@@ -14,7 +14,10 @@ final class WebKeyboardAccessory: UIView {
         self.webView = webView
         // An input accessory is laid out from its frame, not its intrinsic
         // size: a zero frame is a zero-height bar, which is the same as none.
-        super.init(frame: CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 56))
+        // The width follows the keyboard (flexible width), so the web view's
+        // own width is only a starting value; no screen is asked, since a
+        // two-display iPhone has no single main screen.
+        super.init(frame: CGRect(x: 0, y: 0, width: webView.bounds.width, height: 56))
         backgroundColor = .clear
         autoresizingMask = [.flexibleWidth]
 

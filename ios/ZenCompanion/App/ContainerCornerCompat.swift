@@ -22,7 +22,7 @@ enum BottomDock {
 }
 
 extension View {
-    /// Dodges the container's corner insets on the given edges.
+    /// Dodges the window controls on the given edges.
     ///
     /// iPadOS 26 renders the window controls ("traffic lights") over the
     /// window's top-leading corner whenever the app runs in a resizable window
@@ -34,15 +34,47 @@ extension View {
     /// repositions the view and, with `sizeToFit`, shrinks its proposal by the
     /// overlapping inset so following content isn't pushed off-screen.
     ///
-    /// The corner insets are zero on iPhone, on iOS < 26, and whenever the
-    /// window is full screen, so this is a no-op there and can be applied
-    /// unconditionally.
-    @ViewBuilder
+    /// The offset is applied only while there are window controls: on iPad,
+    /// in a window smaller than the screen. Full screen the corner insets still
+    /// report the display's rounded corners, and iPhone Duo reports its side
+    /// strip with the status bar and camera; both would push the content down
+    /// for controls that are not there.
     func containerCornerOffsetCompat(_ edges: Edge.Set, sizeToFit: Bool = true) -> some View {
-        if #available(iOS 26.0, *) {
-            self.containerCornerOffset(edges, sizeToFit: sizeToFit)
-        } else {
-            self
+        modifier(WindowControlsOffset(edges: edges, sizeToFit: sizeToFit))
+    }
+}
+
+private struct WindowControlsOffset: ViewModifier {
+    let edges: Edge.Set
+    let sizeToFit: Bool
+    @State private var windowed = WindowControlsOffset.sceneIsWindowed()
+
+    func body(content: Content) -> some View {
+        Group {
+            if #available(iOS 26.0, *), windowed {
+                content.containerCornerOffset(edges, sizeToFit: sizeToFit)
+            } else {
+                content
+            }
         }
+        // Any resize of the window reaches this view, so its size is the cue
+        // to look again: full screen to windowed and back.
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { _ in
+            windowed = Self.sceneIsWindowed()
+        }
+    }
+
+    /// Whether the app runs on iPad in a window smaller than the screen, the
+    /// only case with window controls over its corner.
+    @MainActor
+    static func sceneIsWindowed() -> Bool {
+        guard UIDevice.current.userInterfaceIdiom == .pad else { return false }
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        guard let scene = scenes.first(where: { $0.activationState == .foregroundActive }) ?? scenes.first else {
+            return false
+        }
+        let window = scene.coordinateSpace.bounds.size
+        let screen = scene.screen.bounds.size
+        return window.width < screen.width - 1 || window.height < screen.height - 1
     }
 }

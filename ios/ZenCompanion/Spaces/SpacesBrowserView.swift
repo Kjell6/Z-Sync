@@ -100,6 +100,18 @@ struct SpacesBrowserView: View {
     }
 
     private var isSignedIn: Bool { account != nil }
+
+    /// Scrolls the pager back to the selected space at once. Deferred one
+    /// turn so it runs against the new page width, not the old one.
+    private func realignPager(_ pager: ScrollViewProxy) {
+        DispatchQueue.main.async {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                pager.scrollTo(model.selectedIndex, anchor: .leading)
+            }
+        }
+    }
     private var isDemo: Bool { account?.isDemo == true }
 
     private var effectiveScheme: ColorScheme {
@@ -142,9 +154,11 @@ struct SpacesBrowserView: View {
 
                     if !isSignedIn {
                         signedOutHome(scheme: effectiveScheme, placement: placement)
+                            .frame(maxWidth: SpacesLayout.maxWidth)
                     } else if model.snapshot.spaces.isEmpty {
                         if placement == .top {
                             actionBar(scheme: effectiveScheme, placement: placement)
+                                .frame(maxWidth: SpacesLayout.maxWidth)
                         }
                         Spacer(minLength: 0)
                         if model.zeroSpaces {
@@ -153,16 +167,20 @@ struct SpacesBrowserView: View {
                             }, onRetry: {
                                 Task { await model.reload() }
                             })
+                            .frame(maxWidth: SpacesLayout.maxWidth)
                         } else {
                             stateArea(scheme: effectiveScheme)
+                                .frame(maxWidth: SpacesLayout.maxWidth)
                         }
                         Spacer(minLength: 0)
                         if placement == .bottom {
                             actionBar(scheme: effectiveScheme, placement: placement)
+                                .frame(maxWidth: SpacesLayout.maxWidth)
                         }
                     } else {
                         if placement == .top {
                             actionBar(scheme: effectiveScheme, placement: placement)
+                                .frame(maxWidth: SpacesLayout.maxWidth)
                         }
 
                         if model.showSyncSetupHint {
@@ -173,6 +191,7 @@ struct SpacesBrowserView: View {
                             }
                             .padding(.horizontal, 20)
                             .padding(.bottom, 8)
+                            .frame(maxWidth: SpacesLayout.maxWidth)
                             .transition(.opacity)
                         }
 
@@ -184,6 +203,7 @@ struct SpacesBrowserView: View {
                             // container guid.
                             let essentialsBySpace = model.snapshot.spaces.map { model.essentials(for: $0) }
 
+                            ScrollViewReader { pager in
                             ScrollView(.horizontal, showsIndicators: false) {
                                 LazyHStack(spacing: 0) {
                                     ForEach(Array(model.snapshot.spaces.enumerated()), id: \.element.id) { index, space in
@@ -204,7 +224,7 @@ struct SpacesBrowserView: View {
                                             prevSharesEssentials: prevSharesEssentials,
                                             nextSharesEssentials: nextSharesEssentials,
                                             scheme: spaceScheme,
-                                            containerWidth: width,
+                                            containerWidth: min(width, SpacesLayout.maxWidth),
                                             essentialsColumns: model.essentialsColumns,
                                             onRefresh: {
                                                 await model.manualRefresh()
@@ -225,6 +245,10 @@ struct SpacesBrowserView: View {
                                                 await model.pinTab(id: id, in: space.id)
                                             }
                                         )
+                                        // The page stays as wide as the pager, so a
+                                        // swipe pages from edge to edge; its
+                                        // content keeps to the centred column.
+                                        .frame(maxWidth: SpacesLayout.maxWidth)
                                         .frame(width: width, height: height)
                                         .id(index)
                                     }
@@ -232,6 +256,14 @@ struct SpacesBrowserView: View {
                                 .scrollTargetLayout()
                             }
                             .scrollTargetBehavior(.paging)
+                            // A scroll view draws on into the safe area beside
+                            // it. iPhone Duo keeps its status bar and camera in
+                            // a strip at the side, where the next space would
+                            // peek through; end the pages at the safe area
+                            // sideways and leave top and bottom untouched.
+                            .mask {
+                                Rectangle().padding(.vertical, -10_000)
+                            }
                             .scrollPosition(id: Binding(
                                 get: { model.selectedIndex },
                                 set: { if let val = $0 { model.selectSpace(val) } }
@@ -241,6 +273,20 @@ struct SpacesBrowserView: View {
                             }
                             .onChange(of: model.selectedIndex) { _, _ in
                                 model.selectedIndexChangedFromPager()
+                            }
+                            // The pager keeps its offset in points when the
+                            // window changes size: opening or closing iPhone
+                            // Duo, rotating, resizing an iPad window. The old
+                            // offset then lands on another page than the
+                            // selected space. Put the selected space back
+                            // in view, without animation, once the new width
+                            // is laid out.
+                            .onChange(of: width) { _, _ in
+                                realignPager(pager)
+                            }
+                            .onAppear {
+                                realignPager(pager)
+                            }
                             }
                         }
                         // With the action bar at the bottom, the essentials grid
@@ -253,6 +299,7 @@ struct SpacesBrowserView: View {
                         // keeps its shape and the text never reads as part of
                         // the toolbar below it.
                         statusLine(scheme: effectiveScheme)
+                            .frame(maxWidth: SpacesLayout.maxWidth)
 
                         SpaceSwitcher(
                             spaces: model.snapshot.spaces,
@@ -263,9 +310,11 @@ struct SpacesBrowserView: View {
                         // switcher, so the switcher only needs air when it is
                         // the last row (top placement).
                         .padding(.bottom, placement == .top ? 4 : 0)
+                        .frame(maxWidth: SpacesLayout.maxWidth)
 
                         if placement == .bottom {
                             actionBar(scheme: effectiveScheme, placement: placement)
+                                .frame(maxWidth: SpacesLayout.maxWidth)
                         }
                     }
                 }
@@ -1028,4 +1077,12 @@ struct FolderBlock: View {
         let path = url.path
         return path.isEmpty || path == "/" ? host : host + path
     }
+}
+
+/// How wide the spaces screen's content gets. On a wide display (iPad, the
+/// open iPhone Duo) tabs, essentials, switcher and toolbar keep to a centred
+/// column as wide as the mini-browser's bar; only the background reaches the
+/// edges. Phones are narrower than this, so nothing changes there.
+enum SpacesLayout {
+    static let maxWidth: CGFloat = MiniBrowserChromeMetrics.maxWidth
 }

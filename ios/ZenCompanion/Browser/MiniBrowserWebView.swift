@@ -215,6 +215,7 @@ final class MiniBrowserWebView: WKWebView {
 /// key-value observer's class that was on the view at that moment, and
 /// removing that observer later crashed the app. Content views without a bar
 /// of ours (other web views) still get WebKit's own accessory.
+@MainActor
 private enum WebKitFormAccessoryInstaller {
     private static let lock = NSLock()
     /// One key per content view; associated objects keep the bar alive.

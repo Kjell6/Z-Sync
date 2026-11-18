@@ -209,11 +209,17 @@ final class MiniBrowserWebView: WKWebView {
 
 /// Overrides `inputAccessoryView` on WebKit's internal content view so the
 /// page's keyboard gets our bar instead of the system one.
+///
+/// The getter is replaced once on WebKit's own `WKContentView` class. The
+/// content view keeps its class: swapping it (`object_setClass`) threw away a
+/// key-value observer's class that was on the view at that moment, and
+/// removing that observer later crashed the app. Content views without a bar
+/// of ours (other web views) still get WebKit's own accessory.
 private enum WebKitFormAccessoryInstaller {
-    private static let subclassName = "ZenMiniBrowserWKContentAccessory"
     private static let lock = NSLock()
     /// One key per content view; associated objects keep the bar alive.
     private static let accessoryKey = UnsafeMutablePointer<UInt8>.allocate(capacity: 1)
+    private static var patchedClass: AnyClass?
 
     static func install(on contentView: UIView, accessory: UIView) {
         lock.lock()
@@ -221,28 +227,39 @@ private enum WebKitFormAccessoryInstaller {
 
         // Layout runs often; the bar is installed once per content view.
         guard objc_getAssociatedObject(contentView, accessoryKey) == nil else { return }
+        guard patchGetter(for: contentView) else { return }
         objc_setAssociatedObject(
             contentView,
             accessoryKey,
             accessory,
             .OBJC_ASSOCIATION_RETAIN_NONATOMIC
         )
-        if let existing = NSClassFromString(subclassName) {
-            if object_getClass(contentView) != existing {
-                object_setClass(contentView, existing)
-            }
-            return
-        }
-        guard let currentClass = object_getClass(contentView),
-              let subclass = objc_allocateClassPair(currentClass, subclassName, 0) else {
-            return
-        }
+    }
+
+    /// Replaces the getter on `WKContentView` the first time. False when the
+    /// view is not one (a future WebKit may rename it).
+    private static func patchGetter(for contentView: UIView) -> Bool {
+        if let patchedClass { return contentView.isKind(of: patchedClass) }
+        guard let target = NSClassFromString("WKContentView"),
+              contentView.isKind(of: target) else { return false }
+
         let selector = #selector(getter: UIResponder.inputAccessoryView)
-        let impl: @convention(block) (AnyObject) -> UIView? = { view in
-            objc_getAssociatedObject(view, accessoryKey) as? UIView
+        guard let method = class_getInstanceMethod(target, selector) else { return false }
+        typealias Getter = @convention(c) (AnyObject, Selector) -> UIView?
+        let original = unsafeBitCast(method_getImplementation(method), to: Getter.self)
+        let block: @convention(block) (AnyObject) -> UIView? = { view in
+            if let ours = objc_getAssociatedObject(view, accessoryKey) as? UIView {
+                return ours
+            }
+            return original(view, selector)
         }
-        class_addMethod(subclass, selector, imp_implementationWithBlock(impl), "@@:")
-        objc_registerClassPair(subclass)
-        object_setClass(contentView, subclass)
+        let replacement = imp_implementationWithBlock(block)
+        // Adds the override when only a superclass has the getter; otherwise
+        // replaces WebKit's own implementation (kept as `original`).
+        if !class_addMethod(target, selector, replacement, method_getTypeEncoding(method)) {
+            method_setImplementation(method, replacement)
+        }
+        patchedClass = target
+        return true
     }
 }

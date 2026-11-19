@@ -31,6 +31,10 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// The pull-to-refresh's own limit: a load that never reports back cannot
     /// leave the spinner going.
     private var refreshDeadline: Task<Void, Never>?
+    /// A colour read already waiting while the page scrolls: a header that
+    /// scrolls away changes the colour at the top, but one read per pause is
+    /// enough.
+    private var colorReadPending = false
 
     init(model: MiniBrowserModel) {
         self.model = model
@@ -409,15 +413,11 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
 
         if #available(iOS 15.0, *) {
-            themeColorObservation = webView.observe(\.themeColor, options: [.new]) { [weak self] wv, _ in
+            // The tag's own colour is not used, as in Safari: a change to it
+            // only says the page may look different now.
+            themeColorObservation = webView.observe(\.themeColor, options: [.new]) { [weak self] _, _ in
                 DispatchQueue.main.async {
-                    // A colour going away is news too: the page's own
-                    // background takes over, not the previous page's tag.
-                    if let native = wv.themeColor {
-                        self?.model?.setThemeColor(Color(uiColor: native))
-                    } else {
-                        self?.readPageColor()
-                    }
+                    self?.readPageColor()
                 }
             }
         }
@@ -443,6 +443,7 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
                     contentHeight: content,
                     isUserDriven: byReader
                 )
+                self?.scheduleScrollColorRead()
             }
         }
     }
@@ -566,7 +567,19 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         startOver(for: webView?.url)
     }
 
-    /// The page's colour, from its `theme-color` tag, else its own background.
+    /// The colour at the top of the page may change as it scrolls, when a
+    /// header scrolls away or a sticky one takes its place.
+    private func scheduleScrollColorRead() {
+        guard !colorReadPending else { return }
+        colorReadPending = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            guard let self else { return }
+            self.colorReadPending = false
+            self.readPageColor()
+        }
+    }
+
+    /// The colour the page shows at its top edge, as Safari tints its bar.
     /// Every answer is checked against the document it was asked of: an older
     /// page answering late must not paint the page the reader is on now.
     private func readPageColor() {
@@ -578,38 +591,55 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
             DispatchQueue.main.async {
                 guard generation == self.pageGeneration,
                       PageTitle.sameDocument(url, self.webView?.url) else { return }
-                // The page's answer first: WebKit's own `themeColor` can still
-                // hold the previous page's tag for a moment after a step back.
-                // When the answer names a colour the parser cannot read, that
-                // tag is still better than clearing the colour.
-                self.model?.updateThemeColor(
-                    from: result as? String,
-                    nativeColor: self.webView?.themeColor
-                )
+                self.model?.updateThemeColor(from: result as? String)
             }
         }
     }
 
-    /// `<meta name="theme-color">`, else the body's background, else the
-    /// document's own. A tag with a `media` query only counts for the window it
-    /// matches, so the first tag that applies is the one used.
-    private static let pageColorScript = """
+    /// The colour at the page's top edge, the way Safari picks its tint:
+    /// `theme-color` is ignored, since a site's brand colour often has nothing
+    /// to do with what the page shows. Three points along the top edge are
+    /// sampled, each walking up to the first element with a solid background;
+    /// when two agree, that is the colour. Otherwise the body's or the
+    /// document's own background, else the browser's white canvas, unless the
+    /// page draws in dark mode. Nil while the page is still loading.
+    ///
+    /// Android port: `PAGE_COLOR_SCRIPT` in `ui/screens/MiniBrowserWebView.kt`.
+    static let pageColorScript = """
     (function() {
-        var metas = document.querySelectorAll('meta[name="theme-color"]');
-        var meta = null;
-        for (var i = 0; i < metas.length; i++) {
-            var media = metas[i].getAttribute('media');
-            if (!media || !media.trim() || window.matchMedia(media).matches) {
-                meta = metas[i];
-                break;
+        function solid(c) {
+            if (!c || c.indexOf('rgb') !== 0) return null;
+            var parts = c.slice(c.indexOf('(') + 1, c.indexOf(')')).split(',');
+            if (parts.length === 4 && parseFloat(parts[3]) < 0.9) return null;
+            return c;
+        }
+        function backgroundOf(el) {
+            for (; el && el.nodeType === 1; el = el.parentElement) {
+                var c = solid(window.getComputedStyle(el).backgroundColor);
+                if (c) return c;
+            }
+            return null;
+        }
+        if (!document.body) return null;
+        var w = window.innerWidth;
+        var xs = [w * 0.1, w * 0.5, w * 0.9];
+        var seen = {};
+        for (var i = 0; i < xs.length; i++) {
+            var c = backgroundOf(document.elementFromPoint(xs[i], 1));
+            if (c) {
+                seen[c] = (seen[c] || 0) + 1;
+                if (seen[c] >= 2) return c;
             }
         }
-        if (meta && meta.content) return meta.content;
-        var bg = window.getComputedStyle(document.body).backgroundColor;
-        if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
-        var htmlBg = window.getComputedStyle(document.documentElement).backgroundColor;
-        if (htmlBg && htmlBg !== 'rgba(0, 0, 0, 0)' && htmlBg !== 'transparent') return htmlBg;
-        return null;
+        var page = solid(window.getComputedStyle(document.body).backgroundColor)
+            || solid(window.getComputedStyle(document.documentElement).backgroundColor);
+        if (page) return page;
+        if (document.readyState === 'loading') return null;
+        var meta = document.querySelector('meta[name="color-scheme"]');
+        var scheme = (window.getComputedStyle(document.documentElement).colorScheme || '')
+            + ' ' + (meta ? meta.content : '');
+        if (scheme.indexOf('dark') !== -1 && window.matchMedia('(prefers-color-scheme: dark)').matches) return null;
+        return 'rgb(255, 255, 255)';
     })()
     """
 

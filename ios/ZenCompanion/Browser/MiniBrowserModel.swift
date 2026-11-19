@@ -1589,6 +1589,9 @@ final class MiniBrowserModel {
     /// pull-to-refresh spinner follows it as well: it has to contrast with the
     /// page behind it, not with the app's own theme.
     func setThemeColor(_ color: Color?) {
+        // Read again on every scroll pause: an unchanged colour must not
+        // restart the bar's colour animation.
+        guard themeColor != color else { return }
         themeColor = color
         updateRefreshTint()
     }
@@ -1599,19 +1602,10 @@ final class MiniBrowserModel {
         )
     }
 
-    /// The page's colour, from its own answer when that is one this app reads,
-    /// else from WebKit's, else none. A colour named in words, as a
-    /// `theme-color` tag may be, is not one the parser reads.
-    func updateThemeColor(from string: String?, nativeColor: UIColor?) {
-        if let color = Self.parsedThemeColor(string) {
-            setThemeColor(color)
-            return
-        }
-        guard let nativeColor else {
-            setThemeColor(nil)
-            return
-        }
-        setThemeColor(Color(uiColor: nativeColor))
+    /// The page's colour from its own answer, or none when the answer is not
+    /// a colour this app reads.
+    func updateThemeColor(from string: String?) {
+        setThemeColor(Self.parsedThemeColor(string))
     }
 
     /// A colour named in the page's answer, or nil for one it does not name in

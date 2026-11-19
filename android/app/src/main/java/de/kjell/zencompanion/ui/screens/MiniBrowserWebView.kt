@@ -229,22 +229,10 @@ internal fun MiniBrowserWebView(
                         onCanGoForwardChange(view?.canGoForward() == true)
                         onPageLoaded()
 
-                        // Extract theme-color / background from web page DOM
-                        val js = """
-                            (function() {
-                                var meta = document.querySelector('meta[name="theme-color"]');
-                                if (meta && meta.content) return meta.content;
-                                var bg = window.getComputedStyle(document.body).backgroundColor;
-                                if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
-                                var htmlBg = window.getComputedStyle(document.documentElement).backgroundColor;
-                                if (htmlBg && htmlBg !== 'rgba(0, 0, 0, 0)' && htmlBg !== 'transparent') return htmlBg;
-                                return null;
-                            })()
-                        """.trimIndent()
                         // The previous page's color stays until this one has its
                         // own: resetting at the start would flash the default
                         // on every reload. A page without a color drops it here.
-                        view?.evaluateJavascript(js) { result ->
+                        view?.evaluateJavascript(PAGE_COLOR_SCRIPT) { result ->
                             onSiteThemeColorChange(parseCssColor(result))
                         }
                         view?.evaluateJavascript(SCROLL_BINDING_SCRIPT, null)
@@ -320,6 +308,18 @@ internal fun MiniBrowserWebView(
                         if (url == null) return
                         onCurrentUrlChange(url)
                         if (!addressFocused) textInputChange(TextFieldValue(text = addressDisplay(url)))
+                        // A new view inside the same document may show a different
+                        // header: read the colour now and once more after it has
+                        // drawn, as the iOS driver does on an address change.
+                        view?.let { v ->
+                            val readColor = {
+                                v.evaluateJavascript(PAGE_COLOR_SCRIPT) { result ->
+                                    onSiteThemeColorChange(parseCssColor(result))
+                                }
+                            }
+                            readColor()
+                            v.postDelayed(readColor, 350)
+                        }
                         onCanGoBackChange(view?.canGoBack() == true)
                         onCanGoForwardChange(view?.canGoForward() == true)
                     }
@@ -482,10 +482,25 @@ internal fun MiniBrowserWebView(
                 // `setOnScrollChangeListener` never fires. The page reports its
                 // scroll offset instead; only that int crosses the bridge. It
                 // also says whether this touch may pull the page down.
+                // The colour at the page's top changes as a header scrolls
+                // away; one read per pause in the scrolling is enough.
+                var colorReadPending = false
+                val readColorAfterScroll = Runnable {
+                    colorReadPending = false
+                    evaluateJavascript(PAGE_COLOR_SCRIPT) { result ->
+                        onSiteThemeColorChange(parseCssColor(result))
+                    }
+                }
                 addJavascriptInterface(
                     ScrollBridge(
                         onScroll = { scrollY, userDriven ->
-                            post { onScrollChange(scrollY, userDriven) }
+                            post {
+                                onScrollChange(scrollY, userDriven)
+                                if (!colorReadPending) {
+                                    colorReadPending = true
+                                    postDelayed(readColorAfterScroll, 250)
+                                }
+                            }
                         },
                         onPull = { allowed -> post { page.pageAllowsPull = allowed } },
                     ),
@@ -657,6 +672,55 @@ internal fun childCanScrollUp(
 } else {
     !(pageAllowsPull && scrollY == 0)
 }
+
+/**
+ * The colour at the page's top edge, the way Safari picks its tint:
+ * `theme-color` is ignored, since a site's brand colour often has nothing to
+ * do with what the page shows. Three points along the top edge are sampled,
+ * each walking up to the first element with a solid background; when two
+ * agree, that is the colour. Otherwise the body's or the document's own
+ * background, else the browser's white canvas, unless the page draws in dark
+ * mode. Null while the page is still loading.
+ *
+ * iOS port: `MiniBrowserWebDriver.pageColorScript` in `Browser/MiniBrowserWebDriver.swift`.
+ */
+internal val PAGE_COLOR_SCRIPT = """
+    (function() {
+        function solid(c) {
+            if (!c || c.indexOf('rgb') !== 0) return null;
+            var parts = c.slice(c.indexOf('(') + 1, c.indexOf(')')).split(',');
+            if (parts.length === 4 && parseFloat(parts[3]) < 0.9) return null;
+            return c;
+        }
+        function backgroundOf(el) {
+            for (; el && el.nodeType === 1; el = el.parentElement) {
+                var c = solid(window.getComputedStyle(el).backgroundColor);
+                if (c) return c;
+            }
+            return null;
+        }
+        if (!document.body) return null;
+        var w = window.innerWidth;
+        var xs = [w * 0.1, w * 0.5, w * 0.9];
+        var seen = {};
+        for (var i = 0; i < xs.length; i++) {
+            var c = backgroundOf(document.elementFromPoint(xs[i], 1));
+            if (c) {
+                seen[c] = (seen[c] || 0) + 1;
+                if (seen[c] >= 2) return c;
+            }
+        }
+        var page = solid(window.getComputedStyle(document.body).backgroundColor)
+            || solid(window.getComputedStyle(document.documentElement).backgroundColor);
+        if (page) return page;
+        if (document.readyState === 'loading') return null;
+        var meta = document.querySelector('meta[name="color-scheme"]');
+        var scheme = (window.getComputedStyle(document.documentElement).colorScheme || '')
+            + ' ' + (meta ? meta.content : '');
+        if (scheme.indexOf('dark') !== -1 && window.matchMedia('(prefers-color-scheme: dark)').matches) return null;
+        return 'rgb(255, 255, 255)';
+    })()
+""".trimIndent()
 
 /** Receives the page's scroll offset and pull permission. Called on a WebView thread. */
 private class ScrollBridge(

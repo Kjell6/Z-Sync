@@ -505,10 +505,21 @@ struct MiniBrowserView: View {
             // In the page's own color: a new page has nothing painted yet.
             RoundedRectangle(cornerRadius: pagePose.corner, style: .continuous)
                 .fill(sheetBackground)
-                .padding(.top, -pageFrame.minY)
+                .padding(.top, -pageStrip)
                 .shadow(color: .black.opacity(0.26), radius: 20, x: -4.4, y: 0)
                 .opacity(Double(overviewReveal))
         }
+    }
+
+    /// How much of the status bar's strip the page brings along. A card is
+    /// the page alone, so the strip goes as the page shrinks into it and
+    /// comes back as it grows out again. Read from the page's own scale, so it
+    /// follows every flight: the pull, the landing, the way back and a new
+    /// page coming in while the deck stays up.
+    private var pageStrip: CGFloat {
+        guard pageFloats, let card = cardPose(), card.scale < 1 else { return pageFrame.minY }
+        let share = (pagePose.scale - card.scale) / (1 - card.scale)
+        return pageFrame.minY * min(1, max(0, share))
     }
 
     private var screenSize: CGSize {
@@ -534,7 +545,9 @@ struct MiniBrowserView: View {
             next: peeking ? neighbours.next.map(peek) : nil,
             slidingColor: peeking || pageFloats ? UIColor(sheetBackground) : nil,
             topOverflow: pageFrame.minY,
-            cornerRadius: revealingNewPage ? DisplayCorners.radius : pagePose.corner
+            currentTopOverflow: pageStrip,
+            cornerRadius: revealingNewPage ? DisplayCorners.radius : pagePose.corner,
+            roundsTop: pageFloats
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -672,7 +685,7 @@ private extension MiniBrowserView {
     /// Where the page has to be to lie exactly on its card.
     private func cardPose() -> PageCardPose? {
         guard screenSize.width > 0, screenSize.height > 0 else { return nil }
-        let deck = PageDeckGeometry(screen: screenSize, count: CGFloat(pages.pages.count))
+        let deck = PageDeckGeometry(screen: screenSize, count: CGFloat(pages.pages.count), topInset: pageFrame.minY)
         let place = CGFloat(activeDeckIndex)
         let card = deck.frame(index: place, focus: place)
         let scale = card.width / screenSize.width
@@ -946,7 +959,7 @@ private extension MiniBrowserView {
     private func newPageStartPose() -> PageCardPose? {
         guard screenSize.width > 0, screenSize.height > 0 else { return nil }
         let count = pages.pages.count
-        let deck = PageDeckGeometry(screen: screenSize, count: CGFloat(count))
+        let deck = PageDeckGeometry(screen: screenSize, count: CGFloat(count), topInset: pageFrame.minY)
         let last = CGFloat(max(0, count - 1))
         let card = deck.frame(index: last, focus: last - 1)
         let scale = card.width / screenSize.width

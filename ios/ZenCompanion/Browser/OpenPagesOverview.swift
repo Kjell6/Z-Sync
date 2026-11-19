@@ -41,7 +41,8 @@ enum DisplayCorners {
 /// Where the iPhone's app switcher puts its cards, as one pure calculation, so
 /// the page can land exactly on its card without measuring anything.
 ///
-/// A card has the display's own proportions. The focused card sits right of
+/// A card is the page alone, without the status bar's strip above it, in the
+/// page's own proportions. The focused card sits right of
 /// the middle; each card further right lies on top and runs away quickly,
 /// each card further left tucks in behind with less and less showing.
 struct PageDeckGeometry {
@@ -50,9 +51,17 @@ struct PageDeckGeometry {
     /// gone, so the cards sliding into its place do not move a second time
     /// when it is removed.
     let count: CGFloat
+    /// The status bar's height: the page starts below it, and so does a card
+    /// grown back to the page.
+    var topInset: CGFloat = 0
 
-    /// The display's own curve, scaled down with the card.
-    @MainActor static var cornerRadius: CGFloat { max(20, DisplayCorners.radius * focusScale) }
+    /// The part of the screen the page fills.
+    var pageHeight: CGFloat { max(0, screen.height - topInset) }
+
+    /// Gentler than the display's own curve scaled down with the card: a
+    /// page's header sits right in the top corners and would be cut off.
+    @MainActor static var cornerRadius: CGFloat { max(14, DisplayCorners.radius * focusScale * cornerShare) }
+    private static let cornerShare: CGFloat = 0.8
     /// A tapped card growing back into its page, and the deck parting around it.
     static let openMotion = Animation.spring(duration: 0.4, bounce: 0)
 
@@ -66,16 +75,18 @@ struct PageDeckGeometry {
     private static let behindGrowth: CGFloat = 2.39
     private static let aheadSpread: CGFloat = 0.3876
     private static let aheadGrowth: CGFloat = 2.29
-    private static let middle: CGFloat = 0.49
+    /// A card's middle, as a share of the height. A little below the
+    /// screen's own: a card is the page alone, shorter than the screen.
+    private static let middle: CGFloat = 0.52
 
     var cardSize: CGSize {
-        CGSize(width: screen.width * Self.focusScale, height: screen.height * Self.focusScale)
+        CGSize(width: screen.width * Self.focusScale, height: pageHeight * Self.focusScale)
     }
 
     func frame(index: CGFloat, focus: CGFloat) -> CGRect {
         let offset = index - focus
         let scale = Self.focusScale + Self.scaleStep * min(2, max(-4, offset))
-        let size = CGSize(width: screen.width * scale, height: screen.height * scale)
+        let size = CGSize(width: screen.width * scale, height: pageHeight * scale)
         let left = screen.width * Self.left(at: min(3, offset))
         return CGRect(
             x: left + endShift(focus: focus),
@@ -129,13 +140,14 @@ private struct DeckCardPlacement: ViewModifier, Animatable {
     }
 
     func body(content: Content) -> some View {
-        let deck = PageDeckGeometry(screen: self.deck.screen, count: count)
+        let deck = PageDeckGeometry(screen: self.deck.screen, count: count, topInset: self.deck.topInset)
         let resting = deck.frame(index: index, focus: focus)
+        // Grown all the way, the card is the page: below the status bar.
         let frame = CGRect(
             x: resting.minX * (1 - expansion),
-            y: resting.minY * (1 - expansion),
+            y: resting.minY + (deck.topInset - resting.minY) * expansion,
             width: resting.width + (deck.screen.width - resting.width) * expansion,
-            height: resting.height + (deck.screen.height - resting.height) * expansion
+            height: resting.height + (deck.pageHeight - resting.height) * expansion
         )
         let offset = index - focus
         // The neighbours come in from the sides as the page shrinks.
@@ -213,7 +225,7 @@ struct OpenPagesOverview: View {
     /// Cards that lie on top of the page's own card wait until it has landed:
     /// the page flies above the deck and could not pass under them.
     var aheadReveal: CGFloat
-    /// Status bar height: the part of a card above the page's picture.
+    /// Status bar height: the page, and so each card, starts below it.
     var topInset: CGFloat
     /// Height of the browser's dock, which stays over the overview.
     var bottomClearance: CGFloat
@@ -280,7 +292,7 @@ struct OpenPagesOverview: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let deck = PageDeckGeometry(screen: proxy.size, count: CGFloat(visiblePages.count))
+            let deck = PageDeckGeometry(screen: proxy.size, count: CGFloat(visiblePages.count), topInset: topInset)
             ZStack {
                 backdrop
                     .opacity(Double(reveal))
@@ -344,10 +356,10 @@ struct OpenPagesOverview: View {
                     hidesPicture: page.id == hiddenCardID,
                     isFrontCard: index == cards.count - 1,
                     size: deck.cardSize,
-                    topInset: topInset * deck.cardSize.width / max(deck.screen.width, 1),
                     offset: place - deckFocus,
                     reveal: reveal,
                     isExpanding: page.id == expandingCardID,
+                    expansion: page.id == expandingCardID ? expansion : 0,
                     onOpen: {
                         // The deck parts around the card in the same move:
                         // the cards on top of it run off, it never jumps in
@@ -669,12 +681,14 @@ private struct OpenPageCard<Menu: View>: View {
     /// Nothing lies on top of this card, so its name has the whole width.
     let isFrontCard: Bool
     let size: CGSize
-    let topInset: CGFloat
     let offset: CGFloat
     let reveal: CGFloat
     /// Growing to the whole screen: it casts nothing that could show through
     /// when it fades into the live page.
     let isExpanding: Bool
+    /// 1 is grown to the whole page. The top corners square off on the way:
+    /// the page meets the status bar's strip there with a straight edge.
+    let expansion: CGFloat
     var onOpen: () -> Void
     var onClose: () -> Void
     @ViewBuilder var menu: () -> Menu
@@ -700,14 +714,14 @@ private struct OpenPageCard<Menu: View>: View {
     }
 
     var body: some View {
-        OpenPageShot(page: page, store: store, topInset: topInset)
+        OpenPageShot(page: page, store: store)
             .frame(width: size.width, height: size.height)
             .overlay {
                 Color.black
                     .modifier(DeckCardDim(offset: offset, isDark: scheme == .dark))
                     .allowsHitTesting(false)
             }
-            .clipShape(shape)
+            .clipShape(CardOutline(radius: PageDeckGeometry.cornerRadius, expansion: expansion))
             // Dark: the shadow is lost on the background, so a faint light rim
             // draws each card's edge over the one below.
             .overlay {
@@ -780,13 +794,36 @@ private struct OpenPageCard<Menu: View>: View {
     }
 }
 
-/// The page as it looked when it was last on screen, on its own color, which
-/// also fills the status bar's strip above it; its favicon until then. The
-/// card loads and lets go of the picture.
+/// A card's outline. Its top corners lose their curve as the card grows into
+/// the page, which meets the status bar's strip with a straight edge; the
+/// bottom ones keep the display's own.
+private struct CardOutline: Shape {
+    let radius: CGFloat
+    var expansion: CGFloat
+
+    var animatableData: CGFloat {
+        get { expansion }
+        set { expansion = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let top = radius * (1 - min(1, max(0, expansion)))
+        return UnevenRoundedRectangle(
+            topLeadingRadius: top,
+            bottomLeadingRadius: radius,
+            bottomTrailingRadius: radius,
+            topTrailingRadius: top,
+            style: .continuous
+        ).path(in: rect)
+    }
+}
+
+/// The page as it looked when it was last on screen, on its own color; its
+/// favicon until then. Only the page: the status bar's strip is not part of
+/// a card. The card loads and lets go of the picture.
 struct OpenPageShot: View {
     let page: OpenPage
     let store: OpenPagesStore
-    var topInset: CGFloat = 0
 
     @Environment(\.colorScheme) private var scheme
 
@@ -801,7 +838,6 @@ struct OpenPageShot: View {
                             .scaledToFill()
                     }
                     .clipped()
-                    .padding(.top, topInset)
             } else if let url = page.url {
                 Favicon(urlString: url.absoluteString, size: 36)
             }

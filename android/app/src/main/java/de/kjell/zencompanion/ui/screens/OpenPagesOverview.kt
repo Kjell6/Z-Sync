@@ -124,7 +124,8 @@ internal val DeckOpenSpring = spring<Float>(stiffness = 220f, visibilityThreshol
 /**
  * Where the iPhone's app switcher puts its cards, as one pure calculation, so
  * the page can land exactly on its card without measuring anything (port of
- * iOS `PageDeckGeometry`). A card is the page down to where the bar starts. The
+ * iOS `PageDeckGeometry`). A card is the page alone: below the status bar and
+ * down to where the bar starts. The
  * focused card sits right of the middle; each card further right lies on top
  * and runs away quickly, each further left tucks in behind.
  */
@@ -133,12 +134,14 @@ internal class PageDeckGeometry(
     val count: Int,
     /** The strip under the page, behind the bar: no part of a card. */
     private val bottomBand: Float,
+    /** The status bar's strip above the page: no part of a card either. */
+    private val topBand: Float = 0f,
 ) {
-    private val pageHeight = max(0f, screen.height - bottomBand)
+    private val pageHeight = max(0f, screen.height - bottomBand - topBand)
     val cardSize = Size(screen.width * FocusScale, pageHeight * FocusScale)
 
     /** Where a page sits at full size. */
-    val pageFrame = Rect(0f, 0f, screen.width, pageHeight)
+    val pageFrame = Rect(0f, topBand, screen.width, topBand + pageHeight)
 
     /** [cards] is fractional while one leaves, so the deck's end moves with it. */
     fun frame(index: Float, focus: Float, cards: Float = count.toFloat()): Rect {
@@ -174,7 +177,8 @@ internal class PageDeckGeometry(
         private const val BehindGrowth = 2.39f
         private const val AheadSpread = 0.3876f
         private const val AheadGrowth = 2.29f
-        private const val Middle = 0.49f
+        /** A little below the screen's middle: a card is the page alone, shorter than the screen. */
+        private const val Middle = 0.52f
     }
 }
 
@@ -191,13 +195,18 @@ internal fun rememberDisplayCornerPx(): Float {
     }
 }
 
-/** The display's own curve, scaled down with the card. */
+/**
+ * Gentler than the display's own curve scaled down with the card: a page's
+ * header sits right in the top corners and would be cut off.
+ */
 @Composable
 internal fun rememberDeckCardCornerPx(): Float {
     val display = rememberDisplayCornerPx()
-    val least = with(LocalDensity.current) { 20.dp.toPx() }
-    return max(least, display * PageDeckGeometry.FocusScale)
+    val least = with(LocalDensity.current) { 14.dp.toPx() }
+    return max(least, display * PageDeckGeometry.FocusScale * CardCornerShare)
 }
+
+private const val CardCornerShare = 0.8f
 
 private enum class DeckDrag { SIDEWAYS, UP, IGNORED }
 
@@ -232,7 +241,7 @@ internal fun OpenPagesOverview(
      * the page flies above the deck and could not pass under them.
      */
     aheadReveal: () -> Float,
-    /** Status bar height: the part of a card above the page's picture. */
+    /** Status bar height: the page, and so each card, starts below it. */
     topInsetPx: Float,
     /** The strip under the page, behind the bar: no part of a card. */
     bottomBandPx: Float,
@@ -279,11 +288,11 @@ internal fun OpenPagesOverview(
             Size(constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat()),
             cards.size,
             bottomBandPx,
+            topInsetPx,
         )
         val density = LocalDensity.current
         val cardWidth = with(density) { deck.cardSize.width.toDp() }
         val cardHeight = with(density) { deck.cardSize.height.toDp() }
-        val cardTopInset = with(density) { (topInsetPx * PageDeckGeometry.FocusScale).toDp() }
         val current by rememberUpdatedState(cards)
         val currentLifted by rememberUpdatedState(lifted)
         val interactive = expandingCardId == null
@@ -518,7 +527,6 @@ internal fun OpenPagesOverview(
                         isFrontCard = index == cards.size - 1,
                         width = cardWidth,
                         height = cardHeight,
-                        topInset = cardTopInset,
                         offset = { place() - deckFocus() },
                         reveal = reveal,
                         menuOpen = menuCardId == page.id,
@@ -547,7 +555,8 @@ internal fun OpenPagesOverview(
                                 val resting = deck.frame(spot, focused, max(1f, deck.count - gap.value))
                                 val grown = if (isExpanding) expansion() else 0f
                                 val left = resting.left * (1f - grown)
-                                val top = resting.top * (1f - grown)
+                                // Grown all the way, the card is the page: below the status bar.
+                                val top = resting.top + (deck.pageFrame.top - resting.top) * grown
                                 val frameWidth = resting.width + (deck.screen.width - resting.width) * grown
                                 val frameHeight = resting.height + (deck.pageFrame.height - resting.height) * grown
                                 val shown = if (spot > focused) min(reveal(), aheadReveal()) else reveal()
@@ -585,7 +594,6 @@ private fun OpenPageCard(
     isFrontCard: Boolean,
     width: Dp,
     height: Dp,
-    topInset: Dp,
     offset: () -> Float,
     reveal: () -> Float,
     menuOpen: Boolean,
@@ -637,9 +645,10 @@ private fun OpenPageCard(
                     spotColor = Color.Black.copy(alpha = 0.3f),
                 )
                 .graphicsLayer {
-                    // Grown to the page, its bottom edge meets the bar's plate.
-                    val bottom = cornerPx * (1f - if (isExpanding) expansion() else 0f)
-                    this.shape = RoundedCornerShape(cornerPx, cornerPx, bottom, bottom)
+                    // Grown to the page, it meets the status bar's strip and
+                    // the bar's plate with straight edges.
+                    val corner = cornerPx * (1f - if (isExpanding) expansion() else 0f)
+                    this.shape = RoundedCornerShape(corner)
                     clip = true
                 }
                 // The deck's gestures sit on its parent; TalkBack needs them here.
@@ -661,7 +670,7 @@ private fun OpenPageCard(
                     )
                 },
         ) {
-            OpenPageShot(page = page, session = session, topInset = topInset, surface = surface)
+            OpenPageShot(page = page, session = session, surface = surface)
             // Cards the deck is not resting on sit a little in the dark, the
             // ones behind more than the one lying on top. On a dark background
             // the shadows hardly show, so the dimming does more of the work.
@@ -743,9 +752,12 @@ private fun OpenPageCard(
     }
 }
 
-/** The page as it looked when it was last on screen, on its own color; its favicon until then. */
+/**
+ * The page as it looked when it was last on screen, on its own color; its
+ * favicon until then. Only the page: the status bar's strip is not part of a card.
+ */
 @Composable
-private fun OpenPageShot(page: OpenPage, session: PageSession?, topInset: Dp, surface: Color) {
+private fun OpenPageShot(page: OpenPage, session: PageSession?, surface: Color) {
     val state = session?.viewModel?.state?.collectAsState()?.value
     val color = state?.siteThemeColor.takeIf { state?.pageError == null } ?: surface
     val shot = session?.shot
@@ -761,9 +773,7 @@ private fun OpenPageShot(page: OpenPage, session: PageSession?, topInset: Dp, su
                 contentDescription = null,
                 contentScale = ContentScale.FillWidth,
                 alignment = Alignment.TopCenter,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = topInset),
+                modifier = Modifier.fillMaxSize(),
             )
         } else if (page.url.isNotEmpty()) {
             Favicon(urlString = page.url, size = 36.dp)

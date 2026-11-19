@@ -32,8 +32,14 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
     /// How far above the host the screen goes on: each sliding page brings its
     /// color for the status bar along.
     var topOverflow: CGFloat = 0
+    /// The same for the current page, which loses the strip on its way into
+    /// its card: a card is the page alone.
+    var currentTopOverflow: CGFloat = 0
     /// Rounded like the screen while the page slides off towards a new one.
     var cornerRadius: CGFloat = 0
+    /// The web view rounds its top corners too: true while the page flies
+    /// as a card, with no strip above it to carry them.
+    var roundsTop = false
 
     func makeUIView(context: Context) -> PageHostView {
         PageHostView()
@@ -48,11 +54,15 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
             topOverflow: topOverflow
         )
         // Carried by the SwiftUI animation that changed it, so the corners
-        // round in step with the page shrinking into its card.
+        // round, and the strip goes, in step with the page shrinking into its card.
         if #available(iOS 18.0, *) {
-            context.animate { host.setCornerRadius(cornerRadius) }
+            context.animate {
+                host.setCornerRadius(cornerRadius, roundsTop: roundsTop)
+                host.setCurrentTopOverflow(currentTopOverflow)
+            }
         } else {
-            host.setCornerRadius(cornerRadius)
+            host.setCornerRadius(cornerRadius, roundsTop: roundsTop)
+            host.setCurrentTopOverflow(currentTopOverflow)
         }
         for peek in [previous, next] {
             let view = peek?.webView as? MiniBrowserWebView
@@ -72,6 +82,7 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
     static func dismantleUIView(_ host: PageHostView, coordinator: ()) {
         host.show(current: nil, previous: nil, next: nil, slidingColor: nil, topOverflow: 0)
         host.setCornerRadius(0)
+        host.setCurrentTopOverflow(0)
     }
 }
 
@@ -93,6 +104,7 @@ final class PageHostView: UIView {
     private let previousBacking = UIView()
     private let nextBacking = UIView()
     private var topOverflow: CGFloat = 0
+    private var currentTopOverflow: CGFloat = 0
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -146,15 +158,30 @@ final class PageHostView: UIView {
     }
 
     /// The backing carries the top corners, which sit above the web view; the
-    /// web view rounds only the bottom ones. It keeps masking at zero, so the
-    /// corners can still animate on their way back to square.
-    func setCornerRadius(_ radius: CGFloat) {
+    /// web view rounds only the bottom ones, unless it is a card on its own
+    /// with no strip above it. It keeps masking at zero, so the corners can
+    /// still animate on their way back to square.
+    func setCornerRadius(_ radius: CGFloat, roundsTop: Bool = false) {
         currentBacking.layer.cornerRadius = radius
         currentBacking.layer.cornerCurve = .continuous
         current?.layer.cornerCurve = .continuous
-        current?.layer.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+        current?.layer.maskedCorners = roundsTop
+            ? [.layerMinXMinYCorner, .layerMaxXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+            : [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
         current?.layer.masksToBounds = true
         current?.layer.cornerRadius = radius
+    }
+
+    /// How far the current page's color reaches up into the status bar.
+    /// Called inside the SwiftUI animation, so the strip shrinks with the page.
+    func setCurrentTopOverflow(_ overflow: CGFloat) {
+        guard overflow != currentTopOverflow else { return }
+        currentTopOverflow = overflow
+        currentBacking.frame = Self.screen(bounds, overflow: overflow)
+    }
+
+    private static func screen(_ bounds: CGRect, overflow: CGFloat) -> CGRect {
+        CGRect(x: 0, y: -overflow, width: bounds.width, height: bounds.height + overflow)
     }
 
     override func layoutSubviews() {
@@ -163,8 +190,8 @@ final class PageHostView: UIView {
         let step = bounds.width + Self.pageGap
         previousPeek?.webView?.frame = bounds.offsetBy(dx: -step, dy: 0)
         nextPeek?.webView?.frame = bounds.offsetBy(dx: step, dy: 0)
-        let screen = CGRect(x: 0, y: -topOverflow, width: bounds.width, height: bounds.height + topOverflow)
-        currentBacking.frame = screen
+        let screen = Self.screen(bounds, overflow: topOverflow)
+        currentBacking.frame = Self.screen(bounds, overflow: currentTopOverflow)
         previousBacking.frame = screen.offsetBy(dx: -step, dy: 0)
         nextBacking.frame = screen.offsetBy(dx: step, dy: 0)
         // Under the live page, which paints over it once it has loaded. Sized

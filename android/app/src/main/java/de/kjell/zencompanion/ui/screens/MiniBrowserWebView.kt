@@ -311,10 +311,12 @@ internal fun MiniBrowserWebView(
                         // A new view inside the same document may show a different
                         // header: read the colour now and once more after it has
                         // drawn, as the iOS driver does on an address change.
+                        // A page still loading has no colour yet: the stored one
+                        // stays rather than flashing the default.
                         view?.let { v ->
                             val readColor = {
                                 v.evaluateJavascript(PAGE_COLOR_SCRIPT) { result ->
-                                    onSiteThemeColorChange(parseCssColor(result))
+                                    parseCssColor(result)?.let(onSiteThemeColorChange)
                                 }
                             }
                             readColor()
@@ -679,18 +681,27 @@ internal fun childCanScrollUp(
  * do with what the page shows. Three points along the top edge are sampled,
  * each walking up to the first element with a solid background; when two
  * agree, that is the colour. Otherwise the body's or the document's own
- * background, else the browser's white canvas, unless the page draws in dark
- * mode. Null while the page is still loading.
+ * background, else the page's canvas colour, which follows its own
+ * `color-scheme`. Every CSS colour form is read through a one-pixel canvas.
+ * Null while the page is still loading.
  *
  * iOS port: `MiniBrowserWebDriver.pageColorScript` in `Browser/MiniBrowserWebDriver.swift`.
  */
 internal val PAGE_COLOR_SCRIPT = """
     (function() {
+        var pixel = document.createElement('canvas');
+        pixel.width = 1;
+        pixel.height = 1;
+        var ctx = pixel.getContext('2d', { willReadFrequently: true });
         function solid(c) {
-            if (!c || c.indexOf('rgb') !== 0) return null;
-            var parts = c.slice(c.indexOf('(') + 1, c.indexOf(')')).split(',');
-            if (parts.length === 4 && parseFloat(parts[3]) < 0.9) return null;
-            return c;
+            if (!c || !ctx) return null;
+            ctx.clearRect(0, 0, 1, 1);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0)';
+            ctx.fillStyle = c;
+            ctx.fillRect(0, 0, 1, 1);
+            var d = ctx.getImageData(0, 0, 1, 1).data;
+            if (d[3] < 230) return null;
+            return 'rgb(' + d[0] + ', ' + d[1] + ', ' + d[2] + ')';
         }
         function backgroundOf(el) {
             for (; el && el.nodeType === 1; el = el.parentElement) {
@@ -714,11 +725,12 @@ internal val PAGE_COLOR_SCRIPT = """
             || solid(window.getComputedStyle(document.documentElement).backgroundColor);
         if (page) return page;
         if (document.readyState === 'loading') return null;
-        var meta = document.querySelector('meta[name="color-scheme"]');
-        var scheme = (window.getComputedStyle(document.documentElement).colorScheme || '')
-            + ' ' + (meta ? meta.content : '');
-        if (scheme.indexOf('dark') !== -1 && window.matchMedia('(prefers-color-scheme: dark)').matches) return null;
-        return 'rgb(255, 255, 255)';
+        var probe = document.createElement('div');
+        probe.style.cssText = 'position:absolute;width:0;height:0;background-color:Canvas';
+        document.documentElement.appendChild(probe);
+        var canvas = solid(window.getComputedStyle(probe).backgroundColor);
+        probe.remove();
+        return canvas;
     })()
 """.trimIndent()
 

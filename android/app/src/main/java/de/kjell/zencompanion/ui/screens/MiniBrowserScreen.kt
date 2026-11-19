@@ -1,5 +1,6 @@
 package de.kjell.zencompanion.ui.screens
 
+import de.kjell.zencompanion.ui.theme.ZenLayout
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
@@ -238,8 +239,9 @@ fun MiniBrowserScreen(
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val statusBars = WindowInsets.statusBars
+    val navigationInset = dockNavigationInset()
     val bottomBand = with(density) {
-        pageBottomBand(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()).toPx()
+        pageBottomBand(navigationInset).toPx()
     }
     var screen by remember { mutableStateOf(Size.Zero) }
 
@@ -1084,9 +1086,7 @@ private fun BrowserPageScreen(
         }
     }
 
-    val navigationBarInset = WindowInsets.navigationBars
-        .asPaddingValues()
-        .calculateBottomPadding()
+    val navigationBarInset = dockNavigationInset()
     val collapsedBarHeight = CollapsedBarHeightBase + barBottomGap(navigationBarInset)
     val reservedBottom by animateDpAsState(
         targetValue = if (barVisible) collapsedBarHeight else 0.dp,
@@ -1303,7 +1303,8 @@ private fun BrowserPageScreen(
                     exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 16.dp, start = 20.dp, end = 20.dp),
+                        .padding(bottom = 16.dp, start = 20.dp, end = 20.dp)
+                        .widthIn(max = ZenLayout.MaxContentWidth),
                 ) {
                     PinBanner(
                         state = state,
@@ -1326,7 +1327,8 @@ private fun BrowserPageScreen(
                     exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = 12.dp, start = 20.dp, end = 20.dp),
+                        .padding(top = 12.dp, start = 20.dp, end = 20.dp)
+                        .widthIn(max = ZenLayout.MaxContentWidth),
                 ) {
                     NoticeBanner(notice = shownNotice)
                 }
@@ -1343,7 +1345,8 @@ private fun BrowserPageScreen(
                     exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 16.dp + capsuleLift, start = 20.dp, end = 20.dp),
+                        .padding(bottom = 16.dp + capsuleLift, start = 20.dp, end = 20.dp)
+                        .widthIn(max = ZenLayout.MaxContentWidth),
                 ) {
                     DownloadCapsule(tasks = downloadTasks)
                 }

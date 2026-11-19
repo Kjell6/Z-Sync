@@ -1,5 +1,7 @@
 package de.kjell.zencompanion
 
+import de.kjell.zencompanion.util.ScreenOrientation
+import android.content.res.Configuration
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
@@ -90,6 +92,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ScreenOrientation.applyTo(this)
         appViewModel = ViewModelProvider(this, AppViewModel.Factory(applicationContext))
             .get(AppViewModel::class.java)
         enableEdgeToEdge()
@@ -110,6 +113,13 @@ class MainActivity : ComponentActivity() {
                 SpacesBrowserRoot(viewModel = viewModel)
             }
         }
+    }
+
+    // The activity handles size changes itself (see the manifest), so folding
+    // or unfolding lands here instead of recreating it.
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        ScreenOrientation.applyTo(this)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

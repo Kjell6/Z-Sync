@@ -1,5 +1,6 @@
 package de.kjell.zencompanion.share
 
+import de.kjell.zencompanion.util.ScreenOrientation
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -24,6 +25,8 @@ class ShareActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        // No configChanges here: a fold recreates the activity, so this runs again.
+        ScreenOrientation.applyTo(this)
 
         val (sharedUrl, title) = extractShared()
 

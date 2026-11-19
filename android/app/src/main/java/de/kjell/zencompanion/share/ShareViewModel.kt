@@ -19,9 +19,10 @@ import de.kjell.zencompanion.util.fetchRemotePageTitle
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -133,8 +134,10 @@ class ShareViewModel(
     )
     val state: StateFlow<State> = _state
 
-    private val _events = MutableSharedFlow<Event>(extraBufferCapacity = 1)
-    val events: SharedFlow<Event> = _events
+    // A channel, not a shared flow: an event sent while the activity is being
+    // recreated (a tablet rotating, a foldable folding) waits for the new one.
+    private val _events = Channel<Event>(Channel.BUFFERED)
+    val events: Flow<Event> = _events.receiveAsFlow()
 
     private var resolveJob: Job? = null
     /** True once the user picks a kind for this share; never persisted. */
@@ -221,7 +224,7 @@ class ShareViewModel(
     }
 
     fun cancel() {
-        _events.tryEmit(Event.Finished)
+        _events.trySend(Event.Finished)
     }
 
     /** Port of `bootstrap()` — instant cached pick, then a background refresh. */
@@ -367,7 +370,7 @@ class ShareViewModel(
             // A fallback notice needs longer on screen than the plain
             // confirmation before the sheet auto-closes.
             delay(if (outcome.fellBackToPinned) 2_400 else 480)
-            _events.emit(Event.Finished)
+            _events.send(Event.Finished)
         } catch (e: Exception) {
             _state.update {
                 it.copy(

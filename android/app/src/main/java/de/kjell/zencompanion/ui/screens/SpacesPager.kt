@@ -1,5 +1,9 @@
 package de.kjell.zencompanion.ui.screens
 
+import de.kjell.zencompanion.ui.theme.ZenLayout
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Box
@@ -104,7 +108,18 @@ internal fun SpacesPager(
             essentialsGridsMatch(essentialsBySpace[spaces[index - 1].id].orEmpty(), spaceEssentials)
         val nextSharesEssentials = index < spaces.size - 1 &&
             essentialsGridsMatch(essentialsBySpace[spaces[index + 1].id].orEmpty(), spaceEssentials)
+        // The page stays as wide as the pager, so a swipe pages from edge to
+        // edge; its content keeps to the centred column on a wide screen.
+        // The pinned essentials offset against the swipe, which moves the
+        // whole page, so they measure the page and not the column.
+        var pageWidthPx by remember { mutableStateOf(0f) }
+        Box(
+            Modifier.fillMaxSize().onSizeChanged { pageWidthPx = it.width.toFloat() },
+            contentAlignment = Alignment.TopCenter,
+        ) {
+        Box(Modifier.widthIn(max = ZenLayout.MaxContentWidth).fillMaxHeight()) {
         SpacePageContainer(
+            pageWidthPx = pageWidthPx,
             space = spaces[index],
             index = index,
             essentials = spaceEssentials,
@@ -118,6 +133,8 @@ internal fun SpacesPager(
             onPinTab = { tabId -> onPinTab(tabId, spaces[index].id) },
             onOpenUrl = onOpenUrl,
         )
+        }
+        }
     }
 }
 
@@ -171,6 +188,7 @@ private suspend fun PagerState.animateToSpace(page: Int) {
  */
 @Composable
 internal fun SpacePageContainer(
+    pageWidthPx: Float,
     space: ZenSpaces.ZenSpace,
     index: Int,
     essentials: List<ZenSpaces.ZenTab>,
@@ -184,8 +202,6 @@ internal fun SpacePageContainer(
     onPinTab: (String) -> Unit,
     onOpenUrl: (String, String?) -> Unit,
 ) {
-    var pageWidthPx by remember { mutableStateOf(0f) }
-
     val offsetInPages = pagerState.getOffsetDistanceInPages(index)
     val minX = offsetInPages * pageWidthPx
     val isVisible = minX > -pageWidthPx + 0.5f && minX < pageWidthPx - 0.5f
@@ -195,11 +211,7 @@ internal fun SpacePageContainer(
     val xOffsetPx = if (isPinning) -minX else 0f
     val gridOpacity = if (isVisible && !hiddenByNeighbor) 1f else 0f
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .onSizeChanged { pageWidthPx = it.width.toFloat() },
-    ) {
+    Column(Modifier.fillMaxSize()) {
         if (essentials.isNotEmpty()) {
             Box(
                 Modifier

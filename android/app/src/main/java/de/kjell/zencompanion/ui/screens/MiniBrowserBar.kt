@@ -1,5 +1,9 @@
 package de.kjell.zencompanion.ui.screens
 
+import androidx.compose.foundation.layout.tappableElement
+import de.kjell.zencompanion.ui.theme.ZenLayout
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
@@ -216,6 +220,20 @@ private val MinBottomGap = 16.dp
 /** Air below the dock for a given navigation-bar inset. */
 internal fun barBottomGap(navigationInset: Dp): Dp =
     (navigationInset - BottomLift).coerceAtLeast(MinBottomGap)
+
+/**
+ * The navigation-bar inset the dock is laid out against. The dock drops into
+ * the gesture area ([BottomLift]), which only holds a handle. A tablet's
+ * persistent taskbar or three-button navigation are tappable, so there the
+ * dock stays clear of them: the inset grows by the lift it would take away,
+ * plus a row gap of air.
+ */
+@Composable
+internal fun dockNavigationInset(): Dp {
+    val navigation = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val tappable = WindowInsets.tappableElement.asPaddingValues().calculateBottomPadding()
+    return if (tappable > 0.dp) navigation + BottomLift + RowGap else navigation
+}
 /** Air above the first row, so the bar background does not end flush with it.
  *  Small on purpose: the band belongs to the page's last line, not to the bar. */
 private val TopGap = 6.dp
@@ -295,7 +313,9 @@ internal fun MiniBrowserBar(
     val zen = LocalZenColors.current
 
     val motion = MaterialTheme.motionScheme
-    Column(modifier = modifier.fillMaxWidth()) {
+    // On a tablet or an unfolded foldable the controls keep to a centred
+    // column; the bar's background strip still runs from edge to edge.
+    Column(modifier = modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         // The open menu is its own layer: it floats over the page, above the
         // bar, and leaves the bar and the page where they are.
         AnimatedVisibility(
@@ -310,6 +330,7 @@ internal fun MiniBrowserBar(
         ) {
             Surface(
                 modifier = Modifier
+                    .widthIn(max = ZenLayout.MaxContentWidth + 24.dp)
                     .fillMaxWidth()
                     .padding(start = 12.dp, end = 12.dp, bottom = RowGap),
                 shape = RoundedCornerShape(28.dp),
@@ -385,7 +406,9 @@ internal fun MiniBrowserBar(
                 motionMs = suggestionMs,
                 onSelectVisit = onPickVisit,
                 onSelect = onPickSuggestion,
-                modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = RowGap),
+                modifier = Modifier
+                    .widthIn(max = ZenLayout.MaxContentWidth + 24.dp)
+                    .padding(start = 12.dp, end = 12.dp, bottom = RowGap),
             )
         }
 
@@ -396,6 +419,10 @@ internal fun MiniBrowserBar(
                 // it). Painting it here keeps the translucent tiles compositing
                 // against that background instead of the page.
                 .drawBehind { drawRect(liveBarColor()) }
+                // The strip is painted full width; the controls in it keep to
+                // the centred column.
+                .wrapContentWidth()
+                .widthIn(max = ZenLayout.MaxContentWidth + 32.dp)
                 // The background starts above the address row: it should not end
                 // hard against it.
                 .padding(start = 16.dp, end = 16.dp, top = TopGap),
@@ -438,9 +465,7 @@ internal fun MiniBrowserBar(
                 }
             }
 
-            val navigationInset = WindowInsets.navigationBars
-                .asPaddingValues()
-                .calculateBottomPadding()
+            val navigationInset = dockNavigationInset()
             val keyboard = WindowInsets.ime
             val dockAlpha by animateFloatAsState(
                 targetValue = if (state.isAddressFocused) 0f else 1f,
@@ -943,11 +968,11 @@ internal fun OverviewDock(
     modifier: Modifier = Modifier,
 ) {
     val zen = LocalZenColors.current
-    val navigationInset = WindowInsets.navigationBars
-        .asPaddingValues()
-        .calculateBottomPadding()
+    val navigationInset = dockNavigationInset()
     Row(
         modifier = modifier
+            // The same column as the browser bar on a wide screen.
+            .widthIn(max = ZenLayout.MaxContentWidth + 32.dp)
             .fillMaxWidth()
             .padding(
                 start = 16.dp + DockInset,

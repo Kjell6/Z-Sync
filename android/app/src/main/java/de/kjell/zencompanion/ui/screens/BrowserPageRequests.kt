@@ -1,5 +1,6 @@
 package de.kjell.zencompanion.ui.screens
 
+import de.kjell.zencompanion.util.ScreenOrientation
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -467,7 +468,6 @@ private class Fullscreen(
     val callback: WebChromeClient.CustomViewCallback,
 ) {
     private val decor = activity.window.decorView as ViewGroup
-    private val orientation = activity.requestedOrientation
     private val bars = WindowCompat.getInsetsController(activity.window, decor)
     private val frame = FrameLayout(activity).apply {
         setBackgroundColor(android.graphics.Color.BLACK)
@@ -485,7 +485,9 @@ private class Fullscreen(
         decor.removeView(frame)
         frame.removeAllViews()
         bars.show(WindowInsetsCompat.Type.systemBars())
-        activity.requestedOrientation = orientation
+        // Back to the screen's own rule rather than what was set before: the
+        // device may have been folded or unfolded while the video played.
+        activity.requestedOrientation = ScreenOrientation.requestedFor(activity)
     }
 }
 

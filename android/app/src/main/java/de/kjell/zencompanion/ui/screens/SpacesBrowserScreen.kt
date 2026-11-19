@@ -1,5 +1,7 @@
 package de.kjell.zencompanion.ui.screens
 
+import de.kjell.zencompanion.ui.theme.ZenLayout
+import androidx.compose.foundation.layout.widthIn
 import androidx.annotation.StringRes
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -90,6 +92,7 @@ fun SpacesBrowserScreen(
     }
     // Single definition of the bar; the placement decides which edge renders it.
     val actionBar: @Composable () -> Unit = {
+        Box(Modifier.widthIn(max = ZenLayout.MaxContentWidth)) {
         ActionBar(
             onOpenBrowser = onOpenBrowser,
             onOpenActivity = onOpenActivity,
@@ -102,6 +105,7 @@ fun SpacesBrowserScreen(
             // navigation-bar inset is the only gap, so no extra padding.
             bottomPadding = if (toolbarPlacement == ToolbarPlacement.BOTTOM) 0.dp else 6.dp,
         )
+        }
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -114,6 +118,9 @@ fun SpacesBrowserScreen(
                     .fillMaxSize()
                     .statusBarsPadding(),
                 verticalArrangement = Arrangement.SpaceBetween,
+                // On a tablet or an unfolded foldable the content keeps to a
+                // centred column; only the background reaches the edges.
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 if (isDemo) {
                     Text(
@@ -137,7 +144,9 @@ fun SpacesBrowserScreen(
                         onSignIn = onSignIn,
                         onOpenHelp = onOpenSignInHelp,
                         onEnterDemo = onEnterDemo,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .widthIn(max = ZenLayout.MaxContentWidth),
                     )
                 } else if (spaces.isEmpty()) {
                     if (toolbarPlacement == ToolbarPlacement.TOP) {
@@ -172,6 +181,7 @@ fun SpacesBrowserScreen(
                             onOpen = { showSyncSetup = true },
                             onDismiss = onDismissSyncSetupHint,
                             modifier = Modifier
+                                .widthIn(max = ZenLayout.MaxContentWidth)
                                 .fillMaxWidth()
                                 .padding(horizontal = 20.dp)
                                 .padding(bottom = 8.dp),
@@ -210,6 +220,7 @@ fun SpacesBrowserScreen(
                     if (spaces.isNotEmpty()) {
                         Column(
                             modifier = Modifier
+                                .widthIn(max = ZenLayout.MaxContentWidth)
                                 .fillMaxWidth()
                                 .navigationBarsPadding(),
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -249,7 +260,8 @@ fun SpacesBrowserScreen(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .statusBarsPadding()
-                    .padding(top = 8.dp, start = 16.dp, end = 16.dp),
+                    .padding(top = 8.dp, start = 16.dp, end = 16.dp)
+                    .widthIn(max = ZenLayout.MaxContentWidth),
             ) {
                 ShareExtensionTip(onDismiss = onDismissShareTip)
             }

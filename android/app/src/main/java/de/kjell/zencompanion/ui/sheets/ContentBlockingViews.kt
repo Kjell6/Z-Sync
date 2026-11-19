@@ -1,5 +1,8 @@
 package de.kjell.zencompanion.ui.sheets
 
+import de.kjell.zencompanion.ui.theme.ZenLayout
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -126,6 +129,9 @@ internal fun ContentBlockingSetupScreen() {
             .background(zen.background)
             .statusBarsPadding()
             .navigationBarsPadding()
+            // The same centred column as the home screen on a wide screen.
+            .wrapContentWidth()
+            .widthIn(max = ZenLayout.MaxContentWidth + 48.dp)
             .padding(horizontal = 24.dp, vertical = 24.dp),
     ) {
         Column(

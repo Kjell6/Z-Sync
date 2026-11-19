@@ -1,5 +1,9 @@
 package de.kjell.zencompanion.ui.screens
 
+import de.kjell.zencompanion.ui.theme.ZenLayout
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Box
@@ -104,6 +108,10 @@ internal fun SpacesPager(
             essentialsGridsMatch(essentialsBySpace[spaces[index - 1].id].orEmpty(), spaceEssentials)
         val nextSharesEssentials = index < spaces.size - 1 &&
             essentialsGridsMatch(essentialsBySpace[spaces[index + 1].id].orEmpty(), spaceEssentials)
+        // The page stays as wide as the pager, so a swipe pages from edge to
+        // edge; its content keeps to the centred column on a wide screen.
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        Box(Modifier.widthIn(max = ZenLayout.MaxContentWidth).fillMaxHeight()) {
         SpacePageContainer(
             space = spaces[index],
             index = index,
@@ -118,6 +126,8 @@ internal fun SpacesPager(
             onPinTab = { tabId -> onPinTab(tabId, spaces[index].id) },
             onOpenUrl = onOpenUrl,
         )
+        }
+        }
     }
 }
 

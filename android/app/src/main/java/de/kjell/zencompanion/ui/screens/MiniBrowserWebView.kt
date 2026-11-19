@@ -962,7 +962,9 @@ internal object DesktopViewportScript {
                 continue;
               }
               for (var j = 0; j < record.addedNodes.length; j++) {
-                if (record.addedNodes[j].nodeName === 'META') return fix();
+                var node = record.addedNodes[j];
+                // A whole head or fragment comes in as one node, its tags inside.
+                if (node.nodeName === 'META' || (node.querySelector && node.querySelector('meta'))) return fix();
               }
             }
           }).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['content', 'name'] });

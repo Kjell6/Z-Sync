@@ -20,6 +20,8 @@ class DesktopViewportScriptTests {
         assertTrue(source.contains("meta[name=\"viewport\" i]"))
         // Later tags too, as single-page apps swap them on navigation.
         assertTrue(source.contains("new MutationObserver"))
+        // A replaced head arrives as one node with the tag inside it.
+        assertTrue(source.contains("node.querySelector('meta')"))
     }
 
     @Test

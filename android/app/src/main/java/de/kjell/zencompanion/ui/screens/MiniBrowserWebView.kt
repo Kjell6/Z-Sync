@@ -725,8 +725,9 @@ internal val PAGE_COLOR_SCRIPT = """
             || solid(window.getComputedStyle(document.documentElement).backgroundColor);
         if (page) return page;
         if (document.readyState === 'loading') return null;
-        var probe = document.createElement('div');
-        probe.style.cssText = 'position:absolute;width:0;height:0;background-color:Canvas';
+        var probe = document.createElement('zc-canvas-probe');
+        probe.style.cssText = 'position:absolute!important;width:0!important;height:0!important;'
+            + 'background:none!important;background-color:Canvas!important';
         document.documentElement.appendChild(probe);
         var canvas = solid(window.getComputedStyle(probe).backgroundColor);
         probe.remove();

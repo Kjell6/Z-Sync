@@ -513,9 +513,13 @@ struct MiniBrowserView: View {
 
     /// How much of the status bar's strip the page brings along. A card is
     /// the page alone, so the strip goes as the page shrinks into it and
-    /// comes back as it grows out again.
+    /// comes back as it grows out again. Read from the page's own scale, so it
+    /// follows every flight: the pull, the landing, the way back and a new
+    /// page coming in while the deck stays up.
     private var pageStrip: CGFloat {
-        pageFloats ? pageFrame.minY * (1 - min(1, max(0, overviewReveal))) : pageFrame.minY
+        guard pageFloats, let card = cardPose(), card.scale < 1 else { return pageFrame.minY }
+        let share = (pagePose.scale - card.scale) / (1 - card.scale)
+        return pageFrame.minY * min(1, max(0, share))
     }
 
     private var screenSize: CGSize {

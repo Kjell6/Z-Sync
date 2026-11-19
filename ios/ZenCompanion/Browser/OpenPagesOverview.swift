@@ -296,6 +296,10 @@ struct OpenPagesOverview: View {
             }
             .simultaneousGesture(deckGesture(deck))
         }
+        // The cards are laid out from the reader's origin, so the finger is
+        // read from there too. In global space it would be off by the side
+        // strip on iPhone Duo.
+        .coordinateSpace(.named(Self.deckSpace))
         // Top to bottom like the page, but not into a safe area at the side:
         // iPhone Duo keeps its status bar and camera in a strip there, and the
         // page ends before it. Measured over the full width, every card would
@@ -373,10 +377,12 @@ struct OpenPagesOverview: View {
         .allowsHitTesting(reveal > 0.99)
     }
 
+    private static let deckSpace = "OpenPagesOverview.deck"
+
     /// One finger, one decision: sideways moves the deck, up lifts the card
     /// under the finger. Both follow the finger exactly and hand its speed on.
     private func deckGesture(_ deck: PageDeckGeometry) -> some Gesture {
-        DragGesture(minimumDistance: 8, coordinateSpace: .global)
+        DragGesture(minimumDistance: 8, coordinateSpace: .named(Self.deckSpace))
             .onChanged { value in
                 if dragAxis == nil { chooseAxis(for: value, in: deck) }
                 switch dragAxis {

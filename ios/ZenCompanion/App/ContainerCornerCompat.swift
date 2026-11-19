@@ -57,11 +57,22 @@ private struct WindowControlsOffset: ViewModifier {
                 content
             }
         }
-        // Any resize of the window reaches this view, so its size is the cue
-        // to look again: full screen to windowed and back.
-        .onGeometryChange(for: CGSize.self) { $0.size } action: { _ in
+        // The cue to look again: the corner insets appear and go with the
+        // window controls even when this view keeps its size, as a capped
+        // column does when the window narrows.
+        .onGeometryChange(for: [CGFloat].self, of: Self.cue) { _ in
             windowed = Self.sceneIsWindowed()
         }
+    }
+
+    private static func cue(_ proxy: GeometryProxy) -> [CGFloat] {
+        var cue = [proxy.size.width, proxy.size.height]
+        if #available(iOS 26.0, *) {
+            let corners = proxy.containerCornerInsets
+            cue += [corners.topLeading.width, corners.topLeading.height,
+                    corners.topTrailing.width, corners.topTrailing.height]
+        }
+        return cue
     }
 
     /// Whether the app runs on iPad in a window smaller than the screen, the

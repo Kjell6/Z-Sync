@@ -4,15 +4,23 @@ import UIKit
 /// How round this display's corners are. Apple has no public API for it, so
 /// the values come by panel height; only home-button phones and unknown panels
 /// fall through to square.
+///
+/// Read from the scene's current screen every time: iPhone Duo moves the app
+/// between its outer and inner display while it runs, and the two panels are
+/// rounded differently.
 @MainActor
 enum DisplayCorners {
-    static let radius: CGFloat = {
-        guard let screen = UIApplication.shared.connectedScenes
-            .compactMap({ ($0 as? UIWindowScene)?.screen }).first else { return 0 }
+    static var radius: CGFloat {
+        guard let screen = currentScreen else { return 0 }
         if screen.traitCollection.userInterfaceIdiom == .pad { return 18 }
         switch Int(max(screen.nativeBounds.width, screen.nativeBounds.height)) {
         case 2622, 2736, 2868: return 62
         case 2556, 2796: return 55
+        // iPhone Duo inner display. Its outer display rounds only the
+        // camera side this much (the hinge side barely at all); the larger
+        // value is used, since a card has one radius for all four corners.
+        case 2853: return 44.8
+        case 2034: return 49.5
         case 2778: return 53.33
         case 2532: return 47.33
         case 2340: return 44
@@ -20,7 +28,14 @@ enum DisplayCorners {
         case 2436, 2688: return 39
         default: return 0
         }
-    }()
+    }
+
+    /// The screen the foreground scene is on, not `UIScreen.main`, which a
+    /// two-display iPhone cannot answer.
+    private static var currentScreen: UIScreen? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        return (scenes.first { $0.activationState == .foregroundActive } ?? scenes.first)?.screen
+    }
 }
 
 /// Where the iPhone's app switcher puts its cards, as one pure calculation, so
@@ -269,6 +284,7 @@ struct OpenPagesOverview: View {
             ZStack {
                 backdrop
                     .opacity(Double(reveal))
+                    .ignoresSafeArea()
 
                 if pages.pages.isEmpty {
                     emptyState
@@ -280,7 +296,16 @@ struct OpenPagesOverview: View {
             }
             .simultaneousGesture(deckGesture(deck))
         }
-        .ignoresSafeArea()
+        // The cards are laid out from the reader's origin, so the finger is
+        // read from there too. In global space it would be off by the side
+        // strip on iPhone Duo.
+        .coordinateSpace(.named(Self.deckSpace))
+        // Top to bottom like the page, but not into a safe area at the side:
+        // iPhone Duo keeps its status bar and camera in a strip there, and the
+        // page ends before it. Measured over the full width, every card would
+        // be a little wider than its page, and the page would jump sideways
+        // and resize as it turns into its card.
+        .ignoresSafeArea(edges: .vertical)
         .onChange(of: pages.pages.map(\.id)) { _, _ in
             // A page can go without passing through `close`: a popup that
             // closes itself, a page that expires. The deck must rest on a
@@ -352,10 +377,12 @@ struct OpenPagesOverview: View {
         .allowsHitTesting(reveal > 0.99)
     }
 
+    private static let deckSpace = "OpenPagesOverview.deck"
+
     /// One finger, one decision: sideways moves the deck, up lifts the card
     /// under the finger. Both follow the finger exactly and hand its speed on.
     private func deckGesture(_ deck: PageDeckGeometry) -> some Gesture {
-        DragGesture(minimumDistance: 8, coordinateSpace: .global)
+        DragGesture(minimumDistance: 8, coordinateSpace: .named(Self.deckSpace))
             .onChanged { value in
                 if dragAxis == nil { chooseAxis(for: value, in: deck) }
                 switch dragAxis {

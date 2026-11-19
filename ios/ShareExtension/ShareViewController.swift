@@ -27,7 +27,14 @@ final class ShareViewController: UIViewController {
             host.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
         host.didMove(toParent: self)
-        preferredContentSize = CGSize(width: UIScreen.main.bounds.width, height: 560)
+    }
+
+    /// The width is only final once the sheet is laid out.
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        let size = CGSize(width: view.bounds.width, height: 560)
+        guard size.width > 0, preferredContentSize != size else { return }
+        preferredContentSize = size
     }
 
     private var extensionItems: [NSExtensionItem] {

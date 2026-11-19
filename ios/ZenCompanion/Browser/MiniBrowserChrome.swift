@@ -14,6 +14,10 @@ enum MiniBrowserChromeMetrics {
     static let overviewDockHeight: CGFloat = 48
     /// How much further up the dock sits over the overview.
     static let overviewDockLift: CGFloat = 16
+    /// The widest the chrome gets. Wider than any iPhone, narrower than the
+    /// open iPhone Duo held upright, so on iPad and the Duo it stays a bar
+    /// rather than a strip across the screen.
+    static let maxWidth: CGFloat = 560
 
     /// Dock bottom to navigation bar top.
     static var height: CGFloat { navBarHeight + rowSpacing + dockHeight }

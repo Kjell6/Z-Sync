@@ -235,6 +235,10 @@ struct MiniBrowserView: View {
                     )
                 }
             )
+            // On a wide display (iPad, the open iPhone Duo) the bar and the
+            // overview's buttons keep a width the thumbs can span, centred,
+            // instead of running from edge to edge.
+            .frame(maxWidth: MiniBrowserChromeMetrics.maxWidth)
             .padding(.horizontal, 16)
             .padding(.bottom, chromeBottomInset + (overviewControls ? MiniBrowserChromeMetrics.overviewDockLift : 0))
             .animation(.spring(response: 0.24, dampingFraction: 0.82), value: overviewControls)
@@ -348,6 +352,7 @@ struct MiniBrowserView: View {
 
                 if let notice = model.pinNotice {
                     pinNoticeToast(notice)
+                        .frame(maxWidth: MiniBrowserChromeMetrics.maxWidth)
                         .padding(.horizontal, 20)
                         .padding(.bottom, 132)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
@@ -357,6 +362,7 @@ struct MiniBrowserView: View {
 
                 if let capsule = BrowserDownloadCapsule.content(for: downloads.tasks) {
                     downloadCapsule(capsule)
+                        .frame(maxWidth: MiniBrowserChromeMetrics.maxWidth)
                         .padding(.horizontal, 20)
                         .padding(.bottom, model.pinNotice == nil ? 132 : 196)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)

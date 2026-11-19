@@ -53,7 +53,6 @@ targets:
               - https
         UILaunchScreen: {}
         CFBundleDevelopmentRegion: en
-        UIRequiresFullScreen: true
         ITSAppUsesNonExemptEncryption: false
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true

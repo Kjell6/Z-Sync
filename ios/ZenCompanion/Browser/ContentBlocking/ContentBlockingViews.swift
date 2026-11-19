@@ -255,6 +255,9 @@ struct ContentBlockingSetupView: View {
         }
         .padding(.horizontal, 24)
         .padding(.bottom, 16)
+        // The same centred column as the spaces screen on a wide display.
+        .frame(maxWidth: SpacesLayout.maxWidth)
+        .frame(maxWidth: .infinity)
         .background(Palette.background(scheme).ignoresSafeArea())
         .interactiveDismissDisabled()
     }

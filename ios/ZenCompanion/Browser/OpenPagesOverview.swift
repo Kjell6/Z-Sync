@@ -295,7 +295,6 @@ struct OpenPagesOverview: View {
             let deck = PageDeckGeometry(screen: proxy.size, count: CGFloat(visiblePages.count), topInset: topInset)
             ZStack {
                 backdrop
-                    .opacity(Double(reveal))
                     .ignoresSafeArea()
 
                 if pages.pages.isEmpty {
@@ -509,9 +508,18 @@ struct OpenPagesOverview: View {
 
     // MARK: - Backdrop
 
-    /// The app's own background, the one the overview always had.
+    /// The app's own background, the one the overview always had. While a
+    /// card grows into its page the page stays hidden behind it: only the
+    /// status bar's strip, which is no part of a card, lets the page's own
+    /// show through as the deck goes.
     private var backdrop: some View {
-        Palette.background(scheme)
+        VStack(spacing: 0) {
+            Palette.background(scheme)
+                .frame(height: topInset)
+                .opacity(Double(reveal))
+            Palette.background(scheme)
+                .opacity(expandingCardID == nil ? Double(reveal) : 1)
+        }
         // Nothing reaches the browser underneath.
         .contentShape(Rectangle())
         .onTapGesture {}
@@ -686,8 +694,7 @@ private struct OpenPageCard<Menu: View>: View {
     /// Growing to the whole screen: it casts nothing that could show through
     /// when it fades into the live page.
     let isExpanding: Bool
-    /// 1 is grown to the whole page. The top corners square off on the way:
-    /// the page meets the status bar's strip there with a straight edge.
+    /// 1 is grown to the whole page.
     let expansion: CGFloat
     var onOpen: () -> Void
     var onClose: () -> Void
@@ -794,9 +801,9 @@ private struct OpenPageCard<Menu: View>: View {
     }
 }
 
-/// A card's outline. Its top corners lose their curve as the card grows into
-/// the page, which meets the status bar's strip with a straight edge; the
-/// bottom ones keep the display's own.
+/// A card's outline. Grown back into its page, the card meets the status
+/// bar's strip with a straight edge, so its top corners square off, but only
+/// over the last stretch: until then it is a card like the others.
 private struct CardOutline: Shape {
     let radius: CGFloat
     var expansion: CGFloat
@@ -807,7 +814,8 @@ private struct CardOutline: Shape {
     }
 
     func path(in rect: CGRect) -> Path {
-        let top = radius * (1 - min(1, max(0, expansion)))
+        let late = min(1, max(0, (expansion - 0.7) / 0.3))
+        let top = radius * (1 - late * late * (3 - 2 * late))
         return UnevenRoundedRectangle(
             topLeadingRadius: top,
             bottomLeadingRadius: radius,

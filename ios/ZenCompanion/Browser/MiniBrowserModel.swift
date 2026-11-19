@@ -510,6 +510,8 @@ final class MiniBrowserModel {
     /// Reported addresses looked at for this document, counted or not.
     @ObservationIgnored private var checkedResources = 0
     @ObservationIgnored private var appliedBlocking: BlockingConfiguration?
+    /// Whether the scripts on the web view include the desktop viewport.
+    @ObservationIgnored private var appliedDesktopViewport = false
     @ObservationIgnored let blocker: ContentBlocker
 
     /// Scroll offset captured when the reader asked for a reload.
@@ -1254,8 +1256,9 @@ final class MiniBrowserModel {
     private func applyBlocking(host: String?) {
         guard let controller = webView?.configuration.userContentController else { return }
         let configuration = blocker.configuration(host: host, original: originalPage != nil)
-        guard configuration != appliedBlocking else { return }
+        guard configuration != appliedBlocking || requestsDesktopSite != appliedDesktopViewport else { return }
         appliedBlocking = configuration
+        appliedDesktopViewport = requestsDesktopSite
         blocker.apply(configuration, to: controller)
         // `apply` clears every user script, this one included.
         BrowserGeolocation.addScript(to: controller)
@@ -1266,6 +1269,14 @@ final class MiniBrowserModel {
             forMainFrameOnly: true,
             in: BlockedResourceReport.world
         ))
+        if requestsDesktopSite {
+            controller.addUserScript(WKUserScript(
+                source: DesktopViewportScript.source,
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: true,
+                in: .page
+            ))
+        }
     }
 
     /// Per document. A page reports at most 2,000 addresses; this also bounds

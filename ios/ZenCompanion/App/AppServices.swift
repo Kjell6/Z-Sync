@@ -25,6 +25,8 @@ enum PreferenceKeys {
     /// `updatedFromEarlierVersion` when the app was in use before that.
     static let firstLaunchVersion = "firstLaunchVersion"
     static let updatedFromEarlierVersion = "earlier"
+    /// The first-run onboarding was finished or skipped.
+    static let didCompleteOnboarding = "didCompleteOnboarding"
 }
 
 enum PreferenceScope {

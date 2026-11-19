@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// The What's New sheet: one short, scrollable release note in the platform's
-/// own idiom (large title, system text styles) with the app's coral as the
-/// only accent. One hero image, then a short row of feature pills that wraps onto as many lines as the text size needs,
+/// The What's New sheet: one short, scrollable release note, centred like the
+/// onboarding, with the app's coral as the only accent. One hero image, then a short row of feature pills that wraps onto as many lines as the text size needs,
 /// so the content scrolls rather than clipping. The Done button is pinned
 /// below the scroll area; there is no close button, so Done or a swipe down
 /// dismisses the sheet.
@@ -15,12 +14,12 @@ struct WhatsNewSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .center, spacing: 24) {
                     header
                     hero
                     features
                 }
-                .frame(maxWidth: 560, alignment: .leading)
+                .frame(maxWidth: 560)
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 24)
                 .padding(.top, 28)
@@ -41,14 +40,16 @@ struct WhatsNewSheet: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .center, spacing: 8) {
             Text(release.title)
-                .font(.largeTitle.bold())
+                .zenFont(30, weight: .bold, design: .rounded)
                 .foregroundStyle(Palette.ink(scheme))
+                .multilineTextAlignment(.center)
                 .accessibilityAddTraits(.isHeader)
 
             Text(release.subtitle)
                 .font(.body)
+                .multilineTextAlignment(.center)
                 .foregroundStyle(Palette.ink(scheme).opacity(0.65))
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -70,7 +71,7 @@ struct WhatsNewSheet: View {
     /// A caption and the remaining features as small pills. VoiceOver reads
     /// the caption as a header and each pill as plain text.
     private var features: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .center, spacing: 10) {
             Text(release.featuresHeading)
                 .zenFont(13, weight: .semibold)
                 .tracking(0.5)
@@ -92,22 +93,14 @@ struct WhatsNewSheet: View {
     }
 
     private var doneButton: some View {
-        Button {
+        PrimaryCapsuleButton(titleKey: "whats_new.done", scheme: scheme) {
             dismiss()
-        } label: {
-            Text("whats_new.done")
-                .font(.headline)
-                .foregroundStyle(Palette.onCoral(scheme))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 15)
-                .modifier(DomedFill(shape: RoundedRectangle(cornerRadius: 14, style: .continuous), scheme: scheme, fill: Palette.coral(scheme)))
         }
-        .buttonStyle(LiquidPressButtonStyle())
     }
 }
 
 /// Lays pills out left to right and wraps them onto new lines, so the row
-/// grows with Dynamic Type instead of clipping.
+/// grows with Dynamic Type instead of clipping. Each line is centred.
 private struct PillFlowLayout: Layout {
     var spacing: CGFloat
 
@@ -121,7 +114,7 @@ private struct PillFlowLayout: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         var y = bounds.minY
         for row in arrange(subviews, maxWidth: bounds.width) {
-            var x = bounds.minX
+            var x = bounds.minX + (bounds.width - row.width) / 2
             for index in row.indices {
                 let size = subviews[index].sizeThatFits(.init(width: bounds.width, height: nil))
                 subviews[index].place(at: CGPoint(x: x, y: y), proposal: .init(size))

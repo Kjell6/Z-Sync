@@ -5,26 +5,25 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import de.kjell.zencompanion.ui.theme.ZenPrimaryButton
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -62,6 +61,7 @@ fun WhatsNewSheet(onDismiss: () -> Unit) {
                     .weight(1f)
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Spacer(Modifier.height(20.dp))
 
@@ -70,6 +70,7 @@ fun WhatsNewSheet(onDismiss: () -> Unit) {
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = zen.ink,
+                    textAlign = TextAlign.Center,
                     modifier = Modifier.semantics { heading() },
                 )
 
@@ -79,6 +80,7 @@ fun WhatsNewSheet(onDismiss: () -> Unit) {
                     text = stringResource(WhatsNewRelease.subtitleRes),
                     style = MaterialTheme.typography.bodyLarge,
                     color = zen.ink.copy(alpha = 0.65f),
+                    textAlign = TextAlign.Center,
                 )
 
                 Spacer(Modifier.height(24.dp))
@@ -92,22 +94,11 @@ fun WhatsNewSheet(onDismiss: () -> Unit) {
                 Spacer(Modifier.height(24.dp))
             }
 
-            Button(
+            ZenPrimaryButton(
+                text = stringResource(R.string.whats_new_done),
                 onClick = onDismiss,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(top = 4.dp, bottom = 20.dp)
-                    .heightIn(min = 52.dp),
-                shapes = ButtonDefaults.shapes(shape = RoundedCornerShape(14.dp)),
-                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.whats_new_done),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
+                modifier = Modifier.padding(horizontal = 24.dp).padding(top = 4.dp, bottom = 20.dp),
+            )
         }
     }
 }
@@ -151,7 +142,7 @@ private fun Features() {
     Spacer(Modifier.height(10.dp))
 
     FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         WhatsNewRelease.items.forEach { item ->

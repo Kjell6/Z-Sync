@@ -322,3 +322,24 @@ extension Color {
         )
     }
 }
+
+/// The full-width call to action at the bottom of the onboarding and the
+/// What's New sheet: a capsule in the brand colour with the liquid press.
+struct PrimaryCapsuleButton: View {
+    let titleKey: LocalizedStringKey
+    let scheme: ColorScheme
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(titleKey)
+                .zenFont(17, weight: .semibold, design: .rounded)
+                .foregroundStyle(Palette.onCoral(scheme))
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: 56)
+                .modifier(DomedFill(shape: Capsule(style: .continuous), scheme: scheme, fill: Palette.coral(scheme)))
+                .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(LiquidPressButtonStyle())
+    }
+}

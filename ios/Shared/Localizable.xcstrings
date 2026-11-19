@@ -1376,6 +1376,76 @@
         }
       }
     },
+    "onboarding.browser.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "With a browser\nbuilt right in"
+          }
+        }
+      }
+    },
+    "onboarding.continue": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue"
+          }
+        }
+      }
+    },
+    "onboarding.page %lld %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Page %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "onboarding.share.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save links from any app\ninto a space"
+          }
+        }
+      }
+    },
+    "onboarding.skip": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skip"
+          }
+        }
+      }
+    },
+    "onboarding.spaces.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your tabs & spaces,\nnow on your phone"
+          }
+        }
+      }
+    },
+    "onboarding.start": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Get started"
+          }
+        }
+      }
+    },
     "or enter it manually": {},
     "pin.folder_menu": {
       "extractionState": "stale",

@@ -137,3 +137,23 @@ class WhatsNewTests {
         assertEquals(R.drawable.whats_new_hero, WhatsNewRelease.heroImageRes)
     }
 }
+
+class OnboardingTests {
+    @Test
+    fun freshInstallShowsTheOnboardingUntilCompleted() {
+        val fresh = de.kjell.zencompanion.data.firstLaunchValue(usedBefore = false, "1.6")
+        assertTrue(de.kjell.zencompanion.data.shouldShowOnboarding(fresh, completed = false))
+        assertFalse(de.kjell.zencompanion.data.shouldShowOnboarding(fresh, completed = true))
+    }
+
+    @Test
+    fun updateFromAnEarlierVersionSkipsTheOnboarding() {
+        val updated = de.kjell.zencompanion.data.firstLaunchValue(usedBefore = true, "1.6")
+        assertFalse(de.kjell.zencompanion.data.shouldShowOnboarding(updated, completed = false))
+    }
+
+    @Test
+    fun unrecordedFirstLaunchStaysQuiet() {
+        assertFalse(de.kjell.zencompanion.data.shouldShowOnboarding(null, completed = false))
+    }
+}

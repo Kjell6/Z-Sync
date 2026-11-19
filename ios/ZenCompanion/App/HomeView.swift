@@ -15,8 +15,25 @@ enum Legal {
 struct HomeView: View {
     @State private var model = SessionModel()
     @Environment(\.scenePhase) private var scenePhase
+    /// The first-run onboarding: up from the first frame on a fresh install,
+    /// so the home screen never flashes before it.
+    @State private var showsOnboarding = OnboardingStore().shouldPresent
 
     var body: some View {
+        ZStack {
+            home
+            if showsOnboarding {
+                OnboardingView {
+                    OnboardingStore().markCompleted()
+                    withAnimation(.easeOut(duration: 0.3)) { showsOnboarding = false }
+                }
+                .transition(.opacity)
+                .zIndex(1)
+            }
+        }
+    }
+
+    private var home: some View {
         SpacesBrowserView(
             account: model.account,
             sessionNotice: model.sessionNotice,

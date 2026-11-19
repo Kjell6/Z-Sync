@@ -175,3 +175,29 @@ final class WhatsNewTests: XCTestCase {
         }
     }
 }
+
+@MainActor
+final class OnboardingStoreTests: XCTestCase {
+    func testFreshInstallShowsTheOnboardingUntilCompleted() {
+        let preferences = FakePreferences()
+        WhatsNewStore.recordFirstLaunch(preferences: preferences, currentVersion: "1.6", hasAccount: { false })
+        let store = OnboardingStore(preferences: preferences)
+
+        XCTAssertTrue(store.shouldPresent)
+        store.markCompleted()
+        XCTAssertFalse(store.shouldPresent)
+        XCTAssertFalse(OnboardingStore(preferences: preferences).shouldPresent)
+    }
+
+    func testUpdateFromAnEarlierVersionSkipsTheOnboarding() {
+        let preferences = FakePreferences()
+        preferences.setString("1.5", PreferenceKeys.whatsNewShownVersion, scope: .standard)
+        WhatsNewStore.recordFirstLaunch(preferences: preferences, currentVersion: "1.6", hasAccount: { false })
+
+        XCTAssertFalse(OnboardingStore(preferences: preferences).shouldPresent)
+    }
+
+    func testUnrecordedFirstLaunchStaysQuiet() {
+        XCTAssertFalse(OnboardingStore(preferences: FakePreferences()).shouldPresent)
+    }
+}

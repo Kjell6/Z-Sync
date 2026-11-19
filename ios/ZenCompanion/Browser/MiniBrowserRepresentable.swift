@@ -37,9 +37,10 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
     var currentTopOverflow: CGFloat = 0
     /// Rounded like the screen while the page slides off towards a new one.
     var cornerRadius: CGFloat = 0
-    /// The web view rounds its top corners too: true while the page flies
-    /// as a card, with no strip above it to carry them.
-    var roundsTop = false
+    /// While the page flies as a card, with no strip above it, the host
+    /// clips its own top corners to this curve.
+    var topCornerRadius: CGFloat = 0
+    var clipsTop = false
 
     func makeUIView(context: Context) -> PageHostView {
         PageHostView()
@@ -57,11 +58,13 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
         // round, and the strip goes, in step with the page shrinking into its card.
         if #available(iOS 18.0, *) {
             context.animate {
-                host.setCornerRadius(cornerRadius, roundsTop: roundsTop)
+                host.setCornerRadius(cornerRadius)
+                host.setTopClip(clipsTop ? topCornerRadius : nil)
                 host.setCurrentTopOverflow(currentTopOverflow)
             }
         } else {
-            host.setCornerRadius(cornerRadius, roundsTop: roundsTop)
+            host.setCornerRadius(cornerRadius)
+            host.setTopClip(clipsTop ? topCornerRadius : nil)
             host.setCurrentTopOverflow(currentTopOverflow)
         }
         for peek in [previous, next] {
@@ -82,6 +85,7 @@ struct MiniBrowserRepresentable: UIViewRepresentable {
     static func dismantleUIView(_ host: PageHostView, coordinator: ()) {
         host.show(current: nil, previous: nil, next: nil, slidingColor: nil, topOverflow: 0)
         host.setCornerRadius(0)
+        host.setTopClip(nil)
         host.setCurrentTopOverflow(0)
     }
 }
@@ -158,18 +162,24 @@ final class PageHostView: UIView {
     }
 
     /// The backing carries the top corners, which sit above the web view; the
-    /// web view rounds only the bottom ones, unless it is a card on its own
-    /// with no strip above it. It keeps masking at zero, so the corners can
-    /// still animate on their way back to square.
-    func setCornerRadius(_ radius: CGFloat, roundsTop: Bool = false) {
+    /// web view rounds only the bottom ones. It keeps masking at zero, so the
+    /// corners can still animate on their way back to square.
+    func setCornerRadius(_ radius: CGFloat) {
         currentBacking.layer.cornerRadius = radius
         currentBacking.layer.cornerCurve = .continuous
         current?.layer.cornerCurve = .continuous
-        current?.layer.maskedCorners = roundsTop
-            ? [.layerMinXMinYCorner, .layerMaxXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMaxYCorner]
-            : [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+        current?.layer.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
         current?.layer.masksToBounds = true
         current?.layer.cornerRadius = radius
+    }
+
+    /// A flying page has no strip above it, so the host rounds its top
+    /// corners itself; nil lets the page and its neighbours reach past it again.
+    func setTopClip(_ radius: CGFloat?) {
+        layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        layer.cornerCurve = .continuous
+        layer.cornerRadius = radius ?? 0
+        clipsToBounds = radius != nil
     }
 
     /// How far the current page's color reaches up into the status bar.

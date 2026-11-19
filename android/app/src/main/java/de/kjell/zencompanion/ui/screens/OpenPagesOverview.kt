@@ -54,6 +54,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -328,11 +329,30 @@ internal fun OpenPagesOverview(
 
         val heldSpan = max(deck.screen.width * 0.5f, 1f)
 
+        // While a card grows into its page the page stays hidden behind it:
+        // only the strips above and below the page, which are no part of a
+        // card, let the page's own show through as the deck goes.
+        val backdrop = zen.background
         Box(
             Modifier
                 .fillMaxSize()
-                .graphicsLayer { alpha = reveal() }
-                .background(zen.background),
+                .drawBehind {
+                    val shown = reveal()
+                    val page = deck.pageFrame
+                    drawRect(backdrop, size = Size(size.width, page.top), alpha = shown)
+                    drawRect(
+                        backdrop,
+                        topLeft = Offset(0f, page.top),
+                        size = Size(size.width, page.height),
+                        alpha = if (expandingCardId != null) 1f else shown,
+                    )
+                    drawRect(
+                        backdrop,
+                        topLeft = Offset(0f, page.bottom),
+                        size = Size(size.width, size.height - page.bottom),
+                        alpha = shown,
+                    )
+                },
         )
 
         if (openPages.isEmpty()) {
@@ -645,10 +665,14 @@ private fun OpenPageCard(
                     spotColor = Color.Black.copy(alpha = 0.3f),
                 )
                 .graphicsLayer {
-                    // Grown to the page, it meets the status bar's strip and
-                    // the bar's plate with straight edges.
-                    val corner = cornerPx * (1f - if (isExpanding) expansion() else 0f)
-                    this.shape = RoundedCornerShape(corner)
+                    // Grown to the page, its bottom edge meets the bar's plate
+                    // and its top edge the status bar's strip. The top squares
+                    // off only over the last stretch: until then it is a card.
+                    val grown = if (isExpanding) expansion() else 0f
+                    val bottom = cornerPx * (1f - grown)
+                    val late = ((grown - 0.7f) / 0.3f).coerceIn(0f, 1f)
+                    val top = cornerPx * (1f - late * late * (3f - 2f * late))
+                    this.shape = RoundedCornerShape(top, top, bottom, bottom)
                     clip = true
                 }
                 // The deck's gestures sit on its parent; TalkBack needs them here.

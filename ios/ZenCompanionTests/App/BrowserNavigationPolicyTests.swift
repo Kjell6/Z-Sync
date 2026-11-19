@@ -72,4 +72,32 @@ final class BrowserNavigationPolicyTests: XCTestCase {
         XCTAssertFalse(BrowserNavigationPolicy.opensExternally(userTapped: true, isMainFrame: false))
         XCTAssertFalse(BrowserNavigationPolicy.opensExternally(userTapped: false, isMainFrame: false))
     }
+
+    /// Sites such as X send a user agent without Safari's ending to
+    /// `x-safari-https://`, which leaves the page blank.
+    func testUserAgentEndsLikeSafari() {
+        XCTAssertEqual(
+            BrowserNavigationPolicy.safariApplicationName(systemVersion: "26.1"),
+            "Version/26.1 Mobile/15E148 Safari/604.1"
+        )
+        XCTAssertEqual(
+            BrowserNavigationPolicy.safariApplicationName(systemVersion: "26"),
+            "Version/26.0 Mobile/15E148 Safari/604.1"
+        )
+        XCTAssertEqual(
+            BrowserNavigationPolicy.safariApplicationName(systemVersion: "18.6.2"),
+            "Version/18.6 Mobile/15E148 Safari/604.1"
+        )
+    }
+
+    /// Desktop mode must not carry the `Mobile` token, or sites keep serving
+    /// the mobile version.
+    func testDesktopUserAgentIsSafariOnAMac() {
+        let agent = BrowserNavigationPolicy.desktopUserAgent(systemVersion: "26.1")
+        XCTAssertEqual(
+            agent,
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Safari/605.1.15"
+        )
+        XCTAssertFalse(agent.contains("Mobile"))
+    }
 }

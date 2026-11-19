@@ -141,6 +141,7 @@ internal fun MiniBrowserWebView(
     val webViewReleased by rememberUpdatedState(onWebViewReleased)
     val consent = remember { ConsentScriptSlot(handledReload = blockingReload) }
     val pageZoomSlot = remember { PageZoomSlot() }
+    val desktopViewport = remember { DesktopViewportSlot() }
     // The indicator sits on the page, so it takes the app's own ink and paper.
     val zen = LocalZenColors.current
 
@@ -263,6 +264,7 @@ internal fun MiniBrowserWebView(
                         onPageDrawn()
                         if (!consent.atDocumentStart) consent.current?.let { view?.evaluateJavascript(it, null) }
                         if (!pageZoomSlot.atDocumentStart) view?.let(pageZoomSlot::applyNow)
+                        if (!desktopViewport.atDocumentStart) view?.let(desktopViewport::applyNow)
                     }
 
                     override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
@@ -528,6 +530,8 @@ internal fun MiniBrowserWebView(
                 consent.handledReload = blockingReload
                 view.reload()
             }
+            // Before the reload below, so the desktop page starts with it.
+            desktopViewport.sync(view, desktopSite)
             val defaultUserAgent = view.tag as? String
             val desired = if (desktopSite) DesktopUserAgent else defaultUserAgent
             if (desired != null && view.settings.userAgentString != desired) {
@@ -915,6 +919,85 @@ internal object PageZoomScript {
               else document.addEventListener('DOMContentLoaded', apply, false);
             })()
         """.trimIndent()
+    }
+}
+
+/**
+ * "Request Desktop Site" for pages that size themselves to the screen. The
+ * desktop user agent alone leaves `<meta name="viewport"
+ * content="width=device-width">` in charge, so a responsive site still lays
+ * out at phone width and shows its mobile version. Chrome lays such pages out
+ * at a desktop width instead; this script does the same by rewriting the
+ * page's viewport tags to that width, also when a script adds or changes one
+ * later. Pages without a viewport tag already get the WebView's wide viewport.
+ *
+ * iOS port: `DesktopViewportScript` in `Browser/DesktopViewportScript.swift`
+ * builds the same script.
+ */
+internal object DesktopViewportScript {
+    /** Chrome's and Safari's layout width for a desktop page on a phone. */
+    const val WIDTH = 980
+
+    val source: String = """
+        (function () {
+          // Only the top document: a frame is laid out inside its parent's width.
+          try {
+            if (window.self !== window.top) return;
+          } catch (e) {
+            return;
+          }
+          var wanted = 'width=$WIDTH';
+          function fix() {
+            var tags = document.querySelectorAll('meta[name="viewport" i]');
+            for (var i = 0; i < tags.length; i++) {
+              if (tags[i].getAttribute('content') !== wanted) tags[i].setAttribute('content', wanted);
+            }
+          }
+          fix();
+          new MutationObserver(function (records) {
+            for (var i = 0; i < records.length; i++) {
+              var record = records[i];
+              if (record.type === 'attributes') {
+                if (record.target.nodeName === 'META') return fix();
+                continue;
+              }
+              for (var j = 0; j < record.addedNodes.length; j++) {
+                var node = record.addedNodes[j];
+                // A whole head or fragment comes in as one node, its tags inside.
+                if (node.nodeName === 'META' || (node.querySelector && node.querySelector('meta'))) return fix();
+              }
+            }
+          }).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['content', 'name'] });
+        })()
+    """.trimIndent()
+}
+
+/**
+ * The desktop viewport script, on every document while desktop mode is on.
+ * The mode's own reload brings the page back without it when it goes off.
+ */
+private class DesktopViewportSlot {
+    private var handler: ScriptHandler? = null
+    private var applied: Boolean? = null
+
+    val atDocumentStart: Boolean = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
+
+    fun sync(view: WebView, desktopSite: Boolean) {
+        if (applied == desktopSite) return
+        applied = desktopSite
+        if (atDocumentStart) {
+            handler?.remove()
+            handler = if (desktopSite) {
+                WebViewCompat.addDocumentStartJavaScript(view, DesktopViewportScript.source, setOf("*"))
+            } else {
+                null
+            }
+        }
+    }
+
+    /** For WebViews without document-start scripts: the page that is up. */
+    fun applyNow(view: WebView) {
+        if (applied == true) view.evaluateJavascript(DesktopViewportScript.source, null)
     }
 }
 

@@ -3,6 +3,7 @@ package de.kjell.zencompanion
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import de.kjell.zencompanion.ui.screens.BarScrollDecision
+import de.kjell.zencompanion.ui.screens.PAGE_COLOR_SCRIPT
 import de.kjell.zencompanion.ui.screens.barScrollStep
 import de.kjell.zencompanion.ui.screens.childCanScrollUp
 import de.kjell.zencompanion.ui.screens.pullRefreshTint
@@ -108,5 +109,12 @@ class MiniBrowserBarTests {
         assertEquals(unknown.red, unknown.green, 0.001f)
         assertEquals(unknown.red, unknown.blue, 0.001f)
         assertEquals(1f, unknown.alpha)
+    }
+
+    /** The colour comes from what the page shows, never its `theme-color` tag, as in Safari. */
+    @Test
+    fun pageColorScriptIgnoresTheThemeColorTag() {
+        assertFalse(PAGE_COLOR_SCRIPT.contains("theme-color"))
+        assertTrue(PAGE_COLOR_SCRIPT.contains("elementFromPoint"))
     }
 }

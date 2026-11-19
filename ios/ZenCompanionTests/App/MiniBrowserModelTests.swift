@@ -327,24 +327,18 @@ final class MiniBrowserModelTests: XCTestCase {
     /// never to the colour of the page the reader left.
     func testAPageWithoutAColourClearsThePreviousOne() {
         let (model, _) = makeModel(initialURL: URL(string: "https://example.com"))
-        model.updateThemeColor(from: "rgb(255, 0, 0)", nativeColor: nil)
+        model.updateThemeColor(from: "rgb(255, 0, 0)")
         XCTAssertNotNil(model.themeColor)
 
-        model.updateThemeColor(from: nil, nativeColor: nil)
+        model.updateThemeColor(from: nil)
         XCTAssertNil(model.themeColor)
     }
 
-    func testAColourNamedInWordsFallsBackToWebKitsOwn() {
-        let (model, _) = makeModel(initialURL: URL(string: "https://example.com"))
-
-        // "black" is a colour the page names in words, which this app cannot
-        // read: WebKit's own answer still counts instead of no colour at all.
-        model.updateThemeColor(from: "black", nativeColor: .red)
-        XCTAssertNotNil(model.themeColor)
-
-        // With nothing of WebKit's either, the previous page's colour goes.
-        model.updateThemeColor(from: "black", nativeColor: nil)
-        XCTAssertNil(model.themeColor)
+    /// The colour comes from what the page shows, never from its
+    /// `theme-color` tag, the way Safari tints its bar.
+    func testThePageColourScriptIgnoresTheThemeColorTag() {
+        XCTAssertFalse(MiniBrowserWebDriver.pageColorScript.contains("theme-color"))
+        XCTAssertTrue(MiniBrowserWebDriver.pageColorScript.contains("elementFromPoint"))
     }
 
     func testTheSpinnerContrastsWithThePageBehindIt() {

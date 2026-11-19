@@ -21,6 +21,17 @@ enum BrowserNavigationPolicy {
         }
     }
 
+    /// The app name WebKit appends to the user agent: Safari's own ending.
+    /// Without `Version/… Safari/…` sites read the page as an in-app web view,
+    /// and some send it away instead of answering - X redirects to
+    /// `x-safari-https://`, which only Safari opens, so the page stayed blank.
+    static func safariApplicationName(systemVersion: String) -> String {
+        let parts = systemVersion.split(separator: ".")
+        let major = parts.first.map(String.init) ?? "26"
+        let minor = parts.count > 1 ? String(parts[1]) : "0"
+        return "Version/\(major).\(minor) Mobile/15E148 Safari/604.1"
+    }
+
     /// Another app opens only from a link the user tapped in the main page.
     /// Script, redirect and iframe navigations to app schemes are dropped,
     /// matching the Android policy.

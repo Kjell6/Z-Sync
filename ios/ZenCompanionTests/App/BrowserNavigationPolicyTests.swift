@@ -72,4 +72,21 @@ final class BrowserNavigationPolicyTests: XCTestCase {
         XCTAssertFalse(BrowserNavigationPolicy.opensExternally(userTapped: true, isMainFrame: false))
         XCTAssertFalse(BrowserNavigationPolicy.opensExternally(userTapped: false, isMainFrame: false))
     }
+
+    /// Sites such as X send a user agent without Safari's ending to
+    /// `x-safari-https://`, which leaves the page blank.
+    func testUserAgentEndsLikeSafari() {
+        XCTAssertEqual(
+            BrowserNavigationPolicy.safariApplicationName(systemVersion: "26.1"),
+            "Version/26.1 Mobile/15E148 Safari/604.1"
+        )
+        XCTAssertEqual(
+            BrowserNavigationPolicy.safariApplicationName(systemVersion: "26"),
+            "Version/26.0 Mobile/15E148 Safari/604.1"
+        )
+        XCTAssertEqual(
+            BrowserNavigationPolicy.safariApplicationName(systemVersion: "18.6.2"),
+            "Version/18.6 Mobile/15E148 Safari/604.1"
+        )
+    }
 }

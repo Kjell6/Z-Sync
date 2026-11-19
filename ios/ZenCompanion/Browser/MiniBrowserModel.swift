@@ -949,6 +949,11 @@ final class MiniBrowserModel {
         guard let webView else { return }
         webView.configuration.defaultWebpagePreferences.preferredContentMode =
             requestsDesktopSite ? .desktop : .mobile
+        // The Safari-style app name carries `Mobile`, so desktop mode sends
+        // a whole Mac user agent instead (see `BrowserNavigationPolicy`).
+        webView.customUserAgent = requestsDesktopSite
+            ? BrowserNavigationPolicy.desktopUserAgent(systemVersion: UIDevice.current.systemVersion)
+            : nil
     }
 
     /// Puts the current zoom into the loaded document. A new document starts

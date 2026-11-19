@@ -89,4 +89,15 @@ final class BrowserNavigationPolicyTests: XCTestCase {
             "Version/18.6 Mobile/15E148 Safari/604.1"
         )
     }
+
+    /// Desktop mode must not carry the `Mobile` token, or sites keep serving
+    /// the mobile version.
+    func testDesktopUserAgentIsSafariOnAMac() {
+        let agent = BrowserNavigationPolicy.desktopUserAgent(systemVersion: "26.1")
+        XCTAssertEqual(
+            agent,
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Safari/605.1.15"
+        )
+        XCTAssertFalse(agent.contains("Mobile"))
+    }
 }

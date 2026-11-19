@@ -21,6 +21,10 @@ enum PreferenceKeys {
     static let essentialsColumns = "essentials_columns"
     /// Marketing version whose What's New sheet was already presented.
     static let whatsNewShownVersion = "whatsNewShownVersion"
+    /// Marketing version of the first launch that recorded it, or
+    /// `updatedFromEarlierVersion` when the app was in use before that.
+    static let firstLaunchVersion = "firstLaunchVersion"
+    static let updatedFromEarlierVersion = "earlier"
 }
 
 enum PreferenceScope {

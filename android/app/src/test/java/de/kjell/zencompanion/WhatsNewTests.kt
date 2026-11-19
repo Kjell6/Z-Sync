@@ -3,6 +3,7 @@ package de.kjell.zencompanion
 import de.kjell.zencompanion.data.WhatsNewController
 import de.kjell.zencompanion.data.WhatsNewRelease
 import de.kjell.zencompanion.data.WhatsNewRepository
+import de.kjell.zencompanion.data.firstLaunchValue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -11,12 +12,38 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class WhatsNewTests {
-    private class MemoryWhatsNewRepository(var version: String? = null) : WhatsNewRepository {
+    private class MemoryWhatsNewRepository(
+        var version: String? = null,
+        var firstLaunch: String? = null,
+    ) : WhatsNewRepository {
         override fun shownVersion(): String? = version
 
         override fun setShownVersion(version: String) {
             this.version = version
         }
+
+        override fun firstLaunchVersion(): String? = firstLaunch
+    }
+
+    @Test
+    fun freshInstallOfTheReleaseSkipsTheNotes() {
+        val repository = MemoryWhatsNewRepository(firstLaunch = firstLaunchValue(usedBefore = false, "1.6"))
+        assertFalse(WhatsNewController(repository, "1.6").shouldPresent(isDemo = false))
+    }
+
+    @Test
+    fun updateFromAnEarlierVersionShowsTheNotes() {
+        val repository = MemoryWhatsNewRepository(firstLaunch = firstLaunchValue(usedBefore = true, "1.6"))
+        assertEquals(WhatsNewRepository.UPDATED_FROM_EARLIER_VERSION, repository.firstLaunch)
+        assertTrue(WhatsNewController(repository, "1.6").shouldPresent(isDemo = false))
+    }
+
+    @Test
+    fun readerWhoStartedOnTheReleaseGetsTheNextOne() {
+        val repository = MemoryWhatsNewRepository(firstLaunch = "1.6")
+        assertTrue(
+            WhatsNewController(repository, "1.7", releaseVersion = "1.7").shouldPresent(isDemo = false),
+        )
     }
 
     @Test

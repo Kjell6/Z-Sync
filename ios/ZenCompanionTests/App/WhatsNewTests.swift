@@ -31,6 +31,65 @@ final class WhatsNewTests: XCTestCase {
         XCTAssertFalse(makeStore(preferences).shouldPresent)
     }
 
+    // MARK: - Only for readers who used an earlier version
+
+    func testFreshInstallOfTheReleaseSkipsTheNotes() {
+        let preferences = FakePreferences()
+        WhatsNewStore.recordFirstLaunch(preferences: preferences, currentVersion: "1.6", hasAccount: { false })
+
+        XCTAssertEqual(preferences.string(PreferenceKeys.firstLaunchVersion, scope: .standard), "1.6")
+        XCTAssertFalse(makeStore(preferences).shouldPresent)
+    }
+
+    func testUpdateFromAnEarlierVersionShowsTheNotes() {
+        let preferences = FakePreferences()
+        preferences.setString("1.5", PreferenceKeys.whatsNewShownVersion, scope: .standard)
+        WhatsNewStore.recordFirstLaunch(preferences: preferences, currentVersion: "1.6", hasAccount: { false })
+
+        XCTAssertEqual(
+            preferences.string(PreferenceKeys.firstLaunchVersion, scope: .standard),
+            PreferenceKeys.updatedFromEarlierVersion
+        )
+        XCTAssertTrue(makeStore(preferences).shouldPresent)
+    }
+
+    func testAppGroupFootprintOrStoredAccountCountsAsEarlierUse() {
+        let fromCache = FakePreferences()
+        fromCache.setString("space-1", PreferenceKeys.lastSpaceId, scope: .appGroup)
+        WhatsNewStore.recordFirstLaunch(preferences: fromCache, currentVersion: "1.6", hasAccount: { false })
+        XCTAssertTrue(makeStore(fromCache).shouldPresent)
+
+        let fromAccount = FakePreferences()
+        WhatsNewStore.recordFirstLaunch(preferences: fromAccount, currentVersion: "1.6", hasAccount: { true })
+        XCTAssertTrue(makeStore(fromAccount).shouldPresent)
+    }
+
+    func testFirstLaunchIsRecordedOnlyOnce() {
+        let preferences = FakePreferences()
+        WhatsNewStore.recordFirstLaunch(preferences: preferences, currentVersion: "1.6", hasAccount: { false })
+        // Later launches write preferences of their own; that is not an update.
+        preferences.setBool(true, PreferenceKeys.didShowShareExtensionTip, scope: .standard)
+        WhatsNewStore.recordFirstLaunch(preferences: preferences, currentVersion: "1.6", hasAccount: { true })
+
+        XCTAssertEqual(preferences.string(PreferenceKeys.firstLaunchVersion, scope: .standard), "1.6")
+        XCTAssertFalse(makeStore(preferences).shouldPresent)
+    }
+
+    func testReaderWhoStartedOnTheReleaseGetsTheNextOne() {
+        let preferences = FakePreferences()
+        WhatsNewStore.recordFirstLaunch(preferences: preferences, currentVersion: "1.6", hasAccount: { false })
+        let nextRelease = WhatsNewRelease(
+            version: "1.7",
+            title: WhatsNewRelease.latest.title,
+            subtitle: WhatsNewRelease.latest.subtitle,
+            heroImage: WhatsNewRelease.latest.heroImage,
+            heroAccessibilityLabel: WhatsNewRelease.latest.heroAccessibilityLabel,
+            featuresHeading: WhatsNewRelease.latest.featuresHeading,
+            items: WhatsNewRelease.latest.items
+        )
+        XCTAssertTrue(makeStore(preferences, version: "1.7", release: nextRelease).shouldPresent)
+    }
+
     func testDoesNotPresentBeforeTheReleaseVersion() {
         XCTAssertFalse(makeStore(FakePreferences(), version: "1.5").shouldPresent)
         XCTAssertFalse(makeStore(FakePreferences(), version: "1.6.1").shouldPresent)

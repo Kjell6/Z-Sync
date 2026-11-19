@@ -243,6 +243,8 @@ fun MiniBrowserScreen(
     val bottomBand = with(density) {
         pageBottomBand(navigationInset).toPx()
     }
+    /** The status bar's strip above the page: a card leaves it out. */
+    val topBand = statusBars.getTop(density).toFloat()
     var screen by remember { mutableStateOf(Size.Zero) }
 
     /** How far the deck has come in: 0 is only the page, 1 is the whole deck. */
@@ -255,6 +257,8 @@ fun MiniBrowserScreen(
     val poseScale = remember { Animatable(1f) }
     /** How much of the strip under the page has been cut away. */
     val poseBandCut = remember { Animatable(0f) }
+    /** The same for the status bar's strip above it. */
+    val poseTopCut = remember { Animatable(0f) }
     val chromeAlpha = remember { Animatable(if (startsInOverview) 0f else 1f) }
     /** How far the tapped card has grown back into its page. */
     val cardExpansion = remember { Animatable(0f) }
@@ -295,7 +299,7 @@ fun MiniBrowserScreen(
     /** Where the page has to be to lie exactly on its card. */
     fun cardPose(): PageCardPose? {
         if (screen.width <= 0f || screen.height <= 0f) return null
-        val deck = PageDeckGeometry(screen, pages.store.pages.value.size, bottomBand)
+        val deck = PageDeckGeometry(screen, pages.store.pages.value.size, bottomBand, topBand)
         val place = activeDeckIndex().toFloat()
         val card = deck.frame(place, place)
         val scale = card.width / screen.width
@@ -314,6 +318,7 @@ fun MiniBrowserScreen(
             poseY.snapTo(0f)
             poseScale.snapTo(1f)
             poseBandCut.snapTo(0f)
+            poseTopCut.snapTo(0f)
             overviewReveal.snapTo(1f)
             aheadReveal.snapTo(1f)
             chromeAlpha.snapTo(0f)
@@ -359,6 +364,7 @@ fun MiniBrowserScreen(
             poseY.snapTo(min(0f, translation.y))
             poseScale.snapTo(1f - (1f - card.scale) * eased)
             poseBandCut.snapTo(bottomBand * eased)
+            poseTopCut.snapTo(topBand * eased)
             overviewReveal.snapTo(appearing * appearing * (3f - 2f * appearing))
             chromeAlpha.snapTo(1f - ((progress - 0.1f) / 0.3f).coerceIn(0f, 1f))
         }
@@ -390,6 +396,7 @@ fun MiniBrowserScreen(
                 launch { poseY.animateTo(card.y, spec, initialVelocity = velocity) },
                 launch { poseScale.animateTo(card.scale, spring(stiffness = 300f, visibilityThreshold = 0.001f)) },
                 launch { poseBandCut.animateTo(bottomBand, spec) },
+                launch { poseTopCut.animateTo(topBand, spec) },
                 launch { overviewReveal.animateTo(1f, spring(stiffness = 300f, visibilityThreshold = 0.002f)) },
             ).joinAll()
             hiddenCardId = null
@@ -399,6 +406,7 @@ fun MiniBrowserScreen(
             poseY.snapTo(0f)
             poseScale.snapTo(1f)
             poseBandCut.snapTo(0f)
+            poseTopCut.snapTo(0f)
             aheadReveal.animateTo(1f, spring(stiffness = 400f, visibilityThreshold = 0.002f))
         }
     }
@@ -415,6 +423,7 @@ fun MiniBrowserScreen(
                 launch { poseY.animateTo(0f, spec) },
                 launch { poseScale.animateTo(1f, spring(stiffness = 400f, visibilityThreshold = 0.001f)) },
                 launch { poseBandCut.animateTo(0f, spec) },
+                launch { poseTopCut.animateTo(0f, spec) },
                 launch { overviewReveal.animateTo(0f, spring(stiffness = 400f, visibilityThreshold = 0.002f)) },
                 launch { chromeAlpha.animateTo(1f, tween(180)) },
             ).joinAll()
@@ -526,7 +535,7 @@ fun MiniBrowserScreen(
         overviewControls = false
         val count = pages.store.pages.value.size
         val last = (count - 1).coerceAtLeast(0).toFloat()
-        val card = PageDeckGeometry(screen, count, bottomBand).frame(last, last - 1f)
+        val card = PageDeckGeometry(screen, count, bottomBand, topBand).frame(last, last - 1f)
         val scale = if (screen.width > 0f) card.width / screen.width else 1f
         floatCorner = deckCardCorner / scale
         pageFloats = true
@@ -535,6 +544,7 @@ fun MiniBrowserScreen(
             poseY.snapTo(card.bottom + bottomBand * scale - screen.height)
             poseScale.snapTo(scale)
             poseBandCut.snapTo(bottomBand)
+            poseTopCut.snapTo(topBand)
             chromeAlpha.snapTo(0f)
             // Building the WebView holds the main thread; the move starts after it.
             var waited = 0
@@ -546,6 +556,7 @@ fun MiniBrowserScreen(
                 launch { poseY.animateTo(0f, spec) },
                 launch { poseScale.animateTo(1f, spring(stiffness = 300f, visibilityThreshold = 0.001f)) },
                 launch { poseBandCut.animateTo(0f, spec) },
+                launch { poseTopCut.animateTo(0f, spec) },
                 launch { overviewReveal.animateTo(0f, spring(stiffness = 300f, visibilityThreshold = 0.002f)) },
             ).joinAll()
             pageFloats = false
@@ -643,7 +654,7 @@ fun MiniBrowserScreen(
                             scaleY = poseScale.value
                             translationX = poseX.value
                             translationY = poseY.value
-                            shape = PageCardClip(floatCorner, poseBandCut.value)
+                            shape = PageCardClip(floatCorner, poseTopCut.value, poseBandCut.value)
                             clip = true
                             // The same shadow the card has, there from the
                             // moment the page leaves the screen's edges.
@@ -696,7 +707,7 @@ fun MiniBrowserScreen(
                         excludedCardId = excludedCardId,
                         reveal = { overviewReveal.value },
                         aheadReveal = { aheadReveal.value },
-                        topInsetPx = statusBars.getTop(density).toFloat(),
+                        topInsetPx = topBand,
                         bottomBandPx = bottomBand,
                         onOpen = ::closeOverview,
                         onPin = { page, destination ->
@@ -834,10 +845,14 @@ fun MiniBrowserScreen(
 }
 
 /** The floating page's outline: rounded, and short of the strip under the page. */
-private class PageCardClip(private val radius: Float, private val bottomCut: Float) : Shape {
+private class PageCardClip(
+    private val radius: Float,
+    private val topCut: Float,
+    private val bottomCut: Float,
+) : Shape {
     override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline =
         Outline.Rounded(
-            RoundRect(0f, 0f, size.width, size.height - bottomCut, CornerRadius(radius)),
+            RoundRect(0f, topCut, size.width, size.height - bottomCut, CornerRadius(radius)),
         )
 }
 

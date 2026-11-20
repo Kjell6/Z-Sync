@@ -39,8 +39,8 @@ struct PagePullEnd {
 
 /// Bottom browser chrome: two rows of floating Liquid Glass, bottom to top.
 ///
-///   [pages] [close] [⋯]  the dock: the open pages, the way out, the menu
-///   [navigation bar]   the full-width address bar, handed in as `navBar`
+///   [pages] [+] [close]  the dock: the open pages, a new page, the way out
+///   [navigation bar]   the full-width address bar with the menu, handed in as `navBar`
 ///   [menu panel]       only while the page menu is open: it grows above the bar
 ///
 /// Nothing spans the screen edge to edge and nothing has a hard edge: the page
@@ -53,7 +53,6 @@ struct MiniBrowserChrome<NavBar: View>: View {
     /// Whether saving into a space is offered. Signed out the pin tile and its
     /// saved-to row are gone, and the row of page tools closes up.
     var canSave = true
-    var onToggleMenu: () -> Void
     /// Closes the mini-browser. The dock's middle control used to be a
     /// placeholder; it is the way out now that there is no sheet to swipe down.
     var onClose: () -> Void
@@ -150,10 +149,12 @@ struct MiniBrowserChrome<NavBar: View>: View {
                 HStack(spacing: 10) {
                     leadingControl
                     Spacer(minLength: 0)
-                    // Closes the mini-browser.
-                    closeButton
+                    // A new page, on a page and over the overview alike: the
+                    // dock reads the same in both, so nothing trades places.
+                    newPageButton
                     Spacer(minLength: 0)
-                    trailingControl
+                    // Closes the mini-browser, under the right thumb.
+                    closeButton
                 }
                 // Pulls the outer buttons inwards. The navigation bar above
                 // keeps its full width.
@@ -281,58 +282,37 @@ struct MiniBrowserChrome<NavBar: View>: View {
         .floatingGlassCapsule()
     }
 
-    /// The page menu, or a new page once the overview is up. A long press on
-    /// the plus closes everything.
-    private var trailingControl: some View {
-        ZStack {
-            Button {
-                withAnimation(motion) { onToggleMenu() }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: glyphSize, weight: .semibold))
-                    .foregroundStyle(Palette.ink(scheme))
-                    .frame(width: controlSide, height: controlSide)
-                    .contentShape(Capsule())
-            }
-            .buttonStyle(GlassPressStyle())
-            .opacity(overviewShown ? 0 : 1)
-            .allowsHitTesting(!overviewShown)
-            .accessibilityHidden(overviewShown)
-            .accessibilityLabel(Text(menuOpen ? "browser.close_menu" : "browser.more"))
-
-            Menu {
-                Button(role: .destructive, action: onCloseAll) {
-                    Label {
-                        Text("kept.close_all")
-                    } icon: {
-                        Image(systemName: "xmark")
-                    }
+    /// A new page, the middle of the dock. A long press closes everything.
+    private var newPageButton: some View {
+        Menu {
+            Button(role: .destructive, action: onCloseAll) {
+                Label {
+                    Text("kept.close_all")
+                } icon: {
+                    Image(systemName: "xmark")
                 }
-                .disabled(pages.pages.isEmpty)
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: glyphSize, weight: .semibold))
-                    .foregroundStyle(Palette.ink(scheme))
-                    .frame(width: controlSide, height: controlSide)
-                    .contentShape(Capsule())
-            } primaryAction: {
-                onNewPage()
             }
-            .opacity(overviewShown ? 1 : 0)
-            .allowsHitTesting(overviewShown)
-            .accessibilityHidden(!overviewShown)
-            .accessibilityLabel(Text("kept.new_page"))
+            .disabled(pages.pages.isEmpty)
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: overviewShown ? 20 : 19, weight: .semibold))
+                .foregroundStyle(Palette.ink(scheme))
+                .frame(width: overviewShown ? 100 : 92, height: overviewShown ? 46 : 42)
+                .contentShape(Capsule())
+        } primaryAction: {
+            onNewPage()
         }
         .floatingGlassCapsule()
+        .accessibilityLabel(Text("kept.new_page"))
     }
 
-    /// Smaller than the side buttons, as the middle control of the row.
+    /// Closes the mini-browser. As big as the other side button.
     private var closeButton: some View {
         Button(action: onClose) {
             Image(systemName: "xmark")
-                .font(.system(size: overviewShown ? 17 : 16, weight: .semibold))
+                .font(.system(size: glyphSize - 1, weight: .semibold))
                 .foregroundStyle(Palette.ink(scheme))
-                .frame(width: overviewShown ? 100 : 92, height: overviewShown ? 46 : 42)
+                .frame(width: controlSide, height: controlSide)
                 .contentShape(Capsule())
                 // Inside the label on purpose: the pressed state has to move
                 // the whole pill, not only the glyph on it.
@@ -993,13 +973,17 @@ private struct LoadingFill: View {
 
 // MARK: - Top bar
 
-/// Full-width navigation bar over the page: back, forward, the address and the
-/// reload. Same glass as the dock below.
+/// Full-width navigation bar over the page, as in Safari: back and forward
+/// only while they go somewhere, the domain centred, then the page menu and
+/// the reload. Same glass as the dock below.
 struct MiniBrowserTopBar: View {
     var model: MiniBrowserModel
     var page: OpenPage?
     var pages: OpenPagesStore
     var addressEditing: Bool
+    /// Whether the page menu is open above the bar.
+    var menuOpen = false
+    var onToggleMenu: () -> Void = {}
     @Binding var isAddressFocused: Bool
     /// How far the swipe between pages has moved the page.
     @Binding var swipeOffset: CGFloat
@@ -1019,6 +1003,7 @@ struct MiniBrowserTopBar: View {
     var onPullEnd: (PagePullEnd) -> Void = { _ in }
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// A swipe is under way; the address under the finger must not open.
     @State private var swiping = false
     /// A pull upwards is under way.
@@ -1048,6 +1033,7 @@ struct MiniBrowserTopBar: View {
             navigationRow
                 .padding(.horizontal, 8)
                 .frame(height: barHeight)
+                .coordinateSpace(.named(AddressLabel.barSpace))
                 .background {
                     LoadingFill(
                         isLoading: model.isLoading,
@@ -1127,39 +1113,35 @@ struct MiniBrowserTopBar: View {
     /// when the swipe ends, the real bar takes over without a visible change.
     private func peekBar(_ page: OpenPage) -> some View {
         let peek = page.model
-        return HStack(spacing: 6) {
-            peekGlyph("chevron.backward", enabled: peek.canGoBack || page.openerID != nil)
-            peekGlyph("chevron.forward", enabled: peek.canGoForward)
-            HStack(spacing: 8) {
-                Group {
-                    if let url = page.url, url.scheme == "http" || url.scheme == "https" {
-                        Favicon(urlString: url.absoluteString, size: 16)
-                    } else {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Palette.ink(scheme).opacity(0.55))
-                    }
-                }
-                .frame(width: 22, height: 22)
-                Text(page.url == nil ? String(localized: "browser.search_placeholder") : page.title)
-                    .zenFont(16, weight: .semibold, design: .rounded)
-                    .foregroundStyle(Palette.ink(scheme))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Spacer(minLength: 0)
+        let url = page.url
+        return HStack(spacing: 2) {
+            if peek.canGoBack || page.openerID != nil {
+                peekGlyph("chevron.backward")
             }
-            peekGlyph("arrow.clockwise", enabled: true)
+            if peek.canGoForward {
+                peekGlyph("chevron.forward")
+            }
+            AddressLabel(
+                text: url.map(Self.domain(of:)) ?? String(localized: "browser.search_placeholder"),
+                symbol: Self.symbol(for: url),
+                barWidth: barWidth,
+                dimmed: url == nil
+            )
+            peekGlyph("ellipsis", upright: true)
+            peekGlyph("arrow.clockwise")
         }
         .padding(.horizontal, 8)
         .frame(width: barWidth, height: barHeight)
+        .coordinateSpace(.named(AddressLabel.barSpace))
         .floatingGlassCapsule()
         .allowsHitTesting(false)
     }
 
-    private func peekGlyph(_ systemName: String, enabled: Bool) -> some View {
+    private func peekGlyph(_ systemName: String, upright: Bool = false) -> some View {
         Image(systemName: systemName)
             .font(.system(size: 18, weight: .semibold))
-            .foregroundStyle(Palette.ink(scheme).opacity(enabled ? 0.85 : 0.3))
+            .rotationEffect(.degrees(upright ? 90 : 0))
+            .foregroundStyle(Palette.ink(scheme).opacity(0.85))
             .frame(width: 32, height: barHeight - 8)
             // The same 44pt slot the real bar's glyphs take, so the bar that
             // slides in matches the one it replaces.
@@ -1240,43 +1222,56 @@ struct MiniBrowserTopBar: View {
             }
     }
 
+    private var canGoBack: Bool { model.canGoBack || page?.openerID != nil }
+
     private var navigationRow: some View {
-        HStack(spacing: 6) {
-            iconButton(
-                systemName: "chevron.backward",
-                label: "browser.back",
-                enabled: model.canGoBack || page?.openerID != nil
-            ) {
-                if model.canGoBack { model.goBack() } else { onReturnToOpener() }
+        HStack(spacing: 2) {
+            // Only while they lead somewhere: most pages never go forward,
+            // and the domain gets the room instead.
+            if canGoBack {
+                iconButton(systemName: "chevron.backward", label: "browser.back", enabled: true) {
+                    if model.canGoBack { model.goBack() } else { onReturnToOpener() }
+                }
+                .transition(.opacity)
             }
-            iconButton(systemName: "chevron.forward", label: "browser.forward", enabled: model.canGoForward) {
-                model.goForward()
+            if model.canGoForward {
+                iconButton(systemName: "chevron.forward", label: "browser.forward", enabled: true) {
+                    model.goForward()
+                }
+                .transition(.opacity)
             }
 
             Button {
                 guard !swiping, !pulling else { return }
                 onBeginAddressEdit()
             } label: {
-                HStack(spacing: 8) {
-                    siteIcon
-                    Text(displayTitle)
-                        .zenFont(16, weight: .semibold, design: .rounded)
-                        .foregroundStyle(Palette.ink(scheme))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    Spacer(minLength: 0)
-                }
+                AddressLabel(
+                    text: addressText,
+                    symbol: Self.symbol(for: model.pageError == nil ? model.effectiveURL : nil),
+                    barWidth: barWidth,
+                    dimmed: model.pageHost.isEmpty
+                )
                 .contentShape(Rectangle())
             }
-            // The icon is the only sign of an encrypted page, so VoiceOver
-            // hears it too (Android's padlock says the same to TalkBack).
+            // An open padlock is the only sign of an unencrypted page, so
+            // VoiceOver hears the connection too.
             .accessibilityValue(Text(connectionLabel ?? ""))
             .buttonStyle(AddressPressStyle())
-            // The page's own title, so the collapsed bar does not hide where
-            // the reader is; only an empty title falls back to the prompt.
-            .accessibilityLabel(
-                Text(displayTitle.isEmpty ? String(localized: "browser.search_placeholder") : displayTitle)
-            )
+            // The page's own title for VoiceOver, so the bar does not hide
+            // where the reader is, while the eye gets the domain.
+            .accessibilityLabel(Text(accessibilityTitle))
+
+            iconButton(
+                systemName: "ellipsis",
+                label: menuOpen ? "browser.close_menu" : "browser.more",
+                enabled: true,
+                // Upright, so it does not read as the domain trailing off.
+                upright: true
+            ) {
+                withAnimation(reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.24, dampingFraction: 0.82)) {
+                    onToggleMenu()
+                }
+            }
 
             iconButton(
                 systemName: model.isLoading ? "xmark" : "arrow.clockwise",
@@ -1286,13 +1281,40 @@ struct MiniBrowserTopBar: View {
                 if model.isLoading { model.stopLoading() } else { model.reload() }
             }
         }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: canGoBack)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: model.canGoForward)
     }
 
-    private var displayTitle: String {
+    /// The domain, the way Safari prints it, or the prompt on an empty page.
+    private var addressText: String {
+        guard let url = model.effectiveURL, !model.pageHost.isEmpty else {
+            return String(localized: "browser.search_placeholder")
+        }
+        return Self.domain(of: url)
+    }
+
+    private var accessibilityTitle: String {
         let title = model.pageTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         if !title.isEmpty { return title }
         let host = model.pageHost
         return host.isEmpty ? String(localized: "browser.search_placeholder") : host
+    }
+
+    /// The host without a leading "www.", as Safari shows it.
+    static func domain(of url: URL) -> String {
+        guard let host = url.host, !host.isEmpty else { return url.absoluteString }
+        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+    }
+
+    /// An open padlock for an unencrypted page, the magnifier for an empty one,
+    /// nothing for an encrypted page: the domain alone says enough there.
+    static func symbol(for url: URL?) -> String? {
+        switch url?.scheme?.lowercased() {
+        case "https": return nil
+        case "http": return "lock.open"
+        case nil: return "magnifyingglass"
+        default: return nil
+        }
     }
 
     /// Whether the page came over an encrypted connection, for VoiceOver.
@@ -1307,34 +1329,18 @@ struct MiniBrowserTopBar: View {
         }
     }
 
-    private var siteIcon: some View {
-        Group {
-            if let url = model.effectiveURL, url.scheme?.lowercased() == "http" {
-                // An unencrypted page must not look like a trusted one: an
-                // open padlock instead of its icon, as on Android.
-                Image(systemName: "lock.open")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Palette.ink(scheme).opacity(0.85))
-            } else if let url = model.effectiveURL, url.scheme == "https" {
-                Favicon(urlString: url.absoluteString, size: 16)
-            } else {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Palette.ink(scheme).opacity(0.55))
-            }
-        }
-        .frame(width: 22, height: 22)
-    }
 
     private func iconButton(
         systemName: String,
         label: LocalizedStringKey,
         enabled: Bool,
+        upright: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 18, weight: .semibold))
+                .rotationEffect(.degrees(upright ? 90 : 0))
                 .foregroundStyle(Palette.ink(scheme).opacity(enabled ? 0.85 : 0.3))
                 .frame(width: 32, height: barHeight - 8)
                 // The glyph keeps its slot; the button around it takes the
@@ -1447,5 +1453,75 @@ private extension BlockingCard {
         case .showingOriginal: return "blocking.card.block_again"
         case .offForSite: return "blocking.card.open_site_settings"
         }
+    }
+}
+
+/// The domain in the navigation bar. It sits in the middle of the whole bar,
+/// as in Safari, so back appearing beside it does not push it around; only
+/// when the buttons leave too little room does it slide aside. A domain too
+/// long for the space fades out at its end instead of breaking off with "…".
+private struct AddressLabel: View {
+    static let barSpace = "miniBrowserNavBar"
+
+    let text: String
+    let symbol: String?
+    /// The whole bar's width, which the label centres in.
+    let barWidth: CGFloat
+    /// The prompt on an empty page is quieter than a real domain.
+    var dimmed = false
+
+    @Environment(\.colorScheme) private var scheme
+    @State private var area: CGRect = .zero
+    @State private var contentWidth: CGFloat = 0
+
+    /// How long the fade at the end is.
+    private let fadeLength: CGFloat = 28
+
+    private var overflows: Bool { contentWidth > area.width + 0.5 }
+
+    /// Where the text starts inside its space: centred on the bar while it
+    /// fits there, else as close to that as the space allows.
+    private var offset: CGFloat {
+        guard area.width > 0, !overflows else { return 0 }
+        let centred = barWidth / 2 - contentWidth / 2 - area.minX
+        return min(max(centred, 0), area.width - contentWidth)
+    }
+
+    var body: some View {
+        Color.clear
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(alignment: .leading) {
+                HStack(spacing: 5) {
+                    if let symbol {
+                        Image(systemName: symbol)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Palette.ink(scheme).opacity(0.6))
+                    }
+                    Text(verbatim: text)
+                        .zenFont(16, weight: .semibold, design: .rounded)
+                        .foregroundStyle(Palette.ink(scheme).opacity(dimmed ? 0.55 : 1))
+                        .lineLimit(1)
+                }
+                .fixedSize()
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { contentWidth = $0 }
+                .offset(x: offset)
+            }
+            .mask {
+                if overflows {
+                    LinearGradient(
+                        stops: [
+                            .init(color: .black, location: 0),
+                            .init(color: .black, location: max(0, 1 - fadeLength / max(area.width, 1))),
+                            .init(color: .clear, location: 1),
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                } else {
+                    Rectangle()
+                }
+            }
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.barSpace)) } action: { area = $0 }
+            .animation(.easeOut(duration: 0.2), value: offset)
     }
 }

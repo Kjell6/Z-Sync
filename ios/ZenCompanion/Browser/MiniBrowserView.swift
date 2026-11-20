@@ -204,14 +204,13 @@ struct MiniBrowserView: View {
                 space: space,
                 allSpaces: allSpaces,
                 canSave: canSave,
-                onToggleMenu: { model.toggleMenu() },
                 onClose: { leaveBrowser() },
                 addressEditing: addressEditing,
                 onPickSuggestion: pickSuggestion,
                 onPickVisit: pickVisit,
                 onOpenPages: openOverview,
                 overviewShown: overviewControls,
-                onNewPage: openNewPage,
+                onNewPage: { overviewControls ? openNewPage() : openNewPageFromBar() },
                 onOpenHistory: openHistory,
                 onCloseAll: { confirmCloseAll = true },
                 navBar: {
@@ -220,6 +219,8 @@ struct MiniBrowserView: View {
                         page: pages.active,
                         pages: pages,
                         addressEditing: addressEditing,
+                        menuOpen: model.menuExpanded,
+                        onToggleMenu: { model.toggleMenu() },
                         isAddressFocused: $isAddressFocused,
                         swipeOffset: $pageSwipe,
                         pageSpan: paneWidth + PageHostView.pageGap,
@@ -1037,6 +1038,35 @@ private extension MiniBrowserView {
             }
             withAnimation(.easeOut(duration: 0.1)) { chromeFade = 0 }
         }
+    }
+
+    /// The dock's plus on a page: the page slides off to the left and a blank
+    /// one grows in behind it, the same as swiping the bar past the last page.
+    /// An empty page needs no new one: its search opens instead.
+    private func openNewPageFromBar() {
+        guard model.pageURL != nil else {
+            startNewPageSearch()
+            return
+        }
+        model.collapseMenu()
+        guard !reduceMotion else {
+            pages.open(url: nil)
+            return
+        }
+        revealingNewPage = true
+        let span = paneWidth + PageHostView.pageGap
+        withAnimation(.spring(duration: 0.38, bounce: 0), completionCriteria: .logicallyComplete) {
+            pageSwipe = -span
+        } completion: {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                pages.open(url: nil)
+                revealingNewPage = false
+                pageSwipe = 0
+            }
+        }
+        AppServices.haptics.selectionChanged()
     }
 
     /// A swipe started: the neighbours wake and take their places beside the page.

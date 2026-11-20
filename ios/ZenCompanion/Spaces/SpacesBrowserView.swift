@@ -10,14 +10,6 @@ struct BrowserTabSession: Identifiable {
     var startsInOverview = false
 }
 
-/// What the incoming-link task waits for: the link itself, and the answer to
-/// the content-blocking question. That question is a full-screen cover of its
-/// own, so the link has to wait for it rather than open behind it.
-private struct IncomingLinkRequest: Equatable {
-    let link: URL?
-    let blockerAsked: Bool
-}
-
 /// The whole app: swipe between spaces (pinned tabs + folders per space),
 /// space switcher at the bottom and the action bar (activity, search,
 /// settings) above the essentials grid or below the switcher, per the
@@ -75,9 +67,12 @@ struct SpacesBrowserView: View {
     /// A pin inside the mini-browser (or a delete from it) fired while a sheet
     /// was up; refresh once the last sheet is gone.
     @State private var pendingStaleReload = false
-    /// The content-blocking question was still up when the link arrived: the
-    /// browser waits for its cover to be gone before it takes the screen.
-    @State private var incomingLinkWaitsForBlocker = false
+    /// The content-blocking question is up. It is asked the first time the
+    /// browser opens, however it opens, not at the first launch.
+    @State private var isAskingBlocker = false
+    /// The browser that waits for the content-blocking answer, so its first
+    /// page already loads with the reader's choice.
+    @State private var browserWaitingForBlocker: BrowserTabSession?
 
     init(
         account: AccountSnapshot?,
@@ -384,12 +379,17 @@ struct SpacesBrowserView: View {
                     .presentationDragIndicator(.visible)
             }
         }
-        // Asked once, right after sign-in or on the first launch that has it.
-        .fullScreenCover(isPresented: Binding(
-            get: { !ContentBlocker.shared.asked },
-            set: { _ in }
-        )) {
+        // Asked once, in front of the first browser the reader opens.
+        .fullScreenCover(isPresented: $isAskingBlocker, onDismiss: {
+            // The cover is fully gone: the browser can take the screen now.
+            guard let session = browserWaitingForBlocker else { return }
+            browserWaitingForBlocker = nil
+            if ContentBlocker.shared.asked { browserSession = session }
+        }) {
             ContentBlockingSetupView(scheme: effectiveScheme)
+        }
+        .onChange(of: ContentBlocker.shared.asked) { _, asked in
+            if asked { isAskingBlocker = false }
         }
         .fullScreenCover(item: $browserSession) { session in
             miniBrowser(session, spaces: model.snapshot.spaces)
@@ -409,19 +409,19 @@ struct SpacesBrowserView: View {
             model.accountChanged(isSignedIn: isSignedIn, isDemo: isDemo)
             openPages.canSave = isSignedIn
         }
-        .task(id: IncomingLinkRequest(link: incomingLink, blockerAsked: ContentBlocker.shared.asked)) {
-            await takeIncomingLink()
+        .task(id: incomingLink) {
+            takeIncomingLink()
         }
-        .task(id: ContentBlocker.shared.asked) {
+        .task {
             // Show release notes once per app version, after the first frame
-            // has had a moment to settle. Demo mode skips it like the other
-            // onboarding prompts. Only the main spaces screen reaches this
-            // task: the Share Extension has its own view controller, so
-            // sharing a link never triggers the sheet. The content blocking
-            // question comes first; the notes wait for its answer.
-            guard ContentBlocker.shared.asked else { return }
+            // has had a moment to settle, and only to readers who used an
+            // earlier version (see `WhatsNewStore`). Demo mode skips it like
+            // the other onboarding prompts. Only the main spaces screen
+            // reaches this task: the Share Extension has its own view
+            // controller, so sharing a link never triggers the sheet.
             try? await Task.sleep(for: .milliseconds(450))
-            guard !isDemo, activeSheet == nil, whatsNew.shouldPresent else { return }
+            guard !isDemo, activeSheet == nil, browserSession == nil, !isAskingBlocker,
+                  whatsNew.shouldPresent else { return }
             whatsNew.markPresented()
             activeSheet = .whatsNew
         }
@@ -600,25 +600,11 @@ struct SpacesBrowserView: View {
         presentBrowser(url: nil, title: nil, space: space)
     }
 
-    /// Opens the link another app handed over, exactly once. The task above
-    /// runs again when the content-blocking question is answered, because that
-    /// question is a full-screen cover: the link waits in the model for its
-    /// answer instead of opening behind it or being lost with it.
-    private func takeIncomingLink() async {
-        guard let url = incomingLink else {
-            incomingLinkWaitsForBlocker = false
-            return
-        }
-        guard ContentBlocker.shared.asked else {
-            incomingLinkWaitsForBlocker = true
-            return
-        }
-        if incomingLinkWaitsForBlocker {
-            incomingLinkWaitsForBlocker = false
-            // The cover has to start going before the browser can take the
-            // screen, like a sheet in `show()`. A newer link cancels this task.
-            do { try await Task.sleep(nanoseconds: 250_000_000) } catch { return }
-        }
+    /// Opens the link another app handed over, exactly once. On the very
+    /// first browser it waits behind the content-blocking question in
+    /// `show()`, like every other way into the browser.
+    private func takeIncomingLink() {
+        guard let url = incomingLink else { return }
         onConsumeIncomingLink()
         presentBrowser(url: url, title: nil, space: model.activeSpace)
     }
@@ -631,16 +617,27 @@ struct SpacesBrowserView: View {
         show(BrowserTabSession(space: space))
     }
 
+    /// The first browser waits for the content-blocking question; every
+    /// later one opens at once.
     private func show(_ session: BrowserTabSession) {
+        if ContentBlocker.shared.asked {
+            presentCover { browserSession = session }
+        } else {
+            browserWaitingForBlocker = session
+            presentCover { isAskingBlocker = true }
+        }
+    }
+
+    private func presentCover(_ present: @escaping () -> Void) {
         guard activeSheet != nil else {
-            browserSession = session
+            present()
             return
         }
         activeSheet = nil
         Task { @MainActor in
             // Sheet dismissal has to start before the cover can take over.
             try? await Task.sleep(nanoseconds: 250_000_000)
-            browserSession = session
+            present()
         }
     }
 

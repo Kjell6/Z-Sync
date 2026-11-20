@@ -203,8 +203,8 @@ private struct SitePermissionRows: View {
     }
 }
 
-/// The setup question: asked once, after sign-in or on the first launch with
-/// content blocking. Every switch starts on; Continue saves them.
+/// The setup question: asked once, in front of the first browser the reader
+/// opens. Every switch starts on; Continue saves them.
 struct ContentBlockingSetupView: View {
     let scheme: ColorScheme
     @State private var choice = ContentBlockingSettings()

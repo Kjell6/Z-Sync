@@ -116,8 +116,8 @@ internal fun listDate(lastModified: String): String? =
     lastModified.split(' ').filter { it.isNotEmpty() }.take(3).takeIf { it.size == 3 }?.joinToString(" ")
 
 /**
- * The setup question: asked once, after sign-in or on the first launch with
- * content blocking. Every switch starts on; Continue saves them.
+ * The setup question: asked once, in front of the first browser the reader
+ * opens. Every switch starts on; Continue saves them.
  */
 @Composable
 internal fun ContentBlockingSetupScreen() {

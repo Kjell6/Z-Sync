@@ -56,14 +56,23 @@ object WhatsNewRelease {
 interface WhatsNewRepository {
     fun shownVersion(): String?
     fun setShownVersion(version: String)
+
+    /**
+     * The version the reader started on, or [UPDATED_FROM_EARLIER_VERSION]
+     * when the app was in use before this was recorded. Null: not recorded.
+     */
+    fun firstLaunchVersion(): String? = null
+
+    companion object {
+        const val UPDATED_FROM_EARLIER_VERSION = "earlier"
+    }
 }
 
 /**
  * Once-per-release decision, kept free of Android types so it is testable on
  * the JVM. The notes only appear once the running app reaches their release
- * version, and then only until they have been shown for it. A fresh 1.6
- * install also presents them, which is safer than guessing whether the app
- * was updated.
+ * version, only until they have been shown for it, and only to a reader who
+ * used an earlier version: a fresh install has nothing to compare against.
  */
 class WhatsNewController(
     private val repository: WhatsNewRepository,
@@ -73,7 +82,8 @@ class WhatsNewController(
     fun shouldPresent(isDemo: Boolean): Boolean =
         !isDemo &&
             currentVersion == releaseVersion &&
-            repository.shownVersion() != releaseVersion
+            repository.shownVersion() != releaseVersion &&
+            repository.firstLaunchVersion() != releaseVersion
 
     /** Call when the sheet is presented, not when it is dismissed. */
     fun markPresented() {
@@ -81,7 +91,15 @@ class WhatsNewController(
     }
 }
 
-class AndroidWhatsNewRepository(context: Context) : WhatsNewRepository {
+/**
+ * What [AndroidWhatsNewRepository.recordFirstLaunch] stores: the running
+ * version for a fresh install, or the "earlier" marker when an earlier
+ * version had been used.
+ */
+internal fun firstLaunchValue(usedBefore: Boolean, currentVersion: String): String =
+    if (usedBefore) WhatsNewRepository.UPDATED_FROM_EARLIER_VERSION else currentVersion
+
+class AndroidWhatsNewRepository(private val context: Context) : WhatsNewRepository {
     private val preferences = context.getSharedPreferences("onboarding", Context.MODE_PRIVATE)
 
     override fun shownVersion(): String? = preferences.getString(KEY_SHOWN_VERSION, null)
@@ -90,7 +108,52 @@ class AndroidWhatsNewRepository(context: Context) : WhatsNewRepository {
         preferences.edit().putString(KEY_SHOWN_VERSION, version).apply()
     }
 
+    override fun firstLaunchVersion(): String? = preferences.getString(KEY_FIRST_LAUNCH_VERSION, null)
+
+    /**
+     * Remembers the version the reader started on, once. Called at app start,
+     * before anything else writes preferences: on the first launch with this
+     * code, an earlier version's footprints (its preferences, a stored
+     * account) mark an update rather than a fresh install.
+     */
+    fun recordFirstLaunch(currentVersion: String) {
+        if (preferences.contains(KEY_FIRST_LAUNCH_VERSION)) return
+        val onboardingUsed = EARLIER_ONBOARDING_KEYS.any(preferences::contains)
+        val shared = context.getSharedPreferences(SHARED_PREFS_NAME, Context.MODE_PRIVATE)
+        val settingsUsed = EARLIER_SHARED_KEYS.any(shared::contains)
+        val usedBefore = onboardingUsed || settingsUsed ||
+            runCatching { AccountStore.load(context) != null }.getOrDefault(false)
+        preferences.edit()
+            .putString(KEY_FIRST_LAUNCH_VERSION, firstLaunchValue(usedBefore, currentVersion))
+            .apply()
+    }
+
     private companion object {
         const val KEY_SHOWN_VERSION = "whatsNewShownVersion"
+        const val KEY_FIRST_LAUNCH_VERSION = "firstLaunchVersion"
+        const val SHARED_PREFS_NAME = "zen_prefs"
+
+        /** What an earlier version left in "onboarding" once it had been used. */
+        val EARLIER_ONBOARDING_KEYS = listOf(
+            KEY_SHOWN_VERSION,
+            "didDismissSyncSetupHint",
+            "didShowShareExtensionTip",
+            "didRequestReview",
+            "didArmReviewPrompt",
+        )
+
+        /** What an earlier version left in "zen_prefs" once it had been used. */
+        val EARLIER_SHARED_KEYS = listOf(
+            "always_open_links_externally",
+            "essentials_grouping",
+            "essentials_columns",
+            "save_tab_kind",
+            "toolbar_placement",
+            "open_into_search",
+            "zen_companion_search_engine",
+            "selected_search_engine",
+            "zen_companion_custom_search_engines",
+            "lastSpaceId",
+        )
     }
 }

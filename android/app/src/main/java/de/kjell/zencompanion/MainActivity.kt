@@ -183,15 +183,15 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
         }
     }
 
-    // Once per app version, after the first frame has had a moment to settle.
+    // Once per app version, after the first frame has had a moment to settle,
+    // and only for readers who used an earlier version (see WhatsNewController).
     // Only the main activity reaches this: sharing from another app opens
     // ShareActivity, which never builds AppViewModel, so a share cannot
-    // trigger the sheet.
-    // The content blocking question comes first; the notes wait for its answer.
-    LaunchedEffect(blockingAsked) {
-        if (!blockingAsked) return@LaunchedEffect
+    // trigger the sheet. A browser opened at launch (a link from another app)
+    // keeps the screen; the notes wait for the next launch.
+    LaunchedEffect(Unit) {
         delay(450)
-        viewModel.presentWhatsNewIfNeeded()
+        if (activeBrowserLaunch == null) viewModel.presentWhatsNewIfNeeded()
     }
 
     val spaces = browser.snapshot.spaces
@@ -304,7 +304,9 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
         )
 
         val launch = activeBrowserLaunch
-        if (launch != null) {
+        // The first browser waits for the content-blocking answer (below), so
+        // its first page already loads with the reader's choice.
+        if (launch != null && blockingAsked) {
             // Keyed by launch: a link that arrives while the last browser is
             // showing (its overview or history up) starts a browser of its own
             // instead of putting the new page behind the old screen.
@@ -407,9 +409,9 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
         WhatsNewSheet(onDismiss = { viewModel.dismissWhatsNew() })
     }
 
-    // Asked once, on the first launch that has it — signed in or not.
-    // Back does nothing: Continue is the answer.
-    if (!blockingAsked) {
+    // Asked once, in front of the first browser the reader opens, however it
+    // opens — signed in or not. Back does nothing: Continue is the answer.
+    if (!blockingAsked && activeBrowserLaunch != null) {
         Dialog(
             onDismissRequest = {},
             properties = DialogProperties(

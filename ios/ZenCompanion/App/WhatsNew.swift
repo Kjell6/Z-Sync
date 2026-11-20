@@ -66,13 +66,51 @@ struct WhatsNewStore {
     }
 
     /// True only once the running app has reached the release these notes
-    /// describe, and until they have been shown for it. A fresh 1.6 install
-    /// also returns true, so the first signed-in launch introduces the
-    /// release; that is safer than guessing whether the app was updated.
+    /// describe, until they have been shown for it, and only for a reader
+    /// who used an earlier version: someone who just installed the app has
+    /// nothing to compare against, so "new" means nothing to them.
     var shouldPresent: Bool {
         currentVersion == release.version
             && preferences.string(PreferenceKeys.whatsNewShownVersion, scope: .standard) != release.version
+            && preferences.string(PreferenceKeys.firstLaunchVersion, scope: .standard) != release.version
     }
+
+    /// Remembers the version the reader started on, once. Call at app start,
+    /// before anything else writes preferences: on the first launch with this
+    /// code, an earlier version's footprints (its preferences, a stored
+    /// account) mark an update rather than a fresh install.
+    static func recordFirstLaunch(
+        preferences: PreferencesStoring = AppServices.preferences,
+        currentVersion: String = WhatsNewStore.bundleVersion,
+        hasAccount: () -> Bool = { AccountStore.load() != nil }
+    ) {
+        guard !preferences.hasObject(PreferenceKeys.firstLaunchVersion, scope: .standard) else { return }
+        let usedBefore = earlierVersionFootprints.contains { key, scope in
+            preferences.hasObject(key, scope: scope)
+        } || hasAccount()
+        preferences.setString(
+            usedBefore ? PreferenceKeys.updatedFromEarlierVersion : currentVersion,
+            PreferenceKeys.firstLaunchVersion,
+            scope: .standard
+        )
+    }
+
+    /// Preferences an earlier version leaves behind once it has been used.
+    static let earlierVersionFootprints: [(String, PreferenceScope)] = [
+        (PreferenceKeys.whatsNewShownVersion, .standard),
+        (PreferenceKeys.didDismissSyncSetupHint, .standard),
+        (PreferenceKeys.didShowShareExtensionTip, .standard),
+        (PreferenceKeys.didArmReviewPrompt, .standard),
+        (PreferenceKeys.didRequestReview, .standard),
+        (PreferenceKeys.selectedSearchEngine, .standard),
+        (PreferenceKeys.alwaysOpenExternally, .standard),
+        (PreferenceKeys.saveKind, .standard),
+        (PreferenceKeys.toolbarPlacement, .standard),
+        (PreferenceKeys.openIntoSearch, .standard),
+        (PreferenceKeys.essentialsColumns, .standard),
+        (PreferenceKeys.lastSpaceId, .appGroup),
+        ("spacesCacheTime", .appGroup)
+    ]
 
     /// Call when the sheet is presented, not when it is dismissed: if the app
     /// is killed while the sheet is up, it must not reappear on every launch.

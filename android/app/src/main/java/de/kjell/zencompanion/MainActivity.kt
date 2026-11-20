@@ -45,6 +45,8 @@ import de.kjell.zencompanion.ui.sheets.SyncedActivitySheet
 import de.kjell.zencompanion.ui.sheets.WhatsNewSheet
 import de.kjell.zencompanion.ui.sheets.ContentBlockingSetupScreen
 import de.kjell.zencompanion.data.ContentBlocking
+import de.kjell.zencompanion.data.OnboardingStore
+import de.kjell.zencompanion.ui.screens.OnboardingScreen
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import de.kjell.zencompanion.ui.sheets.ZenSheet
@@ -170,6 +172,15 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
     var showActivity by rememberSaveable { mutableStateOf(false) }
     val sessionNotice by viewModel.sessionNotice.collectAsState()
     val context = LocalContext.current
+    val onboardingStore = remember { OnboardingStore(context.applicationContext) }
+    // Up from the first frame on a fresh install. A debug build shows it again
+    // when started with `--ez showOnboarding true`.
+    var showOnboarding by rememberSaveable {
+        mutableStateOf(
+            onboardingStore.shouldShow() ||
+                (BuildConfig.DEBUG && (context as? Activity)?.intent?.getBooleanExtra("showOnboarding", false) == true),
+        )
+    }
     val pages = remember { BrowserPages.shared(context, viewModel.browserRepository) }
     val openPages by pages.store.pages.collectAsState()
 
@@ -302,6 +313,15 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
             onDismissShareTip = { viewModel.dismissShareTip() },
             onDismissSyncSetupHint = { viewModel.dismissSyncSetupHint() },
         )
+
+        if (showOnboarding) {
+            OnboardingScreen(
+                onFinish = {
+                    onboardingStore.markCompleted()
+                    showOnboarding = false
+                },
+            )
+        }
 
         val launch = activeBrowserLaunch
         // The first browser waits for the content-blocking answer (below), so

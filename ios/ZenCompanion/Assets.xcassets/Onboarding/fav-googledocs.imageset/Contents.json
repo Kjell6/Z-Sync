@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "fav-googledocs.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

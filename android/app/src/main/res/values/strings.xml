@@ -240,6 +240,13 @@
     <string name="browser_pin_short">Pin</string>
     <string name="browser_save_short">Save</string>
 
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_continue">Continue</string>
+    <string name="onboarding_start">Get started</string>
+    <string name="onboarding_spaces_title">Your tabs &amp; spaces,\nnow on your phone</string>
+    <string name="onboarding_share_title">Save links from any app\ninto a space</string>
+    <string name="onboarding_browser_title">With a browser\nbuilt right in</string>
+    <string name="onboarding_page">Page %1$d of %2$d</string>
     <string name="whats_new_headline">Meet the new Quick Browser</string>
     <string name="whats_new_subtitle">Rebuilt from the ground up, with real tabs that stay open.</string>
     <string name="whats_new_done">Done</string>

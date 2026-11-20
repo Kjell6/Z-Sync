@@ -503,6 +503,53 @@ internal fun MiniBrowserBar(
     }
 }
 
+/**
+ * The browser's bar over a loaded page, drawn by the real [NavBar] and [Dock]
+ * with nothing to do on a tap: the onboarding's picture of the browser stays
+ * the browser as it is. Wrap it in `ZenTheme(darkTheme = …)` for the page, as
+ * the screen does.
+ */
+@Composable
+internal fun MiniBrowserBarPicture(
+    url: String,
+    title: String,
+    pageCount: Int,
+    barColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    val zen = LocalZenColors.current
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(barColor)
+            .padding(start = 16.dp, end = 16.dp, top = TopGap, bottom = MinBottomGap),
+        verticalArrangement = Arrangement.spacedBy(RowGap),
+    ) {
+        NavBar(
+            canGoBack = true,
+            canGoForward = false,
+            effectiveUrl = url,
+            title = title,
+            isLoading = false,
+            progress = 0f,
+            onBack = {},
+            onForward = {},
+            onReload = {},
+            onStop = {},
+            onBeginAddressEdit = {},
+            barColor = barColor,
+        )
+        Dock(
+            menuOpen = false,
+            ink = zen.ink,
+            pageCount = pageCount,
+            onOpenPages = {},
+            onClose = {},
+            onToggleMenu = {},
+        )
+    }
+}
+
 /** The menu grows out of its button, at the bar's trailing end. */
 private val MenuGrowOrigin = TransformOrigin(0.9f, 1f)
 

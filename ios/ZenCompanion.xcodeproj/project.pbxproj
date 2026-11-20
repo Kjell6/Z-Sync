@@ -18,6 +18,7 @@
 		09CA6C5D6D457918BDBFE796 /* SpacesSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB4EBDF9AB517249F1B92769 /* SpacesSyncService.swift */; };
 		0A79277001F0DA462F5C35D2 /* BrowserHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A727F7BC4CE5157D03FBB23E /* BrowserHistoryView.swift */; };
 		0A79E3878B6C0B0D0057F8C1 /* WhatsNewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B7261F8E8A17C9C26B21DCB /* WhatsNewSheet.swift */; };
+		B5F4E76C4FE17F5C92611032 /* Onboarding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B73E9D31A9229DC82D6C36F /* Onboarding.swift */; };
 		0B0AB15B87703B4544F78A60 /* HTTPFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C0BBC938DC26404B12BEABA /* HTTPFixtures.swift */; };
 		0B5E3A3E878989F87C3E02A0 /* SaveKindMenuButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17C9B38551008690BCAFA16F /* SaveKindMenuButton.swift */; };
 		0B63C216F472F4502FCE6AFF /* ZenTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D6A676FC45822D334BD2243 /* ZenTypography.swift */; };
@@ -378,6 +379,7 @@
 		87B81CB09F20198458F6707D /* AppGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroup.swift; sourceTree = "<group>"; };
 		87F67934C58A3E31F34DE9F1 /* HawkAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HawkAuth.swift; sourceTree = "<group>"; };
 		8B7261F8E8A17C9C26B21DCB /* WhatsNewSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewSheet.swift; sourceTree = "<group>"; };
+		8B73E9D31A9229DC82D6C36F /* Onboarding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Onboarding.swift; sourceTree = "<group>"; };
 		8C6D60DD2114481D3BAC5617 /* SearchEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchEngine.swift; sourceTree = "<group>"; };
 		8DD39E2F2EB13EDDE541FC50 /* http-get-pagination-page2.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "http-get-pagination-page2.json"; sourceTree = "<group>"; };
 		8E29C74A36052BB9170A3AF7 /* CryptoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CryptoTests.swift; sourceTree = "<group>"; };
@@ -462,6 +464,7 @@
 				FBD9CAA96E80C787C21B93B7 /* ToolbarPlacement.swift */,
 				C2D09DCC579960C1799DCF39 /* WhatsNew.swift */,
 				8B7261F8E8A17C9C26B21DCB /* WhatsNewSheet.swift */,
+				8B73E9D31A9229DC82D6C36F /* Onboarding.swift */,
 				ADA20E171E96EB2ADAEE51CA /* ZenCompanionApp.swift */,
 			);
 			path = App;
@@ -1107,6 +1110,7 @@
 				3985CD5A90472E055483D0D4 /* WebKeyboardAccessory.swift in Sources */,
 				246424CBCC3EFA0D11C5B30D /* WhatsNew.swift in Sources */,
 				0A79E3878B6C0B0D0057F8C1 /* WhatsNewSheet.swift in Sources */,
+				B5F4E76C4FE17F5C92611032 /* Onboarding.swift in Sources */,
 				991C1DBDF77F84A79B2D4BB3 /* ZenCompanionApp.swift in Sources */,
 				5C1144A74158A8D8EBBBE323 /* ZenSpaces.swift in Sources */,
 				C98F230F1934600165298800 /* ZenTheme.swift in Sources */,

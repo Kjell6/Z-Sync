@@ -1033,7 +1033,21 @@ struct MiniBrowserTopBar: View {
             navigationRow
                 .padding(.horizontal, 8)
                 .frame(height: barHeight)
-                .coordinateSpace(.named(AddressLabel.barSpace))
+                // Drawn over the whole bar, not inside the address button: the
+                // button's frame jumps when back or forward come and go, the
+                // label's place on the bar does not.
+                .overlay(alignment: .leading) {
+                    AddressLabel(
+                        text: addressText,
+                        symbol: Self.symbol(for: model.pageError == nil ? model.effectiveURL : nil),
+                        barWidth: barWidth,
+                        leadingInset: Self.leadingInset(back: canGoBack, forward: model.canGoForward),
+                        trailingInset: Self.trailingInset,
+                        dimmed: model.pageHost.isEmpty
+                    )
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: canGoBack)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: model.canGoForward)
+                }
                 .background {
                     LoadingFill(
                         isLoading: model.isLoading,
@@ -1114,25 +1128,30 @@ struct MiniBrowserTopBar: View {
     private func peekBar(_ page: OpenPage) -> some View {
         let peek = page.model
         let url = page.url
-        return HStack(spacing: 2) {
-            if peek.canGoBack || page.openerID != nil {
+        let back = peek.canGoBack || page.openerID != nil
+        return HStack(spacing: Self.glyphSpacing) {
+            if back {
                 peekGlyph("chevron.backward")
             }
             if peek.canGoForward {
                 peekGlyph("chevron.forward")
             }
+            Spacer(minLength: 0)
+            peekGlyph("ellipsis", upright: true)
+            peekGlyph("arrow.clockwise")
+        }
+        .padding(.horizontal, Self.barPadding)
+        .frame(width: barWidth, height: barHeight)
+        .overlay(alignment: .leading) {
             AddressLabel(
                 text: url.map(Self.domain(of:)) ?? String(localized: "browser.search_placeholder"),
                 symbol: Self.symbol(for: url),
                 barWidth: barWidth,
+                leadingInset: Self.leadingInset(back: back, forward: peek.canGoForward),
+                trailingInset: Self.trailingInset,
                 dimmed: url == nil
             )
-            peekGlyph("ellipsis", upright: true)
-            peekGlyph("arrow.clockwise")
         }
-        .padding(.horizontal, 8)
-        .frame(width: barWidth, height: barHeight)
-        .coordinateSpace(.named(AddressLabel.barSpace))
         .floatingGlassCapsule()
         .allowsHitTesting(false)
     }
@@ -1224,8 +1243,21 @@ struct MiniBrowserTopBar: View {
 
     private var canGoBack: Bool { model.canGoBack || page?.openerID != nil }
 
+    /// The bar's layout, so the label can know where the buttons end without
+    /// measuring them: a measured frame arrives a frame late and the label
+    /// would jump while back or forward fade.
+    private static let barPadding: CGFloat = 8
+    private static let glyphSpacing: CGFloat = 2
+    private static let glyphSlot: CGFloat = 44
+    /// Back and forward, each only when it is shown.
+    static func leadingInset(back: Bool, forward: Bool) -> CGFloat {
+        barPadding + CGFloat((back ? 1 : 0) + (forward ? 1 : 0)) * (glyphSlot + glyphSpacing)
+    }
+    /// The menu and the reload.
+    static let trailingInset: CGFloat = barPadding + 2 * (glyphSlot + glyphSpacing)
+
     private var navigationRow: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: Self.glyphSpacing) {
             // Only while they lead somewhere: most pages never go forward,
             // and the domain gets the room instead.
             if canGoBack {
@@ -1245,13 +1277,10 @@ struct MiniBrowserTopBar: View {
                 guard !swiping, !pulling else { return }
                 onBeginAddressEdit()
             } label: {
-                AddressLabel(
-                    text: addressText,
-                    symbol: Self.symbol(for: model.pageError == nil ? model.effectiveURL : nil),
-                    barWidth: barWidth,
-                    dimmed: model.pageHost.isEmpty
-                )
-                .contentShape(Rectangle())
+                // The label itself is drawn over the bar (see `body`).
+                Color.clear
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(Rectangle())
             }
             // An open padlock is the only sign of an unencrypted page, so
             // VoiceOver hears the connection too.
@@ -1456,72 +1485,73 @@ private extension BlockingCard {
     }
 }
 
-/// The domain in the navigation bar. It sits in the middle of the whole bar,
-/// as in Safari, so back appearing beside it does not push it around; only
-/// when the buttons leave too little room does it slide aside. A domain too
-/// long for the space fades out at its end instead of breaking off with "…".
+/// The domain in the navigation bar, drawn over the whole bar. It sits in the
+/// middle of the bar, as in Safari, so back appearing beside it does not push
+/// it around; only when the buttons leave too little room does it slide
+/// aside. A domain too long for the space fades out at its end instead of
+/// breaking off with "…". Its space comes in as insets from the bar's edges,
+/// worked out from which buttons show, so it moves in the same animation as
+/// the buttons rather than a frame after them.
 private struct AddressLabel: View {
-    static let barSpace = "miniBrowserNavBar"
-
     let text: String
     let symbol: String?
-    /// The whole bar's width, which the label centres in.
     let barWidth: CGFloat
+    /// Where the buttons on either side end, from the bar's edges.
+    let leadingInset: CGFloat
+    let trailingInset: CGFloat
     /// The prompt on an empty page is quieter than a real domain.
     var dimmed = false
 
     @Environment(\.colorScheme) private var scheme
-    @State private var area: CGRect = .zero
     @State private var contentWidth: CGFloat = 0
 
     /// How long the fade at the end is.
     private let fadeLength: CGFloat = 28
 
-    private var overflows: Bool { contentWidth > area.width + 0.5 }
+    private var areaWidth: CGFloat { max(0, barWidth - leadingInset - trailingInset) }
+    private var overflows: Bool { contentWidth > areaWidth + 0.5 }
 
-    /// Where the text starts inside its space: centred on the bar while it
-    /// fits there, else as close to that as the space allows.
-    private var offset: CGFloat {
-        guard area.width > 0, !overflows else { return 0 }
-        let centred = barWidth / 2 - contentWidth / 2 - area.minX
-        return min(max(centred, 0), area.width - contentWidth)
+    /// Where the text starts on the bar: centred while it fits there, else as
+    /// close to that as its space allows.
+    private var x: CGFloat {
+        guard !overflows else { return leadingInset }
+        let centred = (barWidth - contentWidth) / 2
+        return min(max(centred, leadingInset), barWidth - trailingInset - contentWidth)
     }
 
     var body: some View {
-        Color.clear
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .overlay(alignment: .leading) {
-                HStack(spacing: 5) {
-                    if let symbol {
-                        Image(systemName: symbol)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Palette.ink(scheme).opacity(0.6))
-                    }
-                    Text(verbatim: text)
-                        .zenFont(16, weight: .semibold, design: .rounded)
-                        .foregroundStyle(Palette.ink(scheme).opacity(dimmed ? 0.55 : 1))
-                        .lineLimit(1)
-                }
-                .fixedSize()
-                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { contentWidth = $0 }
-                .offset(x: offset)
+        HStack(spacing: 5) {
+            if let symbol {
+                Image(systemName: symbol)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Palette.ink(scheme).opacity(0.6))
             }
-            .mask {
-                if overflows {
-                    LinearGradient(
-                        stops: [
-                            .init(color: .black, location: 0),
-                            .init(color: .black, location: max(0, 1 - fadeLength / max(area.width, 1))),
-                            .init(color: .clear, location: 1),
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                } else {
-                    Rectangle()
-                }
-            }
-            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.barSpace)) } action: { area = $0 }
-            .animation(.easeOut(duration: 0.2), value: offset)
+            Text(verbatim: text)
+                .zenFont(16, weight: .semibold, design: .rounded)
+                .foregroundStyle(Palette.ink(scheme).opacity(dimmed ? 0.55 : 1))
+                .lineLimit(1)
+        }
+        .fixedSize()
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { contentWidth = $0 }
+        .offset(x: x)
+        .frame(width: barWidth, alignment: .leading)
+        // Only the space between the buttons shows text; past its end it fades.
+        .mask(alignment: .leading) {
+            LinearGradient(
+                stops: overflows
+                    ? [
+                        .init(color: .black, location: 0),
+                        .init(color: .black, location: max(0, 1 - fadeLength / max(areaWidth, 1))),
+                        .init(color: .clear, location: 1),
+                    ]
+                    : [.init(color: .black, location: 0), .init(color: .black, location: 1)],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: areaWidth)
+            .offset(x: leadingInset)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }

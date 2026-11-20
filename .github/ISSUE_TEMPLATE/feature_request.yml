@@ -1,6 +1,5 @@
 name: Feature request
-description: Suggest something the apps should do
-title: "[Feature request]: "
+description: Suggest something the app should do
 labels: [enhancement]
 body:
   - type: checkboxes
@@ -11,16 +10,9 @@ body:
         - label: I searched open and closed issues for this request.
           required: true
   - type: textarea
-    id: problem
+    id: idea
     attributes:
-      label: Problem
-      description: What you cannot do today, and where in the app.
-    validations:
-      required: true
-  - type: textarea
-    id: proposal
-    attributes:
-      label: Proposal
-      description: What you would like instead.
+      label: Your idea
+      description: What would you like Z-Sync to do? A few sentences are enough — and feel free to say what you need it for.
     validations:
       required: true

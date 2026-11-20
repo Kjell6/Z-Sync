@@ -220,6 +220,7 @@ struct MiniBrowserView: View {
                         pages: pages,
                         addressEditing: addressEditing,
                         menuOpen: model.menuExpanded,
+                        revealsNewPage: revealingNewPage,
                         onToggleMenu: { model.toggleMenu() },
                         isAddressFocused: $isAddressFocused,
                         swipeOffset: $pageSwipe,
@@ -1044,7 +1045,8 @@ private extension MiniBrowserView {
     /// one grows in behind it, the same as swiping the bar past the last page.
     /// An empty page needs no new one: its search opens instead.
     private func openNewPageFromBar() {
-        guard model.pageURL != nil else {
+        // The model's own rule, so a page whose first load failed counts as a page.
+        guard !model.opensWithSearch else {
             startNewPageSearch()
             return
         }
@@ -1053,6 +1055,8 @@ private extension MiniBrowserView {
             pages.open(url: nil)
             return
         }
+        transitionEpoch += 1
+        let epoch = transitionEpoch
         revealingNewPage = true
         let span = paneWidth + PageHostView.pageGap
         withAnimation(.spring(duration: 0.38, bounce: 0), completionCriteria: .logicallyComplete) {
@@ -1061,7 +1065,9 @@ private extension MiniBrowserView {
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
-                pages.open(url: nil)
+                // Another transition (the overview, say) took over meanwhile:
+                // the page comes back and no blank one opens under it.
+                if epoch == transitionEpoch { pages.open(url: nil) }
                 revealingNewPage = false
                 pageSwipe = 0
             }

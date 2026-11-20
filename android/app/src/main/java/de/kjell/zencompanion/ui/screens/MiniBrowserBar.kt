@@ -875,7 +875,8 @@ private fun NavBar(
                 NavGlyph(
                     icon = Icons.AutoMirrored.Outlined.ArrowBack,
                     description = stringResource(R.string.browser_back),
-                    enabled = true,
+                    // Off while it fades out, so a tap then does not close the page.
+                    enabled = canGoBack,
                     onClick = onBack,
                 )
             }
@@ -887,7 +888,7 @@ private fun NavBar(
                 NavGlyph(
                     icon = Icons.AutoMirrored.Outlined.ArrowForward,
                     description = stringResource(R.string.browser_forward),
-                    enabled = true,
+                    enabled = canGoForward,
                     onClick = onForward,
                 )
             }

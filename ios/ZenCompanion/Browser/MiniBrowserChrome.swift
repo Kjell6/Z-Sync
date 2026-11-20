@@ -983,6 +983,9 @@ struct MiniBrowserTopBar: View {
     var addressEditing: Bool
     /// Whether the page menu is open above the bar.
     var menuOpen = false
+    /// A blank page is sliding in (the dock's plus): the bar beside this one is
+    /// the new page's, even when a next page exists.
+    var revealsNewPage = false
     var onToggleMenu: () -> Void = {}
     @Binding var isAddressFocused: Bool
     /// How far the swipe between pages has moved the page.
@@ -1100,9 +1103,9 @@ struct MiniBrowserTopBar: View {
                 if let previous = neighbours.previous {
                     peekBar(previous).offset(x: barOffset - barSpan)
                 }
-                if let next = neighbours.next {
+                if let next = neighbours.next, !revealsNewPage {
                     peekBar(next).offset(x: barOffset + barSpan)
-                } else if offersNewPage, barOffset < 0 {
+                } else if offersNewPage || revealsNewPage, barOffset < 0 {
                     newPagePill
                 }
             }

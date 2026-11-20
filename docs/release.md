@@ -130,6 +130,37 @@ Remaining maintainer steps, in order:
 Until steps 1 and 2 are done, Z-Sync is not a selectable browser on iOS; only its
 own `zsync://open?url=` links reach it.
 
+## Password manager and passkeys in the browser
+
+**iOS: needs the same entitlement as above.** WebKit only treats a WKWebView
+like a browser for credentials when the app holds `com.apple.developer.web-browser`:
+- **Without it:** the keyboard shows a bare "Passwords" key, and the reader has
+  to search the Passwords app themselves. Passkeys are refused outright, because
+  WebAuthn in a WKWebView only works for the app's own associated domains.
+- **With it:** the QuickType bar suggests the login saved for the page's own
+  site (as in Chrome, Firefox or Orion), and passkeys work for any site,
+  including those from third-party managers via AutoFill.
+
+No code change is needed: WebKit does this on its own once the entitlement is
+signed in. When Apple grants it, do step 2 above. If passkeys still fail after
+that, also ask Apple for `com.apple.developer.web-browser.public-key-credential`
+(some browser developers report needing it on top). Do not add either
+entitlement before it is granted: automatic signing fails and the app no longer
+builds for a device.
+
+**Android: on since this change, waiting on the managers.** The browser asks
+WebView for passkeys in browser mode
+(`WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_FOR_BROWSER`, Android 14+ with a
+current WebView). Password suggestions already work through Android's autofill.
+A password manager only serves passkeys to an app it trusts as a browser. Until
+it does, a site's passkey request fails the same way it did before:
+- **Google Password Manager:** request approval for `de.kjell.zencompanion`
+  through the form linked from
+  <https://developer.android.com/identity/sign-in/privileged-apps>, using the
+  release signing certificate's SHA-256.
+- **Bitwarden, 1Password and others:** each keeps its own list of trusted
+  browsers. Some (Bitwarden) let the user trust an unknown browser on first use.
+
 ## Related
 
 - Signing: the team id lives in the gitignored `ios/Config/Team.local.xcconfig`

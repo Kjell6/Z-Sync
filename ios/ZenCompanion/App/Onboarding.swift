@@ -712,14 +712,14 @@ private struct OnboardingBrowserIllustration: View {
                     .frame(width: MiniBrowserChromeMetrics.dockHeight, height: MiniBrowserChromeMetrics.dockHeight)
                     .floatingGlassCapsule()
                 Spacer(minLength: 0)
-                Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .semibold))
+                Image(systemName: "plus")
+                    .font(.system(size: 19, weight: .semibold))
                     .foregroundStyle(Palette.ink(scheme))
                     .frame(width: 92, height: 42)
                     .floatingGlassCapsule()
                 Spacer(minLength: 0)
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 18, weight: .semibold))
+                Image(systemName: "xmark")
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(Palette.ink(scheme))
                     .frame(width: MiniBrowserChromeMetrics.dockHeight, height: MiniBrowserChromeMetrics.dockHeight)
                     .floatingGlassCapsule()
@@ -728,31 +728,32 @@ private struct OnboardingBrowserIllustration: View {
         }
     }
 
+    /// Back only, since forward leads nowhere here; the domain sits in the
+    /// middle of the bar, as on a real page.
     private var addressBar: some View {
-        HStack(spacing: 6) {
-            barGlyph("chevron.backward", enabled: true)
-            barGlyph("chevron.forward", enabled: false)
-            HStack(spacing: 8) {
-                CafeFavicon(size: 16)
-                    .frame(width: 22, height: 22)
-                Text(verbatim: "Ten quiet cafés in Lisbon")
-                    .zenFont(16, weight: .semibold, design: .rounded)
-                    .foregroundStyle(Palette.ink(scheme))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Spacer(minLength: 0)
-            }
-            barGlyph("arrow.clockwise", enabled: true)
+        HStack(spacing: 2) {
+            barGlyph("chevron.backward")
+            Text(verbatim: "lisbon-guide.com")
+                .zenFont(16, weight: .semibold, design: .rounded)
+                .foregroundStyle(Palette.ink(scheme))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity)
+                // The menu and reload take one slot more than back: this
+                // puts the domain back in the middle of the whole bar.
+                .padding(.trailing, -44)
+            barGlyph("ellipsis", upright: true)
+            barGlyph("arrow.clockwise")
         }
         .padding(.horizontal, 8)
         .frame(height: MiniBrowserChromeMetrics.navBarHeight)
         .floatingGlassCapsule()
     }
 
-    private func barGlyph(_ systemName: String, enabled: Bool) -> some View {
+    private func barGlyph(_ systemName: String, upright: Bool = false) -> some View {
         Image(systemName: systemName)
             .font(.system(size: 18, weight: .semibold))
-            .foregroundStyle(Palette.ink(scheme).opacity(enabled ? 0.85 : 0.3))
+            .rotationEffect(.degrees(upright ? 90 : 0))
+            .foregroundStyle(Palette.ink(scheme).opacity(0.85))
             .frame(width: 32, height: MiniBrowserChromeMetrics.navBarHeight - 8)
             .frame(minWidth: 44, minHeight: 44)
     }

@@ -72,7 +72,7 @@ import androidx.compose.material.icons.outlined.Laptop
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.Print
-import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Restore
@@ -109,6 +109,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import kotlin.math.roundToInt
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -260,6 +267,8 @@ internal fun MiniBrowserBar(
     /** Signed out there is no pin control and no save confirmation. */
     signedIn: Boolean,
     onClose: () -> Unit,
+    /** The dock's plus: a blank page slides in, as past the last page. */
+    onNewPage: () -> Unit,
     /** Open pages on this phone; the dock's button shows the count. */
     pageCount: Int,
     onOpenPages: () -> Unit,
@@ -460,6 +469,10 @@ internal fun MiniBrowserBar(
                             onStop = onStop,
                             onBeginAddressEdit = onBeginAddressEdit,
                             barColor = barColor,
+                            menuOpen = state.menuExpanded,
+                            onToggleMenu = {
+                                if (state.menuExpanded) viewModel.collapseMenu() else viewModel.toggleMenu()
+                            },
                         )
                     }
                 }
@@ -488,14 +501,11 @@ internal fun MiniBrowserBar(
                 if (dockAlpha > 0f) {
                     Dock(
                         modifier = Modifier.graphicsLayer { alpha = dockAlpha },
-                        menuOpen = state.menuExpanded,
                         ink = zen.ink,
                         pageCount = pageCount,
                         onOpenPages = onOpenPages,
+                        onNewPage = onNewPage,
                         onClose = onClose,
-                        onToggleMenu = {
-                            if (state.menuExpanded) viewModel.collapseMenu() else viewModel.toggleMenu()
-                        },
                     )
                 }
             }
@@ -540,18 +550,17 @@ internal fun MiniBrowserBarPicture(
             barColor = barColor,
         )
         Dock(
-            menuOpen = false,
             ink = zen.ink,
             pageCount = pageCount,
             onOpenPages = {},
+            onNewPage = {},
             onClose = {},
-            onToggleMenu = {},
         )
     }
 }
 
-/** The menu grows out of its button, at the bar's trailing end. */
-private val MenuGrowOrigin = TransformOrigin(0.9f, 1f)
+/** The menu grows out of its button, next to the reload at the bar's end. */
+private val MenuGrowOrigin = TransformOrigin(0.85f, 1f)
 
 /** The address list grows up out of the composer. */
 private val SuggestionGrowOrigin = TransformOrigin(0.5f, 1f)
@@ -816,6 +825,9 @@ private fun NavBar(
     onStop: () -> Unit,
     onBeginAddressEdit: () -> Unit,
     barColor: Color,
+    /** The page menu is open above the bar. */
+    menuOpen: Boolean = false,
+    onToggleMenu: () -> Unit = {},
 ) {
     val zen = LocalZenColors.current
     // However the load ends, the fill first reaches the end of the bar and
@@ -846,59 +858,65 @@ private fun NavBar(
                     drawRect(zen.ink.copy(alpha = 0.1f), size = size.copy(width = size.width * fillWidth.value))
                 },
         )
+        // Back and forward only while they lead somewhere: most pages never
+        // go forward, and the domain gets the room instead.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 6.dp)
+                .padding(horizontal = BarPadding)
                 .height(BarHeight),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            NavGlyph(
-                icon = Icons.AutoMirrored.Outlined.ArrowBack,
-                description = stringResource(R.string.browser_back),
-                enabled = canGoBack,
-                onClick = onBack,
-            )
-            NavGlyph(
-                icon = Icons.AutoMirrored.Outlined.ArrowForward,
-                description = stringResource(R.string.browser_forward),
-                enabled = canGoForward,
-                onClick = onForward,
-            )
+            androidx.compose.animation.AnimatedVisibility(
+                visible = canGoBack,
+                enter = androidx.compose.animation.fadeIn(tween(200)),
+                exit = androidx.compose.animation.fadeOut(tween(200)),
+            ) {
+                NavGlyph(
+                    icon = Icons.AutoMirrored.Outlined.ArrowBack,
+                    description = stringResource(R.string.browser_back),
+                    enabled = true,
+                    onClick = onBack,
+                )
+            }
+            androidx.compose.animation.AnimatedVisibility(
+                visible = canGoForward,
+                enter = androidx.compose.animation.fadeIn(tween(200)),
+                exit = androidx.compose.animation.fadeOut(tween(200)),
+            ) {
+                NavGlyph(
+                    icon = Icons.AutoMirrored.Outlined.ArrowForward,
+                    description = stringResource(R.string.browser_forward),
+                    enabled = true,
+                    onClick = onForward,
+                )
+            }
 
+            // The tap target. What it says is drawn over the whole bar below.
+            val connection = connectionDescription(effectiveUrl, pageFailed)
+            val name = when {
+                title.isNotBlank() -> title
+                effectiveUrl.isNotEmpty() -> addressDisplay(effectiveUrl)
+                else -> stringResource(R.string.browser_search_placeholder)
+            }
             Surface(
                 onClick = onBeginAddressEdit,
                 modifier = Modifier
                     .weight(1f)
-                    .height(BarHeight - 12.dp),
+                    .height(BarHeight - 12.dp)
+                    // TalkBack hears the page's own name and the connection,
+                    // while the eye gets the domain.
+                    .semantics { contentDescription = listOfNotNull(name, connection).joinToString(", ") },
                 shape = RoundedCornerShape(10.dp),
                 color = Color.Transparent,
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    SiteIcon(effectiveUrl = effectiveUrl, pageFailed = pageFailed)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        // Same fallback as the iOS bar: a page without a title -
-                        // still loading, or one that failed to load - is named by
-                        // its address instead of an empty placeholder.
-                        text = when {
-                            title.isNotBlank() -> title
-                            effectiveUrl.isNotEmpty() -> addressDisplay(effectiveUrl)
-                            else -> stringResource(R.string.browser_search_placeholder)
-                        },
-                        style = ZenType.rounded(16, FontWeight.SemiBold),
-                        color = zen.ink,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
+            ) {}
 
+            NavGlyph(
+                icon = Icons.Outlined.MoreVert,
+                description = stringResource(if (menuOpen) R.string.browser_close_menu else R.string.browser_more),
+                enabled = true,
+                onClick = onToggleMenu,
+            )
             NavGlyph(
                 icon = if (isLoading) Icons.Outlined.Close else Icons.Outlined.Refresh,
                 description = stringResource(
@@ -908,7 +926,127 @@ private fun NavBar(
                 onClick = if (isLoading) onStop else onReload,
             )
         }
+
+        // Laid out on the whole bar from the buttons that show, not from the
+        // address area's frame, so it moves in the same animation as they fade.
+        val leading by androidx.compose.animation.core.animateDpAsState(
+            targetValue = BarPadding + GlyphWidth * ((if (canGoBack) 1 else 0) + (if (canGoForward) 1 else 0)),
+            animationSpec = tween(200),
+            label = "domainLeading",
+        )
+        DomainLabel(
+            text = when {
+                effectiveUrl.isNotEmpty() -> addressDisplay(effectiveUrl)
+                else -> stringResource(R.string.browser_search_placeholder)
+            },
+            symbol = domainSymbol(effectiveUrl, pageFailed),
+            dimmed = effectiveUrl.isEmpty(),
+            leadingInset = leading,
+            trailingInset = BarPadding + GlyphWidth * 2,
+            modifier = Modifier.matchParentSize(),
+        )
     }
+}
+
+/** The bar's side padding and the width of one glyph slot in it. */
+private val BarPadding = 6.dp
+private val GlyphWidth = 34.dp
+
+/** How long the fade is where a domain runs out of room. */
+private val DomainFade = 28.dp
+
+/**
+ * The domain, in the middle of the whole bar as in Safari, so back appearing
+ * beside it does not push it around; only when the buttons leave too little
+ * room does it slide aside. A domain too long for its space fades out at its
+ * end instead of breaking off with "…".
+ */
+@Composable
+private fun DomainLabel(
+    text: String,
+    symbol: ImageVector?,
+    dimmed: Boolean,
+    leadingInset: Dp,
+    trailingInset: Dp,
+    modifier: Modifier = Modifier,
+) {
+    val zen = LocalZenColors.current
+    val density = LocalDensity.current
+    val leadingPx = with(density) { leadingInset.toPx() }
+    val trailingPx = with(density) { trailingInset.toPx() }
+    val fadePx = with(density) { DomainFade.toPx() }
+    var overflows by remember { mutableStateOf(false) }
+    Layout(
+        content = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (symbol != null) {
+                    Icon(
+                        imageVector = symbol,
+                        contentDescription = null,
+                        tint = zen.ink.copy(alpha = 0.6f),
+                        modifier = Modifier.size(15.dp),
+                    )
+                    Spacer(Modifier.width(5.dp))
+                }
+                Text(
+                    text = text,
+                    style = ZenType.rounded(16, FontWeight.SemiBold),
+                    color = zen.ink.copy(alpha = if (dimmed) 0.55f else 1f),
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            }
+        },
+        modifier = modifier
+            .clearAndSetSemantics {}
+            .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+            .drawWithContent {
+                val end = size.width - trailingPx
+                clipRect(left = leadingPx, right = end) { this@drawWithContent.drawContent() }
+                if (overflows) {
+                    drawRect(
+                        brush = Brush.horizontalGradient(
+                            listOf(Color.Transparent, Color.Black),
+                            startX = end - fadePx,
+                            endX = end,
+                        ),
+                        topLeft = Offset(end - fadePx, 0f),
+                        size = Size(fadePx, size.height),
+                        blendMode = BlendMode.DstOut,
+                    )
+                }
+            },
+    ) { measurables, constraints ->
+        val placeable = measurables.first().measure(Constraints())
+        val width = constraints.maxWidth
+        val area = (width - leadingPx - trailingPx).coerceAtLeast(0f)
+        val over = placeable.width > area + 0.5f
+        if (over != overflows) overflows = over
+        val x = if (over) {
+            leadingPx
+        } else {
+            ((width - placeable.width) / 2f).coerceIn(leadingPx, (width - trailingPx - placeable.width).coerceAtLeast(leadingPx))
+        }
+        layout(width, constraints.maxHeight) {
+            placeable.place(x.roundToInt(), (constraints.maxHeight - placeable.height) / 2)
+        }
+    }
+}
+
+/** An open padlock for an unencrypted page, the magnifier for an empty one, nothing otherwise. */
+private fun domainSymbol(effectiveUrl: String, pageFailed: Boolean): ImageVector? = when {
+    effectiveUrl.isEmpty() -> Icons.Outlined.Search
+    effectiveUrl.startsWith("http://") && !pageFailed -> Icons.Outlined.LockOpen
+    else -> null
+}
+
+/** What the connection is, for TalkBack. A search or an error page says nothing. */
+@Composable
+private fun connectionDescription(effectiveUrl: String, pageFailed: Boolean): String? = when {
+    pageFailed -> null
+    effectiveUrl.startsWith("https://") -> stringResource(R.string.browser_connection_secure)
+    effectiveUrl.startsWith("http://") -> stringResource(R.string.browser_connection_insecure)
+    else -> null
 }
 
 /** Icon-only glyph for the navigation bar: no chrome of its own. */
@@ -944,12 +1082,11 @@ private fun NavGlyph(
 @Composable
 private fun Dock(
     modifier: Modifier = Modifier,
-    menuOpen: Boolean,
     ink: Color,
     pageCount: Int,
     onOpenPages: () -> Unit,
+    onNewPage: () -> Unit,
     onClose: () -> Unit,
-    onToggleMenu: () -> Unit,
 ) {
     Row(
         modifier = modifier
@@ -975,28 +1112,30 @@ private fun Dock(
 
         Spacer(Modifier.weight(1f))
 
-        LeaveBrowserButton(ink = ink, onClick = onClose)
+        // A new page, on a page and over the overview alike: the dock reads
+        // the same in both, so nothing trades places.
+        DockButton(
+            icon = Icons.Outlined.Add,
+            description = stringResource(R.string.kept_new_page),
+            tint = ink,
+            width = CloseWidth,
+            height = CloseHeight,
+            onClick = onNewPage,
+        )
 
         Spacer(Modifier.weight(1f))
 
-        DockButton(
-            icon = Icons.Outlined.MoreHoriz,
-            description = stringResource(if (menuOpen) R.string.browser_close_menu else R.string.browser_more),
-            tint = ink,
-            onClick = onToggleMenu,
-        )
+        LeaveBrowserButton(ink = ink, onClick = onClose)
     }
 }
 
-/** The way out of the browser. */
+/** The way out of the browser, under the right thumb. */
 @Composable
 private fun LeaveBrowserButton(ink: Color, onClick: () -> Unit) {
     DockButton(
         icon = Icons.Outlined.Close,
         description = stringResource(R.string.browser_close),
         tint = ink,
-        width = CloseWidth,
-        height = CloseHeight,
         onClick = onClick,
     )
 }
@@ -1035,20 +1174,13 @@ internal fun OverviewDock(
             onClick = onOpenHistory,
         )
         Spacer(Modifier.weight(1f))
-        DockButton(
-            icon = Icons.Outlined.Close,
-            description = stringResource(R.string.browser_close),
-            tint = zen.ink,
-            width = CloseWidth,
-            height = CloseHeight,
-            onClick = onLeave,
-        )
-        Spacer(Modifier.weight(1f))
         Box {
             DockButton(
                 icon = Icons.Outlined.Add,
                 description = stringResource(R.string.kept_new_page),
                 tint = zen.ink,
+                width = CloseWidth,
+                height = CloseHeight,
                 onLongClick = onPlusLongPress,
                 // The same label the custom action carries: a long press is
                 // invisible to TalkBack, so the action has to be listed.
@@ -1057,6 +1189,8 @@ internal fun OverviewDock(
             )
             plusMenu()
         }
+        Spacer(Modifier.weight(1f))
+        LeaveBrowserButton(ink = zen.ink, onClick = onLeave)
     }
 }
 
@@ -1895,32 +2029,3 @@ private fun RowScope.MenuTile(
     }
 }
 
-@Composable
-private fun SiteIcon(effectiveUrl: String, pageFailed: Boolean = false) {
-    val zen = LocalZenColors.current
-    val icon = when {
-        effectiveUrl.isEmpty() -> Icons.Outlined.Search
-        // An insecure page must not wear the padlock a trusted one does.
-        effectiveUrl.startsWith("http://") -> Icons.Outlined.LockOpen
-        // A failed load (a bad certificate among them) made no trusted
-        // connection, so it gets no closed padlock either.
-        effectiveUrl.startsWith("https://") && !pageFailed -> Icons.Outlined.Lock
-        else -> Icons.Outlined.Language
-    }
-    // The padlock is the only sign a page is encrypted, so it has to say so:
-    // the clickable row around it merges its children, and the description is
-    // read with the page's name. A search or a plain address says nothing
-    // about a connection and stays silent.
-    val description = when {
-        pageFailed -> null
-        effectiveUrl.startsWith("https://") -> stringResource(R.string.browser_connection_secure)
-        effectiveUrl.startsWith("http://") -> stringResource(R.string.browser_connection_insecure)
-        else -> null
-    }
-    Icon(
-        imageVector = icon,
-        contentDescription = description,
-        tint = zen.ink.copy(alpha = 0.7f),
-        modifier = Modifier.size(18.dp),
-    )
-}

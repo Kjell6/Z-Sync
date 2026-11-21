@@ -22,6 +22,8 @@ object PrivateBrowsing {
     private val main = Handler(Looper.getMainLooper())
     /** What an earlier run left behind with no private page to show for it goes once. */
     private var cleaned = false
+    /** Private pages stayed from an earlier run: their data stays with them. */
+    private var keepsEarlierSession = false
     /** A private WebView ran since the profile was last deleted. */
     private var used = false
     /** The last private page closed and its data has not been deleted yet. */
@@ -41,9 +43,8 @@ object PrivateBrowsing {
      * keep their sign-ins; with none of them left, an earlier run's data goes.
      */
     fun startUp(hasPrivatePages: Boolean) {
-        if (cleaned || !isSupported) return
-        cleaned = true
-        if (!hasPrivatePages) runCatching { ProfileStore.getInstance().deleteProfile(PROFILE) }
+        // Only noted: the WebView is not woken for it before a page needs it.
+        keepsEarlierSession = hasPrivatePages
     }
 
     /** Puts a new WebView on the private profile. Before it loads anything. */
@@ -51,11 +52,13 @@ object PrivateBrowsing {
         if (!isSupported) return
         main.removeCallbacksAndMessages(null)
         // A new private page right after the last one closed must not find
-        // the old session's data.
-        if (deletePending) {
+        // the old session's data, nor what an earlier run left behind.
+        if (deletePending || (!cleaned && !keepsEarlierSession)) {
+            cleaned = true
             deletePending = false
             runCatching { ProfileStore.getInstance().deleteProfile(PROFILE) }
         }
+        cleaned = true
         ProfileStore.getInstance().getOrCreateProfile(PROFILE)
         WebViewCompat.setProfile(webView, PROFILE)
         used = true
@@ -68,6 +71,8 @@ object PrivateBrowsing {
     /** No private page is left: the next one starts with nothing. */
     fun endSession() {
         answers = null
+        // An earlier run's private pages are gone: the next one starts empty.
+        keepsEarlierSession = false
         // Nothing private ran: no need to wake the WebView to ask.
         if (!used) return
         used = false

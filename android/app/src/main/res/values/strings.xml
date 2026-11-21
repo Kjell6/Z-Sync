@@ -134,7 +134,7 @@
     <string name="settings_open_into_search">Open into search</string>
     <string name="settings_keep_only_chosen">Keep only chosen pages</string>
     <string name="settings_keep_only_chosen_subtitle">Other pages close with the browser</string>
-    <string name="settings_kept_lifetime">Auto-close</string>
+    <string name="settings_kept_lifetime">Archive pages</string>
     <string name="settings_kept_lifetime_never">Never</string>
     <string name="settings_kept_lifetime_day">After a day</string>
     <string name="settings_kept_lifetime_week">After a week</string>
@@ -327,9 +327,11 @@
     <string name="settings_clear_website_data_message">Removes cookies, site storage and site permissions. You will be signed out of websites. Open pages and your Zen data stay.</string>
 
     <!-- Browsing history -->
-    <string name="history_title">Browsing History</string>
-    <string name="history_search">Search history</string>
+    <string name="history_title">Archive</string>
+    <string name="history_search">Search archive</string>
+    <string name="history_section">History</string>
     <string name="history_empty">Pages you open will show up here</string>
     <string name="history_no_results">No pages found</string>
     <string name="history_delete">Delete</string>
+    <string name="history_archive_footer">Pages you haven\'t looked at for this long close by themselves and stay here, so you can open them again anytime.</string>
 </resources>

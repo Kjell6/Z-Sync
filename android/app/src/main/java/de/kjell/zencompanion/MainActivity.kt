@@ -359,6 +359,8 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
     }
 
     if (showSettings) {
+        // The browser's archive can change this while Settings is closed.
+        LaunchedEffect(Unit) { viewModel.reloadKeptPageLifetime() }
         SettingsSheet(
             signedIn = signedIn,
             email = session?.email,

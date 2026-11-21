@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// The pages opened in this browser, newest first and grouped by day. One card
-/// per day, app colours only, and the list's own swipe to delete an entry.
+/// The browser's archive: when pages close by themselves, then every page
+/// opened in this browser, newest first and grouped by day. One card per day,
+/// app colours only, and the list's own swipe to delete an entry.
 struct BrowserHistoryView: View {
     /// Opens the picked page: in the page behind the sheet, or in a new one
     /// when the overview came up without a page.
@@ -10,6 +11,9 @@ struct BrowserHistoryView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
     @State private var query = ""
+    /// The same choice as Settings › Pages & tabs, so it can be changed where
+    /// its effect shows up.
+    @State private var lifetime = KeptPageLifetime.stored(in: AppServices.preferences)
 
     private var store: BrowserHistoryStore { .shared }
 
@@ -40,29 +44,99 @@ struct BrowserHistoryView: View {
         }
     }
 
-    @ViewBuilder
+    // A List, not a stack of cards: the swipe to delete an entry is the
+    // system's own, and only a List has it.
     private var content: some View {
         let days = days
-        if days.isEmpty {
-            emptyState
-        } else {
-            // A List, not a stack of cards: the swipe to delete an entry is the
-            // system's own, and only a List has it.
-            List {
+        return List {
+            // Settings, not results: searching hides it.
+            if query.isEmpty {
+                Section {
+                    lifetimeRow
+                } footer: {
+                    Text("history.archive_footer")
+                        .zenFont(12.5, design: .rounded)
+                        .foregroundStyle(Palette.ink(scheme).opacity(0.45))
+                }
+            }
+
+            if days.isEmpty {
+                Section {
+                    emptyState
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                } header: {
+                    if query.isEmpty { historyHeading }
+                }
+            } else {
                 ForEach(days, id: \.day) { group in
                     Section {
                         ForEach(group.visits) { visit in
                             row(visit)
                         }
                     } header: {
-                        dayLabel(group.day)
+                        // The setting above and the pages below are two
+                        // things; the first day carries the list's own title.
+                        if query.isEmpty, group.day == days.first?.day {
+                            VStack(alignment: .leading, spacing: 10) {
+                                historyHeading
+                                dayLabel(group.day)
+                            }
+                        } else {
+                            dayLabel(group.day)
+                        }
                     }
                 }
             }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
-            .scrollDismissesKeyboard(.immediately)
         }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .scrollDismissesKeyboard(.immediately)
+    }
+
+    /// When unused pages close and land here.
+    private var lifetimeRow: some View {
+        HStack(spacing: 12) {
+            Text("settings.kept_lifetime")
+                .zenFont(15.5, weight: .medium, design: .rounded)
+                .foregroundStyle(Palette.ink(scheme))
+            Spacer(minLength: 8)
+            Menu {
+                ForEach(KeptPageLifetime.allCases) { option in
+                    Button {
+                        lifetime = option
+                    } label: {
+                        if lifetime == option {
+                            Label(option.title, systemImage: "checkmark")
+                        } else {
+                            Text(option.title)
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(lifetime.title)
+                        .zenFont(15.5, design: .rounded)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 10, weight: .semibold))
+                }
+                .foregroundStyle(Palette.ink(scheme).opacity(0.65))
+            }
+        }
+        .padding(.vertical, 3)
+        .listRowBackground(Palette.lift(scheme))
+        .onChange(of: lifetime) { _, value in
+            AppServices.preferences.setString(value.rawValue, PreferenceKeys.keptPageLifetime, scope: .standard)
+        }
+    }
+
+    private var historyHeading: some View {
+        Text("history.section")
+            .zenFont(20, weight: .semibold, design: .rounded)
+            .foregroundStyle(Palette.ink(scheme))
+            .textCase(nil)
+            .padding(.top, 14)
+            .accessibilityAddTraits(.isHeader)
     }
 
     private func dayLabel(_ day: Date) -> some View {
@@ -119,7 +193,7 @@ struct BrowserHistoryView: View {
 
     private var emptyState: some View {
         VStack(spacing: 10) {
-            Image(systemName: query.isEmpty ? "clock" : "magnifyingglass")
+            Image(systemName: query.isEmpty ? "archivebox" : "magnifyingglass")
                 .font(.system(size: 30, weight: .medium))
                 .foregroundStyle(Palette.ink(scheme).opacity(0.3))
             Text(query.isEmpty ? "history.empty" : "history.no_results")
@@ -128,6 +202,7 @@ struct BrowserHistoryView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 48)
     }
 }

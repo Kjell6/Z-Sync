@@ -871,6 +871,12 @@ class AppViewModel(
         _preferences.value = _preferences.value.copy(keptPageLifetime = lifetime)
     }
 
+    /** The browser's archive changes the lifetime on its own; read it back. */
+    fun reloadKeptPageLifetime() {
+        val stored = preferencesRepository.load().keptPageLifetime
+        _preferences.value = _preferences.value.copy(keptPageLifetime = stored)
+    }
+
     /**
      * The spaces screen started: on launch, or back from the background. Asks
      * for a new tab once per open when the setting is on. Signed in it waits

@@ -1218,7 +1218,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pages you haven't looked at for this long close by themselves and stay here, so you can open them again anytime."
+            "value": "Pages you haven't looked at for this long close by themselves. You can still find them in the history below."
           }
         }
       }

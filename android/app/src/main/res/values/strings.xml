@@ -333,5 +333,5 @@
     <string name="history_empty">Pages you open will show up here</string>
     <string name="history_no_results">No pages found</string>
     <string name="history_delete">Delete</string>
-    <string name="history_archive_footer">Pages you haven\'t looked at for this long close by themselves and stay here, so you can open them again anytime.</string>
+    <string name="history_archive_footer">Pages you haven\'t looked at for this long close by themselves. You can still find them in the history below.</string>
 </resources>

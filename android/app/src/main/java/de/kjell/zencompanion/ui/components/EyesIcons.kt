@@ -8,31 +8,25 @@ import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 
 /**
- * Two eyes side by side, the private-page mark. Material has no such glyph;
- * this matches the eyes iOS uses: open outlines for a normal page, filled for
- * a private one.
+ * Two open eyes, the address field's way into a private page. Material has no
+ * such glyph; this matches the eyes iOS uses. A private page shows
+ * `ic_incognito`, the eyes with lowered lids.
  */
 object EyesIcons {
-    val Open: ImageVector by lazy { eyes(filled = false) }
-    val Filled: ImageVector by lazy { eyes(filled = true) }
-
-    private fun eyes(filled: Boolean): ImageVector =
+    val Open: ImageVector by lazy {
         ImageVector.Builder(
-            name = if (filled) "EyesFilled" else "EyesOpen",
+            name = "EyesOpen",
             defaultWidth = 24.dp,
             defaultHeight = 24.dp,
             viewportWidth = 24f,
             viewportHeight = 24f,
         ).apply {
             for (centerX in listOf(7.5f, 16.5f)) {
-                if (filled) {
-                    path(fill = SolidColor(Color.Black)) { oval(centerX, 12f, 4f, 7f) }
-                } else {
-                    path(stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f) { oval(centerX, 12f, 3.6f, 6.6f) }
-                    path(fill = SolidColor(Color.Black)) { oval(centerX + 0.6f, 14f, 1.5f, 2.2f) }
-                }
+                path(stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f) { oval(centerX, 12f, 3.6f, 6.6f) }
+                path(fill = SolidColor(Color.Black)) { oval(centerX + 0.6f, 14f, 1.5f, 2.2f) }
             }
         }.build()
+    }
 
     private fun PathBuilder.oval(cx: Float, cy: Float, rx: Float, ry: Float) {
         moveTo(cx - rx, cy)

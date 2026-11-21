@@ -565,8 +565,10 @@ struct MiniBrowserView: View {
     /// What a new private page shows until something loads in it.
     private var incognitoNote: some View {
         VStack(spacing: 12) {
-            Image(systemName: "eyes.inverse")
-                .font(.system(size: 34, weight: .semibold))
+            Image("incognito")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 48, height: 38)
             Text("browser.incognito.note")
                 .zenFont(19, weight: .semibold, design: .rounded)
         }

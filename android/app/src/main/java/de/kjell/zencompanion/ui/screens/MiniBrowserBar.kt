@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.tappableElement
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.semantics.Role
 import de.kjell.zencompanion.ui.components.EyesIcons
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.res.painterResource
 import de.kjell.zencompanion.ui.theme.ZenLayout
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.widthIn
@@ -1340,7 +1342,10 @@ private fun ComposerBar(
     }
 }
 
-/** Open eyes for a normal page; filled ones, named, once it is private. */
+/**
+ * Open eyes for a normal page; lowered lids once it is private. The field is
+ * short, so no label: the private page says so behind it.
+ */
 @Composable
 private fun PrivateToggle(isPrivate: Boolean, onToggle: () -> Unit) {
     val zen = LocalZenColors.current
@@ -1352,20 +1357,11 @@ private fun PrivateToggle(isPrivate: Boolean, onToggle: () -> Unit) {
             .clip(CircleShape)
             .toggleable(value = isPrivate, role = Role.Switch, onValueChange = { onToggle() })
             .semantics { contentDescription = "$label. $hint" }
-            .padding(start = 8.dp, end = 10.dp),
+            .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        AnimatedVisibility(visible = isPrivate, enter = fadeIn(), exit = fadeOut()) {
-            Text(
-                text = label,
-                style = ZenType.rounded(13, FontWeight.Medium),
-                color = zen.ink.copy(alpha = 0.6f),
-                maxLines = 1,
-            )
-        }
         Icon(
-            imageVector = if (isPrivate) EyesIcons.Filled else EyesIcons.Open,
+            painter = if (isPrivate) painterResource(R.drawable.ic_incognito) else rememberVectorPainter(EyesIcons.Open),
             contentDescription = null,
             tint = zen.ink.copy(alpha = if (isPrivate) 0.8f else 0.45f),
             modifier = Modifier.size(20.dp),

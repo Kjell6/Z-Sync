@@ -1,7 +1,6 @@
 package de.kjell.zencompanion.ui.screens
 
 import de.kjell.zencompanion.ui.browser.PrivateBrowsing
-import de.kjell.zencompanion.ui.components.EyesIcons
 import de.kjell.zencompanion.ui.theme.InkDark
 import de.kjell.zencompanion.ui.theme.PaperDark
 import de.kjell.zencompanion.ui.theme.ZenLayout
@@ -126,6 +125,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
@@ -868,7 +868,7 @@ private fun PrivatePageNote() {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
-            imageVector = EyesIcons.Filled,
+            painter = painterResource(R.drawable.ic_incognito),
             contentDescription = null,
             tint = InkDark.copy(alpha = 0.55f),
             modifier = Modifier.size(40.dp),

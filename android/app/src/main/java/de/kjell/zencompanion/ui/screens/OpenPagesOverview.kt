@@ -68,6 +68,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
@@ -90,7 +91,6 @@ import de.kjell.zencompanion.data.SaveKind
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.browser.BrowserPages
 import de.kjell.zencompanion.ui.browser.PageSession
-import de.kjell.zencompanion.ui.components.EyesIcons
 import de.kjell.zencompanion.ui.components.Favicon
 import de.kjell.zencompanion.ui.components.PinDestination
 import de.kjell.zencompanion.ui.components.PinDestinationModel
@@ -735,7 +735,7 @@ private fun OpenPageCard(
             }
             if (page.isPrivate) {
                 Icon(
-                    imageVector = EyesIcons.Filled,
+                    painter = painterResource(R.drawable.ic_incognito),
                     contentDescription = stringResource(R.string.browser_incognito),
                     tint = zen.ink,
                     modifier = Modifier.size(iconSide * 0.8f),

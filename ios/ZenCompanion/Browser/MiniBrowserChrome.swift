@@ -1404,7 +1404,8 @@ struct MiniBrowserTopBar: View {
         .accessibilityLabel(Text("browser.clear_search"))
     }
 
-    /// Open eyes for a normal page; filled ones, named, once it is private.
+    /// Open eyes for a normal page; lowered lids once it is private. The
+    /// field is short, so no label: the private page says so behind it.
     private var incognitoButton: some View {
         Button {
             withAnimation(.easeInOut(duration: 0.25)) {
@@ -1412,22 +1413,21 @@ struct MiniBrowserTopBar: View {
             }
             AppServices.haptics.selectionChanged()
         } label: {
-            HStack(spacing: 6) {
+            Group {
                 if model.isPrivate {
-                    Text("browser.incognito")
-                        .zenFont(13, weight: .medium, design: .rounded)
-                        .foregroundStyle(Palette.ink(scheme).opacity(0.6))
-                        .transition(.opacity)
+                    Image("incognito")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 22, height: 18)
+                } else {
+                    Image(systemName: "eyes")
+                        .font(.system(size: 17, weight: .semibold))
                 }
-                Image(systemName: model.isPrivate ? "eyes.inverse" : "eyes")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Palette.ink(scheme).opacity(model.isPrivate ? 0.8 : 0.4))
-                    .contentTransition(.symbolEffect(.replace))
             }
-            .padding(.leading, 8)
-            .padding(.trailing, 13)
-            .frame(minWidth: barHeight, minHeight: barHeight)
-            .contentShape(Capsule())
+            .foregroundStyle(Palette.ink(scheme).opacity(model.isPrivate ? 0.8 : 0.4))
+            .transition(.opacity)
+            .frame(width: barHeight, height: barHeight)
+            .contentShape(Circle())
         }
         .buttonStyle(GlyphPressStyle())
         .accessibilityLabel(Text("browser.incognito"))

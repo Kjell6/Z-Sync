@@ -9,15 +9,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
@@ -29,6 +23,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.listSaver
@@ -36,8 +31,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.unit.IntOffset
 import de.kjell.zencompanion.ui.motion.rememberReducedMotion
 import de.kjell.zencompanion.ui.motion.springStiffness
 import androidx.compose.ui.platform.LocalContext
@@ -74,13 +69,28 @@ import kotlinx.coroutines.delay
 private val BrowserCoverIn = spring(
     dampingRatio = Spring.DampingRatioNoBouncy,
     stiffness = springStiffness(0.45),
-    visibilityThreshold = IntOffset.VisibilityThreshold,
+    visibilityThreshold = 0.001f,
 )
 private val BrowserCoverOut = spring(
     dampingRatio = Spring.DampingRatioNoBouncy,
     stiffness = springStiffness(0.35),
-    visibilityThreshold = IntOffset.VisibilityThreshold,
+    visibilityThreshold = 0.001f,
 )
+
+/**
+ * Lets the expensive frames of a change pass before a move starts timing
+ * itself: waits for two quick frames in a row, a third of a second at most.
+ */
+private suspend fun awaitSettledFrames() {
+    var last = withFrameNanos { it }
+    var quick = 0
+    repeat(20) {
+        val now = withFrameNanos { it }
+        quick = if (now - last < 25_000_000L) quick + 1 else 0
+        last = now
+        if (quick >= 2) return
+    }
+}
 
 /** The browser being open. The pages live in [BrowserPages]; [url] reopens one after the process died. */
 private data class BrowserLaunch(
@@ -243,8 +253,11 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
         pinned = emptyList(),
     )
 
-    /** The browser is up or on its way; it stays composed until it has slid away. */
-    val browserPresented = remember { MutableTransitionState(activeBrowserLaunch != null && blockingAsked) }
+    val browserWanted = activeBrowserLaunch != null && blockingAsked
+    /** The browser is composed: up, or on its way in or out. */
+    var browserComposed by remember { mutableStateOf(browserWanted) }
+    /** How far the browser sits below the screen: 0 is up, 1 is gone. */
+    val coverOffset = remember { Animatable(if (browserWanted) 0f else 1f) }
     /** The launch on screen, kept while the browser slides out after it ended. */
     val shownLaunch = remember { arrayOfNulls<BrowserLaunch>(1) }
     /** The reader left with pages open: they let go once the browser is gone. */
@@ -257,8 +270,29 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
         pages.leaveBrowser(captured = true)
     }
 
-    LaunchedEffect(browserPresented.isIdle, browserPresented.currentState) {
-        if (browserPresented.isIdle && !browserPresented.currentState) {
+    // A page comes up from the bottom and goes back down, all of it at once —
+    // page, bar and the color under them — like the cover on iOS. From home
+    // the overview fades in over the spaces on its own, dock included, so the
+    // screen itself only has to be there.
+    LaunchedEffect(browserWanted) {
+        if (browserWanted) {
+            browserComposed = true
+            if (reducedMotion || shownLaunch[0]?.overview == true) {
+                coverOffset.snapTo(0f)
+                return@LaunchedEffect
+            }
+            // The first frames build the page's WebView and are slow; a move
+            // started under them would be over before it was seen.
+            awaitSettledFrames()
+            coverOffset.animateTo(0f, BrowserCoverIn)
+        } else if (browserComposed) {
+            if (!reducedMotion) {
+                // Leaving shoots the page for the overview, which costs a frame.
+                awaitSettledFrames()
+                coverOffset.animateTo(1f, BrowserCoverOut)
+            }
+            browserComposed = false
+            coverOffset.snapTo(1f)
             shownLaunch[0] = null
             finishLeaving()
         }
@@ -380,23 +414,14 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
         val launch = activeBrowserLaunch
         // The first browser waits for the content-blocking answer (below), so
         // its first page already loads with the reader's choice.
-        browserPresented.targetState = launch != null && blockingAsked
-        if (launch != null) shownLaunch[0] = launch
+        if (launch != null && blockingAsked) shownLaunch[0] = launch
         val presented = shownLaunch[0]
-        // A page comes up from the bottom and goes back down, all of it at
-        // once — page, bar and the color under them — like the cover on iOS.
-        // From home the overview fades in over the spaces on its own, dock
-        // included, so the screen itself only has to be there.
-        AnimatedVisibility(
-            visibleState = browserPresented,
-            enter = if (reducedMotion || presented?.overview == true) {
-                EnterTransition.None
-            } else {
-                slideInVertically(BrowserCoverIn) { it }
-            },
-            exit = if (reducedMotion) ExitTransition.None else slideOutVertically(BrowserCoverOut) { it },
-        ) {
-            if (presented != null) {
+        if (browserComposed && presented != null) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { translationY = coverOffset.value * size.height },
+            ) {
                 // Keyed by launch: a link that arrives while the last browser is
                 // showing (its overview or history up) starts a browser of its own
                 // instead of putting the new page behind the old screen.
@@ -421,7 +446,7 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
                     )
                 }
                 // On its way out the browser takes no touch and no back.
-                if (!browserPresented.targetState) {
+                if (!browserWanted) {
                     BackHandler {}
                     Box(
                         Modifier

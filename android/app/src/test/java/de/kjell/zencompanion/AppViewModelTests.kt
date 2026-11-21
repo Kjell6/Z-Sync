@@ -1044,3 +1044,24 @@ private class EmptyLegacyPlainStore : AccountStore.LegacyPlainStore {
 
     override fun delete() = Unit
 }
+
+/** Private pages on a WebView without profiles: see [BrowserPages]'s start. */
+class PrivatePagesWithoutProfilesTests {
+    @Test
+    fun privatePagesThatCannotStayPrivateCloseAtStart() {
+        val dir = File(System.getProperty("java.io.tmpdir"), "zen-private-${System.nanoTime()}")
+        try {
+            val store = de.kjell.zencompanion.data.OpenPagesStore(dir)
+            store.open("https://a.example/", privateProfile = "private-a")
+            val normal = store.open("https://b.example/")
+
+            // The unit tests' WebView has no profiles, like an old one.
+            val pages = BrowserPages(FakeAppContext(), store, FakeBrowserRepository())
+
+            assertEquals(listOf(normal.id), pages.store.pages.value.map { it.id })
+            assertTrue(pages.store.privateProfiles().isEmpty())
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+}

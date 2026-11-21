@@ -211,6 +211,15 @@ internal fun MiniBrowserWebView(
                     setSupportMultipleWindows(true)
                     javaScriptCanOpenWindowsAutomatically = true
                 }
+                // A private page without its profile stays shut for good,
+                // whatever is typed into it later: nothing reaches the network,
+                // and nothing runs that could write into the phone's own data.
+                if (!canLoad) {
+                    settings.blockNetworkLoads = true
+                    settings.javaScriptEnabled = false
+                    settings.domStorageEnabled = false
+                    settings.databaseEnabled = false
+                }
                 // Passkeys for any site, the way a browser asks for them.
                 if (BrowserPasskeysEnabled &&
                     WebViewFeature.isFeatureSupported(WebViewFeature.WEB_AUTHENTICATION)

@@ -201,6 +201,14 @@ class BrowserPages(
     var onPageLeft: ((String) -> Unit)? = null
 
     init {
+        // Private pages that stayed, on a WebView that has since lost its
+        // profiles (an older one put back): they cannot open privately, so
+        // they close rather than load into the phone's own data. Before the
+        // removal callback is set: nothing of them is in memory yet, and
+        // there is no profile to delete without profile support.
+        if (store.privateProfiles().isNotEmpty() && !PrivateBrowsing.isSupported) {
+            store.pages.value.filter { it.isPrivate }.forEach { store.close(it.id) }
+        }
         store.onPageRemoved = { id ->
             live.removeAll { it.id == id }
             recent.removeAll { it.id == id }
@@ -210,12 +218,6 @@ class BrowserPages(
             PrivateBrowsing.releaseAllExcept(store.privateProfiles())
         }
         PrivateBrowsing.startUp(store.privateProfiles())
-        // Private pages that stayed, on a WebView that has since lost its
-        // profiles (an older one put back): they cannot open privately, so
-        // they close rather than load into the phone's own data.
-        if (store.privateProfiles().isNotEmpty() && !PrivateBrowsing.isSupported) {
-            store.pages.value.filter { it.isPrivate }.forEach { store.close(it.id) }
-        }
     }
 
     /** The account came or went; every page's pin path follows it. */

@@ -27,9 +27,12 @@ object PrivateBrowsing {
     /** What earlier runs left behind without a page is looked for once. */
     private var orphansChecked = false
 
-    /** Older WebViews have a single profile: there private pages are not offered. */
+    /**
+     * Older WebViews have a single profile: there private pages are not
+     * offered. A WebView that cannot even be asked counts as one of them.
+     */
     val isSupported: Boolean
-        get() = WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)
+        get() = runCatching { WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE) }.getOrDefault(false)
 
     /** A profile for a new private page, used by no other. */
     fun newProfile(): String = PREFIX + UUID.randomUUID()
@@ -71,6 +74,9 @@ object PrivateBrowsing {
         val gone = known - inUse
         if (gone.isEmpty()) return
         known -= gone
+        // Without profile support there is no profile store to ask, and no
+        // private page could have written to one.
+        if (!isSupported) return
         gone.forEach { profile -> main.postDelayed({ delete(profile) }, DELETE_DELAY_MS) }
     }
 

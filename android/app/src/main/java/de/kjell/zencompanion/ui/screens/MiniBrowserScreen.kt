@@ -269,7 +269,9 @@ fun MiniBrowserScreen(
     var pageFloats by remember { mutableStateOf(false) }
     /** How far a private page's cover has come over it in the move. */
     val privateCoverFade = remember { Animatable(0f) }
-    LaunchedEffect(pageFloats) { if (!pageFloats) privateCoverFade.snapTo(0f) }
+    /** A private card opened from the deck: its cover stays over the page, fading into it. */
+    var privateCoverHolds by remember { mutableStateOf(false) }
+    LaunchedEffect(pageFloats) { if (!pageFloats && !privateCoverHolds) privateCoverFade.snapTo(0f) }
     /** The pull has let go for the overview; the bar takes no new one. */
     var committingPull by remember { mutableStateOf(false) }
     var pullPassedPoint by remember { mutableStateOf(false) }
@@ -356,6 +358,8 @@ fun MiniBrowserScreen(
             floatCardScale = it.scale
         }
         pageFloats = true
+        // A card's cover cut short on its way out is this flight's now.
+        privateCoverHolds = false
         // Faded in as the page lifts off: covered from the start, without a cut.
         if (page.isPrivate) scope.launch { privateCoverFade.animateTo(1f, tween(220)) }
         showOverview = true
@@ -513,6 +517,10 @@ fun MiniBrowserScreen(
         pages.finishSwitching(afterMs = BrowserPages.CHOSEN_SETTLE_MS)
         overviewControls = false
         expandingCardId = page.id
+        if (page.isPrivate) {
+            privateCoverHolds = true
+            scope.launch { privateCoverFade.snapTo(1f) }
+        }
         transition {
             launch { overviewReveal.animateTo(0f, DeckOpenSpring) }
             // The spring's last stretch is invisible; the page takes over once
@@ -524,6 +532,13 @@ fun MiniBrowserScreen(
             showOverview = false
             expandingCardId = null
             cardExpansion.snapTo(0f)
+            // The card's cover is the page's now, and fades into the site.
+            if (privateCoverHolds) {
+                scope.launch {
+                    privateCoverFade.animateTo(0f, tween(280))
+                    privateCoverHolds = false
+                }
+            }
             // The bar sits under the deck until now.
             chromeAlpha.animateTo(1f, tween(150))
         }
@@ -639,7 +654,7 @@ fun MiniBrowserScreen(
     ) {
         // Nothing of the screen behind the browser shows around a flying page:
         // the page's own color lies under it, as it does on iOS.
-        if (pageFloats && session != null) {
+        if ((pageFloats || privateCoverHolds) && session != null) {
             val floating by session.viewModel.state.collectAsState()
             val under = floating.siteThemeColor.takeIf { floating.pageError == null } ?: MaterialTheme.colorScheme.surface
             Box(
@@ -713,7 +728,7 @@ fun MiniBrowserScreen(
                 )
                 // On its way to its card the page already is the card: the site
                 // never shows in the move.
-                if (pageFloats && session.isPrivate) {
+                if ((pageFloats || privateCoverHolds) && session.isPrivate) {
                     PrivatePageCover(Modifier.graphicsLayer { alpha = privateCoverFade.value })
                 }
             }

@@ -56,6 +56,9 @@ struct MiniBrowserView: View {
     /// How far a private page's cover has come over it in the move: faded in
     /// as the page lifts off, out again if it goes back.
     @State private var privateCoverFade: Double = 0
+    /// A private card opened from the deck: its cover stays over the page
+    /// once the card has gone, and fades away into it.
+    @State private var privateCoverHolds = false
     @State private var chromeFade: CGFloat = 1
     /// The pull has let go for the overview; the bar takes no new one.
     @State private var committingPull = false
@@ -305,7 +308,7 @@ struct MiniBrowserView: View {
                             .overlay {
                                 // On its way to its card the page already is
                                 // the card: the site never shows in the move.
-                                if model.isPrivate, pageFloats {
+                                if model.isPrivate, pageFloats || privateCoverHolds {
                                     PrivatePageCover()
                                         // The page's own outline, corner for
                                         // corner, so nothing shows past it.
@@ -412,14 +415,14 @@ struct MiniBrowserView: View {
                 ZStack {
                     sheetBackground
                     // The status bar goes dark with the private page's cover.
-                    if model.isPrivate, pageFloats {
+                    if model.isPrivate, pageFloats || privateCoverHolds {
                         Palette.background(.dark).opacity(privateCoverFade)
                     }
                 }
                 .ignoresSafeArea()
             }
             .onChange(of: pageFloats) { _, floats in
-                guard !floats else { return }
+                guard !floats, !privateCoverHolds else { return }
                 var transaction = Transaction()
                 transaction.disablesAnimations = true
                 withTransaction(transaction) { privateCoverFade = 0 }
@@ -805,6 +808,8 @@ private extension MiniBrowserView {
         // changes where the page meets the screen's edge.
         if let card = cardPose() { pagePose.corner = card.corner }
         pageFloats = true
+        // A card's cover cut short on its way out is this flight's now.
+        privateCoverHolds = false
         if model.isPrivate {
             withAnimation(.easeOut(duration: 0.22)) { privateCoverFade = 1 }
         }
@@ -989,6 +994,14 @@ private extension MiniBrowserView {
         transitionEpoch += 1
         let epoch = transitionEpoch
         overviewControls = false
+        if page.model.isPrivate {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                privateCoverHolds = true
+                privateCoverFade = 1
+            }
+        }
         withAnimation(PageDeckGeometry.openMotion) {
             expandingCardID = page.id
             cardExpansion = 1
@@ -1007,7 +1020,16 @@ private extension MiniBrowserView {
                     expandingCardID = nil
                     cardExpansion = 0
                 }
+                // The card's cover is the page's now, and fades into the site.
+                if privateCoverHolds { releasePrivateCover() }
             }
+        }
+    }
+
+    private func releasePrivateCover() {
+        withAnimation(.easeOut(duration: 0.28)) { privateCoverFade = 0 } completion: {
+            guard privateCoverFade == 0 else { return }
+            privateCoverHolds = false
         }
     }
 

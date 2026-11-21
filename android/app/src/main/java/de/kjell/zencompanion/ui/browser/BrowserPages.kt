@@ -198,6 +198,7 @@ class BrowserPages(
             sessions.remove(id)
             shotBitmaps.remove(id)
         }
+        PrivateBrowsing.startUp(store.hasPrivatePages())
     }
 
     /** The account came or went; every page's pin path follows it. */

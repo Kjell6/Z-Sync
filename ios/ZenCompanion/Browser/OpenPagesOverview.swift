@@ -892,27 +892,30 @@ struct PageCountBadge: View {
 /// site, only the private page's dark surface, its eyes and its name, in the
 /// system's own white.
 ///
-/// Sized by its own width: the flying page is the whole screen scaled down to
-/// the card, so the eyes and the name land at the size the card then shows.
+/// Laid out at a card's size and only scaled to the size it is shown at: the
+/// flying page is the whole screen, and type set at that size takes other
+/// letter widths than the card's, so the name would shift as the card takes over.
 struct PrivatePageCover: View {
-    /// A focused card's width on a phone, where the sizes below are drawn at.
+    /// A focused card's width on a phone, where the layout below is set.
     private static let cardWidth: CGFloat = 276
 
     var body: some View {
         GeometryReader { geometry in
-            let factor = geometry.size.width / Self.cardWidth
             ZStack {
                 Palette.background(.dark)
-                VStack(spacing: 10 * factor) {
+                VStack(spacing: 10) {
                     Image("incognito")
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 44 * factor, height: 35 * factor)
+                        .frame(width: 44, height: 35)
                     Text("browser.incognito")
-                        .zenFont(17 * factor, weight: .semibold, design: .rounded)
+                        .zenFont(17, weight: .semibold, design: .rounded)
                 }
                 .foregroundStyle(.secondary)
+                .fixedSize()
+                .scaleEffect(geometry.size.width / Self.cardWidth)
             }
+            .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .environment(\.colorScheme, .dark)
     }

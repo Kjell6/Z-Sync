@@ -20,7 +20,7 @@ object PrivateBrowsing {
     private const val DELETE_DELAY_MS = 1_500L
 
     private val main = Handler(Looper.getMainLooper())
-    /** What an earlier run left behind (the app can end without saying so) goes once. */
+    /** What an earlier run left behind with no private page to show for it goes once. */
     private var cleaned = false
     /** A private WebView ran since the profile was last deleted. */
     private var used = false
@@ -36,14 +36,23 @@ object PrivateBrowsing {
     val isSupported: Boolean
         get() = WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)
 
+    /**
+     * The pages were read back as the app starts. Private pages that stayed
+     * keep their sign-ins; with none of them left, an earlier run's data goes.
+     */
+    fun startUp(hasPrivatePages: Boolean) {
+        if (cleaned || !isSupported) return
+        cleaned = true
+        if (!hasPrivatePages) runCatching { ProfileStore.getInstance().deleteProfile(PROFILE) }
+    }
+
     /** Puts a new WebView on the private profile. Before it loads anything. */
     fun adopt(webView: WebView) {
         if (!isSupported) return
         main.removeCallbacksAndMessages(null)
         // A new private page right after the last one closed must not find
-        // the old session's data, nor what an earlier run left behind.
-        if (!cleaned || deletePending) {
-            cleaned = true
+        // the old session's data.
+        if (deletePending) {
             deletePending = false
             runCatching { ProfileStore.getInstance().deleteProfile(PROFILE) }
         }

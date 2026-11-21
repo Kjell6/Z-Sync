@@ -802,26 +802,30 @@ private fun OpenPageCard(
  */
 @Composable
 internal fun PrivatePageCover(modifier: Modifier = Modifier) {
-    // Sized by its own width: the flying page is the whole screen scaled down
-    // to the card, so the eyes and the name land at the size the card shows.
-    BoxWithConstraints(modifier.fillMaxSize().background(PaperDark)) {
+    // Laid out at a card's size and only scaled to the size it is shown at, so
+    // the name does not shift as the card takes over from the flying page.
+    BoxWithConstraints(modifier.fillMaxSize().background(PaperDark), contentAlignment = Alignment.Center) {
         val factor = maxWidth / PrivateCoverCardWidth
         Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.graphicsLayer {
+                scaleX = factor
+                scaleY = factor
+            },
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Icon(
                 painter = painterResource(R.drawable.ic_incognito),
                 contentDescription = null,
                 tint = PrivateInk,
-                modifier = Modifier.size(44.dp * factor),
+                modifier = Modifier.size(44.dp),
             )
-            Spacer(Modifier.height(10.dp * factor))
+            Spacer(Modifier.height(10.dp))
             Text(
                 text = stringResource(R.string.browser_incognito),
-                style = ZenType.rounded(17, FontWeight.SemiBold).let { it.copy(fontSize = it.fontSize * factor) },
+                style = ZenType.rounded(17, FontWeight.SemiBold),
                 color = PrivateInk,
+                maxLines = 1,
+                softWrap = false,
             )
         }
     }

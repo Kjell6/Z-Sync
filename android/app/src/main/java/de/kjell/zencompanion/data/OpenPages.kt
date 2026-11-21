@@ -29,7 +29,7 @@ data class OpenPage(
     val released: Boolean = false,
     /** The address saved from this page into a space. */
     val pinnedUrl: String? = null,
-    /** Private: no history, never kept, website data of its own. Never on disk. */
+    /** Private: no history and website data of its own. It stays like any other page. */
     val isPrivate: Boolean = false,
 ) {
     val isKept: Boolean get() = keptAt != null
@@ -158,7 +158,7 @@ class OpenPagesStore(
     }
 
     fun canKeep(page: OpenPage, failed: Boolean): Boolean =
-        page.isKept || (!page.isPrivate && !failed && KeptPagesPolicy.isWebAddress(page.url))
+        page.isKept || (!failed && KeptPagesPolicy.isWebAddress(page.url))
 
     /** A new page turns private or back, before anything has loaded in it. */
     fun setPrivate(id: String, isPrivate: Boolean) {
@@ -325,8 +325,6 @@ class OpenPagesStore(
     }
 
     private fun promote(page: OpenPage, keepEveryPage: Boolean, exit: PageExit) {
-        // A private page never stays, whatever the setting says.
-        if (page.isPrivate) return
         val action = KeptPagesPolicy.onLeave(
             isKept = page.isKept,
             keepEveryPage = keepEveryPage,
@@ -432,7 +430,8 @@ class OpenPagesStore(
                         .put("url", page.url)
                         .put("title", page.title)
                         .put("keptAt", page.keptAt)
-                        .put("lastUsedAt", page.lastUsedAt),
+                        .put("lastUsedAt", page.lastUsedAt)
+                        .put("isPrivate", page.isPrivate),
                 )
             }
             return array.toString()
@@ -448,6 +447,7 @@ class OpenPagesStore(
                     title = item.optString("title"),
                     keptAt = item.getLong("keptAt"),
                     lastUsedAt = item.getLong("lastUsedAt"),
+                    isPrivate = item.optBoolean("isPrivate"),
                 )
             }
         }

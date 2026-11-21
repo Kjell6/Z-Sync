@@ -267,6 +267,9 @@ fun MiniBrowserScreen(
     var overviewControls by remember { mutableStateOf(showOverview) }
     /** The page is above the deck, moving with the finger or landing on its card. */
     var pageFloats by remember { mutableStateOf(false) }
+    /** How far a private page's cover has come over it in the move. */
+    val privateCoverFade = remember { Animatable(0f) }
+    LaunchedEffect(pageFloats) { if (!pageFloats) privateCoverFade.snapTo(0f) }
     /** The pull has let go for the overview; the bar takes no new one. */
     var committingPull by remember { mutableStateOf(false) }
     var pullPassedPoint by remember { mutableStateOf(false) }
@@ -353,6 +356,8 @@ fun MiniBrowserScreen(
             floatCardScale = it.scale
         }
         pageFloats = true
+        // Faded in as the page lifts off: covered from the start, without a cut.
+        if (page.isPrivate) scope.launch { privateCoverFade.animateTo(1f, tween(220)) }
         showOverview = true
         pages.capture(page)
     }
@@ -428,6 +433,7 @@ fun MiniBrowserScreen(
                 launch { poseBandCut.animateTo(0f, spec) },
                 launch { overviewReveal.animateTo(0f, spring(stiffness = 400f, visibilityThreshold = 0.002f)) },
                 launch { chromeAlpha.animateTo(1f, tween(180)) },
+                launch { privateCoverFade.animateTo(0f, tween(250)) },
             ).joinAll()
             showOverview = false
             pageFloats = false
@@ -642,6 +648,16 @@ fun MiniBrowserScreen(
                     .zIndex(-1f)
                     .background(under),
             )
+            // The status bar goes dark with the private page's cover.
+            if (session.isPrivate) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .zIndex(-1f)
+                        .graphicsLayer { alpha = privateCoverFade.value }
+                        .background(PaperDark),
+                )
+            }
         }
 
         if (session != null) {
@@ -697,7 +713,9 @@ fun MiniBrowserScreen(
                 )
                 // On its way to its card the page already is the card: the site
                 // never shows in the move.
-                if (pageFloats && session.isPrivate) PrivatePageCover()
+                if (pageFloats && session.isPrivate) {
+                    PrivatePageCover(Modifier.graphicsLayer { alpha = privateCoverFade.value })
+                }
             }
         }
 

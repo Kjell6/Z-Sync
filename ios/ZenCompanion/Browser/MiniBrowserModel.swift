@@ -436,9 +436,9 @@ final class MiniBrowserModel {
     @ObservationIgnored private weak var zoomedWebView: WKWebView?
     @ObservationIgnored private var appliedPageZoom: Double?
 
-    /// A private page: its website data lives in memory only, it leaves no
-    /// history and it never stays once the browser closes. Chosen while the
-    /// page is still new, before anything has loaded in it.
+    /// A private page: its website data is kept apart from the phone's and it
+    /// leaves no history. Chosen while the page is still new, before anything
+    /// has loaded in it; it stays like any other page.
     private(set) var isPrivate = false
 
     /// The page's live web view; nil while the page sleeps. Owned here, not by
@@ -675,6 +675,11 @@ final class MiniBrowserModel {
     /// A page opened from a private one is private too.
     func inheritPrivacy(from opener: MiniBrowserModel?) {
         guard opener?.isPrivate == true else { return }
+        restorePrivate()
+    }
+
+    /// A private page read back as the app starts, before it has a web view.
+    func restorePrivate() {
         isPrivate = true
         sitePermissions = PrivateBrowsing.permissions
     }

@@ -201,12 +201,15 @@ final class OpenPagesStore: MiniBrowserPageHost {
         pages = Self.read(from: directory).map { saved in
             let model = makeModel(saved.url)
             model.restore(title: saved.title)
+            if saved.isPrivate == true { model.restorePrivate() }
             model.markAddressAsVisited()
             let page = OpenPage(id: saved.id, model: model, keptAt: saved.keptAt, lastUsedAt: saved.lastUsedAt)
             model.host = self
             return page
         }
         closeExpired()
+        // An earlier run's private data with no private page left to own it.
+        if !pages.contains(where: { $0.model.isPrivate }) { PrivateBrowsing.endSession() }
     }
 
     // MARK: - Reading
@@ -278,7 +281,6 @@ final class OpenPagesStore: MiniBrowserPageHost {
 
     func canKeep(_ page: OpenPage) -> Bool {
         if page.isKept { return true }
-        guard !page.model.isPrivate else { return false }
         guard page.model.pageError == nil else { return false }
         return Self.isWebAddress(page.url)
     }
@@ -484,8 +486,6 @@ final class OpenPagesStore: MiniBrowserPageHost {
     }
 
     private func saveIfItStays(_ page: OpenPage) {
-        // A private page never stays, whatever the setting says.
-        guard !page.model.isPrivate else { return }
         let model = page.model
         let action = KeptPagesPolicy.onLeave(
             isKept: page.isKept,
@@ -710,7 +710,10 @@ final class OpenPagesStore: MiniBrowserPageHost {
     private func persist() {
         let saved = pages.compactMap { page -> SavedPage? in
             guard let keptAt = page.keptAt, let url = page.url else { return nil }
-            return SavedPage(id: page.id, url: url, title: page.model.pageTitle, keptAt: keptAt, lastUsedAt: page.lastUsedAt)
+            return SavedPage(
+                id: page.id, url: url, title: page.model.pageTitle, keptAt: keptAt,
+                lastUsedAt: page.lastUsedAt, isPrivate: page.model.isPrivate ? true : nil
+            )
         }
         ensureDirectory()
         guard let data = try? JSONEncoder().encode(saved) else { return }
@@ -731,6 +734,8 @@ final class OpenPagesStore: MiniBrowserPageHost {
         let title: String
         let keptAt: Date
         let lastUsedAt: Date
+        /// Absent in files written before private pages could stay.
+        let isPrivate: Bool?
     }
 
     private static let fileName = "pages.json"

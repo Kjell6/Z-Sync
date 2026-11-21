@@ -1,17 +1,20 @@
 import SwiftUI
 import WebKit
 
-/// Website data for private pages: in memory only, shared by the private
-/// pages open together so a sign-in carries across them, and dropped once the
-/// last of them has closed.
+/// Website data for private pages: a store of their own, apart from the
+/// phone's, shared by the private pages open together so a sign-in carries
+/// across them. It stays with the pages through a restart, and is wiped once
+/// the last of them has closed.
 @MainActor
 enum PrivateBrowsing {
+    /// Fixed, so the pages find their store again after a restart.
+    private static let identifier = UUID(uuidString: "6F1C2B0E-5A43-4C47-9B7E-2D8F0C4A7E11")!
     private static var store: WKWebsiteDataStore?
     private static var answers: SitePermissionStore?
 
     static var dataStore: WKWebsiteDataStore {
         if let store { return store }
-        let fresh = WKWebsiteDataStore.nonPersistent()
+        let fresh = WKWebsiteDataStore(forIdentifier: identifier)
         store = fresh
         return fresh
     }
@@ -26,8 +29,11 @@ enum PrivateBrowsing {
 
     /// No private page is left: the next one starts with nothing.
     static func endSession() {
-        store = nil
         answers = nil
+        dataStore.removeData(
+            ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
+            modifiedSince: .distantPast
+        ) {}
     }
 }
 
@@ -86,7 +92,7 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         // in Safari.
         configuration.preferences.isElementFullscreenEnabled = true
         // A popup already carries its opener's store, which must stay.
-        if model.isPrivate, configuration.websiteDataStore.isPersistent {
+        if model.isPrivate, configuration.websiteDataStore !== PrivateBrowsing.dataStore {
             configuration.websiteDataStore = PrivateBrowsing.dataStore
         }
         configuration.userContentController.addScriptMessageHandler(

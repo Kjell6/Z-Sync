@@ -53,6 +53,9 @@ struct MiniBrowserView: View {
     @State private var pagePose = PageCardPose.identity
     /// The page is above the deck, moving with the finger or landing on its card.
     @State private var pageFloats = false
+    /// How far a private page's cover has come over it in the move: faded in
+    /// as the page lifts off, out again if it goes back.
+    @State private var privateCoverFade: Double = 0
     @State private var chromeFade: CGFloat = 1
     /// The pull has let go for the overview; the bar takes no new one.
     @State private var committingPull = false
@@ -307,6 +310,7 @@ struct MiniBrowserView: View {
                                         // The page's own outline, corner for
                                         // corner, so nothing shows past it.
                                         .clipShape(floatingPageShape)
+                                        .opacity(privateCoverFade)
                                         .allowsHitTesting(false)
                                 }
                             }
@@ -404,7 +408,22 @@ struct MiniBrowserView: View {
                     .zIndex(6)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-            .background(sheetBackground.ignoresSafeArea())
+            .background {
+                ZStack {
+                    sheetBackground
+                    // The status bar goes dark with the private page's cover.
+                    if model.isPrivate, pageFloats {
+                        Palette.background(.dark).opacity(privateCoverFade)
+                    }
+                }
+                .ignoresSafeArea()
+            }
+            .onChange(of: pageFloats) { _, floats in
+                guard !floats else { return }
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) { privateCoverFade = 0 }
+            }
             .ignoresSafeArea(edges: .bottom)
             .ignoresSafeArea(.keyboard)
             .presentationBackground(pages.active == nil ? Palette.background(scheme) : barBackground)
@@ -786,6 +805,9 @@ private extension MiniBrowserView {
         // changes where the page meets the screen's edge.
         if let card = cardPose() { pagePose.corner = card.corner }
         pageFloats = true
+        if model.isPrivate {
+            withAnimation(.easeOut(duration: 0.22)) { privateCoverFade = 1 }
+        }
         showOverview = true
         // The overview's controls are there from the first point on, where
         // they will stay: the deck's buttons, not part of the page in flight.
@@ -888,6 +910,7 @@ private extension MiniBrowserView {
             pagePose = PageCardPose(x: 0, y: 0, scale: 1, corner: pagePose.corner)
             overviewReveal = 0
             chromeFade = 1
+            privateCoverFade = 0
         } completion: {
             guard epoch == transitionEpoch else { return }
             var transaction = Transaction()

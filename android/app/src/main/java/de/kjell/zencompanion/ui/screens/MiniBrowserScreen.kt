@@ -17,7 +17,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -218,7 +217,14 @@ fun MiniBrowserScreen(
     currentSpace: ZenSpaces.ZenSpace,
     allSpaces: List<ZenSpaces.ZenSpace>,
     browserRepository: BrowserRepository,
+    /** The browser goes with nothing left on screen. */
     onDismiss: () -> Unit,
+    /**
+     * The reader leaves the browser with its pages: the caller takes the
+     * screen away first and lets the pages go ([BrowserPages.leaveBrowser])
+     * once it is out of sight, so the page leaves with its chrome.
+     */
+    onLeave: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -722,10 +728,7 @@ fun MiniBrowserScreen(
                     onPullChange = ::updatePagePull,
                     onPullEnd = ::endPagePull,
                     onOpenOverview = ::openOverview,
-                    onDismiss = {
-                        pages.leaveBrowser()
-                        onDismiss()
-                    },
+                    onDismiss = onLeave,
                 )
                 // On its way to its card the page already is the card: the site
                 // never shows in the move.
@@ -805,11 +808,13 @@ fun MiniBrowserScreen(
             )
         }
 
-        val dockAlpha by animateFloatAsState(
-            targetValue = if (overviewControls) 1f else 0f,
-            animationSpec = tween(200),
-            label = "overviewDock",
-        )
+        // From home the dock comes in with the deck instead of standing there
+        // from the first frame while the cards fade in under it.
+        val dockFade = remember { Animatable(0f) }
+        LaunchedEffect(overviewControls) {
+            dockFade.animateTo(if (overviewControls) 1f else 0f, tween(200))
+        }
+        val dockAlpha = dockFade.value
         if (showOverview && dockAlpha > 0f) {
             OverviewDock(
                 modifier = Modifier
@@ -821,8 +826,7 @@ fun MiniBrowserScreen(
                 onPlusLongPress = { if (openPages.isNotEmpty()) plusMenuOpen = true },
                 onLeave = {
                     if (pages.active != null) {
-                        pages.leaveBrowser()
-                        onDismiss()
+                        onLeave()
                     } else {
                         // Over home nothing is open behind it, only the overview goes.
                         fadeOverviewOut()

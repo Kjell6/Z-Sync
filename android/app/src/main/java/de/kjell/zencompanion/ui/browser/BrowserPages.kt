@@ -411,9 +411,14 @@ class BrowserPages(
         }
     }
 
-    /** The browser is closing. What happens to each page is the store's call. */
-    fun leaveBrowser() {
-        active?.let { capture(it) }
+    /**
+     * The browser is closing. What happens to each page is the store's call.
+     * [captured]: the page on screen was already shot while it still showed —
+     * once the browser has slid away its WebView is off the window and would
+     * draw blank.
+     */
+    fun leaveBrowser(captured: Boolean = false) {
+        if (!captured) active?.let { capture(it) }
         sessions.values.forEach {
             it.viewModel.commitPendingPinSave()
             saveHistory(it)

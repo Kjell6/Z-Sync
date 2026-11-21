@@ -1213,6 +1213,33 @@ private fun BrowserPageScreen(
         },
     )
 
+    // The dock's plus: the page slides off to the left and a blank one takes
+    // its place, the same as swiping the bar past the last page. An empty page
+    // needs no new one: its search opens instead.
+    val openNewPageFromBar: () -> Unit = {
+        if (effectiveUrl.isEmpty()) {
+            viewModel.beginAddressEdit()
+        } else {
+            viewModel.collapseMenu()
+            scope.launch {
+                Haptics.perform(context, Haptics.Kind.SELECTION)
+                // Only past the last page is the blank sheet what slides in;
+                // elsewhere the next page would show, so it just appears.
+                if (nextPage == null) {
+                    pageSwipe.animateTo(-(paneWidth + pageGapPx), PageSpring)
+                }
+                colorJumps = true
+                val arriving = pages.open(null).id
+                while (shownSession.id != arriving) withFrameNanos { }
+                withFrameNanos { }
+                pageSwipe.snapTo(0f)
+                withFrameNanos { }
+                withFrameNanos { }
+                colorJumps = false
+            }
+        }
+    }
+
     Surface(
         modifier = modifier
             .fillMaxSize()
@@ -1422,6 +1449,7 @@ private fun BrowserPageScreen(
                         viewModel = viewModel,
                         signedIn = signedIn,
                         onClose = onDismiss,
+                        onNewPage = openNewPageFromBar,
                         pageCount = pageCount,
                         onOpenPages = onOpenOverview,
                         canReturnToOpener = pages.canReturnToOpener(session.id),

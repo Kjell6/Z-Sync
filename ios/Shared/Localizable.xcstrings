@@ -706,6 +706,36 @@
         }
       }
     },
+    "browser.incognito": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incognito"
+          }
+        }
+      }
+    },
+    "browser.incognito.hint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens this page privately: no history, nothing kept once the browser closes"
+          }
+        }
+      }
+    },
+    "browser.incognito.note": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You’re browsing Incognito"
+          }
+        }
+      }
+    },
     "browser.open_in_browser": {
       "localizations": {
         "en": {

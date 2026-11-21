@@ -1,6 +1,9 @@
 package de.kjell.zencompanion.ui.screens
 
 import androidx.compose.foundation.layout.tappableElement
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
+import de.kjell.zencompanion.ui.components.EyesIcons
 import de.kjell.zencompanion.ui.theme.ZenLayout
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.widthIn
@@ -282,6 +285,12 @@ internal fun MiniBrowserBar(
     onBeginAddressEdit: () -> Unit,
     onCancelAddressEdit: () -> Unit,
     onSubmitAddress: (String) -> Unit,
+    /**
+     * Whether the new page opens private; null where that is no choice (the
+     * page has an address, or the WebView has a single profile).
+     */
+    isPrivate: Boolean? = null,
+    onTogglePrivate: () -> Unit = {},
     /** False while a page error covers the page: there is nothing to pin. */
     canPin: Boolean = true,
     /** False while no page is showing, or the reader covers it. */
@@ -443,6 +452,8 @@ internal fun MiniBrowserBar(
                         onSubmitAddress = onSubmitAddress,
                         onCancel = onCancelAddressEdit,
                         barColor = barColor,
+                        isPrivate = isPrivate,
+                        onTogglePrivate = onTogglePrivate,
                     )
                 } else {
                     SwipeableNavBar(swipe = swipe) {
@@ -1227,6 +1238,8 @@ private fun ComposerBar(
     onSubmitAddress: (String) -> Unit,
     onCancel: () -> Unit,
     barColor: Color,
+    isPrivate: Boolean?,
+    onTogglePrivate: () -> Unit,
 ) {
     val zen = LocalZenColors.current
     // The composer is composed by the address state, so its field reports
@@ -1319,7 +1332,44 @@ private fun ComposerBar(
                     modifier = Modifier.size(18.dp),
                 )
             }
+        } else if (isPrivate != null) {
+            // Nothing typed into a new page yet: the clear button's slot
+            // chooses whether the page opens private.
+            PrivateToggle(isPrivate = isPrivate, onToggle = onTogglePrivate)
         }
+    }
+}
+
+/** Open eyes for a normal page; filled ones, named, once it is private. */
+@Composable
+private fun PrivateToggle(isPrivate: Boolean, onToggle: () -> Unit) {
+    val zen = LocalZenColors.current
+    val label = stringResource(R.string.browser_incognito)
+    val hint = stringResource(R.string.browser_incognito_hint)
+    Row(
+        modifier = Modifier
+            .heightIn(min = 40.dp)
+            .clip(CircleShape)
+            .toggleable(value = isPrivate, role = Role.Switch, onValueChange = { onToggle() })
+            .semantics { contentDescription = "$label. $hint" }
+            .padding(start = 8.dp, end = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        AnimatedVisibility(visible = isPrivate, enter = fadeIn(), exit = fadeOut()) {
+            Text(
+                text = label,
+                style = ZenType.rounded(13, FontWeight.Medium),
+                color = zen.ink.copy(alpha = 0.6f),
+                maxLines = 1,
+            )
+        }
+        Icon(
+            imageVector = if (isPrivate) EyesIcons.Filled else EyesIcons.Open,
+            contentDescription = null,
+            tint = zen.ink.copy(alpha = if (isPrivate) 0.8f else 0.45f),
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 

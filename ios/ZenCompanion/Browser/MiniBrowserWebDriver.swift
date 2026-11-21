@@ -1,6 +1,26 @@
 import SwiftUI
 import WebKit
 
+/// Website data for private pages: in memory only, shared by the private
+/// pages open together so a sign-in carries across them, and dropped once the
+/// last of them has closed.
+@MainActor
+enum PrivateBrowsing {
+    private static var store: WKWebsiteDataStore?
+
+    static var dataStore: WKWebsiteDataStore {
+        if let store { return store }
+        let fresh = WKWebsiteDataStore.nonPersistent()
+        store = fresh
+        return fresh
+    }
+
+    /// No private page is left: the next one starts with nothing.
+    static func endSession() {
+        store = nil
+    }
+}
+
 /// One page's WebKit side: builds its web view, feeds its model through KVO and
 /// answers the navigation and UI delegates. It lives as long as the web view
 /// and has no tie to the view hierarchy, so a page keeps running while another
@@ -55,6 +75,10 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         // A player's own fullscreen button then fills the screen, as it does
         // in Safari.
         configuration.preferences.isElementFullscreenEnabled = true
+        // A popup already carries its opener's store, which must stay.
+        if model.isPrivate, configuration.websiteDataStore.isPersistent {
+            configuration.websiteDataStore = PrivateBrowsing.dataStore
+        }
         configuration.userContentController.addScriptMessageHandler(
             BrowserGeolocation.Handler(model: model),
             contentWorld: .page,
@@ -83,6 +107,8 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         webView.allowsBackForwardNavigationGestures = true
         webView.isFindInteractionEnabled = true
         webView.isOpaque = false
+        // Sites with a dark look show it in private pages, like the chrome.
+        if model.isPrivate { webView.overrideUserInterfaceStyle = .dark }
         webView.backgroundColor = .clear
         webView.scrollView.backgroundColor = .clear
 

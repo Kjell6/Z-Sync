@@ -180,15 +180,20 @@ struct MiniBrowserView: View {
     private var sheetBackground: Color { pageColor(of: model) }
 
     private func pageColor(of page: MiniBrowserModel) -> Color {
-        if page.pageError != nil { return Palette.background(scheme) }
-        return page.themeColor ?? defaultBackground
+        if page.pageError != nil { return Palette.background(pageScheme(page)) }
+        return page.themeColor ?? Palette.background(pageScheme(page))
+    }
+
+    /// A private page is dark, whatever the system says.
+    private func pageScheme(_ page: MiniBrowserModel) -> ColorScheme {
+        page.isPrivate ? .dark : scheme
     }
 
     /// The bar's surface: the page's own color, nudged a touch darker or
     /// lighter so the plate is visible against it while still reading as the
     /// site's color. Without a theme color, the system background is nudged.
     private var barBackground: Color {
-        (model.themeColor ?? defaultBackground).nudgedForBar() ?? sheetBackground
+        (model.themeColor ?? Palette.background(pageScheme(model))).nudgedForBar() ?? sheetBackground
     }
 
     /// The bar is nearly the page's color, so the page decides whether the
@@ -288,6 +293,8 @@ struct MiniBrowserView: View {
                             .overlay {
                                 if let error = model.pageError {
                                     errorPanel(error)
+                                } else if model.isPrivate, model.opensWithSearch, !holdsNewPageSearch {
+                                    incognitoNote
                                 }
                             }
 
@@ -377,6 +384,9 @@ struct MiniBrowserView: View {
                 }
 
                 chrome
+                    // Private pages wear the dark chrome; the overview keeps
+                    // the app's own look.
+                    .environment(\.colorScheme, model.isPrivate && !overviewControls ? .dark : scheme)
                     .zIndex(6)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
@@ -552,6 +562,21 @@ struct MiniBrowserView: View {
 
     /// The page stops at the bar: the plate is opaque, so there is nothing to
     /// paint under it and no viewport inset to reserve.
+    /// What a new private page shows until something loads in it.
+    private var incognitoNote: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "eyes.inverse")
+                .font(.system(size: 34, weight: .semibold))
+            Text("browser.incognito.note")
+                .zenFont(19, weight: .semibold, design: .rounded)
+        }
+        .foregroundStyle(Palette.ink(.dark).opacity(0.55))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.bottom, 160)
+        .allowsHitTesting(false)
+        .transition(.opacity)
+    }
+
     private var webPane: some View {
         let neighbours = pages.neighbours
         return MiniBrowserRepresentable(

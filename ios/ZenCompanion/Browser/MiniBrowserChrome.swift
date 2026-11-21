@@ -1361,6 +1361,10 @@ struct MiniBrowserTopBar: View {
             )
             if !model.addressText.isEmpty {
                 clearButton
+            } else if model.opensWithSearch, page != nil {
+                // Nothing typed into a new page yet: the slot of the clear
+                // button chooses whether the page opens private.
+                incognitoButton
             }
         }
         .padding(.leading, 16)
@@ -1398,6 +1402,37 @@ struct MiniBrowserTopBar: View {
         }
         .buttonStyle(GlyphPressStyle())
         .accessibilityLabel(Text("browser.clear_search"))
+    }
+
+    /// Open eyes for a normal page; filled ones, named, once it is private.
+    private var incognitoButton: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                model.setPrivate(!model.isPrivate)
+            }
+            AppServices.haptics.selectionChanged()
+        } label: {
+            HStack(spacing: 6) {
+                if model.isPrivate {
+                    Text("browser.incognito")
+                        .zenFont(13, weight: .medium, design: .rounded)
+                        .foregroundStyle(Palette.ink(scheme).opacity(0.6))
+                        .transition(.opacity)
+                }
+                Image(systemName: model.isPrivate ? "eyes.inverse" : "eyes")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(Palette.ink(scheme).opacity(model.isPrivate ? 0.8 : 0.4))
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .padding(.leading, 8)
+            .padding(.trailing, 13)
+            .frame(minWidth: barHeight, minHeight: barHeight)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(GlyphPressStyle())
+        .accessibilityLabel(Text("browser.incognito"))
+        .accessibilityAddTraits(model.isPrivate ? .isSelected : [])
+        .accessibilityHint(Text("browser.incognito.hint"))
     }
 
     /// The way out of editing. Safari keeps it outside the field, as a circle.

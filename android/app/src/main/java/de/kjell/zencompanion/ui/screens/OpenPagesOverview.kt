@@ -90,6 +90,7 @@ import de.kjell.zencompanion.data.SaveKind
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.browser.BrowserPages
 import de.kjell.zencompanion.ui.browser.PageSession
+import de.kjell.zencompanion.ui.components.EyesIcons
 import de.kjell.zencompanion.ui.components.Favicon
 import de.kjell.zencompanion.ui.components.PinDestination
 import de.kjell.zencompanion.ui.components.PinDestinationModel
@@ -732,7 +733,16 @@ private fun OpenPageCard(
             } else {
                 Spacer(Modifier.size(iconSide))
             }
+            if (page.isPrivate) {
+                Icon(
+                    imageVector = EyesIcons.Filled,
+                    contentDescription = stringResource(R.string.browser_incognito),
+                    tint = zen.ink,
+                    modifier = Modifier.size(iconSide * 0.8f),
+                )
+            }
             val room = if (isFrontCard) width - headerInset * 2 else width * 0.727f - 12.dp
+            val privateMark = if (page.isPrivate) iconSide * 0.8f + iconGap else 0.dp
             Text(
                 text = title,
                 style = ZenType.rounded(14, FontWeight.SemiBold),
@@ -740,7 +750,7 @@ private fun OpenPageCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
-                    .widthIn(max = (room - iconSide - iconGap).coerceAtLeast(0.dp))
+                    .widthIn(max = (room - iconSide - iconGap - privateMark).coerceAtLeast(0.dp))
                     .graphicsLayer {
                         alpha = 1f - (abs(offset()) * 2.5f).coerceAtMost(1f)
                     },

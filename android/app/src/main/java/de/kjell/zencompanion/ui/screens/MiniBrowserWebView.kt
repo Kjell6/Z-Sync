@@ -53,6 +53,7 @@ import de.kjell.zencompanion.ui.browser.BrowserDownload
 import de.kjell.zencompanion.ui.browser.BrowserPrompt
 import de.kjell.zencompanion.ui.browser.MiniBrowserZoom
 import de.kjell.zencompanion.ui.browser.PageBlocker
+import de.kjell.zencompanion.ui.browser.PrivateBrowsing
 import de.kjell.zencompanion.ui.browser.downloadReferrer
 import de.kjell.zencompanion.ui.browser.grantableResources
 import de.kjell.zencompanion.ui.browser.sitePermissionsFor
@@ -78,6 +79,8 @@ private const val DesktopUserAgent =
 @Composable
 internal fun MiniBrowserWebView(
     initialUrl: String?,
+    /** A private page's WebView runs on the private profile. */
+    isPrivate: Boolean = false,
     isAddressFocused: Boolean,
     desktopSite: Boolean,
     /** 1.0 = 100%. Page zoom for the page's document. */
@@ -162,6 +165,8 @@ internal fun MiniBrowserWebView(
             var mainFrameRequest: String? = null
             val page = BrowserPullRefresh(ctx)
             val webView = WebView(ctx)
+            // Before the WebView does anything: the profile cannot change later.
+            if (isPrivate) PrivateBrowsing.adopt(webView)
             page.addView(
                 webView,
                 ViewGroup.LayoutParams(
@@ -178,7 +183,8 @@ internal fun MiniBrowserWebView(
             webView.apply {
                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
                 // Logins set up on one site often read their cookie from another.
-                CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                val jar = if (isPrivate) PrivateBrowsing.cookies(this) else CookieManager.getInstance()
+                jar.setAcceptThirdPartyCookies(this, true)
                 // Password managers fill the page through the system's autofill.
                 importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_YES
                 requests.installPageFileBridge(this)

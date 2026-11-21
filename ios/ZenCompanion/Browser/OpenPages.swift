@@ -278,6 +278,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
 
     func canKeep(_ page: OpenPage) -> Bool {
         if page.isKept { return true }
+        guard !page.model.isPrivate else { return false }
         guard page.model.pageError == nil else { return false }
         return Self.isWebAddress(page.url)
     }
@@ -381,6 +382,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
         page.model.sleep()
         pages.remove(at: index)
         removeFiles(of: page)
+        endPrivateSessionIfDone()
         for other in pages where other.openerID == id {
             other.openerID = page.openerID
         }
@@ -404,6 +406,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
         }
         pages = []
         activeID = nil
+        PrivateBrowsing.endSession()
         try? FileManager.default.removeItem(at: directory)
     }
 
@@ -425,6 +428,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
             putToSleep(page)
         }
         pages.removeAll { !$0.isKept }
+        endPrivateSessionIfDone()
         // A page's way back ends with the page it led to.
         for page in pages where page.openerID.flatMap(self.page) == nil {
             page.openerID = nil
@@ -473,7 +477,15 @@ final class OpenPagesStore: MiniBrowserPageHost {
         persist()
     }
 
+    /// The last private page went, and its website data with it.
+    private func endPrivateSessionIfDone() {
+        guard !pages.contains(where: { $0.model.isPrivate }) else { return }
+        PrivateBrowsing.endSession()
+    }
+
     private func saveIfItStays(_ page: OpenPage) {
+        // A private page never stays, whatever the setting says.
+        guard !page.model.isPrivate else { return }
         let model = page.model
         let action = KeptPagesPolicy.onLeave(
             isKept: page.isKept,
@@ -493,6 +505,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
     func openPopup(from model: MiniBrowserModel, url: URL?, configuration: WKWebViewConfiguration) -> WKWebView? {
         let opener = pages.first { $0.model === model }
         let popup = makeModel(url ?? URL(string: "about:blank"))
+        popup.inheritPrivacy(from: model)
         let webView = MiniBrowserWebDriver.attach(to: popup, configuration: configuration)
         let page = OpenPage(model: popup, openerID: opener?.id, lastUsedAt: now())
         _ = insert(page, after: opener)
@@ -501,7 +514,9 @@ final class OpenPagesStore: MiniBrowserPageHost {
 
     func openInNewPage(_ url: URL, from model: MiniBrowserModel) {
         let opener = pages.first { $0.model === model }
-        let page = OpenPage(model: makeModel(url), openerID: opener?.id, lastUsedAt: now())
+        let newModel = makeModel(url)
+        newModel.inheritPrivacy(from: model)
+        let page = OpenPage(model: newModel, openerID: opener?.id, lastUsedAt: now())
         _ = insert(page, after: opener)
     }
 

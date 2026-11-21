@@ -232,6 +232,9 @@
     <string name="browser_zoom_reset">Reset page zoom</string>
     <string name="browser_find_short">Find</string>
     <string name="browser_find_on_page">Find on page</string>
+    <string name="browser_incognito">Incognito</string>
+    <string name="browser_incognito_hint">Opens this page privately: no history, nothing kept once the browser closes</string>
+    <string name="browser_incognito_note">You’re browsing Incognito</string>
     <string name="browser_find_next">Next</string>
     <string name="browser_find_previous">Previous</string>
     <string name="browser_print">Print</string>

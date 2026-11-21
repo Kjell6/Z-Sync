@@ -773,6 +773,13 @@ private struct OpenPageCard<Menu: View>: View {
         HStack(spacing: iconGap) {
             icon
                 .modifier(DeckHeaderFade(offset: offset, reveal: reveal, isName: false))
+            if page.model.isPrivate {
+                Image(systemName: "eyes.inverse")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.primary)
+                    .modifier(DeckHeaderFade(offset: offset, reveal: reveal, isName: false))
+                    .accessibilityLabel(Text("browser.incognito"))
+            }
             Text(page.title)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Color.primary)

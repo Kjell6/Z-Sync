@@ -436,6 +436,11 @@ final class MiniBrowserModel {
     @ObservationIgnored private weak var zoomedWebView: WKWebView?
     @ObservationIgnored private var appliedPageZoom: Double?
 
+    /// A private page: its website data lives in memory only, it leaves no
+    /// history and it never stays once the browser closes. Chosen while the
+    /// page is still new, before anything has loaded in it.
+    private(set) var isPrivate = false
+
     /// The page's live web view; nil while the page sleeps. Owned here, not by
     /// the view, so the page survives being off screen.
     var webView: WKWebView?
@@ -651,6 +656,21 @@ final class MiniBrowserModel {
         applyWebpagePreferences()
         // A woken page brings its colour along: the new control starts on it.
         updateRefreshTint()
+    }
+
+    /// Turns a new page private or back. Its web view belongs to the other
+    /// kind of website data, so a fresh one takes its place.
+    func setPrivate(_ on: Bool) {
+        guard isPrivate != on, opensWithSearch else { return }
+        isPrivate = on
+        guard webView != nil else { return }
+        sleep()
+        wake()
+    }
+
+    /// A page opened from a private one is private too.
+    func inheritPrivacy(from opener: MiniBrowserModel?) {
+        if opener?.isPrivate == true { isPrivate = true }
     }
 
     /// Gives the page a web view again: from [history] when there is one, at
@@ -1015,7 +1035,7 @@ final class MiniBrowserModel {
     /// Puts the page in the history. A reload, or a page coming back from
     /// sleep, is at the same address and so is no new visit.
     func recordVisit() {
-        guard pageError == nil, let address = BrowserHistoryStore.address(of: currentURL),
+        guard !isPrivate, pageError == nil, let address = BrowserHistoryStore.address(of: currentURL),
               address != lastRecordedVisit else { return }
         lastRecordedVisit = address
         history.record(currentURL, title: pageTitle)

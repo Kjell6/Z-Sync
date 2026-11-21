@@ -94,6 +94,8 @@ class PageSession(
     var pendingPopup: Message? = null
     /** A new page goes straight into the address field, once. */
     var opensWithSearch = false
+    /** Private: see [OpenPage.isPrivate]. */
+    var isPrivate by mutableStateOf(false)
     /** The address last put in the history, so a reload or a wake is no new visit. */
     var lastVisit: String? = null
     /** The page's open questions, oldest first. Shown while it is on screen. */
@@ -228,6 +230,7 @@ class BrowserPages(
             sessions[id]?.let(::holdReleasedShot)
         }
         val session = PageSession(id, viewModel, page.url)
+        session.isPrivate = page.isPrivate
         if (page.isKept) {
             // The history file is read once a WebView asks for it ([takeHistory]).
             // Coming back to a page is not visiting it again.
@@ -239,7 +242,9 @@ class BrowserPages(
     /** Opens a page and puts it on screen. */
     fun open(url: String?, title: String? = null, openedFromSpace: Boolean = false, openerId: String? = null, popup: Message? = null): PageSession {
         leaveScreen(store.activeId.value)
-        val page = store.open(url.orEmpty(), title.orEmpty(), openedFromSpace, openerId)
+        // A page opened from a private one is private too.
+        val isPrivate = openerId?.let(store::page)?.isPrivate == true
+        val page = store.open(url.orEmpty(), title.orEmpty(), openedFromSpace, openerId, isPrivate)
         val session = makeSession(page)
         session.pendingPopup = popup
         session.opensWithSearch = url.isNullOrEmpty() && popup == null
@@ -321,6 +326,24 @@ class BrowserPages(
     fun close(id: String) {
         store.close(id)?.let { next -> session(next)?.let(::bringLive) }
         syncActive()
+        endPrivateSessionIfDone()
+    }
+
+    /**
+     * Turns a new page private or back. Its WebView belongs to the other
+     * profile, so a fresh one takes its place.
+     */
+    fun setPrivate(session: PageSession, isPrivate: Boolean) {
+        if (session.isPrivate == isPrivate || !PrivateBrowsing.isSupported) return
+        session.isPrivate = isPrivate
+        store.setPrivate(session.id, isPrivate)
+        session.webViewGeneration++
+        if (!isPrivate) endPrivateSessionIfDone()
+    }
+
+    /** The last private page went, and its website data with it. */
+    private fun endPrivateSessionIfDone() {
+        if (!store.hasPrivatePages()) PrivateBrowsing.endSession()
     }
 
     fun closeAll() {
@@ -332,6 +355,7 @@ class BrowserPages(
         // closing every page, not a sign-out.
         shotBitmaps.clear()
         syncActive()
+        PrivateBrowsing.endSession()
     }
 
     fun toggleKeep(id: String) {
@@ -373,6 +397,7 @@ class BrowserPages(
             it.webView?.pausePage()
         }
         store.endSession(keepEveryPage(), ::exit)
+        endPrivateSessionIfDone()
         // Kept pages let go of their WebViews; the history is saved on release.
         live.clear()
         recent.clear()
@@ -393,6 +418,7 @@ class BrowserPages(
     }
 
     private fun recordVisit(session: PageSession) {
+        if (session.isPrivate) return
         val state = session.viewModel.state.value
         val address = historyAddress(session.webView?.url) ?: return
         // A failed load also ends in `onPageFinished`.
@@ -403,6 +429,7 @@ class BrowserPages(
 
     /** Titles often arrive after the page has finished. */
     fun pageTitleChanged(session: PageSession) {
+        if (session.isPrivate) return
         val address = session.lastVisit ?: return
         if (historyAddress(session.webView?.url) != address) return
         BrowserHistory.updateTitle(address, session.viewModel.state.value.currentTitle)

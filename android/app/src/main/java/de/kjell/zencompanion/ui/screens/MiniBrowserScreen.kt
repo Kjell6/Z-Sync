@@ -1,5 +1,9 @@
 package de.kjell.zencompanion.ui.screens
 
+import de.kjell.zencompanion.ui.browser.PrivateBrowsing
+import de.kjell.zencompanion.ui.components.EyesIcons
+import de.kjell.zencompanion.ui.theme.InkDark
+import de.kjell.zencompanion.ui.theme.PaperDark
 import de.kjell.zencompanion.ui.theme.ZenLayout
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -849,6 +853,35 @@ fun MiniBrowserScreen(
     }
 }
 
+/** A new page nothing has loaded in yet. */
+private fun PageSession.isBlank(state: MiniBrowserViewModel.State): Boolean =
+    startUrl.isEmpty() && state.currentUrl.isEmpty() && state.pageError == null
+
+/** What a new private page shows until something loads in it. */
+@Composable
+private fun PrivatePageNote() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(bottom = 160.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(
+            imageVector = EyesIcons.Filled,
+            contentDescription = null,
+            tint = InkDark.copy(alpha = 0.55f),
+            modifier = Modifier.size(40.dp),
+        )
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = stringResource(R.string.browser_incognito_note),
+            style = ZenType.rounded(19, FontWeight.SemiBold),
+            color = InkDark.copy(alpha = 0.55f),
+        )
+    }
+}
+
 /** The floating page's outline: rounded, and short of the strip under the page. */
 private class PageCardClip(
     private val radius: Float,
@@ -1069,7 +1102,8 @@ private fun BrowserPageScreen(
         }
     }
 
-    val defaultSurface = MaterialTheme.colorScheme.surface
+    // A private page is dark, whatever the system says.
+    val defaultSurface = if (session.isPrivate) PaperDark else MaterialTheme.colorScheme.surface
     // The error panel sits on the surface color. The failed load leaves the
     // previous page's color behind, so the bar ignores it while it shows.
     val targetBg = state.siteThemeColor.takeIf { state.pageError == null } ?: defaultSurface
@@ -1279,6 +1313,10 @@ private fun BrowserPageScreen(
                     )
                 }
 
+                if (session.isPrivate && session.isBlank(state)) {
+                    PrivatePageNote()
+                }
+
                 state.pageError?.let { error ->
                     val isDefaultBrowser by rememberIsDefaultBrowser()
                     BrowserErrorPanel(
@@ -1448,6 +1486,10 @@ private fun BrowserPageScreen(
                             openAddressTarget(viewModel.submitAddress(input))
                             finishAddressEdit()
                         },
+                        isPrivate = session.isPrivate.takeIf {
+                            PrivateBrowsing.isSupported && session.isBlank(state)
+                        },
+                        onTogglePrivate = { pages.setPrivate(session, !session.isPrivate) },
                         onPickSuggestion = { suggestion ->
                             openAddressTarget(viewModel.selectSuggestion(suggestion))
                             finishAddressEdit()
@@ -1735,6 +1777,7 @@ private fun PageStack(
                 }
                 key(session.webViewGeneration) {
                     MiniBrowserWebView(
+                        isPrivate = session.isPrivate,
                         // After a crash it waits for Reload instead.
                         initialUrl = if (state.pageError == BrowserPageError.CRASHED) {
                             null

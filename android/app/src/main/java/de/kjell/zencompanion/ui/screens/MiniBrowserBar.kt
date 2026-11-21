@@ -158,6 +158,7 @@ import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.BrowserVisit
 import de.kjell.zencompanion.data.SitePermission
 import de.kjell.zencompanion.data.SitePermissionChoice
+import de.kjell.zencompanion.data.SitePermissionStore
 import de.kjell.zencompanion.data.SitePermissions
 import de.kjell.zencompanion.data.BlockCategory
 import de.kjell.zencompanion.data.ContentBlockingSettings
@@ -293,6 +294,8 @@ internal fun MiniBrowserBar(
      */
     isPrivate: Boolean? = null,
     onTogglePrivate: () -> Unit = {},
+    /** The page's answers: a private page's never reach the phone's. */
+    permissions: SitePermissionStore = SitePermissions,
     /** False while a page error covers the page: there is nothing to pin. */
     canPin: Boolean = true,
     /** False while no page is showing, or the reader covers it. */
@@ -372,6 +375,7 @@ internal fun MiniBrowserBar(
                                     settings = blockingSettings,
                                     onBack = viewModel::closeSiteSettings,
                                     onChange = onSiteBlockingChange,
+                                    permissions = permissions,
                                 )
                             } else {
                                 ExpandedMenu(
@@ -1610,6 +1614,7 @@ private fun SiteSettingsMenuPage(
     settings: ContentBlockingSettings,
     onBack: () -> Unit,
     onChange: (BlockCategory, Boolean) -> Unit,
+    permissions: SitePermissionStore,
 ) {
     val zen = LocalZenColors.current
     val site = blockingSiteKey(host)
@@ -1653,7 +1658,7 @@ private fun SiteSettingsMenuPage(
         ZenMenuGroupGap()
 
         ZenMenuGroup(index = 2, count = groupCount) {
-            SitePermissionRows(host)
+            SitePermissionRows(host, permissions)
         }
 
         Text(
@@ -1668,12 +1673,12 @@ private fun SiteSettingsMenuPage(
 
 /** What the site may ask for. Ask lets the site's question come back. */
 @Composable
-private fun SitePermissionRows(host: String) {
-    val choices by SitePermissions.choices.collectAsState()
+private fun SitePermissionRows(host: String, store: SitePermissionStore) {
+    val choices by store.choices.collectAsState()
     val count = SitePermission.entries.size
     SitePermission.entries.forEachIndexed { index, kind ->
         // Read through the collected map, so a change redraws the row.
-        val current = choices.let { SitePermissions.choice(kind, host) }
+        val current = choices.let { store.choice(kind, host) }
         var expanded by remember { mutableStateOf(false) }
         ZenMenuItem(
             text = { Text(stringResource(kind.title)) },
@@ -1700,7 +1705,7 @@ private fun SitePermissionRows(host: String) {
                                     selected = choice == current,
                                     onClick = {
                                         expanded = false
-                                        SitePermissions.set(choice, listOf(kind), host)
+                                        store.set(choice, listOf(kind), host)
                                     },
                                     text = { Text(stringResource(choiceTitle(choice))) },
                                     index = optionIndex,

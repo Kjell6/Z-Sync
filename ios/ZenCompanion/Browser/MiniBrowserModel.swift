@@ -549,7 +549,9 @@ final class MiniBrowserModel {
         }
     }
     private let suggestionClient: SearchSuggestionFetching
-    let sitePermissions: SitePermissionStore
+    /// The phone's answers, or the private pages' own while this one is private.
+    private(set) var sitePermissions: SitePermissionStore
+    @ObservationIgnored private let savedSitePermissions: SitePermissionStore
     private let history: BrowserHistoryStore
     /// The address last put in the history.
     @ObservationIgnored private var lastRecordedVisit: String?
@@ -572,6 +574,7 @@ final class MiniBrowserModel {
         self.history = history
         self.initialURL = initialURL
         self.sitePermissions = sitePermissions
+        savedSitePermissions = sitePermissions
         self.blocker = blocker
         self.pinWriter = pinWriter
         self.urlOpener = urlOpener
@@ -663,6 +666,7 @@ final class MiniBrowserModel {
     func setPrivate(_ on: Bool) {
         guard isPrivate != on, opensWithSearch else { return }
         isPrivate = on
+        sitePermissions = on ? PrivateBrowsing.permissions : savedSitePermissions
         guard webView != nil else { return }
         sleep()
         wake()
@@ -670,7 +674,9 @@ final class MiniBrowserModel {
 
     /// A page opened from a private one is private too.
     func inheritPrivacy(from opener: MiniBrowserModel?) {
-        if opener?.isPrivate == true { isPrivate = true }
+        guard opener?.isPrivate == true else { return }
+        isPrivate = true
+        sitePermissions = PrivateBrowsing.permissions
     }
 
     /// Gives the page a web view again: from [history] when there is one, at

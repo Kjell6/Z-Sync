@@ -50,17 +50,30 @@ final class SitePermissionStore {
     static let shared = SitePermissionStore()
 
     private(set) var choices: [String: SitePermissionChoice]
-    @ObservationIgnored private let fileURL: URL
+    /// Nil for private pages: their answers live in memory only.
+    @ObservationIgnored private let fileURL: URL?
     /// Beside the answers: notes that the old keys were folded, once.
-    @ObservationIgnored private let migrationMarkerURL: URL
+    @ObservationIgnored private let migrationMarkerURL: URL?
     /// Kinds whose question went unanswered this run: no until the app restarts.
     @ObservationIgnored private var unanswered: Set<String> = []
     /// Sites whose closed system access was already explained this run.
     @ObservationIgnored private var explainedSystemAccess: Set<String> = []
 
+    /// Answers that end with the private pages: nothing read, nothing written.
+    static func inMemory() -> SitePermissionStore {
+        SitePermissionStore(memoryOnly: ())
+    }
+
+    private init(memoryOnly: Void) {
+        self.fileURL = nil
+        migrationMarkerURL = nil
+        choices = [:]
+    }
+
     init(fileURL: URL = SitePermissionStore.defaultFileURL) {
         self.fileURL = fileURL
-        migrationMarkerURL = fileURL.appendingPathExtension(Self.keysFoldedExtension)
+        let migrationMarkerURL = fileURL.appendingPathExtension(Self.keysFoldedExtension)
+        self.migrationMarkerURL = migrationMarkerURL
         let saved = (try? Data(contentsOf: fileURL))
             .flatMap { try? JSONDecoder().decode([String: SitePermissionChoice].self, from: $0) }
         // Answers saved under a leading `www.` move over once, so a later
@@ -120,11 +133,11 @@ final class SitePermissionStore {
         choices = [:]
         unanswered = []
         explainedSystemAccess = []
-        try? FileManager.default.removeItem(at: fileURL)
+        if let fileURL { try? FileManager.default.removeItem(at: fileURL) }
     }
 
     private func save() {
-        guard let data = try? JSONEncoder().encode(choices) else { return }
+        guard let fileURL, let data = try? JSONEncoder().encode(choices) else { return }
         try? FileManager.default.createDirectory(
             at: fileURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -138,6 +151,7 @@ final class SitePermissionStore {
 
     /// The fold has happened: a launch from now on reads the keys as they are.
     private func markKeysFolded() {
+        guard let migrationMarkerURL else { return }
         try? FileManager.default.createDirectory(
             at: migrationMarkerURL.deletingLastPathComponent(),
             withIntermediateDirectories: true

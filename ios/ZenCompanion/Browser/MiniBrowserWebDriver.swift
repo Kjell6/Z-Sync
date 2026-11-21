@@ -7,6 +7,7 @@ import WebKit
 @MainActor
 enum PrivateBrowsing {
     private static var store: WKWebsiteDataStore?
+    private static var answers: SitePermissionStore?
 
     static var dataStore: WKWebsiteDataStore {
         if let store { return store }
@@ -15,9 +16,18 @@ enum PrivateBrowsing {
         return fresh
     }
 
+    /// What private pages allowed or blocked: never written down.
+    static var permissions: SitePermissionStore {
+        if let answers { return answers }
+        let fresh = SitePermissionStore.inMemory()
+        answers = fresh
+        return fresh
+    }
+
     /// No private page is left: the next one starts with nothing.
     static func endSession() {
         store = nil
+        answers = nil
     }
 }
 

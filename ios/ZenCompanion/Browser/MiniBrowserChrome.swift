@@ -365,7 +365,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
     private func siteSettingsPage(host: String) -> some View {
         VStack(spacing: 8) {
             siteSettingsHeader(host: host)
-            SiteSettingsControls(host: host, scheme: scheme) {
+            SiteSettingsControls(host: host, permissions: model.sitePermissions, scheme: scheme) {
                 model.blockingSettingsDidChange()
             }
         }

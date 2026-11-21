@@ -22,6 +22,8 @@ import de.kjell.zencompanion.data.BrowserSettings
 import de.kjell.zencompanion.data.KeptPageLifetime
 import de.kjell.zencompanion.data.OpenPage
 import de.kjell.zencompanion.data.OpenPagesStore
+import de.kjell.zencompanion.data.SitePermissionStore
+import de.kjell.zencompanion.data.SitePermissions
 import de.kjell.zencompanion.data.historyAddress
 import de.kjell.zencompanion.sync.ZenSpaces
 import de.kjell.zencompanion.ui.BrowserRepository
@@ -96,6 +98,10 @@ class PageSession(
     var opensWithSearch = false
     /** Private: see [OpenPage.isPrivate]. */
     var isPrivate by mutableStateOf(false)
+
+    /** The phone's answers, or the private pages' own while this one is private. */
+    val permissions: SitePermissionStore
+        get() = if (isPrivate) PrivateBrowsing.permissions else SitePermissions
     /** The address last put in the history, so a reload or a wake is no new visit. */
     var lastVisit: String? = null
     /** The page's open questions, oldest first. Shown while it is on screen. */

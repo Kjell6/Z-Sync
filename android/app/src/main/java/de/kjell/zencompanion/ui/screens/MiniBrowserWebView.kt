@@ -380,7 +380,14 @@ internal fun MiniBrowserWebView(
                     if (url.isNullOrEmpty()) return@setDownloadListener
                     requests.askDownload(
                         this,
-                        BrowserDownload(url, userAgent, contentDisposition, mimeType, referer = downloadReferrer(this.url, url)),
+                        BrowserDownload(
+                            url,
+                            userAgent,
+                            contentDisposition,
+                            mimeType,
+                            referer = downloadReferrer(this.url, url),
+                            cookies = if (isPrivate) PrivateBrowsing.cookies(this) else null,
+                        ),
                     )
                 }
                 webChromeClient = object : WebChromeClient() {

@@ -7,6 +7,7 @@ import android.webkit.WebView
 import androidx.webkit.ProfileStore
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
+import de.kjell.zencompanion.data.SitePermissionStore
 
 /**
  * Website data for private pages: one WebView profile of their own, shared by
@@ -25,6 +26,11 @@ object PrivateBrowsing {
     private var used = false
     /** The last private page closed and its data has not been deleted yet. */
     private var deletePending = false
+    private var answers: SitePermissionStore? = null
+
+    /** What private pages allowed or blocked: never written down. */
+    val permissions: SitePermissionStore
+        get() = answers ?: SitePermissionStore().also { answers = it }
 
     /** Older WebViews have a single profile: there private pages are not offered. */
     val isSupported: Boolean
@@ -52,6 +58,7 @@ object PrivateBrowsing {
 
     /** No private page is left: the next one starts with nothing. */
     fun endSession() {
+        answers = null
         // Nothing private ran: no need to wake the WebView to ask.
         if (!used) return
         used = false

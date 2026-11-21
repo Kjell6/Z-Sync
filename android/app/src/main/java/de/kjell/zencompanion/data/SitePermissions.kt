@@ -69,17 +69,12 @@ fun sitePermissionDecision(
 }
 
 /**
- * The browser's answers per site, on this phone only: never synced and left
- * out of device backups.
+ * Answers per site. Without [start] they live in memory only, as private
+ * pages' do: see [PrivateBrowsing][de.kjell.zencompanion.ui.browser.PrivateBrowsing].
  *
  * iOS port: `SitePermissionStore` in `Browser/SitePermissions.swift`.
  */
-object SitePermissions {
-    private const val PREFS = "site_permissions"
-
-    /** Set once the old `www.` keys are folded, so a later launch leaves them alone. */
-    private const val FOLDED_KEYS = "keys_folded"
-
+open class SitePermissionStore {
     private var prefs: SharedPreferences? = null
 
     private val _choices = MutableStateFlow<Map<String, SitePermissionChoice>>(emptyMap())
@@ -91,6 +86,7 @@ object SitePermissions {
     /** Sites whose closed system access was already explained this run. */
     private val explainedSystemAccess = mutableSetOf<String>()
 
+    /** Reads the saved answers, and from then on writes every change down. */
     fun start(context: Context) {
         val stored = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         prefs = stored
@@ -162,4 +158,17 @@ object SitePermissions {
     }
 
     private fun key(kind: SitePermission, host: String) = "${foldedSiteHost(host)}|${kind.storageValue}"
+
+    private companion object {
+        const val PREFS = "site_permissions"
+
+        /** Set once the old `www.` keys are folded, so a later launch leaves them alone. */
+        const val FOLDED_KEYS = "keys_folded"
+    }
 }
+
+/**
+ * The browser's answers per site, on this phone only: never synced and left
+ * out of device backups.
+ */
+object SitePermissions : SitePermissionStore()

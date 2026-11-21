@@ -1488,6 +1488,7 @@ private fun BrowserPageScreen(
                             PrivateBrowsing.isSupported && session.isBlank(state)
                         },
                         onTogglePrivate = { pages.setPrivate(session, !session.isPrivate) },
+                        permissions = session.permissions,
                         onPickSuggestion = { suggestion ->
                             openAddressTarget(viewModel.selectSuggestion(suggestion))
                             finishAddressEdit()
@@ -1621,6 +1622,7 @@ private fun BrowserPageScreen(
                             contentDisposition = null,
                             mimeType = null,
                             referer = downloadReferrer(effectiveUrl, image),
+                            cookies = if (session.isPrivate) PrivateBrowsing.cookies(view) else null,
                         ),
                     )
                 }

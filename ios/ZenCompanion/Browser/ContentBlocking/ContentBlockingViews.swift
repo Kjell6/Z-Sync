@@ -111,6 +111,8 @@ struct ContentBlockingSettingsView: View {
 /// that is off in Settings stays off here, with a note saying so.
 struct SiteSettingsControls: View {
     let host: String
+    /// The page's answers: a private page's never reach the phone's.
+    let permissions: SitePermissionStore
     let scheme: ColorScheme
     /// The page reloads so the new switches apply to it.
     var onChange: () -> Void
@@ -133,7 +135,7 @@ struct SiteSettingsControls: View {
                 ink: .primary
             )
 
-            SitePermissionRows(host: host)
+            SitePermissionRows(host: host, store: permissions)
 
             Text("site_settings.footer \(site)")
                 .zenFont(13, design: .rounded)
@@ -147,8 +149,7 @@ struct SiteSettingsControls: View {
 /// a remembered answer be changed, and Ask lets the site's question come back.
 private struct SitePermissionRows: View {
     let host: String
-
-    private var store: SitePermissionStore { .shared }
+    let store: SitePermissionStore
 
     var body: some View {
         VStack(spacing: 0) {

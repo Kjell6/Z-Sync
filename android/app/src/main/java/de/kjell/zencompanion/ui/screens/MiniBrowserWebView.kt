@@ -62,6 +62,14 @@ import java.io.ByteArrayInputStream
 import java.util.Locale
 
 /** Chrome-like desktop user agent for the "Request Desktop Site" toggle. */
+/**
+ * Off until Google Password Manager approves Z-Sync as a privileged browser.
+ * Before that, sites would see passkey support and offer it, and every attempt
+ * would fail, which reads as "broken, try again" rather than "not supported".
+ * Turn on once approved (see docs/release.md).
+ */
+private const val BrowserPasskeysEnabled = false
+
 private const val DesktopUserAgent =
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
         "(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
@@ -188,11 +196,10 @@ internal fun MiniBrowserWebView(
                     setSupportMultipleWindows(true)
                     javaScriptCanOpenWindowsAutomatically = true
                 }
-                // Passkeys for any site, the way a browser asks for them. The
-                // password manager decides whether it trusts this app as a
-                // browser; until it does, the site's request fails as it would
-                // with no passkey support at all.
-                if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_AUTHENTICATION)) {
+                // Passkeys for any site, the way a browser asks for them.
+                if (BrowserPasskeysEnabled &&
+                    WebViewFeature.isFeatureSupported(WebViewFeature.WEB_AUTHENTICATION)
+                ) {
                     WebSettingsCompat.setWebAuthenticationSupport(
                         settings,
                         WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_FOR_BROWSER,

@@ -955,16 +955,35 @@ private extension MiniBrowserView {
         holdsNewPageSearch = false
         showOverview = true
         overviewControls = true
-        withAnimation(.easeOut(duration: 0.2)) { overviewReveal = 1 }
+        // With no flight, a private page is covered as the deck fades in
+        // over it, so the site never shows through.
+        if model.isPrivate { privateCoverHolds = true }
+        withAnimation(.easeOut(duration: 0.2)) {
+            overviewReveal = 1
+            if model.isPrivate { privateCoverFade = 1 }
+        }
     }
 
     private func fadeOverviewOut() {
         transitionEpoch += 1
         let epoch = transitionEpoch
         overviewControls = false
-        withAnimation(.easeOut(duration: 0.2)) { overviewReveal = 0 } completion: {
+        // The page coming back: covered under the deck, uncovered with it.
+        if model.isPrivate {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                privateCoverHolds = true
+                privateCoverFade = 1
+            }
+        }
+        withAnimation(.easeOut(duration: 0.2)) {
+            overviewReveal = 0
+            privateCoverFade = 0
+        } completion: {
             guard epoch == transitionEpoch else { return }
             showOverview = false
+            privateCoverHolds = false
         }
     }
 
@@ -1091,6 +1110,8 @@ private extension MiniBrowserView {
     private func openNewPage() {
         transitionEpoch += 1
         let epoch = transitionEpoch
+        // A cover held for the page the deck faded in over is not the new page's.
+        privateCoverHolds = false
         pages.releaseSwitchingOrder()
         // The deck stays as it was while it goes: no card joins it on the way out.
         overviewHoldsCards = true

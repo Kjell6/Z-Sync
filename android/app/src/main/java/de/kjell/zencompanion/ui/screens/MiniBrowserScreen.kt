@@ -259,7 +259,13 @@ fun MiniBrowserScreen(
     var screen by remember { mutableStateOf(Size.Zero) }
 
     /** How far the deck has come in: 0 is only the page, 1 is the whole deck. */
-    val overviewReveal = remember { Animatable(0f) }
+    val overviewReveal = remember { Animatable(if (startsInOverview) 1f else 0f) }
+    /**
+     * The whole browser, deck, cards and dock in one. From home there is no
+     * page to shrink into its card, so the overview comes and goes as one
+     * layer instead of a backdrop fading under cards that stand there.
+     */
+    val screenFade = remember { Animatable(if (startsInOverview) 0f else 1f) }
     /** The deck's cards above the page's own, once it has landed. */
     val aheadReveal = remember { Animatable(1f) }
     /** The live page between full screen and its card. */
@@ -476,7 +482,8 @@ fun MiniBrowserScreen(
     fun fadeOverviewOut() {
         overviewControls = false
         transition {
-            overviewReveal.animateTo(0f, tween(200))
+            // Only ever without a page: nothing stays behind the deck, so all of it goes.
+            screenFade.animateTo(0f, tween(200))
             showOverview = false
             chromeAlpha.snapTo(1f)
         }
@@ -601,7 +608,13 @@ fun MiniBrowserScreen(
 
     /** From home the overview fades in over the spaces; a recreated screen just comes back. */
     LaunchedEffect(Unit) {
-        if (showOverview) overviewReveal.animateTo(1f, tween(220))
+        if (showOverview) {
+            // The frame that builds the deck and loads its pictures is slow;
+            // a fade started under it would skip its start.
+            withFrameNanos { }
+            withFrameNanos { }
+            screenFade.animateTo(1f, tween(220))
+        }
     }
 
     // The overview stays up empty, like Safari's; its Done goes.
@@ -657,6 +670,7 @@ fun MiniBrowserScreen(
     Box(
         modifier
             .fillMaxSize()
+            .graphicsLayer { alpha = screenFade.value }
             .onSizeChanged { screen = Size(it.width.toFloat(), it.height.toFloat()) },
     ) {
         // Nothing of the screen behind the browser shows around a flying page:
@@ -810,7 +824,7 @@ fun MiniBrowserScreen(
 
         // From home the dock comes in with the deck instead of standing there
         // from the first frame while the cards fade in under it.
-        val dockFade = remember { Animatable(0f) }
+        val dockFade = remember { Animatable(if (overviewControls) 1f else 0f) }
         LaunchedEffect(overviewControls) {
             dockFade.animateTo(if (overviewControls) 1f else 0f, tween(200))
         }

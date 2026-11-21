@@ -43,6 +43,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.webkit.ScriptHandler
+import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import de.kjell.zencompanion.data.ContentBlocking
@@ -186,6 +187,16 @@ internal fun MiniBrowserWebView(
                     // target=_blank and window.open do nothing unless this is on.
                     setSupportMultipleWindows(true)
                     javaScriptCanOpenWindowsAutomatically = true
+                }
+                // Passkeys for any site, the way a browser asks for them. The
+                // password manager decides whether it trusts this app as a
+                // browser; until it does, the site's request fails as it would
+                // with no passkey support at all.
+                if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_AUTHENTICATION)) {
+                    WebSettingsCompat.setWebAuthenticationSupport(
+                        settings,
+                        WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_FOR_BROWSER,
+                    )
                 }
                 // The stock user agent, restored when desktop mode is turned off.
                 tag = settings.userAgentString

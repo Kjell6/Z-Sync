@@ -51,6 +51,8 @@ final class MiniBrowserWebView: WKWebView {
     /// Runs after a refresh was ended by taking the control away. Ending it
     /// moves the offset without a finger, like the end of a pull does.
     var refreshWasEnded: (() -> Void)?
+    /// The system find bar is gone again.
+    var findBarDidClose: (() -> Void)?
 
     override var inputAccessoryView: UIView? { nil }
 
@@ -127,6 +129,7 @@ final class MiniBrowserWebView: WKWebView {
                 // Done: the next bar starts a watcher of its own.
                 self.findBarWatcher = nil
                 self.syncRefreshControl()
+                self.findBarDidClose?()
                 return
             }
         }

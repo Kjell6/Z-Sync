@@ -411,6 +411,9 @@ final class MiniBrowserModel {
 
     /// Expanded page menu on the bottom card.
     var menuExpanded = false
+    /// The system find bar is up. It brings its own field and buttons, so the
+    /// browser's bar and dock step aside until it is gone.
+    private(set) var findBarShown = false
     /// Reading view: the article lifted out of the page, or nil for the page
     /// itself. The script below finds it; a page without an article returns nil.
     private(set) var readerArticle: ReaderArticle?
@@ -686,6 +689,7 @@ final class MiniBrowserModel {
         estimatedProgress = 0
         // The questions went with the page; dropping them answers WebKit.
         dialogs = []
+        findBarShown = false
         sleptWithBackHistory = canGoBack
         canGoBack = false
         canGoForward = false
@@ -889,9 +893,15 @@ final class MiniBrowserModel {
         guard let webView else { return }
         webView.isFindInteractionEnabled = true
         webView.findInteraction?.presentFindNavigator(showingReplace: false)
+        findBarShown = true
+        guard let miniWebView = webView as? MiniBrowserWebView else { return }
+        miniWebView.findBarDidClose = { [weak self] in
+            guard let self, self.findBarShown else { return }
+            self.findBarShown = false
+        }
         // The find bar and the pull-to-refresh control share the top of the
         // page; the control waits until the bar is gone.
-        (webView as? MiniBrowserWebView)?.findNavigatorDidPresent()
+        miniWebView.findNavigatorDidPresent()
     }
 
     /// There is a page to print: it is loaded, nothing covers it, and it is

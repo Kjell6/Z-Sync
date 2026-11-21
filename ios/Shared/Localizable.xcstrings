@@ -721,7 +721,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Opens this page privately: no history, nothing kept once the browser closes"
+            "value": "Opens this page privately: no history, and its sign-ins stay apart from your other pages"
           }
         }
       }

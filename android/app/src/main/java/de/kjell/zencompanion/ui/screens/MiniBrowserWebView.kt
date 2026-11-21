@@ -13,6 +13,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Message
 import android.view.MotionEvent
+import android.view.ContextThemeWrapper
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
@@ -164,7 +165,12 @@ internal fun MiniBrowserWebView(
             // its own address, and the WebView may still show the previous page.
             var mainFrameRequest: String? = null
             val page = BrowserPullRefresh(ctx)
-            val webView = WebView(ctx)
+            // Sites with a dark look show it in private pages, like the chrome,
+            // whatever the system's mode: the WebView reads it from its theme.
+            // Only the site's own dark look, no forced darkening, as on iOS.
+            val webView = WebView(
+                if (isPrivate) ContextThemeWrapper(ctx, android.R.style.Theme_DeviceDefault_NoActionBar) else ctx,
+            )
             // Before the WebView does anything: the profile cannot change later.
             if (isPrivate) PrivateBrowsing.adopt(webView)
             page.addView(

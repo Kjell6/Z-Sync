@@ -180,20 +180,15 @@ struct MiniBrowserView: View {
     private var sheetBackground: Color { pageColor(of: model) }
 
     private func pageColor(of page: MiniBrowserModel) -> Color {
-        if page.pageError != nil { return Palette.background(pageScheme(page)) }
-        return page.themeColor ?? Palette.background(pageScheme(page))
-    }
-
-    /// A private page is dark, whatever the system says.
-    private func pageScheme(_ page: MiniBrowserModel) -> ColorScheme {
-        page.isPrivate ? .dark : scheme
+        if page.pageError != nil { return Palette.background(scheme) }
+        return page.themeColor ?? defaultBackground
     }
 
     /// The bar's surface: the page's own color, nudged a touch darker or
     /// lighter so the plate is visible against it while still reading as the
     /// site's color. Without a theme color, the system background is nudged.
     private var barBackground: Color {
-        (model.themeColor ?? Palette.background(pageScheme(model))).nudgedForBar() ?? sheetBackground
+        (model.themeColor ?? defaultBackground).nudgedForBar() ?? sheetBackground
     }
 
     /// The bar is nearly the page's color, so the page decides whether the
@@ -384,9 +379,6 @@ struct MiniBrowserView: View {
                 }
 
                 chrome
-                    // Private pages wear the dark chrome; the overview keeps
-                    // the app's own look.
-                    .environment(\.colorScheme, model.isPrivate && !overviewControls ? .dark : scheme)
                     .zIndex(6)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
@@ -572,7 +564,7 @@ struct MiniBrowserView: View {
             Text("browser.incognito.note")
                 .zenFont(19, weight: .semibold, design: .rounded)
         }
-        .foregroundStyle(Palette.ink(.dark).opacity(0.55))
+        .foregroundStyle(Palette.ink(scheme).opacity(0.55))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.bottom, 160)
         .allowsHitTesting(false)

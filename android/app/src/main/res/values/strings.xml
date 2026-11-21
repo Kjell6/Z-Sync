@@ -209,6 +209,7 @@
     <string name="browser_image_save">Save Image</string>
     <string name="browser_image_open">Open Image in New Page</string>
     <string name="browser_image_copy">Copy Image Address</string>
+    <string name="kept_private_tab">Private Tab</string>
     <string name="kept_new_page">New Page</string>
     <string name="kept_close_all">Close All</string>
     <string name="kept_close_all_label">Close all pages</string>

@@ -632,7 +632,12 @@ private fun OpenPageCard(
 ) {
     val zen = LocalZenColors.current
     val context = LocalContext.current
-    val title = if (page.url.isEmpty()) stringResource(R.string.kept_new_page) else PageTitle.headline(page.title, page.url)
+    val title = when {
+        // A private page keeps its site to itself: one name for all of them.
+        page.isPrivate -> stringResource(R.string.kept_private_tab)
+        page.url.isEmpty() -> stringResource(R.string.kept_new_page)
+        else -> PageTitle.headline(page.title, page.url)
+    }
     val currentLabel = stringResource(R.string.kept_current_page)
     val closeLabel = stringResource(R.string.kept_close_page)
     val session = remember(page.id) { pages.session(page.id) }
@@ -695,7 +700,11 @@ private fun OpenPageCard(
                     )
                 },
         ) {
-            OpenPageShot(page = page, session = session, surface = surface)
+            if (page.isPrivate) {
+                PrivatePageCover()
+            } else {
+                OpenPageShot(page = page, session = session, surface = surface)
+            }
             // Cards the deck is not resting on sit a little in the dark, the
             // ones behind more than the one lying on top. On a dark background
             // the shadows hardly show, so the dimming does more of the work.
@@ -728,21 +737,19 @@ private fun OpenPageCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(iconGap),
         ) {
-            if (page.url.isNotEmpty()) {
+            if (page.isPrivate) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_incognito),
+                    contentDescription = null,
+                    tint = zen.ink,
+                    modifier = Modifier.size(iconSide),
+                )
+            } else if (page.url.isNotEmpty()) {
                 Favicon(urlString = page.url, size = iconSide)
             } else {
                 Spacer(Modifier.size(iconSide))
             }
-            if (page.isPrivate) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_incognito),
-                    contentDescription = stringResource(R.string.browser_incognito),
-                    tint = zen.ink,
-                    modifier = Modifier.size(iconSide * 0.8f),
-                )
-            }
             val room = if (isFrontCard) width - headerInset * 2 else width * 0.727f - 12.dp
-            val privateMark = if (page.isPrivate) iconSide * 0.8f + iconGap else 0.dp
             Text(
                 text = title,
                 style = ZenType.rounded(14, FontWeight.SemiBold),
@@ -750,7 +757,7 @@ private fun OpenPageCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
-                    .widthIn(max = (room - iconSide - iconGap - privateMark).coerceAtLeast(0.dp))
+                    .widthIn(max = (room - iconSide - iconGap).coerceAtLeast(0.dp))
                     .graphicsLayer {
                         alpha = 1f - (abs(offset()) * 2.5f).coerceAtMost(1f)
                     },
@@ -782,6 +789,35 @@ private fun OpenPageCard(
                 onShare()
             },
             onClose = onClose,
+        )
+    }
+}
+
+/**
+ * No picture of a private page's site: the surface the new private page
+ * shows, its eyes and its name.
+ */
+@Composable
+private fun PrivatePageCover() {
+    val zen = LocalZenColors.current
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.ic_incognito),
+            contentDescription = null,
+            tint = zen.ink.copy(alpha = 0.55f),
+            modifier = Modifier.size(44.dp),
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = stringResource(R.string.browser_incognito),
+            style = ZenType.rounded(17, FontWeight.SemiBold),
+            color = zen.ink.copy(alpha = 0.55f),
         )
     }
 }

@@ -1365,6 +1365,16 @@
         }
       }
     },
+    "kept.private_tab": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Private Tab"
+          }
+        }
+      }
+    },
     "legal.feedback": {
       "localizations": {
         "en": {

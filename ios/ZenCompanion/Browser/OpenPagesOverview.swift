@@ -720,8 +720,19 @@ private struct OpenPageCard<Menu: View>: View {
         return max(0, room - iconSide - iconGap)
     }
 
+    /// A private page keeps its site to itself: one name for all of them.
+    private var cardTitle: String {
+        page.model.isPrivate ? String(localized: "kept.private_tab") : page.title
+    }
+
     var body: some View {
-        OpenPageShot(page: page, store: store)
+        Group {
+            if page.model.isPrivate {
+                privateCover
+            } else {
+                OpenPageShot(page: page, store: store)
+            }
+        }
             .frame(width: size.width, height: size.height)
             .overlay {
                 Color.black
@@ -752,7 +763,7 @@ private struct OpenPageCard<Menu: View>: View {
             .onTapGesture(perform: onOpen)
             .contextMenu { menu() }
             .accessibilityElement(children: .contain)
-            .accessibilityLabel(isCurrent ? Text(verbatim: "\(page.title), \(String(localized: "kept.current_page"))") : Text(verbatim: page.title))
+            .accessibilityLabel(isCurrent ? Text(verbatim: "\(cardTitle), \(String(localized: "kept.current_page"))") : Text(verbatim: cardTitle))
             .accessibilityAddTraits(.isButton)
             .accessibilityAction(.default, onOpen)
             .accessibilityAction(named: Text("kept.close_page")) { onClose() }
@@ -773,16 +784,7 @@ private struct OpenPageCard<Menu: View>: View {
         HStack(spacing: iconGap) {
             icon
                 .modifier(DeckHeaderFade(offset: offset, reveal: reveal, isName: false))
-            if page.model.isPrivate {
-                Image("incognito")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 15, height: 12)
-                    .foregroundStyle(Color.primary)
-                    .modifier(DeckHeaderFade(offset: offset, reveal: reveal, isName: false))
-                    .accessibilityLabel(Text("browser.incognito"))
-            }
-            Text(page.title)
+            Text(cardTitle)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Color.primary)
                 .lineLimit(1)
@@ -792,9 +794,32 @@ private struct OpenPageCard<Menu: View>: View {
         .allowsHitTesting(false)
     }
 
+    /// No picture of the site: the surface, eyes and name the new private
+    /// page shows before anything loads.
+    private var privateCover: some View {
+        ZStack {
+            Palette.background(scheme)
+            VStack(spacing: 10) {
+                Image("incognito")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 44, height: 35)
+                Text("browser.incognito")
+                    .zenFont(17, weight: .semibold, design: .rounded)
+            }
+            .foregroundStyle(Palette.ink(scheme).opacity(0.55))
+        }
+    }
+
     @ViewBuilder
     private var icon: some View {
-        if let url = page.url {
+        if page.model.isPrivate {
+            Image("incognito")
+                .resizable()
+                .scaledToFit()
+                .foregroundStyle(Color.primary)
+                .frame(width: iconSide, height: iconSide)
+        } else if let url = page.url {
             Favicon(urlString: url.absoluteString, size: iconSide)
                 .shadow(color: .black.opacity(0.28), radius: 4, y: 2)
         } else {

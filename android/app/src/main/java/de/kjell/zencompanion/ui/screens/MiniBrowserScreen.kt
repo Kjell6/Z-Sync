@@ -1,8 +1,6 @@
 package de.kjell.zencompanion.ui.screens
 
 import de.kjell.zencompanion.ui.browser.PrivateBrowsing
-import de.kjell.zencompanion.ui.theme.InkDark
-import de.kjell.zencompanion.ui.theme.PaperDark
 import de.kjell.zencompanion.ui.theme.ZenLayout
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -860,6 +858,7 @@ private fun PageSession.isBlank(state: MiniBrowserViewModel.State): Boolean =
 /** What a new private page shows until something loads in it. */
 @Composable
 private fun PrivatePageNote() {
+    val zen = LocalZenColors.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -870,14 +869,14 @@ private fun PrivatePageNote() {
         Icon(
             painter = painterResource(R.drawable.ic_incognito),
             contentDescription = null,
-            tint = InkDark.copy(alpha = 0.55f),
+            tint = zen.ink.copy(alpha = 0.55f),
             modifier = Modifier.size(40.dp),
         )
         Spacer(Modifier.height(12.dp))
         Text(
             text = stringResource(R.string.browser_incognito_note),
             style = ZenType.rounded(19, FontWeight.SemiBold),
-            color = InkDark.copy(alpha = 0.55f),
+            color = zen.ink.copy(alpha = 0.55f),
         )
     }
 }
@@ -1102,8 +1101,7 @@ private fun BrowserPageScreen(
         }
     }
 
-    // A private page is dark, whatever the system says.
-    val defaultSurface = if (session.isPrivate) PaperDark else MaterialTheme.colorScheme.surface
+    val defaultSurface = MaterialTheme.colorScheme.surface
     // The error panel sits on the surface color. The failed load leaves the
     // previous page's color behind, so the bar ignores it while it shows.
     val targetBg = state.siteThemeColor.takeIf { state.pageError == null } ?: defaultSurface

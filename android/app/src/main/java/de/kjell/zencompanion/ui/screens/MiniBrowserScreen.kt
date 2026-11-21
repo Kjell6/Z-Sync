@@ -1827,7 +1827,7 @@ private fun PageStack(
                 }
                 key(session.webViewGeneration) {
                     MiniBrowserWebView(
-                        isPrivate = session.isPrivate,
+                        privateProfile = session.privateProfile,
                         // After a crash it waits for Reload instead.
                         initialUrl = if (state.pageError == BrowserPageError.CRASHED) {
                             null

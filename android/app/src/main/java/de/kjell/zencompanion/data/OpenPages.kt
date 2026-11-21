@@ -29,10 +29,15 @@ data class OpenPage(
     val released: Boolean = false,
     /** The address saved from this page into a space. */
     val pinnedUrl: String? = null,
-    /** Private: no history and website data of its own. It stays like any other page. */
-    val isPrivate: Boolean = false,
+    /**
+     * The WebView profile of a private page: no history, and website data of
+     * its own that no other page sees. Null for a normal page. A private page
+     * stays like any other.
+     */
+    val privateProfile: String? = null,
 ) {
     val isKept: Boolean get() = keptAt != null
+    val isPrivate: Boolean get() = privateProfile != null
 }
 
 /** How long a page stays once the user has left it. A month by default. */
@@ -161,12 +166,12 @@ class OpenPagesStore(
         page.isKept || (!failed && KeptPagesPolicy.isWebAddress(page.url))
 
     /** A new page turns private or back, before anything has loaded in it. */
-    fun setPrivate(id: String, isPrivate: Boolean) {
-        _pages.value = _pages.value.map { if (it.id == id) it.copy(isPrivate = isPrivate) else it }
+    fun setPrivate(id: String, privateProfile: String?) {
+        _pages.value = _pages.value.map { if (it.id == id) it.copy(privateProfile = privateProfile) else it }
     }
 
-    /** Whether any private page is still open. */
-    fun hasPrivatePages(): Boolean = _pages.value.any { it.isPrivate }
+    /** The profiles the open private pages use. */
+    fun privateProfiles(): Set<String> = _pages.value.mapNotNull { it.privateProfile }.toSet()
 
     /** Opens a new page and puts it on screen. */
     fun open(
@@ -174,10 +179,10 @@ class OpenPagesStore(
         title: String = "",
         openedFromSpace: Boolean = false,
         openerId: String? = null,
-        isPrivate: Boolean = false,
+        privateProfile: String? = null,
     ): OpenPage {
         val page = OpenPage(
-            isPrivate = isPrivate,
+            privateProfile = privateProfile,
             id = UUID.randomUUID().toString(),
             url = url,
             title = title,
@@ -431,7 +436,7 @@ class OpenPagesStore(
                         .put("title", page.title)
                         .put("keptAt", page.keptAt)
                         .put("lastUsedAt", page.lastUsedAt)
-                        .put("isPrivate", page.isPrivate),
+                        .put("privateProfile", page.privateProfile),
                 )
             }
             return array.toString()
@@ -447,7 +452,10 @@ class OpenPagesStore(
                     title = item.optString("title"),
                     keptAt = item.getLong("keptAt"),
                     lastUsedAt = item.getLong("lastUsedAt"),
-                    isPrivate = item.optBoolean("isPrivate"),
+                    privateProfile = item.optString("privateProfile").ifEmpty {
+                        // Written before each private page had a profile of its own.
+                        if (item.optBoolean("isPrivate")) "private-" + item.getString("id") else null
+                    },
                 )
             }
         }

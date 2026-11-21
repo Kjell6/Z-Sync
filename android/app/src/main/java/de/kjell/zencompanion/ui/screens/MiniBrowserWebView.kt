@@ -80,8 +80,8 @@ private const val DesktopUserAgent =
 @Composable
 internal fun MiniBrowserWebView(
     initialUrl: String?,
-    /** A private page's WebView runs on the private profile. */
-    isPrivate: Boolean = false,
+    /** A private page's WebView runs on its own profile. */
+    privateProfile: String? = null,
     isAddressFocused: Boolean,
     desktopSite: Boolean,
     /** 1.0 = 100%. Page zoom for the page's document. */
@@ -168,11 +168,12 @@ internal fun MiniBrowserWebView(
             // Sites with a dark look show it in private pages, like the chrome,
             // whatever the system's mode: the WebView reads it from its theme.
             // Only the site's own dark look, no forced darkening, as on iOS.
+            val isPrivate = privateProfile != null
             val webView = WebView(
                 if (isPrivate) ContextThemeWrapper(ctx, android.R.style.Theme_DeviceDefault_NoActionBar) else ctx,
             )
             // Before the WebView does anything: the profile cannot change later.
-            if (isPrivate) PrivateBrowsing.adopt(webView)
+            if (privateProfile != null) PrivateBrowsing.adopt(webView, privateProfile)
             page.addView(
                 webView,
                 ViewGroup.LayoutParams(

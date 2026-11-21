@@ -3,6 +3,7 @@ package de.kjell.zencompanion
 import de.kjell.zencompanion.data.KeptPageLifetime
 import de.kjell.zencompanion.data.KeptPagesPolicy
 import de.kjell.zencompanion.data.LeaveAction
+import de.kjell.zencompanion.data.OpenPage
 import de.kjell.zencompanion.data.OpenPagesStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -440,5 +441,23 @@ class OpenPagesTests {
 
         assertTrue(pages.pages.value.isEmpty())
         assertFalse(dir.exists())
+    }
+
+    @Test
+    fun privatePagesKeepTheirOwnProfileThroughARestart() {
+        val pages = listOf(
+            OpenPage(id = "a", url = "https://a.example/", title = "A", keptAt = 1L, lastUsedAt = 1L, privateProfile = "private-1"),
+            OpenPage(id = "b", url = "https://b.example/", title = "B", keptAt = 2L, lastUsedAt = 2L, privateProfile = "private-2"),
+            OpenPage(id = "c", url = "https://c.example/", title = "C", keptAt = 3L, lastUsedAt = 3L),
+        )
+        val read = OpenPagesStore.decode(OpenPagesStore.encode(pages))
+        assertEquals(listOf("private-1", "private-2", null), read.map { it.privateProfile })
+        assertEquals(listOf(true, true, false), read.map { it.isPrivate })
+    }
+
+    @Test
+    fun aPrivatePageFromBeforeProfilesGetsOneOfItsOwn() {
+        val raw = """[{"id":"a","url":"https://a.example/","title":"A","keptAt":1,"lastUsedAt":1,"isPrivate":true}]"""
+        assertEquals("private-a", OpenPagesStore.decode(raw).single().privateProfile)
     }
 }

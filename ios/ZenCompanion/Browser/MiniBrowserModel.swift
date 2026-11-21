@@ -436,10 +436,11 @@ final class MiniBrowserModel {
     @ObservationIgnored private weak var zoomedWebView: WKWebView?
     @ObservationIgnored private var appliedPageZoom: Double?
 
-    /// A private page: its website data is kept apart from the phone's and it
-    /// leaves no history. Chosen while the page is still new, before anything
-    /// has loaded in it; it stays like any other page.
-    private(set) var isPrivate = false
+    /// A private page's own website data, which no other page sees; nil for
+    /// a normal page. A private page leaves no history. Chosen while the page
+    /// is still new, before anything has loaded in it; it stays like any other.
+    private(set) var privateDataID: UUID?
+    var isPrivate: Bool { privateDataID != nil }
 
     /// The page's live web view; nil while the page sleeps. Owned here, not by
     /// the view, so the page survives being off screen.
@@ -549,7 +550,7 @@ final class MiniBrowserModel {
         }
     }
     private let suggestionClient: SearchSuggestionFetching
-    /// The phone's answers, or the private pages' own while this one is private.
+    /// The phone's answers, or this private page's own.
     private(set) var sitePermissions: SitePermissionStore
     @ObservationIgnored private let savedSitePermissions: SitePermissionStore
     private let history: BrowserHistoryStore
@@ -665,23 +666,28 @@ final class MiniBrowserModel {
     /// kind of website data, so a fresh one takes its place.
     func setPrivate(_ on: Bool) {
         guard isPrivate != on, opensWithSearch else { return }
-        isPrivate = on
-        sitePermissions = on ? PrivateBrowsing.permissions : savedSitePermissions
-        guard webView != nil else { return }
-        sleep()
-        wake()
+        let previous = privateDataID
+        makePrivate(on ? UUID() : nil)
+        if webView != nil {
+            sleep()
+            wake()
+        }
+        // Nothing has loaded in it, and no popup of a new page can share it.
+        if let previous { PrivateBrowsing.discard(previous) }
     }
 
-    /// A page opened from a private one is private too.
-    func inheritPrivacy(from opener: MiniBrowserModel?) {
-        guard opener?.isPrivate == true else { return }
-        restorePrivate()
+    /// A page opened from a private one is private too, with data of its own.
+    /// A popup shares its opener's: its sign-in is for that page.
+    func inheritPrivacy(from opener: MiniBrowserModel?, sharingData: Bool) {
+        guard let id = opener?.privateDataID else { return }
+        makePrivate(sharingData ? id : UUID())
     }
 
-    /// A private page read back as the app starts, before it has a web view.
-    func restorePrivate() {
-        isPrivate = true
-        sitePermissions = PrivateBrowsing.permissions
+    /// A private page read back as the app starts, or made private now. Its
+    /// answers to sites live in memory only, its own.
+    func makePrivate(_ id: UUID?) {
+        privateDataID = id
+        sitePermissions = id == nil ? savedSitePermissions : SitePermissionStore.inMemory()
     }
 
     /// Gives the page a web view again: from [history] when there is one, at

@@ -1,39 +1,62 @@
 import SwiftUI
 import WebKit
 
-/// Website data for private pages: a store of their own, apart from the
-/// phone's, shared by the private pages open together so a sign-in carries
-/// across them. It stays with the pages through a restart, and is wiped once
-/// the last of them has closed.
+/// Website data for private pages: every private page has a store of its own,
+/// so nothing it signs into reaches another page, private or not. A popup a
+/// page opens shares its store, or a sign-in in the popup would never reach
+/// the page that asked for it. A store stays with its page through a restart
+/// and is deleted once the page has closed.
 @MainActor
 enum PrivateBrowsing {
-    /// Fixed, so the pages find their store again after a restart.
-    private static let identifier = UUID(uuidString: "6F1C2B0E-5A43-4C47-9B7E-2D8F0C4A7E11")!
-    private static var store: WKWebsiteDataStore?
-    private static var answers: SitePermissionStore?
+    private static var stores: [UUID: WKWebsiteDataStore] = [:]
+    /// The stores of the private pages read back as the app started.
+    private static var stayed: Set<UUID> = []
+    private static var leftoversChecked = false
 
-    static var dataStore: WKWebsiteDataStore {
-        if let store { return store }
-        let fresh = WKWebsiteDataStore(forIdentifier: identifier)
-        store = fresh
+    static func dataStore(_ id: UUID) -> WKWebsiteDataStore {
+        if let store = stores[id] { return store }
+        let fresh = WKWebsiteDataStore(forIdentifier: id)
+        stores[id] = fresh
+        // Not before WebKit is up: asked at launch, it crashes. A moment
+        // later the page's web view exists.
+        if !leftoversChecked {
+            leftoversChecked = true
+            Task { @MainActor in discardLeftovers() }
+        }
         return fresh
     }
 
-    /// What private pages allowed or blocked: never written down.
-    static var permissions: SitePermissionStore {
-        if let answers { return answers }
-        let fresh = SitePermissionStore.inMemory()
-        answers = fresh
-        return fresh
+    /// The pages were read back as the app starts: their stores keep their sign-ins.
+    static func startUp(keeping ids: Set<UUID>) {
+        stayed = ids
     }
 
-    /// No private page is left: the next one starts with nothing.
-    static func endSession() {
-        answers = nil
-        dataStore.removeData(
-            ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
-            modifiedSince: .distantPast
-        ) {}
+    /// No open page uses the store any more: everything in it goes.
+    static func discard(_ id: UUID) {
+        stayed.remove(id)
+        let store = stores.removeValue(forKey: id) ?? WKWebsiteDataStore(forIdentifier: id)
+        store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) {
+            Task { @MainActor in
+                // The web view may still be on its way out; the store itself
+                // goes once it has. Should it still be held, the next start
+                // finds it without a page and removes it then.
+                try? await Task.sleep(for: .seconds(2))
+                guard stores[id] == nil else { return }
+                WKWebsiteDataStore.remove(forIdentifier: id) { _ in }
+            }
+        }
+    }
+
+    /// Stores an earlier run left behind without a page go. The browser keeps
+    /// no other stores of its own, so every one but the pages' is a leftover.
+    private static func discardLeftovers() {
+        WKWebsiteDataStore.fetchAllDataStoreIdentifiers { ids in
+            Task { @MainActor in
+                for id in ids where !stayed.contains(id) && stores[id] == nil {
+                    WKWebsiteDataStore.remove(forIdentifier: id) { _ in }
+                }
+            }
+        }
     }
 }
 
@@ -92,8 +115,9 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         // in Safari.
         configuration.preferences.isElementFullscreenEnabled = true
         // A popup already carries its opener's store, which must stay.
-        if model.isPrivate, configuration.websiteDataStore !== PrivateBrowsing.dataStore {
-            configuration.websiteDataStore = PrivateBrowsing.dataStore
+        if let id = model.privateDataID {
+            let store = PrivateBrowsing.dataStore(id)
+            if configuration.websiteDataStore !== store { configuration.websiteDataStore = store }
         }
         configuration.userContentController.addScriptMessageHandler(
             BrowserGeolocation.Handler(model: model),

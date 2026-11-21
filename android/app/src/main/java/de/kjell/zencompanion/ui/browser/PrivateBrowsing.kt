@@ -7,86 +7,75 @@ import android.webkit.WebView
 import androidx.webkit.ProfileStore
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
-import de.kjell.zencompanion.data.SitePermissionStore
+import java.util.UUID
 
 /**
- * Website data for private pages: one WebView profile of their own, shared by
- * the private pages open together so a sign-in carries across them, and
- * deleted once the last of them has closed. Main thread only.
+ * Website data for private pages: every private page has a WebView profile of
+ * its own, so nothing it signs into reaches another page, private or not. A
+ * popup a page opens shares its profile, or a sign-in in the popup would never
+ * reach the page that asked for it. A profile stays with its page through a
+ * restart and is deleted once the page has closed. Main thread only.
  */
 object PrivateBrowsing {
-    private const val PROFILE = "private-pages"
+    private const val PREFIX = "private-"
     /** A WebView needs a moment after its page closes before it lets go. */
     private const val DELETE_DELAY_MS = 1_500L
 
     private val main = Handler(Looper.getMainLooper())
-    /** What an earlier run left behind with no private page to show for it goes once. */
-    private var cleaned = false
-    /** Private pages stayed from an earlier run: their data stays with them. */
-    private var keepsEarlierSession = false
-    /** A private WebView ran since the profile was last deleted. */
-    private var used = false
-    /** The last private page closed and its data has not been deleted yet. */
-    private var deletePending = false
-    private var answers: SitePermissionStore? = null
-
-    /** What private pages allowed or blocked: never written down. */
-    val permissions: SitePermissionStore
-        get() = answers ?: SitePermissionStore().also { answers = it }
+    /** Profiles that may hold data: the stayed pages' from the start, and each one adopted since. */
+    private val known = mutableSetOf<String>()
+    /** What earlier runs left behind without a page is looked for once. */
+    private var orphansChecked = false
 
     /** Older WebViews have a single profile: there private pages are not offered. */
     val isSupported: Boolean
         get() = WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)
 
+    /** A profile for a new private page, used by no other. */
+    fun newProfile(): String = PREFIX + UUID.randomUUID()
+
     /**
-     * The pages were read back as the app starts. Private pages that stayed
-     * keep their sign-ins; with none of them left, an earlier run's data goes.
+     * The pages were read back as the app starts: their profiles keep their
+     * sign-ins. Only noted: the WebView is not woken for it before a page needs it.
      */
-    fun startUp(hasPrivatePages: Boolean) {
-        // Only noted: the WebView is not woken for it before a page needs it.
-        keepsEarlierSession = hasPrivatePages
+    fun startUp(profiles: Set<String>) {
+        known += profiles
     }
 
-    /** Puts a new WebView on the private profile. Before it loads anything. */
-    fun adopt(webView: WebView) {
+    /** Puts a new WebView on its page's profile. Before it loads anything. */
+    fun adopt(webView: WebView, profile: String) {
         if (!isSupported) return
-        main.removeCallbacksAndMessages(null)
-        // A new private page right after the last one closed must not find
-        // the old session's data, nor what an earlier run left behind.
-        if (deletePending || (!cleaned && !keepsEarlierSession)) {
-            cleaned = true
-            deletePending = false
-            runCatching { ProfileStore.getInstance().deleteProfile(PROFILE) }
+        known += profile
+        val store = ProfileStore.getInstance()
+        if (!orphansChecked) {
+            orphansChecked = true
+            store.allProfileNames
+                .filter { it.startsWith(PREFIX) && it !in known }
+                .forEach { runCatching { store.deleteProfile(it) } }
         }
-        cleaned = true
-        ProfileStore.getInstance().getOrCreateProfile(PROFILE)
-        WebViewCompat.setProfile(webView, PROFILE)
-        used = true
+        store.getOrCreateProfile(profile)
+        WebViewCompat.setProfile(webView, profile)
     }
 
-    /** The jar a WebView uses: the private one for a private page. */
+    /** The jar a WebView uses: its own profile's for a private page. */
     fun cookies(webView: WebView): CookieManager =
         if (isSupported) WebViewCompat.getProfile(webView).cookieManager else CookieManager.getInstance()
 
-    /** No private page is left: the next one starts with nothing. */
-    fun endSession() {
-        answers = null
-        // An earlier run's private pages are gone: the next one starts empty.
-        keepsEarlierSession = false
-        // Nothing private ran: no need to wake the WebView to ask.
-        if (!used) return
-        used = false
-        deletePending = true
-        main.removeCallbacksAndMessages(null)
-        main.postDelayed(::deleteProfile, DELETE_DELAY_MS)
+    /** Every profile no open page uses any more goes, with all it held. */
+    fun releaseAllExcept(inUse: Set<String>) {
+        val gone = known - inUse
+        if (gone.isEmpty()) return
+        known -= gone
+        gone.forEach { profile -> main.postDelayed({ delete(profile) }, DELETE_DELAY_MS) }
     }
 
-    private fun deleteProfile(retries: Int = 2) {
-        val deleted = runCatching { ProfileStore.getInstance().deleteProfile(PROFILE) }
-        if (deleted.isSuccess) deletePending = false
+    private fun delete(profile: String, retries: Int = 2) {
+        // Taken up again in the meantime (cannot happen with fresh names, but cheap).
+        if (profile in known) return
+        val deleted = runCatching { ProfileStore.getInstance().deleteProfile(profile) }
         // Still held by a WebView on its way out: try again shortly.
         if (deleted.isFailure && retries > 0) {
-            main.postDelayed({ deleteProfile(retries - 1) }, DELETE_DELAY_MS)
+            main.postDelayed({ delete(profile, retries - 1) }, DELETE_DELAY_MS)
         }
     }
 }

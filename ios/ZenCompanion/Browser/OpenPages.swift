@@ -201,15 +201,18 @@ final class OpenPagesStore: MiniBrowserPageHost {
         pages = Self.read(from: directory).map { saved in
             let model = makeModel(saved.url)
             model.restore(title: saved.title)
-            if saved.isPrivate == true { model.restorePrivate() }
+            // Written before each private page had a store of its own: a fresh one.
+            if let id = saved.privateDataID ?? (saved.isPrivate == true ? UUID() : nil) {
+                model.makePrivate(id)
+            }
             model.markAddressAsVisited()
             let page = OpenPage(id: saved.id, model: model, keptAt: saved.keptAt, lastUsedAt: saved.lastUsedAt)
             model.host = self
             return page
         }
         closeExpired()
-        // An earlier run's private data with no private page left to own it.
-        if !pages.contains(where: { $0.model.isPrivate }) { PrivateBrowsing.endSession() }
+        // Their sign-ins stay; what an earlier run left without a page goes.
+        PrivateBrowsing.startUp(keeping: privateDataIDs)
     }
 
     // MARK: - Reading
@@ -384,7 +387,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
         page.model.sleep()
         pages.remove(at: index)
         removeFiles(of: page)
-        endPrivateSessionIfDone()
+        discardPrivateData(of: [page])
         for other in pages where other.openerID == id {
             other.openerID = page.openerID
         }
@@ -406,9 +409,10 @@ final class OpenPagesStore: MiniBrowserPageHost {
             page.model.commitPendingPinSave()
             page.model.sleep()
         }
+        let gone = pages
         pages = []
         activeID = nil
-        PrivateBrowsing.endSession()
+        discardPrivateData(of: gone)
         try? FileManager.default.removeItem(at: directory)
     }
 
@@ -429,8 +433,9 @@ final class OpenPagesStore: MiniBrowserPageHost {
             }
             putToSleep(page)
         }
+        let gone = pages.filter { !$0.isKept }
         pages.removeAll { !$0.isKept }
-        endPrivateSessionIfDone()
+        discardPrivateData(of: gone)
         // A page's way back ends with the page it led to.
         for page in pages where page.openerID.flatMap(self.page) == nil {
             page.openerID = nil
@@ -479,10 +484,17 @@ final class OpenPagesStore: MiniBrowserPageHost {
         persist()
     }
 
-    /// The last private page went, and its website data with it.
-    private func endPrivateSessionIfDone() {
-        guard !pages.contains(where: { $0.model.isPrivate }) else { return }
-        PrivateBrowsing.endSession()
+    private var privateDataIDs: Set<UUID> {
+        Set(pages.compactMap(\.model.privateDataID))
+    }
+
+    /// Private pages that went take their website data with them, unless a
+    /// popup of theirs still has it open.
+    private func discardPrivateData(of gone: [OpenPage]) {
+        let inUse = privateDataIDs
+        for id in Set(gone.compactMap(\.model.privateDataID)) where !inUse.contains(id) {
+            PrivateBrowsing.discard(id)
+        }
     }
 
     private func saveIfItStays(_ page: OpenPage) {
@@ -505,7 +517,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
     func openPopup(from model: MiniBrowserModel, url: URL?, configuration: WKWebViewConfiguration) -> WKWebView? {
         let opener = pages.first { $0.model === model }
         let popup = makeModel(url ?? URL(string: "about:blank"))
-        popup.inheritPrivacy(from: model)
+        popup.inheritPrivacy(from: model, sharingData: true)
         let webView = MiniBrowserWebDriver.attach(to: popup, configuration: configuration)
         let page = OpenPage(model: popup, openerID: opener?.id, lastUsedAt: now())
         _ = insert(page, after: opener)
@@ -515,7 +527,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
     func openInNewPage(_ url: URL, from model: MiniBrowserModel) {
         let opener = pages.first { $0.model === model }
         let newModel = makeModel(url)
-        newModel.inheritPrivacy(from: model)
+        newModel.inheritPrivacy(from: model, sharingData: false)
         let page = OpenPage(model: newModel, openerID: opener?.id, lastUsedAt: now())
         _ = insert(page, after: opener)
     }
@@ -712,7 +724,7 @@ final class OpenPagesStore: MiniBrowserPageHost {
             guard let keptAt = page.keptAt, let url = page.url else { return nil }
             return SavedPage(
                 id: page.id, url: url, title: page.model.pageTitle, keptAt: keptAt,
-                lastUsedAt: page.lastUsedAt, isPrivate: page.model.isPrivate ? true : nil
+                lastUsedAt: page.lastUsedAt, privateDataID: page.model.privateDataID, isPrivate: nil
             )
         }
         ensureDirectory()
@@ -734,7 +746,9 @@ final class OpenPagesStore: MiniBrowserPageHost {
         let title: String
         let keptAt: Date
         let lastUsedAt: Date
-        /// Absent in files written before private pages could stay.
+        /// A private page's own website data; absent for a normal page.
+        let privateDataID: UUID?
+        /// Written by builds before each private page had a store of its own.
         let isPrivate: Bool?
     }
 

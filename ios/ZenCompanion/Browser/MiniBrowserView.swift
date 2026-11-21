@@ -576,7 +576,9 @@ struct MiniBrowserView: View {
     /// glass; only its layout viewport ends above the bar, so cookie banners
     /// and sticky CTAs lay out in the visible strip instead of under it.
     private var pageBottomClearance: CGFloat {
-        guard !barCollapsed else { return 0 }
+        // Nothing to keep clear of while the chrome is away, the find bar's
+        // turn included.
+        guard !chromeHidden else { return 0 }
         return MiniBrowserChromeMetrics.height(above: chromeBottomInset)
     }
 

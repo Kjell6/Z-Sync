@@ -148,12 +148,11 @@ that, also ask Apple for `com.apple.developer.web-browser.public-key-credential`
 entitlement before it is granted: automatic signing fails and the app no longer
 builds for a device.
 
-**Android: on since this change, waiting on the managers.** The browser asks
-WebView for passkeys in browser mode
+**Android: built, switched off until Google approves.** `BrowserPasskeysEnabled` in `MiniBrowserWebView.kt` is `false`: with it on but no approval, sites offer passkeys and every attempt fails. Set it to `true` once Google Password Manager has approved the app. When on, the
+browser asks WebView for passkeys in browser mode
 (`WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_FOR_BROWSER`, Android 14+ with a
 current WebView). Password suggestions already work through Android's autofill.
-A password manager only serves passkeys to an app it trusts as a browser. Until
-it does, a site's passkey request fails the same way it did before:
+A password manager only serves passkeys to an app it trusts as a browser:
 - **Google Password Manager:** request approval for `de.kjell.zencompanion`
   through the form linked from
   <https://developer.android.com/identity/sign-in/privileged-apps>, using the

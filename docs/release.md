@@ -141,7 +141,7 @@ works.
 | Platform | Approval | Status |
 |---|---|---|
 | iOS | Apple `com.apple.developer.web-browser` (default-browser entitlement) | Requested around 2026-11-17, pending |
-| Android | Google Password Manager privileged-browser access | Not requested yet |
+| Android | Google Password Manager privileged-browser access | Requested 2026-11-21, pending (Google usually answers within 10 business days) |
 
 ### iOS — when Apple grants the entitlement
 

@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
@@ -801,10 +802,17 @@ private fun OpenPageCard(
  * system's own white.
  */
 @Composable
-internal fun PrivatePageCover(modifier: Modifier = Modifier) {
+internal fun PrivatePageCover(
+    modifier: Modifier = Modifier,
+    /** Around the part a card shows: the flying page centers its eyes where the card will. */
+    contentPadding: PaddingValues = PaddingValues(),
+) {
     // Laid out at a card's size and only scaled to the size it is shown at, so
     // the name does not shift as the card takes over from the flying page.
-    BoxWithConstraints(modifier.fillMaxSize().background(PaperDark), contentAlignment = Alignment.Center) {
+    BoxWithConstraints(
+        modifier.fillMaxSize().background(PaperDark).padding(contentPadding),
+        contentAlignment = Alignment.Center,
+    ) {
         val factor = maxWidth / PrivateCoverCardWidth
         Column(
             modifier = Modifier.graphicsLayer {

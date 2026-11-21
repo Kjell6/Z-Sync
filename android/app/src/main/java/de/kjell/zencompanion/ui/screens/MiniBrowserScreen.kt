@@ -50,6 +50,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -729,7 +730,14 @@ fun MiniBrowserScreen(
                 // On its way to its card the page already is the card: the site
                 // never shows in the move.
                 if ((pageFloats || privateCoverHolds) && session.isPrivate) {
-                    PrivatePageCover(Modifier.graphicsLayer { alpha = privateCoverFade.value })
+                    PrivatePageCover(
+                        Modifier.graphicsLayer { alpha = privateCoverFade.value },
+                        // The card shows the page between the status bar and
+                        // the bar's band: centered there, nothing moves as it takes over.
+                        contentPadding = with(density) {
+                            PaddingValues(top = topBand.toDp(), bottom = bottomBand.toDp())
+                        },
+                    )
                 }
             }
         }

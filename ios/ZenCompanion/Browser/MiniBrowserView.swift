@@ -304,7 +304,9 @@ struct MiniBrowserView: View {
                                 // the card: the site never shows in the move.
                                 if model.isPrivate, pageFloats {
                                     PrivatePageCover()
-                                        .clipShape(RoundedRectangle(cornerRadius: pagePose.corner, style: .continuous))
+                                        // The page's own outline, corner for
+                                        // corner, so nothing shows past it.
+                                        .clipShape(floatingPageShape)
                                         .allowsHitTesting(false)
                                 }
                             }
@@ -526,19 +528,25 @@ struct MiniBrowserView: View {
         )
     }
 
+    /// The flying page's outline: its bottom corners round with the card, its
+    /// top ones only as it nears the card's size, as the web view clips them.
+    private var floatingPageShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: pageTopCorner,
+            bottomLeadingRadius: pagePose.corner,
+            bottomTrailingRadius: pagePose.corner,
+            topTrailingRadius: pageTopCorner,
+            style: .continuous
+        )
+    }
+
     /// The same shadow the card has, there from the moment the page leaves
     /// the screen's edges. Sized up by what the page's scale will take off.
     @ViewBuilder
     private var floatingPageShadow: some View {
         if pageFloats {
             // In the page's own color: a new page has nothing painted yet.
-            UnevenRoundedRectangle(
-                topLeadingRadius: pageTopCorner,
-                bottomLeadingRadius: pagePose.corner,
-                bottomTrailingRadius: pagePose.corner,
-                topTrailingRadius: pageTopCorner,
-                style: .continuous
-            )
+            floatingPageShape
                 .fill(sheetBackground)
                 .shadow(color: .black.opacity(0.26), radius: 20, x: -4.4, y: 0)
                 .opacity(Double(overviewReveal))

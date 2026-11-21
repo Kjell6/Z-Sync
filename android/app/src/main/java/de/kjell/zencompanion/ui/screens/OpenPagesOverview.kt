@@ -802,27 +802,33 @@ private fun OpenPageCard(
  */
 @Composable
 internal fun PrivatePageCover(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(PaperDark),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(
-            painter = painterResource(R.drawable.ic_incognito),
-            contentDescription = null,
-            tint = PrivateInk,
-            modifier = Modifier.size(44.dp),
-        )
-        Spacer(Modifier.height(10.dp))
-        Text(
-            text = stringResource(R.string.browser_incognito),
-            style = ZenType.rounded(17, FontWeight.SemiBold),
-            color = PrivateInk,
-        )
+    // Sized by its own width: the flying page is the whole screen scaled down
+    // to the card, so the eyes and the name land at the size the card shows.
+    BoxWithConstraints(modifier.fillMaxSize().background(PaperDark)) {
+        val factor = maxWidth / PrivateCoverCardWidth
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_incognito),
+                contentDescription = null,
+                tint = PrivateInk,
+                modifier = Modifier.size(44.dp * factor),
+            )
+            Spacer(Modifier.height(10.dp * factor))
+            Text(
+                text = stringResource(R.string.browser_incognito),
+                style = ZenType.rounded(17, FontWeight.SemiBold).let { it.copy(fontSize = it.fontSize * factor) },
+                color = PrivateInk,
+            )
+        }
     }
 }
+
+/** A focused card's width on a phone, where the cover's sizes are drawn at. */
+private val PrivateCoverCardWidth = 276.dp
 
 /**
  * The page as it looked when it was last on screen, on its own color; its

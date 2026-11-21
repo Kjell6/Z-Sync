@@ -100,7 +100,7 @@ ignored silently.
 
 Remaining maintainer steps, in order:
 
-1. Request the entitlement from Apple:
+1. Request the entitlement from Apple (done around 2026-11-17, pending):
    <https://developer.apple.com/contact/request/default-browser-entitlement/>.
    It is tied to the app's bundle id (`de.kjell.zencompanion`) and the team.
 2. Add `com.apple.developer.web-browser` (Boolean, `true`) to the app's
@@ -132,33 +132,57 @@ own `zsync://open?url=` links reach it.
 
 ## Password manager and passkeys in the browser
 
-**iOS: needs the same entitlement as above.** WebKit only treats a WKWebView
-like a browser for credentials when the app holds `com.apple.developer.web-browser`:
-- **Without it:** the keyboard shows a bare "Passwords" key, and the reader has
-  to search the Passwords app themselves. Passkeys are refused outright, because
-  WebAuthn in a WKWebView only works for the app's own associated domains.
-- **With it:** the QuickType bar suggests the login saved for the page's own
-  site (as in Chrome, Firefox or Orion), and passkeys work for any site,
-  including those from third-party managers via AutoFill.
+Site-matched password suggestions and passkeys in the mini-browser wait on two
+outside approvals. All code that can exist without them is already merged
+(#98, #101). **When one arrives, do only the steps under it — nothing needs to
+be built, researched or re-implemented.** Reply on issue #96 once a platform
+works.
 
-No code change is needed: WebKit does this on its own once the entitlement is
-signed in. When Apple grants it, do step 2 above. If passkeys still fail after
-that, also ask Apple for `com.apple.developer.web-browser.public-key-credential`
-(some browser developers report needing it on top). Do not add either
-entitlement before it is granted: automatic signing fails and the app no longer
-builds for a device.
+| Platform | Approval | Status |
+|---|---|---|
+| iOS | Apple `com.apple.developer.web-browser` (default-browser entitlement) | Requested around 2026-11-17, pending |
+| Android | Google Password Manager privileged-browser access | Not requested yet |
 
-**Android: built, switched off until Google approves.** `BrowserPasskeysEnabled` in `MiniBrowserWebView.kt` is `false`: with it on but no approval, sites offer passkeys and every attempt fails. Set it to `true` once Google Password Manager has approved the app. When on, the
-browser asks WebView for passkeys in browser mode
-(`WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_FOR_BROWSER`, Android 14+ with a
-current WebView). Password suggestions already work through Android's autofill.
-A password manager only serves passkeys to an app it trusts as a browser:
-- **Google Password Manager:** request approval for `de.kjell.zencompanion`
-  through the form linked from
-  <https://developer.android.com/identity/sign-in/privileged-apps>, using the
-  release signing certificate's SHA-256.
-- **Bitwarden, 1Password and others:** each keeps its own list of trusted
-  browsers. Some (Bitwarden) let the user trust an unknown browser on first use.
+### iOS — when Apple grants the entitlement
+
+1. Do step 2 of "Default browser on iOS" above: add
+   `com.apple.developer.web-browser` = `true` to
+   `ios/ZenCompanion/ZenCompanion.entitlements` **and** to the
+   `entitlements.properties` block in `ios/project.yml`, re-issue the
+   provisioning profile, build and install on the iPhone.
+2. Check in the mini-browser: a login field shows the saved login for that site
+   in the QuickType bar, and a passkey sign-in (e.g. Google account,
+   webauthn.io) works.
+3. If passkeys still fail, also ask Apple for
+   `com.apple.developer.web-browser.public-key-credential` (some browser
+   developers report needing it on top).
+
+No Swift change is needed: WebKit turns both on by itself once the entitlement
+is signed in. Without it, the keyboard only shows a bare "Passwords" key and
+WebAuthn in a WKWebView is refused. Do not add the entitlement before it is
+granted: automatic signing fails and the app no longer builds for a device.
+
+### Android — when Google approves the app
+
+1. In `android/app/src/main/java/de/kjell/zencompanion/ui/screens/MiniBrowserWebView.kt`
+   set `BrowserPasskeysEnabled` to `true`. That is the whole change: the
+   browser-mode WebAuthn call (`WEB_AUTHENTICATION_SUPPORT_FOR_BROWSER`) and the
+   `CREDENTIAL_MANAGER_SET_ORIGIN` permission in the manifest are already in place.
+2. Check on Android 14+ with a current WebView: webauthn.io → Register, then
+   Authenticate, using Google Password Manager.
+3. Update the status table above.
+
+It stays off until then on purpose: with it on but no approval, sites offer
+passkeys and every attempt fails, which reads as "broken, try again".
+Password suggestions are not affected; they already work through Android's
+autofill.
+
+The request goes through Google's form linked from
+<https://developer.android.com/identity/sign-in/privileged-apps>. It needs the
+package name `de.kjell.zencompanion` and the SHA-256 of the **Play App Signing**
+certificate (Play Console → App integrity → App signing), not the local upload
+key. Bitwarden, 1Password and other managers keep their own lists of trusted
+browsers; some (Bitwarden) let the user trust an unknown browser on first use.
 
 ## Related
 

@@ -22,6 +22,10 @@ Run the full test suite once a complete piece of work is finished **and the user
 
 The simulator's keychain and app group outlive the app: a simulator left in demo mode feeds the iOS suite demo data, and `ConflictSafeSyncTests` fails on `demo-normal-hn` / space "Work" instead of its own fixtures. Exit demo in the app, or run the suite on a clean simulator.
 
+## Pending outside approvals
+
+Passkeys and site-matched password suggestions in the mini-browser wait on Apple (iOS default-browser entitlement) and Google (Password Manager privileged-browser access). The code is merged. When the user says one was granted, follow the matching checklist in `docs/release.md` ("Password manager and passkeys in the browser") and nothing more — do not rebuild or re-research the feature.
+
 ## Signing and stores
 
 Do not commit keystores, Team IDs, `.p8` keys, or store credentials. Do not upload to App Store Connect or Google Play. Store releases are maintainer-only. Never bump build or version numbers yourself — that is maintainer-only too.

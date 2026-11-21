@@ -173,7 +173,10 @@ internal fun MiniBrowserWebView(
                 if (isPrivate) ContextThemeWrapper(ctx, android.R.style.Theme_DeviceDefault_NoActionBar) else ctx,
             )
             // Before the WebView does anything: the profile cannot change later.
-            if (privateProfile != null) PrivateBrowsing.adopt(webView, privateProfile)
+            // A private page without its profile loads nothing at all.
+            val canLoad = privateProfile == null || PrivateBrowsing.adopt(webView, privateProfile)
+            // The page's own jar: a private page's sign-in lives in its profile.
+            val jar = if (isPrivate && canLoad) PrivateBrowsing.cookies(webView) else CookieManager.getInstance()
             page.addView(
                 webView,
                 ViewGroup.LayoutParams(
@@ -190,7 +193,6 @@ internal fun MiniBrowserWebView(
             webView.apply {
                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
                 // Logins set up on one site often read their cookie from another.
-                val jar = if (isPrivate) PrivateBrowsing.cookies(this) else CookieManager.getInstance()
                 jar.setAcceptThirdPartyCookies(this, true)
                 // Password managers fill the page through the system's autofill.
                 importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_YES
@@ -249,7 +251,7 @@ internal fun MiniBrowserWebView(
                         view?.let(pageZoomSlot::applyNow)
                         // The jar otherwise reaches disk on its own schedule, and
                         // a sign-in must outlast the app being killed right after.
-                        CookieManager.getInstance().flush()
+                        jar.flush()
                         onLoadingChange(false)
                         url?.let {
                             onCurrentUrlChange(it)
@@ -552,7 +554,9 @@ internal fun MiniBrowserWebView(
                 val loadTarget = formatBrowserInput(initialUrl ?: "")
                 val popup = takePopup()
                 val history = savedHistory()
-                if (popup != null) {
+                if (!canLoad) {
+                    // Nothing: see above.
+                } else if (popup != null) {
                     (popup.obj as? WebView.WebViewTransport)?.webView = this
                     popup.sendToTarget()
                 } else if (history != null && restoreState(history) != null) {

@@ -305,18 +305,6 @@ struct MiniBrowserView: View {
                                     incognitoNote
                                 }
                             }
-                            .overlay {
-                                // On its way to its card the page already is
-                                // the card: the site never shows in the move.
-                                if model.isPrivate, pageFloats || privateCoverHolds {
-                                    PrivatePageCover()
-                                        // The page's own outline, corner for
-                                        // corner, so nothing shows past it.
-                                        .clipShape(floatingPageShape)
-                                        .opacity(privateCoverFade)
-                                        .allowsHitTesting(false)
-                                }
-                            }
 
                         if let article = model.readerArticle {
                             ReaderView(
@@ -327,6 +315,19 @@ struct MiniBrowserView: View {
                                 model.closeReader()
                             }
                             .transition(.opacity)
+                        }
+                    }
+                    .overlay {
+                        // On its way to its card the page already is the
+                        // card: the site never shows in the move, nor does
+                        // an article open in the reader over it.
+                        if model.isPrivate, pageFloats || privateCoverHolds {
+                            PrivatePageCover()
+                                // The page's own outline, corner for corner,
+                                // so nothing shows past it.
+                                .clipShape(floatingPageShape)
+                                .opacity(privateCoverFade)
+                                .allowsHitTesting(false)
                         }
                     }
                     .background(revealingNewPage || pageFloats ? Color.clear : sheetBackground)

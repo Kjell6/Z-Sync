@@ -1152,7 +1152,8 @@ final class MiniBrowserModel {
         guard let title = PageTitle.usable(raw, url: currentURL ?? webView?.url) else { return }
         pageTitle = title
         host?.pageDidChange(self)
-        if let lastRecordedVisit, lastRecordedVisit == BrowserHistoryStore.address(of: currentURL) {
+        // A private page leaves no trace in the history, its titles included.
+        if !isPrivate, let lastRecordedVisit, lastRecordedVisit == BrowserHistoryStore.address(of: currentURL) {
             history.updateTitle(title, of: lastRecordedVisit)
         }
     }

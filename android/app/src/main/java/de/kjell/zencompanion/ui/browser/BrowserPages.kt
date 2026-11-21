@@ -210,6 +210,12 @@ class BrowserPages(
             PrivateBrowsing.releaseAllExcept(store.privateProfiles())
         }
         PrivateBrowsing.startUp(store.privateProfiles())
+        // Private pages that stayed, on a WebView that has since lost its
+        // profiles (an older one put back): they cannot open privately, so
+        // they close rather than load into the phone's own data.
+        if (store.privateProfiles().isNotEmpty() && !PrivateBrowsing.isSupported) {
+            store.pages.value.filter { it.isPrivate }.forEach { store.close(it.id) }
+        }
     }
 
     /** The account came or went; every page's pin path follows it. */

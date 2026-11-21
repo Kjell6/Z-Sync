@@ -42,9 +42,13 @@ object PrivateBrowsing {
         known += profiles
     }
 
-    /** Puts a new WebView on its page's profile. Before it loads anything. */
-    fun adopt(webView: WebView, profile: String) {
-        if (!isSupported) return
+    /**
+     * Puts a new WebView on its page's profile. Before it loads anything.
+     * False where profiles are missing: the page must then load nothing, or
+     * it would write into the phone's own data.
+     */
+    fun adopt(webView: WebView, profile: String): Boolean {
+        if (!isSupported) return false
         known += profile
         val store = ProfileStore.getInstance()
         if (!orphansChecked) {
@@ -55,6 +59,7 @@ object PrivateBrowsing {
         }
         store.getOrCreateProfile(profile)
         WebViewCompat.setProfile(webView, profile)
+        return true
     }
 
     /** The jar a WebView uses: its own profile's for a private page. */
@@ -69,13 +74,18 @@ object PrivateBrowsing {
         gone.forEach { profile -> main.postDelayed({ delete(profile) }, DELETE_DELAY_MS) }
     }
 
-    private fun delete(profile: String, retries: Int = 2) {
+    private fun delete(profile: String) {
         // Taken up again in the meantime (cannot happen with fresh names, but cheap).
         if (profile in known) return
-        val deleted = runCatching { ProfileStore.getInstance().deleteProfile(profile) }
-        // Still held by a WebView on its way out: try again shortly.
-        if (deleted.isFailure && retries > 0) {
-            main.postDelayed({ delete(profile, retries - 1) }, DELETE_DELAY_MS)
+        val store = ProfileStore.getInstance()
+        if (runCatching { store.deleteProfile(profile) }.isSuccess) return
+        // A profile loaded in this run cannot be deleted until the next one.
+        // Everything in it goes now; the empty profile is a leftover the next
+        // run's first private page removes.
+        store.getProfile(profile)?.let { loaded ->
+            runCatching { loaded.cookieManager.removeAllCookies(null) }
+            runCatching { loaded.webStorage.deleteAllData() }
+            runCatching { loaded.geolocationPermissions.clearAll() }
         }
     }
 }

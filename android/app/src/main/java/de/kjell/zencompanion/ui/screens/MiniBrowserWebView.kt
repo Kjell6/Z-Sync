@@ -216,6 +216,7 @@ internal fun MiniBrowserWebView(
                 // and nothing runs that could write into the phone's own data.
                 if (!canLoad) {
                     settings.blockNetworkLoads = true
+                    settings.cacheMode = WebSettings.LOAD_NO_CACHE
                     settings.javaScriptEnabled = false
                     settings.domStorageEnabled = false
                     settings.databaseEnabled = false
@@ -283,6 +284,9 @@ internal fun MiniBrowserWebView(
                     // Runs on a WebView thread for every request the page makes.
                     override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
                         request ?: return null
+                        // A private page without its profile gets nothing,
+                        // asked before the cache or the network could answer.
+                        if (!canLoad) return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
                         if (!blocker.shouldBlock(request.url, request.isForMainFrame)) return null
                         return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
                     }

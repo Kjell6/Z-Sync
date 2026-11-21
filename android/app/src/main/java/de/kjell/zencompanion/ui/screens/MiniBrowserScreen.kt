@@ -1,6 +1,8 @@
 package de.kjell.zencompanion.ui.screens
 
 import de.kjell.zencompanion.ui.browser.PrivateBrowsing
+import de.kjell.zencompanion.ui.theme.PaperDark
+import de.kjell.zencompanion.ui.theme.PrivateInk
 import de.kjell.zencompanion.ui.theme.ZenLayout
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -643,8 +645,9 @@ fun MiniBrowserScreen(
         }
 
         if (session != null) {
-            BrowserPageScreen(
+            Box(
                 modifier = Modifier
+                    .fillMaxSize()
                     .zIndex(if (pageFloats) 2f else 0f)
                     .graphicsLayer {
                         if (pageFloats) {
@@ -671,25 +674,31 @@ fun MiniBrowserScreen(
                         }
                     }
                     .then(if (showOverview) Modifier.clearAndSetSemantics { } else Modifier),
-                session = session,
-                pages = pages,
-                signedIn = signedIn,
-                pageCount = openPages.size,
-                currentSpace = currentSpace,
-                allSpaces = allSpaces,
-                browserRepository = browserRepository,
-                chromeAlpha = { chromeAlpha.value },
-                // A new page flies in on its own color, not on its way there.
-                colorArrives = excludedCardId != null,
-                onPullStart = ::beginPagePull,
-                onPullChange = ::updatePagePull,
-                onPullEnd = ::endPagePull,
-                onOpenOverview = ::openOverview,
-                onDismiss = {
-                    pages.leaveBrowser()
-                    onDismiss()
-                },
-            )
+            ) {
+                BrowserPageScreen(
+                    session = session,
+                    pages = pages,
+                    signedIn = signedIn,
+                    pageCount = openPages.size,
+                    currentSpace = currentSpace,
+                    allSpaces = allSpaces,
+                    browserRepository = browserRepository,
+                    chromeAlpha = { chromeAlpha.value },
+                    // A new page flies in on its own color, not on its way there.
+                    colorArrives = excludedCardId != null,
+                    onPullStart = ::beginPagePull,
+                    onPullChange = ::updatePagePull,
+                    onPullEnd = ::endPagePull,
+                    onOpenOverview = ::openOverview,
+                    onDismiss = {
+                        pages.leaveBrowser()
+                        onDismiss()
+                    },
+                )
+                // On its way to its card the page already is the card: the site
+                // never shows in the move.
+                if (pageFloats && session.isPrivate) PrivatePageCover()
+            }
         }
 
         if (showOverview) {
@@ -858,7 +867,6 @@ private fun PageSession.isBlank(state: MiniBrowserViewModel.State): Boolean =
 /** What a new private page shows until something loads in it. */
 @Composable
 private fun PrivatePageNote() {
-    val zen = LocalZenColors.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -869,14 +877,14 @@ private fun PrivatePageNote() {
         Icon(
             painter = painterResource(R.drawable.ic_incognito),
             contentDescription = null,
-            tint = zen.ink.copy(alpha = 0.55f),
+            tint = PrivateInk,
             modifier = Modifier.size(40.dp),
         )
         Spacer(Modifier.height(12.dp))
         Text(
             text = stringResource(R.string.browser_incognito_note),
             style = ZenType.rounded(19, FontWeight.SemiBold),
-            color = zen.ink.copy(alpha = 0.55f),
+            color = PrivateInk,
         )
     }
 }
@@ -1101,7 +1109,8 @@ private fun BrowserPageScreen(
         }
     }
 
-    val defaultSurface = MaterialTheme.colorScheme.surface
+    // A private page is dark, whatever the system says.
+    val defaultSurface = if (session.isPrivate) PaperDark else MaterialTheme.colorScheme.surface
     // The error panel sits on the surface color. The failed load leaves the
     // previous page's color behind, so the bar ignores it while it shows.
     val targetBg = state.siteThemeColor.takeIf { state.pageError == null } ?: defaultSurface
@@ -1345,7 +1354,7 @@ private fun BrowserPageScreen(
                 }
 
                 if (state.findVisible) {
-                    ZenTheme(darkTheme = barIsDark, jumps = colorJumps) {
+                    ZenTheme(darkTheme = barIsDark, jumps = colorJumps, systemInk = session.isPrivate) {
                     MiniBrowserFindBar(
                         query = state.findQuery,
                         progress = state.findProgress,
@@ -1452,7 +1461,7 @@ private fun BrowserPageScreen(
                     // field must not push the whole bar up into the page.
                     .then(if (ridesKeyboard) Modifier.imePadding() else Modifier),
             ) {
-                ZenTheme(darkTheme = barIsDark, jumps = colorJumps) {
+                ZenTheme(darkTheme = barIsDark, jumps = colorJumps, systemInk = session.isPrivate) {
                     MiniBrowserBar(
                         state = state,
                         viewModel = viewModel,

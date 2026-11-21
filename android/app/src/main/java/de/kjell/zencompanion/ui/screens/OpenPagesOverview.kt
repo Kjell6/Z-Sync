@@ -95,6 +95,8 @@ import de.kjell.zencompanion.ui.components.Favicon
 import de.kjell.zencompanion.ui.components.PinDestination
 import de.kjell.zencompanion.ui.components.PinDestinationModel
 import de.kjell.zencompanion.ui.theme.LocalZenColors
+import de.kjell.zencompanion.ui.theme.PaperDark
+import de.kjell.zencompanion.ui.theme.PrivateInk
 import de.kjell.zencompanion.ui.theme.ZenMenu
 import de.kjell.zencompanion.ui.theme.ZenMenuGroup
 import de.kjell.zencompanion.ui.theme.ZenMenuGroupGap
@@ -794,30 +796,30 @@ private fun OpenPageCard(
 }
 
 /**
- * No picture of a private page's site: the surface the new private page
- * shows, its eyes and its name.
+ * A private page in the overview, and on its way there: no picture of the
+ * site, only the private page's dark surface, its eyes and its name, in the
+ * system's own white.
  */
 @Composable
-private fun PrivatePageCover() {
-    val zen = LocalZenColors.current
+internal fun PrivatePageCover(modifier: Modifier = Modifier) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface),
+            .background(PaperDark),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
             painter = painterResource(R.drawable.ic_incognito),
             contentDescription = null,
-            tint = zen.ink.copy(alpha = 0.55f),
+            tint = PrivateInk,
             modifier = Modifier.size(44.dp),
         )
         Spacer(Modifier.height(10.dp))
         Text(
             text = stringResource(R.string.browser_incognito),
             style = ZenType.rounded(17, FontWeight.SemiBold),
-            color = zen.ink.copy(alpha = 0.55f),
+            color = PrivateInk,
         )
     }
 }

@@ -728,7 +728,7 @@ private struct OpenPageCard<Menu: View>: View {
     var body: some View {
         Group {
             if page.model.isPrivate {
-                privateCover
+                PrivatePageCover()
             } else {
                 OpenPageShot(page: page, store: store)
             }
@@ -792,23 +792,6 @@ private struct OpenPageCard<Menu: View>: View {
                 .modifier(DeckHeaderFade(offset: offset, reveal: reveal, isName: true))
         }
         .allowsHitTesting(false)
-    }
-
-    /// No picture of the site: the surface, eyes and name the new private
-    /// page shows before anything loads.
-    private var privateCover: some View {
-        ZStack {
-            Palette.background(scheme)
-            VStack(spacing: 10) {
-                Image("incognito")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 44, height: 35)
-                Text("browser.incognito")
-                    .zenFont(17, weight: .semibold, design: .rounded)
-            }
-            .foregroundStyle(Palette.ink(scheme).opacity(0.55))
-        }
     }
 
     @ViewBuilder
@@ -902,5 +885,26 @@ struct PageCountBadge: View {
                 RoundedRectangle(cornerRadius: side * 0.32, style: .continuous)
                     .strokeBorder(lineWidth: 2)
             )
+    }
+}
+
+/// A private page in the overview, and on its way there: no picture of the
+/// site, only the private page's dark surface, its eyes and its name, in the
+/// system's own white.
+struct PrivatePageCover: View {
+    var body: some View {
+        ZStack {
+            Palette.background(.dark)
+            VStack(spacing: 10) {
+                Image("incognito")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 44, height: 35)
+                Text("browser.incognito")
+                    .zenFont(17, weight: .semibold, design: .rounded)
+            }
+            .foregroundStyle(.secondary)
+        }
+        .environment(\.colorScheme, .dark)
     }
 }

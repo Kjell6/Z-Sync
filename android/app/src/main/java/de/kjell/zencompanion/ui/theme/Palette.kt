@@ -34,6 +34,8 @@ val PaperDark = Color(0xFF1F1F1F)
 val BackgroundLight = Color(0xFFFAF7F1)
 val InkLight = Color(0xFF2E2E2E)
 val InkDark = Color(0xFFF3ECE6)
+/** Quiet text on a private page's dark surface: the system's white, not the warm ink. */
+val PrivateInk = Color.White.copy(alpha = 0.6f)
 val ErrorLight = Color(0xFFBA1A1A)
 val ErrorDark = Color(0xFFFFB4AB)
 
@@ -104,9 +106,18 @@ fun ZenTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     /** The colors change at once, on this very frame, instead of blending over. */
     jumps: Boolean = false,
+    /** Dark, with the system's white for text and glyphs instead of the warm ink: a private page. */
+    systemInk: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val targetZen = zenColors(darkTheme)
+    val darkInk = if (systemInk) Color.White else InkDark
+    val targetZen = zenColors(darkTheme).let { colors ->
+        if (darkTheme && systemInk) {
+            ZenColors(colors.paper, colors.background, darkInk, colors.lift, colors.coral, isDark = true)
+        } else {
+            colors
+        }
+    }
     val animSpec: AnimationSpec<Color> = if (jumps) {
         snap()
     } else {
@@ -137,11 +148,11 @@ fun ZenTheme(
             primary = CoralDark,
             onPrimary = PaperDark,
             background = PaperDark,
-            onBackground = InkDark,
+            onBackground = darkInk,
             surface = PaperDark,
-            onSurface = InkDark,
+            onSurface = darkInk,
             surfaceVariant = Color(0xFF2A2A2A),
-            onSurfaceVariant = InkDark.copy(alpha = 0.7f),
+            onSurfaceVariant = darkInk.copy(alpha = 0.7f),
             surfaceContainer = Color(0xFF282828),
             surfaceContainerHigh = Color(0xFF323232),
             error = ErrorDark,

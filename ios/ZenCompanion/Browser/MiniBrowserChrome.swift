@@ -1,5 +1,11 @@
 import SwiftUI
 
+extension EnvironmentValues {
+    /// Overrides the chrome's ink: a private page's dark chrome uses the
+    /// system's white, not the app's warm paper tone.
+    @Entry var browserInk: Color?
+}
+
 /// How tall the floating chrome is. One source of truth: the rows draw with
 /// these values and the page keeps exactly this much clear at the bottom
 /// (`MiniBrowserWebView.obscuredContentInsets`), so the two cannot drift.
@@ -78,6 +84,9 @@ struct MiniBrowserChrome<NavBar: View>: View {
     @ViewBuilder var navBar: () -> NavBar
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.browserInk) private var inkOverride
+    /// The app's ink, or the system's white on a private page.
+    private var ink: Color { inkOverride ?? Palette.ink(scheme) }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var copied = false
     @State private var copyGeneration = 0
@@ -219,17 +228,17 @@ struct MiniBrowserChrome<NavBar: View>: View {
         HStack(spacing: 10) {
             Image(systemName: row.visit == nil ? "magnifyingglass" : "clock")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Palette.ink(scheme).opacity(0.45))
+                .foregroundStyle(ink.opacity(0.45))
                 .frame(width: 22, height: 22)
             VStack(alignment: .leading, spacing: 0) {
                 Text(verbatim: row.text)
                     .zenFont(16, weight: .medium, design: .rounded)
-                    .foregroundStyle(Palette.ink(scheme))
+                    .foregroundStyle(ink)
                     .lineLimit(1)
                 if let visit = row.visit {
                     Text(verbatim: visit.displayAddress)
                         .zenFont(13, design: .rounded)
-                        .foregroundStyle(Palette.ink(scheme).opacity(0.6))
+                        .foregroundStyle(ink.opacity(0.6))
                         .lineLimit(1)
                 }
             }
@@ -255,7 +264,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
         return ZStack {
             Button(action: onOpenPages) {
                 PageCountBadge(count: count)
-                    .foregroundStyle(Palette.ink(scheme))
+                    .foregroundStyle(ink)
                     .frame(width: controlSide, height: controlSide)
                     .contentShape(Capsule())
             }
@@ -268,7 +277,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
             Button(action: onOpenHistory) {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.system(size: glyphSize, weight: .semibold))
-                    .foregroundStyle(Palette.ink(scheme))
+                    .foregroundStyle(ink)
                     .frame(width: controlSide, height: controlSide)
                     .contentShape(Capsule())
             }
@@ -290,7 +299,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: glyphSize, weight: .semibold))
-                    .foregroundStyle(Palette.ink(scheme))
+                    .foregroundStyle(ink)
                     .frame(width: controlSide, height: controlSide)
                     .contentShape(Capsule())
             }
@@ -312,7 +321,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: glyphSize, weight: .semibold))
-                    .foregroundStyle(Palette.ink(scheme))
+                    .foregroundStyle(ink)
                     .frame(width: controlSide, height: controlSide)
                     .contentShape(Capsule())
             } primaryAction: {
@@ -331,7 +340,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
         Button(action: onClose) {
             Image(systemName: "xmark")
                 .font(.system(size: overviewShown ? 17 : 16, weight: .semibold))
-                .foregroundStyle(Palette.ink(scheme))
+                .foregroundStyle(ink)
                 .frame(width: overviewShown ? 100 : 92, height: overviewShown ? 46 : 42)
                 .contentShape(Capsule())
                 // Inside the label on purpose: the pressed state has to move
@@ -587,7 +596,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
         }
-        .foregroundStyle(Palette.ink(scheme).opacity(0.85))
+        .foregroundStyle(ink.opacity(0.85))
         .frame(maxWidth: .infinity)
         .frame(height: 60)
         .background(
@@ -618,7 +627,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
                         .font(.system(size: 14, weight: .semibold))
                 }
             }
-            .foregroundStyle(kept ? Palette.ink(scheme) : Color.primary)
+            .foregroundStyle(kept ? ink : Color.primary)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
@@ -642,10 +651,10 @@ struct MiniBrowserChrome<NavBar: View>: View {
                 Image(systemName: copied ? "checkmark" : "link")
                     .font(.system(size: 16, weight: .semibold))
                     .frame(width: 24)
-                    .foregroundStyle(copied ? Palette.ink(scheme) : Color.primary)
+                    .foregroundStyle(copied ? ink : Color.primary)
                 Text(copied ? "browser.copied" : "browser.copy_link")
                     .zenFont(16, weight: .medium, design: .rounded)
-                    .foregroundStyle(copied ? Palette.ink(scheme) : Color.primary)
+                    .foregroundStyle(copied ? ink : Color.primary)
                 Spacer(minLength: 0)
             }
             .frame(minHeight: 44)
@@ -678,7 +687,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
                 } else if model.readerArticle != nil {
                     Image(systemName: "checkmark")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Palette.ink(scheme))
+                        .foregroundStyle(ink)
                 }
             }
             .frame(minHeight: 44)
@@ -705,7 +714,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
                 )
             )
             .labelsHidden()
-            .tint(Palette.ink(scheme))
+            .tint(ink)
         }
         .frame(minHeight: 44)
         .accessibilityElement(children: .combine)
@@ -1019,6 +1028,9 @@ struct MiniBrowserTopBar: View {
     var onPullEnd: (PagePullEnd) -> Void = { _ in }
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.browserInk) private var inkOverride
+    /// The app's ink, or the system's white on a private page.
+    private var ink: Color { inkOverride ?? Palette.ink(scheme) }
     /// A swipe is under way; the address under the finger must not open.
     @State private var swiping = false
     /// A pull upwards is under way.
@@ -1052,7 +1064,7 @@ struct MiniBrowserTopBar: View {
                     LoadingFill(
                         isLoading: model.isLoading,
                         progress: model.estimatedProgress,
-                        tint: Palette.ink(scheme).opacity(0.1)
+                        tint: ink.opacity(0.1)
                     )
                     // A page brings its own load: nothing carries over a switch.
                     .id(page?.id)
@@ -1115,7 +1127,7 @@ struct MiniBrowserTopBar: View {
         let width = max(0, -barOffset - peekGap)
         return Image(systemName: "plus")
             .font(.system(size: 18, weight: .semibold))
-            .foregroundStyle(Palette.ink(scheme).opacity(0.85))
+            .foregroundStyle(ink.opacity(0.85))
             .opacity(min(1, width / 90))
             .frame(width: width, height: barHeight)
             .floatingGlassCapsule()
@@ -1137,13 +1149,13 @@ struct MiniBrowserTopBar: View {
                     } else {
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Palette.ink(scheme).opacity(0.55))
+                            .foregroundStyle(ink.opacity(0.55))
                     }
                 }
                 .frame(width: 22, height: 22)
                 Text(page.url == nil ? String(localized: "browser.search_placeholder") : page.title)
                     .zenFont(16, weight: .semibold, design: .rounded)
-                    .foregroundStyle(Palette.ink(scheme))
+                    .foregroundStyle(ink)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Spacer(minLength: 0)
@@ -1159,7 +1171,7 @@ struct MiniBrowserTopBar: View {
     private func peekGlyph(_ systemName: String, enabled: Bool) -> some View {
         Image(systemName: systemName)
             .font(.system(size: 18, weight: .semibold))
-            .foregroundStyle(Palette.ink(scheme).opacity(enabled ? 0.85 : 0.3))
+            .foregroundStyle(ink.opacity(enabled ? 0.85 : 0.3))
             .frame(width: 32, height: barHeight - 8)
             // The same 44pt slot the real bar's glyphs take, so the bar that
             // slides in matches the one it replaces.
@@ -1261,7 +1273,7 @@ struct MiniBrowserTopBar: View {
                     siteIcon
                     Text(displayTitle)
                         .zenFont(16, weight: .semibold, design: .rounded)
-                        .foregroundStyle(Palette.ink(scheme))
+                        .foregroundStyle(ink)
                         .lineLimit(1)
                         .truncationMode(.tail)
                     Spacer(minLength: 0)
@@ -1314,13 +1326,13 @@ struct MiniBrowserTopBar: View {
                 // open padlock instead of its icon, as on Android.
                 Image(systemName: "lock.open")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Palette.ink(scheme).opacity(0.85))
+                    .foregroundStyle(ink.opacity(0.85))
             } else if let url = model.effectiveURL, url.scheme == "https" {
                 Favicon(urlString: url.absoluteString, size: 16)
             } else {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Palette.ink(scheme).opacity(0.55))
+                    .foregroundStyle(ink.opacity(0.55))
             }
         }
         .frame(width: 22, height: 22)
@@ -1335,7 +1347,7 @@ struct MiniBrowserTopBar: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(Palette.ink(scheme).opacity(enabled ? 0.85 : 0.3))
+                .foregroundStyle(ink.opacity(enabled ? 0.85 : 0.3))
                 .frame(width: 32, height: barHeight - 8)
                 // The glyph keeps its slot; the button around it takes the
                 // platform's least touch target, filling the bar's height.
@@ -1352,7 +1364,7 @@ struct MiniBrowserTopBar: View {
             NativeAddressField(
                 text: Binding(get: { model.addressText }, set: { model.addressText = $0 }),
                 placeholder: String(localized: "browser.search_placeholder"),
-                ink: UIColor(Palette.ink(scheme)),
+                ink: UIColor(ink),
                 // The system tint, so caret and selection use the usual iOS accent.
                 caret: UIColor.tintColor,
                 isFocused: isAddressFocused,
@@ -1394,7 +1406,7 @@ struct MiniBrowserTopBar: View {
         } label: {
             Image(systemName: "xmark.circle.fill")
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Palette.ink(scheme).opacity(0.35))
+                .foregroundStyle(ink.opacity(0.35))
                 // A full-height slot in the capsule's round end: 44pt of
                 // target, with the glyph in the middle of it.
                 .frame(width: barHeight, height: barHeight)
@@ -1424,7 +1436,7 @@ struct MiniBrowserTopBar: View {
                         .font(.system(size: 17, weight: .semibold))
                 }
             }
-            .foregroundStyle(Palette.ink(scheme).opacity(model.isPrivate ? 0.8 : 0.4))
+            .foregroundStyle(ink.opacity(model.isPrivate ? 0.8 : 0.4))
             .transition(.opacity)
             .frame(width: barHeight, height: barHeight)
             .contentShape(Circle())
@@ -1440,7 +1452,7 @@ struct MiniBrowserTopBar: View {
         Button(action: onCancel) {
             Image(systemName: "xmark")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Palette.ink(scheme).opacity(0.8))
+                .foregroundStyle(ink.opacity(0.8))
                 .frame(width: barHeight, height: barHeight)
                 .contentShape(Circle())
                 .floatingGlassCapsule()

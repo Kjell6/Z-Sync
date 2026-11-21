@@ -164,6 +164,8 @@ struct MiniBrowserView: View {
         barCollapsed || (model.findBarShown && !showOverview)
     }
 
+    private var privateChrome: Bool { model.isPrivate && !overviewControls }
+
     private var barMotion: Animation {
         reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.35, dampingFraction: 0.86)
     }
@@ -180,15 +182,20 @@ struct MiniBrowserView: View {
     private var sheetBackground: Color { pageColor(of: model) }
 
     private func pageColor(of page: MiniBrowserModel) -> Color {
-        if page.pageError != nil { return Palette.background(scheme) }
-        return page.themeColor ?? defaultBackground
+        if page.pageError != nil { return Palette.background(pageScheme(page)) }
+        return page.themeColor ?? Palette.background(pageScheme(page))
+    }
+
+    /// A private page is dark, whatever the system says.
+    private func pageScheme(_ page: MiniBrowserModel) -> ColorScheme {
+        page.isPrivate ? .dark : scheme
     }
 
     /// The bar's surface: the page's own color, nudged a touch darker or
     /// lighter so the plate is visible against it while still reading as the
     /// site's color. Without a theme color, the system background is nudged.
     private var barBackground: Color {
-        (model.themeColor ?? defaultBackground).nudgedForBar() ?? sheetBackground
+        (model.themeColor ?? Palette.background(pageScheme(model))).nudgedForBar() ?? sheetBackground
     }
 
     /// The bar is nearly the page's color, so the page decides whether the
@@ -292,6 +299,15 @@ struct MiniBrowserView: View {
                                     incognitoNote
                                 }
                             }
+                            .overlay {
+                                // On its way to its card the page already is
+                                // the card: the site never shows in the move.
+                                if model.isPrivate, pageFloats {
+                                    PrivatePageCover()
+                                        .clipShape(RoundedRectangle(cornerRadius: pagePose.corner, style: .continuous))
+                                        .allowsHitTesting(false)
+                                }
+                            }
 
                         if let article = model.readerArticle {
                             ReaderView(
@@ -379,6 +395,10 @@ struct MiniBrowserView: View {
                 }
 
                 chrome
+                    // Private pages wear the dark chrome, with the system's
+                    // own white for its glyphs; the overview keeps the app's look.
+                    .environment(\.colorScheme, privateChrome ? .dark : scheme)
+                    .environment(\.browserInk, privateChrome ? .white : nil)
                     .zIndex(6)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
@@ -564,7 +584,8 @@ struct MiniBrowserView: View {
             Text("browser.incognito.note")
                 .zenFont(19, weight: .semibold, design: .rounded)
         }
-        .foregroundStyle(Palette.ink(scheme).opacity(0.55))
+        .foregroundStyle(.secondary)
+        .environment(\.colorScheme, .dark)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.bottom, 160)
         .allowsHitTesting(false)

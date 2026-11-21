@@ -117,6 +117,8 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         webView.allowsBackForwardNavigationGestures = true
         webView.isFindInteractionEnabled = true
         webView.isOpaque = false
+        // Sites with a dark look show it in private pages, like the chrome.
+        if model.isPrivate { webView.overrideUserInterfaceStyle = .dark }
         webView.backgroundColor = .clear
         webView.scrollView.backgroundColor = .clear
 

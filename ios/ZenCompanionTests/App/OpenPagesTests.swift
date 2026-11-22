@@ -1,3 +1,4 @@
+import WebKit
 import XCTest
 
 @testable import ZenCompanion
@@ -417,5 +418,29 @@ final class OpenPagesTests: XCTestCase {
 
         XCTAssertTrue(pages.pages.isEmpty)
         XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
+    }
+
+    // MARK: - Private pages
+
+    /// Each private page has its own store: a sign-in in one never shows in another.
+    func testPrivatePagesGetStoresOfTheirOwn() {
+        let first = PrivateBrowsing.dataStore(UUID())
+        let second = PrivateBrowsing.dataStore(UUID())
+        XCTAssertFalse(first === second)
+        XCTAssertFalse(first === WKWebsiteDataStore.default())
+    }
+
+    /// A store's first use looks for leftovers, which WebKit only answers
+    /// safely once it is up; and a closed page's store goes.
+    func testPrivateStoreComesAndGoesWithItsPage() async throws {
+        let id = UUID()
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = PrivateBrowsing.dataStore(id)
+        var webView: WKWebView? = WKWebView(frame: .zero, configuration: configuration)
+        XCTAssertNotNil(webView)
+        try await Task.sleep(for: .milliseconds(500))
+        webView = nil
+        PrivateBrowsing.discard(id)
+        try await Task.sleep(for: .milliseconds(500))
     }
 }

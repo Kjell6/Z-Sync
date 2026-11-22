@@ -720,8 +720,19 @@ private struct OpenPageCard<Menu: View>: View {
         return max(0, room - iconSide - iconGap)
     }
 
+    /// A private page keeps its site to itself: one name for all of them.
+    private var cardTitle: String {
+        page.model.isPrivate ? String(localized: "kept.private_tab") : page.title
+    }
+
     var body: some View {
-        OpenPageShot(page: page, store: store)
+        Group {
+            if page.model.isPrivate {
+                PrivatePageCover()
+            } else {
+                OpenPageShot(page: page, store: store)
+            }
+        }
             .frame(width: size.width, height: size.height)
             .overlay {
                 Color.black
@@ -752,7 +763,7 @@ private struct OpenPageCard<Menu: View>: View {
             .onTapGesture(perform: onOpen)
             .contextMenu { menu() }
             .accessibilityElement(children: .contain)
-            .accessibilityLabel(isCurrent ? Text(verbatim: "\(page.title), \(String(localized: "kept.current_page"))") : Text(verbatim: page.title))
+            .accessibilityLabel(isCurrent ? Text(verbatim: "\(cardTitle), \(String(localized: "kept.current_page"))") : Text(verbatim: cardTitle))
             .accessibilityAddTraits(.isButton)
             .accessibilityAction(.default, onOpen)
             .accessibilityAction(named: Text("kept.close_page")) { onClose() }
@@ -773,7 +784,7 @@ private struct OpenPageCard<Menu: View>: View {
         HStack(spacing: iconGap) {
             icon
                 .modifier(DeckHeaderFade(offset: offset, reveal: reveal, isName: false))
-            Text(page.title)
+            Text(cardTitle)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Color.primary)
                 .lineLimit(1)
@@ -785,7 +796,13 @@ private struct OpenPageCard<Menu: View>: View {
 
     @ViewBuilder
     private var icon: some View {
-        if let url = page.url {
+        if page.model.isPrivate {
+            Image("incognito")
+                .resizable()
+                .scaledToFit()
+                .foregroundStyle(Color.primary)
+                .frame(width: iconSide, height: iconSide)
+        } else if let url = page.url {
             Favicon(urlString: url.absoluteString, size: iconSide)
                 .shadow(color: .black.opacity(0.28), radius: 4, y: 2)
         } else {
@@ -868,5 +885,38 @@ struct PageCountBadge: View {
                 RoundedRectangle(cornerRadius: side * 0.32, style: .continuous)
                     .strokeBorder(lineWidth: 2)
             )
+    }
+}
+
+/// A private page in the overview, and on its way there: no picture of the
+/// site, only the private page's dark surface, its eyes and its name, in the
+/// system's own white.
+///
+/// Laid out at a card's size and only scaled to the size it is shown at: the
+/// flying page is the whole screen, and type set at that size takes other
+/// letter widths than the card's, so the name would shift as the card takes over.
+struct PrivatePageCover: View {
+    /// A focused card's width on a phone, where the layout below is set.
+    private static let cardWidth: CGFloat = 276
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                Palette.background(.dark)
+                VStack(spacing: 10) {
+                    Image("incognito")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 44, height: 35)
+                    Text("browser.incognito")
+                        .zenFont(17, weight: .semibold, design: .rounded)
+                }
+                .foregroundStyle(.secondary)
+                .fixedSize()
+                .scaleEffect(geometry.size.width / Self.cardWidth)
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+        }
+        .environment(\.colorScheme, .dark)
     }
 }

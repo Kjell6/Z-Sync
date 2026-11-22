@@ -13,6 +13,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Message
 import android.view.MotionEvent
+import android.view.ContextThemeWrapper
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
@@ -53,6 +54,7 @@ import de.kjell.zencompanion.ui.browser.BrowserDownload
 import de.kjell.zencompanion.ui.browser.BrowserPrompt
 import de.kjell.zencompanion.ui.browser.MiniBrowserZoom
 import de.kjell.zencompanion.ui.browser.PageBlocker
+import de.kjell.zencompanion.ui.browser.PrivateBrowsing
 import de.kjell.zencompanion.ui.browser.downloadReferrer
 import de.kjell.zencompanion.ui.browser.grantableResources
 import de.kjell.zencompanion.ui.browser.sitePermissionsFor
@@ -78,6 +80,8 @@ private const val DesktopUserAgent =
 @Composable
 internal fun MiniBrowserWebView(
     initialUrl: String?,
+    /** A private page's WebView runs on its own profile. */
+    privateProfile: String? = null,
     isAddressFocused: Boolean,
     desktopSite: Boolean,
     /** 1.0 = 100%. Page zoom for the page's document. */
@@ -161,7 +165,18 @@ internal fun MiniBrowserWebView(
             // its own address, and the WebView may still show the previous page.
             var mainFrameRequest: String? = null
             val page = BrowserPullRefresh(ctx)
-            val webView = WebView(ctx)
+            // Sites with a dark look show it in private pages, like the chrome,
+            // whatever the system's mode: the WebView reads it from its theme.
+            // Only the site's own dark look, no forced darkening, as on iOS.
+            val isPrivate = privateProfile != null
+            val webView = WebView(
+                if (isPrivate) ContextThemeWrapper(ctx, android.R.style.Theme_DeviceDefault_NoActionBar) else ctx,
+            )
+            // Before the WebView does anything: the profile cannot change later.
+            // A private page without its profile loads nothing at all.
+            val canLoad = privateProfile == null || PrivateBrowsing.adopt(webView, privateProfile)
+            // The page's own jar: a private page's sign-in lives in its profile.
+            val jar = if (isPrivate && canLoad) PrivateBrowsing.cookies(webView) else CookieManager.getInstance()
             page.addView(
                 webView,
                 ViewGroup.LayoutParams(
@@ -178,7 +193,7 @@ internal fun MiniBrowserWebView(
             webView.apply {
                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
                 // Logins set up on one site often read their cookie from another.
-                CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                jar.setAcceptThirdPartyCookies(this, true)
                 // Password managers fill the page through the system's autofill.
                 importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_YES
                 requests.installPageFileBridge(this)
@@ -195,6 +210,16 @@ internal fun MiniBrowserWebView(
                     // target=_blank and window.open do nothing unless this is on.
                     setSupportMultipleWindows(true)
                     javaScriptCanOpenWindowsAutomatically = true
+                }
+                // A private page without its profile stays shut for good,
+                // whatever is typed into it later: nothing reaches the network,
+                // and nothing runs that could write into the phone's own data.
+                if (!canLoad) {
+                    settings.blockNetworkLoads = true
+                    settings.cacheMode = WebSettings.LOAD_NO_CACHE
+                    settings.javaScriptEnabled = false
+                    settings.domStorageEnabled = false
+                    settings.databaseEnabled = false
                 }
                 // Passkeys for any site, the way a browser asks for them.
                 if (BrowserPasskeysEnabled &&
@@ -236,7 +261,7 @@ internal fun MiniBrowserWebView(
                         view?.let(pageZoomSlot::applyNow)
                         // The jar otherwise reaches disk on its own schedule, and
                         // a sign-in must outlast the app being killed right after.
-                        CookieManager.getInstance().flush()
+                        jar.flush()
                         onLoadingChange(false)
                         url?.let {
                             onCurrentUrlChange(it)
@@ -259,6 +284,9 @@ internal fun MiniBrowserWebView(
                     // Runs on a WebView thread for every request the page makes.
                     override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
                         request ?: return null
+                        // A private page without its profile gets nothing,
+                        // asked before the cache or the network could answer.
+                        if (!canLoad) return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
                         if (!blocker.shouldBlock(request.url, request.isForMainFrame)) return null
                         return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
                     }
@@ -374,7 +402,14 @@ internal fun MiniBrowserWebView(
                     if (url.isNullOrEmpty()) return@setDownloadListener
                     requests.askDownload(
                         this,
-                        BrowserDownload(url, userAgent, contentDisposition, mimeType, referer = downloadReferrer(this.url, url)),
+                        BrowserDownload(
+                            url,
+                            userAgent,
+                            contentDisposition,
+                            mimeType,
+                            referer = downloadReferrer(this.url, url),
+                            cookies = if (isPrivate) PrivateBrowsing.cookies(this) else null,
+                        ),
                     )
                 }
                 webChromeClient = object : WebChromeClient() {
@@ -532,7 +567,9 @@ internal fun MiniBrowserWebView(
                 val loadTarget = formatBrowserInput(initialUrl ?: "")
                 val popup = takePopup()
                 val history = savedHistory()
-                if (popup != null) {
+                if (!canLoad) {
+                    // Nothing: see above.
+                } else if (popup != null) {
                     (popup.obj as? WebView.WebViewTransport)?.webView = this
                     popup.sendToTarget()
                 } else if (history != null && restoreState(history) != null) {

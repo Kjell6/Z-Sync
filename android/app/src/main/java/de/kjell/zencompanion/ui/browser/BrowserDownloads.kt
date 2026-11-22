@@ -40,6 +40,11 @@ data class BrowserDownload(
     val mimeType: String?,
     /** The page the file came from. */
     val referer: String?,
+    /**
+     * The jar of the page it came from; null for the phone's. A private page's
+     * sign-in lives in its own profile, and the file may need it.
+     */
+    val cookies: CookieManager? = null,
 )
 
 /** A name that stays inside the Downloads folder, whatever the page suggested. */
@@ -140,7 +145,7 @@ private const val MAX_DOWNLOAD_REDIRECTS = 8
 private const val PROBE_TIMEOUT_MS = 10_000
 
 /** Status and redirect of [url], asking with only that address's own cookies. */
-private fun probeDownload(url: String, userAgent: String?): Pair<Int, String?> {
+private fun probeDownload(url: String, userAgent: String?, cookies: CookieManager): Pair<Int, String?> {
     fun ask(method: String): Pair<Int, String?> {
         val connection = URL(url).openConnection() as HttpURLConnection
         try {
@@ -148,7 +153,7 @@ private fun probeDownload(url: String, userAgent: String?): Pair<Int, String?> {
             connection.instanceFollowRedirects = false
             connection.connectTimeout = PROBE_TIMEOUT_MS
             connection.readTimeout = PROBE_TIMEOUT_MS
-            CookieManager.getInstance().getCookie(url)?.let { connection.setRequestProperty("Cookie", it) }
+            cookies.getCookie(url)?.let { connection.setRequestProperty("Cookie", it) }
             userAgent?.takeIf { it.isNotEmpty() }?.let { connection.setRequestProperty("User-Agent", it) }
             return connection.responseCode to connection.getHeaderField("Location")
         } finally {
@@ -546,7 +551,8 @@ internal fun enqueueWebDownload(
     taskId: Long,
     fileName: String,
 ): QueuedDownload? = runCatching {
-    val target = resolveDownloadUrl(download.url) { probeDownload(it, download.userAgent) }
+    val cookies = download.cookies ?: CookieManager.getInstance()
+    val target = resolveDownloadUrl(download.url) { probeDownload(it, download.userAgent, cookies) }
     // A folder of its own, so two files of the same name cannot overwrite
     // each other while they wait to be copied.
     val folder = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), taskId.toString())
@@ -559,7 +565,7 @@ internal fun enqueueWebDownload(
         .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
         .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, "$taskId/$fileName")
     download.mimeType?.takeIf { it.isNotEmpty() }?.let(request::setMimeType)
-    target?.let(CookieManager.getInstance()::getCookie)?.let { request.addRequestHeader("Cookie", it) }
+    target?.let(cookies::getCookie)?.let { request.addRequestHeader("Cookie", it) }
     download.userAgent?.takeIf { it.isNotEmpty() }?.let { request.addRequestHeader("User-Agent", it) }
     // The policy again for where the file really comes from, so a secure page
     // whose file redirects to plain http sends no Referer at all.

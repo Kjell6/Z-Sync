@@ -1,6 +1,65 @@
 import SwiftUI
 import WebKit
 
+/// Website data for private pages: every private page has a store of its own,
+/// so nothing it signs into reaches another page, private or not. A popup a
+/// page opens shares its store, or a sign-in in the popup would never reach
+/// the page that asked for it. A store stays with its page through a restart
+/// and is deleted once the page has closed.
+@MainActor
+enum PrivateBrowsing {
+    private static var stores: [UUID: WKWebsiteDataStore] = [:]
+    /// The stores of the private pages read back as the app started.
+    private static var stayed: Set<UUID> = []
+    private static var leftoversChecked = false
+
+    static func dataStore(_ id: UUID) -> WKWebsiteDataStore {
+        if let store = stores[id] { return store }
+        let fresh = WKWebsiteDataStore(forIdentifier: id)
+        stores[id] = fresh
+        // Not before WebKit is up: asked at launch, it crashes. A moment
+        // later the page's web view exists.
+        if !leftoversChecked {
+            leftoversChecked = true
+            Task { @MainActor in discardLeftovers() }
+        }
+        return fresh
+    }
+
+    /// The pages were read back as the app starts: their stores keep their sign-ins.
+    static func startUp(keeping ids: Set<UUID>) {
+        stayed = ids
+    }
+
+    /// No open page uses the store any more: everything in it goes.
+    static func discard(_ id: UUID) {
+        stayed.remove(id)
+        let store = stores.removeValue(forKey: id) ?? WKWebsiteDataStore(forIdentifier: id)
+        store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) {
+            Task { @MainActor in
+                // The web view may still be on its way out; the store itself
+                // goes once it has. Should it still be held, the next start
+                // finds it without a page and removes it then.
+                try? await Task.sleep(for: .seconds(2))
+                guard stores[id] == nil else { return }
+                WKWebsiteDataStore.remove(forIdentifier: id) { _ in }
+            }
+        }
+    }
+
+    /// Stores an earlier run left behind without a page go. The browser keeps
+    /// no other stores of its own, so every one but the pages' is a leftover.
+    private static func discardLeftovers() {
+        WKWebsiteDataStore.fetchAllDataStoreIdentifiers { ids in
+            Task { @MainActor in
+                for id in ids where !stayed.contains(id) && stores[id] == nil {
+                    WKWebsiteDataStore.remove(forIdentifier: id) { _ in }
+                }
+            }
+        }
+    }
+}
+
 /// One page's WebKit side: builds its web view, feeds its model through KVO and
 /// answers the navigation and UI delegates. It lives as long as the web view
 /// and has no tie to the view hierarchy, so a page keeps running while another
@@ -55,6 +114,11 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         // A player's own fullscreen button then fills the screen, as it does
         // in Safari.
         configuration.preferences.isElementFullscreenEnabled = true
+        // A popup already carries its opener's store, which must stay.
+        if let id = model.privateDataID {
+            let store = PrivateBrowsing.dataStore(id)
+            if configuration.websiteDataStore !== store { configuration.websiteDataStore = store }
+        }
         configuration.userContentController.addScriptMessageHandler(
             BrowserGeolocation.Handler(model: model),
             contentWorld: .page,
@@ -83,6 +147,8 @@ final class MiniBrowserWebDriver: NSObject, WKNavigationDelegate, WKUIDelegate {
         webView.allowsBackForwardNavigationGestures = true
         webView.isFindInteractionEnabled = true
         webView.isOpaque = false
+        // Sites with a dark look show it in private pages, like the chrome.
+        if model.isPrivate { webView.overrideUserInterfaceStyle = .dark }
         webView.backgroundColor = .clear
         webView.scrollView.backgroundColor = .clear
 

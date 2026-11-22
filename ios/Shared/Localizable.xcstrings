@@ -706,6 +706,36 @@
         }
       }
     },
+    "browser.incognito": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incognito"
+          }
+        }
+      }
+    },
+    "browser.incognito.hint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens this page privately: no history, nothing kept once the tab closes"
+          }
+        }
+      }
+    },
+    "browser.incognito.note": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You’re browsing Incognito"
+          }
+        }
+      }
+    },
     "browser.open_in_browser": {
       "localizations": {
         "en": {
@@ -896,7 +926,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Search or enter address"
+            "value": "Search…"
           }
         }
       }
@@ -1331,6 +1361,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Your spaces, essentials and pinned tabs on the go."
+          }
+        }
+      }
+    },
+    "kept.private_tab": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Private Tab"
           }
         }
       }

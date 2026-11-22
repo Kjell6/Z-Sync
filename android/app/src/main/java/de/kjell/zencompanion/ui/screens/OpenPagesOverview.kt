@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
@@ -68,6 +69,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
@@ -94,6 +96,8 @@ import de.kjell.zencompanion.ui.components.Favicon
 import de.kjell.zencompanion.ui.components.PinDestination
 import de.kjell.zencompanion.ui.components.PinDestinationModel
 import de.kjell.zencompanion.ui.theme.LocalZenColors
+import de.kjell.zencompanion.ui.theme.PaperDark
+import de.kjell.zencompanion.ui.theme.PrivateInk
 import de.kjell.zencompanion.ui.theme.ZenMenu
 import de.kjell.zencompanion.ui.theme.ZenMenuGroup
 import de.kjell.zencompanion.ui.theme.ZenMenuGroupGap
@@ -631,7 +635,12 @@ private fun OpenPageCard(
 ) {
     val zen = LocalZenColors.current
     val context = LocalContext.current
-    val title = if (page.url.isEmpty()) stringResource(R.string.kept_new_page) else PageTitle.headline(page.title, page.url)
+    val title = when {
+        // A private page keeps its site to itself: one name for all of them.
+        page.isPrivate -> stringResource(R.string.kept_private_tab)
+        page.url.isEmpty() -> stringResource(R.string.kept_new_page)
+        else -> PageTitle.headline(page.title, page.url)
+    }
     val currentLabel = stringResource(R.string.kept_current_page)
     val closeLabel = stringResource(R.string.kept_close_page)
     val session = remember(page.id) { pages.session(page.id) }
@@ -694,7 +703,11 @@ private fun OpenPageCard(
                     )
                 },
         ) {
-            OpenPageShot(page = page, session = session, surface = surface)
+            if (page.isPrivate) {
+                PrivatePageCover()
+            } else {
+                OpenPageShot(page = page, session = session, surface = surface)
+            }
             // Cards the deck is not resting on sit a little in the dark, the
             // ones behind more than the one lying on top. On a dark background
             // the shadows hardly show, so the dimming does more of the work.
@@ -727,7 +740,14 @@ private fun OpenPageCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(iconGap),
         ) {
-            if (page.url.isNotEmpty()) {
+            if (page.isPrivate) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_incognito),
+                    contentDescription = null,
+                    tint = zen.ink,
+                    modifier = Modifier.size(iconSide),
+                )
+            } else if (page.url.isNotEmpty()) {
                 Favicon(urlString = page.url, size = iconSide)
             } else {
                 Spacer(Modifier.size(iconSide))
@@ -775,6 +795,52 @@ private fun OpenPageCard(
         )
     }
 }
+
+/**
+ * A private page in the overview, and on its way there: no picture of the
+ * site, only the private page's dark surface, its eyes and its name, in the
+ * system's own white.
+ */
+@Composable
+internal fun PrivatePageCover(
+    modifier: Modifier = Modifier,
+    /** Around the part a card shows: the flying page centers its eyes where the card will. */
+    contentPadding: PaddingValues = PaddingValues(),
+) {
+    // Laid out at a card's size and only scaled to the size it is shown at, so
+    // the name does not shift as the card takes over from the flying page.
+    BoxWithConstraints(
+        modifier.fillMaxSize().background(PaperDark).padding(contentPadding),
+        contentAlignment = Alignment.Center,
+    ) {
+        val factor = maxWidth / PrivateCoverCardWidth
+        Column(
+            modifier = Modifier.graphicsLayer {
+                scaleX = factor
+                scaleY = factor
+            },
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_incognito),
+                contentDescription = null,
+                tint = PrivateInk,
+                modifier = Modifier.size(44.dp),
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = stringResource(R.string.browser_incognito),
+                style = ZenType.rounded(17, FontWeight.SemiBold),
+                color = PrivateInk,
+                maxLines = 1,
+                softWrap = false,
+            )
+        }
+    }
+}
+
+/** A focused card's width on a phone, where the cover's sizes are drawn at. */
+private val PrivateCoverCardWidth = 276.dp
 
 /**
  * The page as it looked when it was last on screen, on its own color; its

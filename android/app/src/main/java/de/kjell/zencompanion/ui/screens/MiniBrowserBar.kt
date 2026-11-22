@@ -1,6 +1,11 @@
 package de.kjell.zencompanion.ui.screens
 
 import androidx.compose.foundation.layout.tappableElement
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
+import de.kjell.zencompanion.ui.components.EyesIcons
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.res.painterResource
 import de.kjell.zencompanion.ui.theme.ZenLayout
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.widthIn
@@ -153,6 +158,7 @@ import de.kjell.zencompanion.R
 import de.kjell.zencompanion.data.BrowserVisit
 import de.kjell.zencompanion.data.SitePermission
 import de.kjell.zencompanion.data.SitePermissionChoice
+import de.kjell.zencompanion.data.SitePermissionStore
 import de.kjell.zencompanion.data.SitePermissions
 import de.kjell.zencompanion.data.BlockCategory
 import de.kjell.zencompanion.data.ContentBlockingSettings
@@ -282,6 +288,14 @@ internal fun MiniBrowserBar(
     onBeginAddressEdit: () -> Unit,
     onCancelAddressEdit: () -> Unit,
     onSubmitAddress: (String) -> Unit,
+    /**
+     * Whether the new page opens private; null where that is no choice (the
+     * page has an address, or the WebView has a single profile).
+     */
+    isPrivate: Boolean? = null,
+    onTogglePrivate: () -> Unit = {},
+    /** The page's answers: a private page's never reach the phone's. */
+    permissions: SitePermissionStore = SitePermissions,
     /** False while a page error covers the page: there is nothing to pin. */
     canPin: Boolean = true,
     /** False while no page is showing, or the reader covers it. */
@@ -361,6 +375,7 @@ internal fun MiniBrowserBar(
                                     settings = blockingSettings,
                                     onBack = viewModel::closeSiteSettings,
                                     onChange = onSiteBlockingChange,
+                                    permissions = permissions,
                                 )
                             } else {
                                 ExpandedMenu(
@@ -443,6 +458,8 @@ internal fun MiniBrowserBar(
                         onSubmitAddress = onSubmitAddress,
                         onCancel = onCancelAddressEdit,
                         barColor = barColor,
+                        isPrivate = isPrivate,
+                        onTogglePrivate = onTogglePrivate,
                     )
                 } else {
                     SwipeableNavBar(swipe = swipe) {
@@ -1227,6 +1244,8 @@ private fun ComposerBar(
     onSubmitAddress: (String) -> Unit,
     onCancel: () -> Unit,
     barColor: Color,
+    isPrivate: Boolean?,
+    onTogglePrivate: () -> Unit,
 ) {
     val zen = LocalZenColors.current
     // The composer is composed by the address state, so its field reports
@@ -1319,7 +1338,38 @@ private fun ComposerBar(
                     modifier = Modifier.size(18.dp),
                 )
             }
+        } else if (isPrivate != null) {
+            // Nothing typed into a new page yet: the clear button's slot
+            // chooses whether the page opens private.
+            PrivateToggle(isPrivate = isPrivate, onToggle = onTogglePrivate)
         }
+    }
+}
+
+/**
+ * Open eyes for a normal page; lowered lids once it is private. The field is
+ * short, so no label: the private page says so behind it.
+ */
+@Composable
+private fun PrivateToggle(isPrivate: Boolean, onToggle: () -> Unit) {
+    val zen = LocalZenColors.current
+    val label = stringResource(R.string.browser_incognito)
+    val hint = stringResource(R.string.browser_incognito_hint)
+    Row(
+        modifier = Modifier
+            .heightIn(min = 40.dp)
+            .clip(CircleShape)
+            .toggleable(value = isPrivate, role = Role.Switch, onValueChange = { onToggle() })
+            .semantics { contentDescription = "$label. $hint" }
+            .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            painter = if (isPrivate) painterResource(R.drawable.ic_incognito) else rememberVectorPainter(EyesIcons.Open),
+            contentDescription = null,
+            tint = zen.ink.copy(alpha = if (isPrivate) 0.8f else 0.45f),
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
@@ -1564,6 +1614,7 @@ private fun SiteSettingsMenuPage(
     settings: ContentBlockingSettings,
     onBack: () -> Unit,
     onChange: (BlockCategory, Boolean) -> Unit,
+    permissions: SitePermissionStore,
 ) {
     val zen = LocalZenColors.current
     val site = blockingSiteKey(host)
@@ -1607,7 +1658,7 @@ private fun SiteSettingsMenuPage(
         ZenMenuGroupGap()
 
         ZenMenuGroup(index = 2, count = groupCount) {
-            SitePermissionRows(host)
+            SitePermissionRows(host, permissions)
         }
 
         Text(
@@ -1622,12 +1673,12 @@ private fun SiteSettingsMenuPage(
 
 /** What the site may ask for. Ask lets the site's question come back. */
 @Composable
-private fun SitePermissionRows(host: String) {
-    val choices by SitePermissions.choices.collectAsState()
+private fun SitePermissionRows(host: String, store: SitePermissionStore) {
+    val choices by store.choices.collectAsState()
     val count = SitePermission.entries.size
     SitePermission.entries.forEachIndexed { index, kind ->
         // Read through the collected map, so a change redraws the row.
-        val current = choices.let { SitePermissions.choice(kind, host) }
+        val current = choices.let { store.choice(kind, host) }
         var expanded by remember { mutableStateOf(false) }
         ZenMenuItem(
             text = { Text(stringResource(kind.title)) },
@@ -1654,7 +1705,7 @@ private fun SitePermissionRows(host: String) {
                                     selected = choice == current,
                                     onClick = {
                                         expanded = false
-                                        SitePermissions.set(choice, listOf(kind), host)
+                                        store.set(choice, listOf(kind), host)
                                     },
                                     text = { Text(stringResource(choiceTitle(choice))) },
                                     index = optionIndex,

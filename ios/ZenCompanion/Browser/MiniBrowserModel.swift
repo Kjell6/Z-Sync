@@ -436,6 +436,12 @@ final class MiniBrowserModel {
     @ObservationIgnored private weak var zoomedWebView: WKWebView?
     @ObservationIgnored private var appliedPageZoom: Double?
 
+    /// A private page's own website data, which no other page sees; nil for
+    /// a normal page. A private page leaves no history. Chosen while the page
+    /// is still new, before anything has loaded in it; it stays like any other.
+    private(set) var privateDataID: UUID?
+    var isPrivate: Bool { privateDataID != nil }
+
     /// The page's live web view; nil while the page sleeps. Owned here, not by
     /// the view, so the page survives being off screen.
     var webView: WKWebView?
@@ -544,7 +550,9 @@ final class MiniBrowserModel {
         }
     }
     private let suggestionClient: SearchSuggestionFetching
-    let sitePermissions: SitePermissionStore
+    /// The phone's answers, or this private page's own.
+    private(set) var sitePermissions: SitePermissionStore
+    @ObservationIgnored private let savedSitePermissions: SitePermissionStore
     private let history: BrowserHistoryStore
     /// The address last put in the history.
     @ObservationIgnored private var lastRecordedVisit: String?
@@ -567,6 +575,7 @@ final class MiniBrowserModel {
         self.history = history
         self.initialURL = initialURL
         self.sitePermissions = sitePermissions
+        savedSitePermissions = sitePermissions
         self.blocker = blocker
         self.pinWriter = pinWriter
         self.urlOpener = urlOpener
@@ -651,6 +660,34 @@ final class MiniBrowserModel {
         applyWebpagePreferences()
         // A woken page brings its colour along: the new control starts on it.
         updateRefreshTint()
+    }
+
+    /// Turns a new page private or back. Its web view belongs to the other
+    /// kind of website data, so a fresh one takes its place.
+    func setPrivate(_ on: Bool) {
+        guard isPrivate != on, opensWithSearch else { return }
+        let previous = privateDataID
+        makePrivate(on ? UUID() : nil)
+        if webView != nil {
+            sleep()
+            wake()
+        }
+        // Nothing has loaded in it, and no popup of a new page can share it.
+        if let previous { PrivateBrowsing.discard(previous) }
+    }
+
+    /// A page opened from a private one is private too, with data of its own.
+    /// A popup shares its opener's: its sign-in is for that page.
+    func inheritPrivacy(from opener: MiniBrowserModel?, sharingData: Bool) {
+        guard let id = opener?.privateDataID else { return }
+        makePrivate(sharingData ? id : UUID())
+    }
+
+    /// A private page read back as the app starts, or made private now. Its
+    /// answers to sites live in memory only, its own.
+    func makePrivate(_ id: UUID?) {
+        privateDataID = id
+        sitePermissions = id == nil ? savedSitePermissions : SitePermissionStore.inMemory()
     }
 
     /// Gives the page a web view again: from [history] when there is one, at
@@ -1015,7 +1052,7 @@ final class MiniBrowserModel {
     /// Puts the page in the history. A reload, or a page coming back from
     /// sleep, is at the same address and so is no new visit.
     func recordVisit() {
-        guard pageError == nil, let address = BrowserHistoryStore.address(of: currentURL),
+        guard !isPrivate, pageError == nil, let address = BrowserHistoryStore.address(of: currentURL),
               address != lastRecordedVisit else { return }
         lastRecordedVisit = address
         history.record(currentURL, title: pageTitle)
@@ -1115,7 +1152,8 @@ final class MiniBrowserModel {
         guard let title = PageTitle.usable(raw, url: currentURL ?? webView?.url) else { return }
         pageTitle = title
         host?.pageDidChange(self)
-        if let lastRecordedVisit, lastRecordedVisit == BrowserHistoryStore.address(of: currentURL) {
+        // A private page leaves no trace in the history, its titles included.
+        if !isPrivate, let lastRecordedVisit, lastRecordedVisit == BrowserHistoryStore.address(of: currentURL) {
             history.updateTitle(title, of: lastRecordedVisit)
         }
     }

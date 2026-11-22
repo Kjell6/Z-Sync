@@ -311,7 +311,7 @@ internal class BrowserPageRequests(
         }
 
         override fun askPermission(kinds: List<SitePermission>, host: String, done: (Boolean) -> Unit) {
-            when (SitePermissions.decision(kinds, host)) {
+            when (session.permissions.decision(kinds, host)) {
                 SitePermissionDecision.GRANT -> requestSystem(kinds, host, done)
                 SitePermissionDecision.DENY -> done(false)
                 SitePermissionDecision.ASK -> session.prompts += BrowserPrompt.Permission(
@@ -319,11 +319,11 @@ internal class BrowserPageRequests(
                     kinds,
                     onDismiss = {
                         // Nobody answered: the site hears no for the rest of this run.
-                        SitePermissions.markUnanswered(kinds, host)
+                        session.permissions.markUnanswered(kinds, host)
                         done(false)
                     },
                 ) { allowed ->
-                    SitePermissions.set(
+                    session.permissions.set(
                         if (allowed) SitePermissionChoice.ALLOW else SitePermissionChoice.BLOCK,
                         kinds,
                         host,

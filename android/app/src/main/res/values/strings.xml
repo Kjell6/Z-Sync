@@ -209,6 +209,7 @@
     <string name="browser_image_save">Save Image</string>
     <string name="browser_image_open">Open Image in New Page</string>
     <string name="browser_image_copy">Copy Image Address</string>
+    <string name="kept_private_tab">Private Tab</string>
     <string name="kept_new_page">New Page</string>
     <string name="kept_close_all">Close All</string>
     <string name="kept_close_all_label">Close all pages</string>
@@ -232,6 +233,9 @@
     <string name="browser_zoom_reset">Reset page zoom</string>
     <string name="browser_find_short">Find</string>
     <string name="browser_find_on_page">Find on page</string>
+    <string name="browser_incognito">Incognito</string>
+    <string name="browser_incognito_hint">Opens this page privately: no history, nothing kept once the tab closes</string>
+    <string name="browser_incognito_note">You’re browsing Incognito</string>
     <string name="browser_find_next">Next</string>
     <string name="browser_find_previous">Previous</string>
     <string name="browser_print">Print</string>

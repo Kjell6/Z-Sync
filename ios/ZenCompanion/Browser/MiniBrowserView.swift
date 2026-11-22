@@ -53,6 +53,12 @@ struct MiniBrowserView: View {
     @State private var pagePose = PageCardPose.identity
     /// The page is above the deck, moving with the finger or landing on its card.
     @State private var pageFloats = false
+    /// How far a private page's cover has come over it in the move: faded in
+    /// as the page lifts off, out again if it goes back.
+    @State private var privateCoverFade: Double = 0
+    /// A private card opened from the deck: its cover stays over the page
+    /// once the card has gone, and fades away into it.
+    @State private var privateCoverHolds = false
     @State private var chromeFade: CGFloat = 1
     /// The pull has let go for the overview; the bar takes no new one.
     @State private var committingPull = false
@@ -164,6 +170,8 @@ struct MiniBrowserView: View {
         barCollapsed || (model.findBarShown && !showOverview)
     }
 
+    private var privateChrome: Bool { model.isPrivate && !overviewControls }
+
     private var barMotion: Animation {
         reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.35, dampingFraction: 0.86)
     }
@@ -180,15 +188,20 @@ struct MiniBrowserView: View {
     private var sheetBackground: Color { pageColor(of: model) }
 
     private func pageColor(of page: MiniBrowserModel) -> Color {
-        if page.pageError != nil { return Palette.background(scheme) }
-        return page.themeColor ?? defaultBackground
+        if page.pageError != nil { return Palette.background(pageScheme(page)) }
+        return page.themeColor ?? Palette.background(pageScheme(page))
+    }
+
+    /// A private page is dark, whatever the system says.
+    private func pageScheme(_ page: MiniBrowserModel) -> ColorScheme {
+        page.isPrivate ? .dark : scheme
     }
 
     /// The bar's surface: the page's own color, nudged a touch darker or
     /// lighter so the plate is visible against it while still reading as the
     /// site's color. Without a theme color, the system background is nudged.
     private var barBackground: Color {
-        (model.themeColor ?? defaultBackground).nudgedForBar() ?? sheetBackground
+        (model.themeColor ?? Palette.background(pageScheme(model))).nudgedForBar() ?? sheetBackground
     }
 
     /// The bar is nearly the page's color, so the page decides whether the
@@ -288,6 +301,8 @@ struct MiniBrowserView: View {
                             .overlay {
                                 if let error = model.pageError {
                                     errorPanel(error)
+                                } else if model.isPrivate, model.opensWithSearch, !holdsNewPageSearch {
+                                    incognitoNote
                                 }
                             }
 
@@ -300,6 +315,19 @@ struct MiniBrowserView: View {
                                 model.closeReader()
                             }
                             .transition(.opacity)
+                        }
+                    }
+                    .overlay {
+                        // On its way to its card the page already is the
+                        // card: the site never shows in the move, nor does
+                        // an article open in the reader over it.
+                        if model.isPrivate, pageFloats || privateCoverHolds {
+                            PrivatePageCover()
+                                // The page's own outline, corner for corner,
+                                // so nothing shows past it.
+                                .clipShape(floatingPageShape)
+                                .opacity(privateCoverFade)
+                                .allowsHitTesting(false)
                         }
                     }
                     .background(revealingNewPage || pageFloats ? Color.clear : sheetBackground)
@@ -377,10 +405,29 @@ struct MiniBrowserView: View {
                 }
 
                 chrome
+                    // Private pages wear the dark chrome, with the system's
+                    // own white for its glyphs; the overview keeps the app's look.
+                    .environment(\.colorScheme, privateChrome ? .dark : scheme)
+                    .environment(\.browserInk, privateChrome ? .white : nil)
                     .zIndex(6)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-            .background(sheetBackground.ignoresSafeArea())
+            .background {
+                ZStack {
+                    sheetBackground
+                    // The status bar goes dark with the private page's cover.
+                    if model.isPrivate, pageFloats || privateCoverHolds {
+                        Palette.background(.dark).opacity(privateCoverFade)
+                    }
+                }
+                .ignoresSafeArea()
+            }
+            .onChange(of: pageFloats) { _, floats in
+                guard !floats, !privateCoverHolds else { return }
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) { privateCoverFade = 0 }
+            }
             .ignoresSafeArea(edges: .bottom)
             .ignoresSafeArea(.keyboard)
             .presentationBackground(pages.active == nil ? Palette.background(scheme) : barBackground)
@@ -504,19 +551,25 @@ struct MiniBrowserView: View {
         )
     }
 
+    /// The flying page's outline: its bottom corners round with the card, its
+    /// top ones only as it nears the card's size, as the web view clips them.
+    private var floatingPageShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: pageTopCorner,
+            bottomLeadingRadius: pagePose.corner,
+            bottomTrailingRadius: pagePose.corner,
+            topTrailingRadius: pageTopCorner,
+            style: .continuous
+        )
+    }
+
     /// The same shadow the card has, there from the moment the page leaves
     /// the screen's edges. Sized up by what the page's scale will take off.
     @ViewBuilder
     private var floatingPageShadow: some View {
         if pageFloats {
             // In the page's own color: a new page has nothing painted yet.
-            UnevenRoundedRectangle(
-                topLeadingRadius: pageTopCorner,
-                bottomLeadingRadius: pagePose.corner,
-                bottomTrailingRadius: pagePose.corner,
-                topTrailingRadius: pageTopCorner,
-                style: .continuous
-            )
+            floatingPageShape
                 .fill(sheetBackground)
                 .shadow(color: .black.opacity(0.26), radius: 20, x: -4.4, y: 0)
                 .opacity(Double(overviewReveal))
@@ -552,6 +605,24 @@ struct MiniBrowserView: View {
 
     /// The page stops at the bar: the plate is opaque, so there is nothing to
     /// paint under it and no viewport inset to reserve.
+    /// What a new private page shows until something loads in it.
+    private var incognitoNote: some View {
+        VStack(spacing: 12) {
+            Image("incognito")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 48, height: 38)
+            Text("browser.incognito.note")
+                .zenFont(19, weight: .semibold, design: .rounded)
+        }
+        .foregroundStyle(.secondary)
+        .environment(\.colorScheme, .dark)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.bottom, 160)
+        .allowsHitTesting(false)
+        .transition(.opacity)
+    }
+
     private var webPane: some View {
         let neighbours = pages.neighbours
         return MiniBrowserRepresentable(
@@ -738,6 +809,11 @@ private extension MiniBrowserView {
         // changes where the page meets the screen's edge.
         if let card = cardPose() { pagePose.corner = card.corner }
         pageFloats = true
+        // A card's cover cut short on its way out is this flight's now.
+        privateCoverHolds = false
+        if model.isPrivate {
+            withAnimation(.easeOut(duration: 0.22)) { privateCoverFade = 1 }
+        }
         showOverview = true
         // The overview's controls are there from the first point on, where
         // they will stay: the deck's buttons, not part of the page in flight.
@@ -840,6 +916,7 @@ private extension MiniBrowserView {
             pagePose = PageCardPose(x: 0, y: 0, scale: 1, corner: pagePose.corner)
             overviewReveal = 0
             chromeFade = 1
+            privateCoverFade = 0
         } completion: {
             guard epoch == transitionEpoch else { return }
             var transaction = Transaction()
@@ -878,16 +955,35 @@ private extension MiniBrowserView {
         holdsNewPageSearch = false
         showOverview = true
         overviewControls = true
-        withAnimation(.easeOut(duration: 0.2)) { overviewReveal = 1 }
+        // With no flight, a private page is covered as the deck fades in
+        // over it, so the site never shows through.
+        if model.isPrivate { privateCoverHolds = true }
+        withAnimation(.easeOut(duration: 0.2)) {
+            overviewReveal = 1
+            if model.isPrivate { privateCoverFade = 1 }
+        }
     }
 
     private func fadeOverviewOut() {
         transitionEpoch += 1
         let epoch = transitionEpoch
         overviewControls = false
-        withAnimation(.easeOut(duration: 0.2)) { overviewReveal = 0 } completion: {
+        // The page coming back: covered under the deck, uncovered with it.
+        if model.isPrivate {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                privateCoverHolds = true
+                privateCoverFade = 1
+            }
+        }
+        withAnimation(.easeOut(duration: 0.2)) {
+            overviewReveal = 0
+            privateCoverFade = 0
+        } completion: {
             guard epoch == transitionEpoch else { return }
             showOverview = false
+            privateCoverHolds = false
         }
     }
 
@@ -918,6 +1014,14 @@ private extension MiniBrowserView {
         transitionEpoch += 1
         let epoch = transitionEpoch
         overviewControls = false
+        if page.model.isPrivate {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                privateCoverHolds = true
+                privateCoverFade = 1
+            }
+        }
         withAnimation(PageDeckGeometry.openMotion) {
             expandingCardID = page.id
             cardExpansion = 1
@@ -936,7 +1040,16 @@ private extension MiniBrowserView {
                     expandingCardID = nil
                     cardExpansion = 0
                 }
+                // The card's cover is the page's now, and fades into the site.
+                if privateCoverHolds { releasePrivateCover() }
             }
+        }
+    }
+
+    private func releasePrivateCover() {
+        withAnimation(.easeOut(duration: 0.28)) { privateCoverFade = 0 } completion: {
+            guard privateCoverFade == 0 else { return }
+            privateCoverHolds = false
         }
     }
 
@@ -997,6 +1110,8 @@ private extension MiniBrowserView {
     private func openNewPage() {
         transitionEpoch += 1
         let epoch = transitionEpoch
+        // A cover held for the page the deck faded in over is not the new page's.
+        privateCoverHolds = false
         pages.releaseSwitchingOrder()
         // The deck stays as it was while it goes: no card joins it on the way out.
         overviewHoldsCards = true

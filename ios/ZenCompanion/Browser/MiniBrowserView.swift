@@ -158,6 +158,12 @@ struct MiniBrowserView: View {
         return true
     }
 
+    /// Out of sight: scrolled away, or the find bar stands in for it, which
+    /// would otherwise stack on top of the browser's own bar.
+    private var chromeHidden: Bool {
+        barCollapsed || (model.findBarShown && !showOverview)
+    }
+
     private var barMotion: Animation {
         reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.35, dampingFraction: 0.86)
     }
@@ -243,13 +249,13 @@ struct MiniBrowserView: View {
             .padding(.bottom, chromeBottomInset + (overviewControls ? MiniBrowserChromeMetrics.overviewDockLift : 0))
             .animation(.spring(response: 0.24, dampingFraction: 0.82), value: overviewControls)
             .frame(maxWidth: .infinity)
-            .offset(y: barCollapsed ? 220 : 0)
+            .offset(y: chromeHidden ? 220 : 0)
             // The bar stays where it is while the page is pulled: the overview's
             // controls are separate buttons, so they only fade, never ride.
             // With nothing left to show, the cover is on its way out.
-            .opacity(barCollapsed || (pages.active == nil && !showOverview) ? 0 : Double(chromeFade))
-            .allowsHitTesting(!committingPull)
-            .accessibilityHidden(barCollapsed)
+            .opacity(chromeHidden || (pages.active == nil && !showOverview) ? 0 : Double(chromeFade))
+            .allowsHitTesting(!committingPull && !chromeHidden)
+            .accessibilityHidden(chromeHidden)
         }
     }
 
@@ -344,7 +350,7 @@ struct MiniBrowserView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     // Back before the card has finished growing, so the page
                     // does not change at the bottom when the card goes.
-                    .opacity(barCollapsed || (showOverview && expandingCardID == nil) ? 0 : 1)
+                    .opacity(chromeHidden || (showOverview && expandingCardID == nil) ? 0 : 1)
                     .animation(barMotion, value: barCollapsed)
                     .animation(.easeOut(duration: 0.12), value: showOverview)
                     .animation(.easeOut(duration: 0.3), value: expandingCardID)
@@ -427,6 +433,7 @@ struct MiniBrowserView: View {
                 value: addressEditing
             )
             .animation(barMotion, value: barCollapsed)
+            .animation(barMotion, value: model.findBarShown)
             .animation(.spring(response: 0.38, dampingFraction: 0.86), value: model.pinNotice != nil)
             .animation(.spring(response: 0.38, dampingFraction: 0.86), value: downloads.tasks.isEmpty)
             .animation(.easeInOut(duration: 0.25), value: model.themeColor)
@@ -569,7 +576,9 @@ struct MiniBrowserView: View {
     /// glass; only its layout viewport ends above the bar, so cookie banners
     /// and sticky CTAs lay out in the visible strip instead of under it.
     private var pageBottomClearance: CGFloat {
-        guard !barCollapsed else { return 0 }
+        // Nothing to keep clear of while the chrome is away, the find bar's
+        // turn included.
+        guard !chromeHidden else { return 0 }
         return MiniBrowserChromeMetrics.height(above: chromeBottomInset)
     }
 

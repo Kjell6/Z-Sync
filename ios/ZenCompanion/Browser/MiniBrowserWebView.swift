@@ -51,6 +51,8 @@ final class MiniBrowserWebView: WKWebView {
     /// Runs after a refresh was ended by taking the control away. Ending it
     /// moves the offset without a finger, like the end of a pull does.
     var refreshWasEnded: (() -> Void)?
+    /// The system find bar is gone again.
+    var findBarDidClose: (() -> Void)?
 
     override var inputAccessoryView: UIView? { nil }
 
@@ -125,17 +127,22 @@ final class MiniBrowserWebView: WKWebView {
                 }
                 guard !self.findBarIsOpening else { continue }
                 // Done: the next bar starts a watcher of its own.
-                self.findBarWatcher = nil
                 self.syncRefreshControl()
+                self.stopWatchingFindBar()
                 return
             }
         }
     }
 
+    /// The bar is gone, whichever way that was noticed: by the watcher, or
+    /// by a layout pass that found it closed first. Either way the browser's
+    /// own bar hears of it, or it would stay hidden.
     private func stopWatchingFindBar() {
-        findBarWatcher?.cancel()
-        findBarWatcher = nil
         findBarOpenedAt = nil
+        guard let watcher = findBarWatcher else { return }
+        watcher.cancel()
+        findBarWatcher = nil
+        findBarDidClose?()
     }
 
     /// The page's own bottom edge stays clear of the chrome. Values are

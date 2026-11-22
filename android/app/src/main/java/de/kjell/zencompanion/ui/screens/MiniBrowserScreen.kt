@@ -17,7 +17,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -218,7 +217,14 @@ fun MiniBrowserScreen(
     currentSpace: ZenSpaces.ZenSpace,
     allSpaces: List<ZenSpaces.ZenSpace>,
     browserRepository: BrowserRepository,
+    /** The browser goes with nothing left on screen. */
     onDismiss: () -> Unit,
+    /**
+     * The reader leaves the browser with its pages: the caller takes the
+     * screen away first and lets the pages go ([BrowserPages.leaveBrowser])
+     * once it is out of sight, so the page leaves with its chrome.
+     */
+    onLeave: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -253,7 +259,14 @@ fun MiniBrowserScreen(
     var screen by remember { mutableStateOf(Size.Zero) }
 
     /** How far the deck has come in: 0 is only the page, 1 is the whole deck. */
-    val overviewReveal = remember { Animatable(0f) }
+    val overviewReveal = remember { Animatable(if (startsInOverview) 1f else 0f) }
+    /**
+     * The whole browser, deck, cards and dock in one. From home there is no
+     * page to shrink into its card, so the overview comes and goes as one
+     * layer instead of a backdrop fading under cards that stand there.
+     */
+    // Recreated on a page picked from the deck, the page simply stays.
+    val screenFade = remember { Animatable(if (startsInOverview && showOverview) 0f else 1f) }
     /** The deck's cards above the page's own, once it has landed. */
     val aheadReveal = remember { Animatable(1f) }
     /** The live page between full screen and its card. */
@@ -290,9 +303,13 @@ fun MiniBrowserScreen(
     /** Every move of the overview replaces the one before; only the last one finishes. */
     val move = remember { arrayOfNulls<Job>(1) }
 
-    fun transition(block: suspend CoroutineScope.() -> Unit) {
+    fun transition(fadesOut: Boolean = false, block: suspend CoroutineScope.() -> Unit) {
         move[0]?.cancel()
-        move[0] = scope.launch(block = block)
+        move[0] = scope.launch {
+            // A move that cuts the overview's fade-out short brings it all back.
+            if (!fadesOut && screenFade.value < 1f) launch { screenFade.animateTo(1f, tween(150)) }
+            block()
+        }
     }
 
     val deckCardCorner = rememberDeckCardCornerPx()
@@ -469,8 +486,9 @@ fun MiniBrowserScreen(
 
     fun fadeOverviewOut() {
         overviewControls = false
-        transition {
-            overviewReveal.animateTo(0f, tween(200))
+        transition(fadesOut = true) {
+            // Only ever without a page: nothing stays behind the deck, so all of it goes.
+            screenFade.animateTo(0f, tween(200))
             showOverview = false
             chromeAlpha.snapTo(1f)
         }
@@ -595,7 +613,13 @@ fun MiniBrowserScreen(
 
     /** From home the overview fades in over the spaces; a recreated screen just comes back. */
     LaunchedEffect(Unit) {
-        if (showOverview) overviewReveal.animateTo(1f, tween(220))
+        if (showOverview) {
+            // The frame that builds the deck and loads its pictures is slow;
+            // a fade started under it would skip its start.
+            withFrameNanos { }
+            withFrameNanos { }
+            screenFade.animateTo(1f, tween(220))
+        }
     }
 
     // The overview stays up empty, like Safari's; its Done goes.
@@ -651,6 +675,7 @@ fun MiniBrowserScreen(
     Box(
         modifier
             .fillMaxSize()
+            .graphicsLayer { alpha = screenFade.value }
             .onSizeChanged { screen = Size(it.width.toFloat(), it.height.toFloat()) },
     ) {
         // Nothing of the screen behind the browser shows around a flying page:
@@ -722,10 +747,7 @@ fun MiniBrowserScreen(
                     onPullChange = ::updatePagePull,
                     onPullEnd = ::endPagePull,
                     onOpenOverview = ::openOverview,
-                    onDismiss = {
-                        pages.leaveBrowser()
-                        onDismiss()
-                    },
+                    onDismiss = onLeave,
                 )
                 // On its way to its card the page already is the card: the site
                 // never shows in the move.
@@ -805,11 +827,13 @@ fun MiniBrowserScreen(
             )
         }
 
-        val dockAlpha by animateFloatAsState(
-            targetValue = if (overviewControls) 1f else 0f,
-            animationSpec = tween(200),
-            label = "overviewDock",
-        )
+        // From home the dock comes in with the deck instead of standing there
+        // from the first frame while the cards fade in under it.
+        val dockFade = remember { Animatable(if (overviewControls) 1f else 0f) }
+        LaunchedEffect(overviewControls) {
+            dockFade.animateTo(if (overviewControls) 1f else 0f, tween(200))
+        }
+        val dockAlpha = dockFade.value
         if (showOverview && dockAlpha > 0f) {
             OverviewDock(
                 modifier = Modifier
@@ -821,8 +845,7 @@ fun MiniBrowserScreen(
                 onPlusLongPress = { if (openPages.isNotEmpty()) plusMenuOpen = true },
                 onLeave = {
                     if (pages.active != null) {
-                        pages.leaveBrowser()
-                        onDismiss()
+                        onLeave()
                     } else {
                         // Over home nothing is open behind it, only the overview goes.
                         fadeOverviewOut()

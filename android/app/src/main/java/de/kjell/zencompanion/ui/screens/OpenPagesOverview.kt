@@ -343,17 +343,21 @@ internal fun OpenPagesOverview(
                 .drawBehind {
                     val shown = reveal()
                     val page = deck.pageFrame
-                    drawRect(backdrop, size = Size(size.width, page.top), alpha = shown)
+                    // Whole pixels: strips meeting on a fractional edge both
+                    // blend it, and what lies below shows through as a hairline.
+                    val top = kotlin.math.round(page.top)
+                    val bottom = kotlin.math.round(page.bottom)
+                    drawRect(backdrop, size = Size(size.width, top), alpha = shown)
                     drawRect(
                         backdrop,
-                        topLeft = Offset(0f, page.top),
-                        size = Size(size.width, page.height),
+                        topLeft = Offset(0f, top),
+                        size = Size(size.width, bottom - top),
                         alpha = if (expandingCardId != null) 1f else shown,
                     )
                     drawRect(
                         backdrop,
-                        topLeft = Offset(0f, page.bottom),
-                        size = Size(size.width, size.height - page.bottom),
+                        topLeft = Offset(0f, bottom),
+                        size = Size(size.width, size.height - bottom),
                         alpha = shown,
                     )
                 },

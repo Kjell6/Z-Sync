@@ -8,6 +8,12 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -17,6 +23,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.listSaver
@@ -24,6 +31,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import de.kjell.zencompanion.ui.motion.rememberReducedMotion
+import de.kjell.zencompanion.ui.motion.springStiffness
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -53,6 +64,35 @@ import de.kjell.zencompanion.ui.sheets.ZenSheet
 import de.kjell.zencompanion.ui.theme.ZenTheme
 import java.util.UUID
 import kotlinx.coroutines.delay
+
+/** The browser comes up like a cover: it settles without a bounce. */
+private val BrowserCoverIn = spring(
+    dampingRatio = Spring.DampingRatioNoBouncy,
+    stiffness = springStiffness(0.45),
+    visibilityThreshold = 0.001f,
+)
+private val BrowserCoverOut = spring(
+    dampingRatio = Spring.DampingRatioNoBouncy,
+    stiffness = springStiffness(0.35),
+    visibilityThreshold = 0.001f,
+)
+
+/**
+ * Lets the expensive frames of a change pass before a move starts timing
+ * itself: waits for two quick frames in a row, a third of a second at most.
+ */
+private suspend fun awaitSettledFrames() {
+    val start = withFrameNanos { it }
+    var last = start
+    var quick = 0
+    while (true) {
+        val now = withFrameNanos { it }
+        quick = if (now - last < 25_000_000L) quick + 1 else 0
+        last = now
+        // A screen that only manages 30 Hz never has quick frames: give up in time.
+        if (quick >= 2 || now - start >= 333_000_000L) return
+    }
+}
 
 /** The browser being open. The pages live in [BrowserPages]; [url] reopens one after the process died. */
 private data class BrowserLaunch(
@@ -215,6 +255,54 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
         pinned = emptyList(),
     )
 
+    val browserWanted = activeBrowserLaunch != null && blockingAsked
+    /** The browser is composed: up, or on its way in or out. */
+    var browserComposed by remember { mutableStateOf(browserWanted) }
+    /** How far the browser sits below the screen: 0 is up, 1 is gone. */
+    val coverOffset = remember { Animatable(if (browserWanted) 0f else 1f) }
+    /** The launch on screen, kept while the browser slides out after it ended. */
+    val shownLaunch = remember { arrayOfNulls<BrowserLaunch>(1) }
+    /** The reader left with pages open: they let go once the browser is gone. */
+    var leavePending by rememberSaveable { mutableStateOf(false) }
+    val reducedMotion = rememberReducedMotion()
+
+    fun finishLeaving() {
+        if (!leavePending) return
+        leavePending = false
+        pages.leaveBrowser(captured = true)
+    }
+
+    // A page comes up from the bottom and goes back down, all of it at once —
+    // page, bar and the color under them — like the cover on iOS. From home
+    // the overview fades in over the spaces on its own, dock included, so the
+    // screen itself only has to be there.
+    LaunchedEffect(browserWanted) {
+        if (browserWanted) {
+            browserComposed = true
+            if (reducedMotion || shownLaunch[0]?.overview == true) {
+                coverOffset.snapTo(0f)
+                return@LaunchedEffect
+            }
+            // The first frames build the page's WebView and are slow; a move
+            // started under them would be over before it was seen.
+            awaitSettledFrames()
+            coverOffset.animateTo(0f, BrowserCoverIn)
+        } else if (browserComposed) {
+            if (!reducedMotion) {
+                // Leaving shoots the page for the overview, which costs a frame.
+                awaitSettledFrames()
+                coverOffset.animateTo(1f, BrowserCoverOut)
+            }
+            browserComposed = false
+            coverOffset.snapTo(1f)
+            shownLaunch[0] = null
+            finishLeaving()
+        } else {
+            // Recreated while the browser slid out: it is gone, its pages still have to go.
+            finishLeaving()
+        }
+    }
+
     fun openBrowser(
         url: String?,
         title: String?,
@@ -233,6 +321,8 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
         ) {
             openURLExternally(context, url)
         } else {
+            // Back before the last browser has slid away: its pages go first.
+            finishLeaving()
             pages.updateSpaces(spaces, currentSpace.id)
             pages.open(url, title, openedFromSpace)
             activeBrowserLaunch = BrowserLaunch(url, title, overview = false)
@@ -309,7 +399,10 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
             onOpenActivity = { showActivity = true },
             onOpenBrowser = { url, title -> openBrowser(url, title, openedFromSpace = url != null) },
             pageCount = openPages.size,
-            onOpenPages = { activeBrowserLaunch = BrowserLaunch(null, null, overview = true) },
+            onOpenPages = {
+                finishLeaving()
+                activeBrowserLaunch = BrowserLaunch(null, null, overview = true)
+            },
             onDismissShareTip = { viewModel.dismissShareTip() },
             onDismissSyncSetupHint = { viewModel.dismissSyncSetupHint() },
         )
@@ -326,22 +419,50 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
         val launch = activeBrowserLaunch
         // The first browser waits for the content-blocking answer (below), so
         // its first page already loads with the reader's choice.
-        if (launch != null && blockingAsked) {
-            // Keyed by launch: a link that arrives while the last browser is
-            // showing (its overview or history up) starts a browser of its own
-            // instead of putting the new page behind the old screen.
-            key(launch.id) {
-                MiniBrowserScreen(
-                    pages = pages,
-                    signedIn = signedIn,
-                    startsInOverview = launch.overview,
-                    launchUrl = launch.url,
-                    launchTitle = launch.title,
-                    currentSpace = currentSpace,
-                    allSpaces = spaces,
-                    browserRepository = viewModel.browserRepository,
-                    onDismiss = { activeBrowserLaunch = null },
-                )
+        if (launch != null && blockingAsked) shownLaunch[0] = launch
+        val presented = shownLaunch[0]
+        if (browserComposed && presented != null) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { translationY = coverOffset.value * size.height },
+            ) {
+                // Keyed by launch: a link that arrives while the last browser is
+                // showing (its overview or history up) starts a browser of its own
+                // instead of putting the new page behind the old screen.
+                key(presented.id) {
+                    MiniBrowserScreen(
+                        pages = pages,
+                        signedIn = signedIn,
+                        startsInOverview = presented.overview,
+                        launchUrl = presented.url,
+                        launchTitle = presented.title,
+                        currentSpace = currentSpace,
+                        allSpaces = spaces,
+                        browserRepository = viewModel.browserRepository,
+                        onDismiss = { activeBrowserLaunch = null },
+                        onLeave = {
+                            // Shot now, while the page still shows; the pages
+                            // let go once the screen is out of sight.
+                            pages.active?.let(pages::capture)
+                            leavePending = true
+                            activeBrowserLaunch = null
+                        },
+                    )
+                }
+                // On its way out the browser takes no touch and no back.
+                if (!browserWanted) {
+                    BackHandler {}
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .pointerInput(Unit) {
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false).consume()
+                                }
+                            },
+                    )
+                }
             }
         }
     }

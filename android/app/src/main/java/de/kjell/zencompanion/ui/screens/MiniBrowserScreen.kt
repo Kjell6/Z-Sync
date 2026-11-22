@@ -265,7 +265,8 @@ fun MiniBrowserScreen(
      * page to shrink into its card, so the overview comes and goes as one
      * layer instead of a backdrop fading under cards that stand there.
      */
-    val screenFade = remember { Animatable(if (startsInOverview) 0f else 1f) }
+    // Recreated on a page picked from the deck, the page simply stays.
+    val screenFade = remember { Animatable(if (startsInOverview && showOverview) 0f else 1f) }
     /** The deck's cards above the page's own, once it has landed. */
     val aheadReveal = remember { Animatable(1f) }
     /** The live page between full screen and its card. */
@@ -302,9 +303,13 @@ fun MiniBrowserScreen(
     /** Every move of the overview replaces the one before; only the last one finishes. */
     val move = remember { arrayOfNulls<Job>(1) }
 
-    fun transition(block: suspend CoroutineScope.() -> Unit) {
+    fun transition(fadesOut: Boolean = false, block: suspend CoroutineScope.() -> Unit) {
         move[0]?.cancel()
-        move[0] = scope.launch(block = block)
+        move[0] = scope.launch {
+            // A move that cuts the overview's fade-out short brings it all back.
+            if (!fadesOut && screenFade.value < 1f) launch { screenFade.animateTo(1f, tween(150)) }
+            block()
+        }
     }
 
     val deckCardCorner = rememberDeckCardCornerPx()
@@ -481,7 +486,7 @@ fun MiniBrowserScreen(
 
     fun fadeOverviewOut() {
         overviewControls = false
-        transition {
+        transition(fadesOut = true) {
             // Only ever without a page: nothing stays behind the deck, so all of it goes.
             screenFade.animateTo(0f, tween(200))
             showOverview = false

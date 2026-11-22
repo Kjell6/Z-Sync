@@ -82,13 +82,15 @@ private val BrowserCoverOut = spring(
  * itself: waits for two quick frames in a row, a third of a second at most.
  */
 private suspend fun awaitSettledFrames() {
-    var last = withFrameNanos { it }
+    val start = withFrameNanos { it }
+    var last = start
     var quick = 0
-    repeat(20) {
+    while (true) {
         val now = withFrameNanos { it }
         quick = if (now - last < 25_000_000L) quick + 1 else 0
         last = now
-        if (quick >= 2) return
+        // A screen that only manages 30 Hz never has quick frames: give up in time.
+        if (quick >= 2 || now - start >= 333_000_000L) return
     }
 }
 
@@ -294,6 +296,9 @@ private fun SpacesBrowserRoot(viewModel: AppViewModel) {
             browserComposed = false
             coverOffset.snapTo(1f)
             shownLaunch[0] = null
+            finishLeaving()
+        } else {
+            // Recreated while the browser slid out: it is gone, its pages still have to go.
             finishLeaving()
         }
     }

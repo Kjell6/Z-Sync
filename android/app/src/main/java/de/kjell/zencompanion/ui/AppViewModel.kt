@@ -207,6 +207,9 @@ interface PreferencesRepository {
     fun setDidRequestReview(requested: Boolean)
     fun didArmReviewPrompt(): Boolean
     fun setDidArmReviewPrompt(armed: Boolean)
+    /** When the latest review prompt went out (epoch ms), or null. */
+    fun lastReviewRequestedAt(): Long?
+    fun setLastReviewRequestedAt(millis: Long)
 }
 
 internal class AndroidPreferencesRepository(private val context: Context) : PreferencesRepository {
@@ -274,6 +277,14 @@ internal class AndroidPreferencesRepository(private val context: Context) : Pref
         onboardingPrefs().edit().putBoolean(KEY_DID_ARM_REVIEW, armed).apply()
     }
 
+    override fun lastReviewRequestedAt(): Long? =
+        onboardingPrefs().takeIf { it.contains(KEY_LAST_REVIEW_AT) }
+            ?.getLong(KEY_LAST_REVIEW_AT, 0L)
+
+    override fun setLastReviewRequestedAt(millis: Long) {
+        onboardingPrefs().edit().putLong(KEY_LAST_REVIEW_AT, millis).apply()
+    }
+
     private fun onboardingPrefs() =
         context.getSharedPreferences("onboarding", Context.MODE_PRIVATE)
 
@@ -282,6 +293,7 @@ internal class AndroidPreferencesRepository(private val context: Context) : Pref
         const val KEY_DID_SHOW_SHARE_TIP = "didShowShareExtensionTip"
         const val KEY_DID_REQUEST_REVIEW = "didRequestReview"
         const val KEY_DID_ARM_REVIEW = "didArmReviewPrompt"
+        const val KEY_LAST_REVIEW_AT = "lastReviewRequestedAt"
     }
 }
 
@@ -316,6 +328,8 @@ class AppViewModel(
     },
     private val whatsNewRepository: WhatsNewRepository = AndroidWhatsNewRepository(appContext),
     private val appVersion: String = BuildConfig.VERSION_NAME,
+    /** Wall clock for the repeated review prompt; replaceable in tests. */
+    private val now: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
     // Loaded synchronously at creation so the first composed frame already
     // shows the right screen — no sign-in flash on cold start.
@@ -673,12 +687,16 @@ class AppViewModel(
      * Native Play In-App Review dialog. Google decides whether it actually
      * appears (quota-limited; debug/sideload installs usually skip it).
      * First look waits 12s after synced tabs; if the app is closed sooner,
-     * the next launch asks after a short settle.
+     * the next launch asks after a short settle. After that it asks again
+     * every two weeks; Google's quota decides which of those actually show.
      */
     internal fun considerReviewPrompt() {
         if (browserRepository.isDemo()) return
-        if (preferencesRepository.didRequestReview()) return
         if (!_browser.value.snapshot.hasSyncedTabs) return
+        if (preferencesRepository.didRequestReview()) {
+            considerRepeatReviewPrompt()
+            return
+        }
         val alreadyArmed = preferencesRepository.didArmReviewPrompt()
         if (!alreadyArmed) {
             preferencesRepository.setDidArmReviewPrompt(true)
@@ -691,8 +709,23 @@ class AppViewModel(
         scheduleReviewPrompt(REVIEW_NEXT_OPEN_DELAY_MS)
     }
 
+    private fun considerRepeatReviewPrompt() {
+        if (reviewArmedThisProcess) return
+        val lastAskedAt = preferencesRepository.lastReviewRequestedAt()
+        if (lastAskedAt == null) {
+            // Asked before repeats existed: count the two weeks from now.
+            preferencesRepository.setLastReviewRequestedAt(now())
+            return
+        }
+        if (!repeatReviewDue(lastAskedAt)) return
+        reviewArmedThisProcess = true
+        scheduleReviewPrompt(REVIEW_FIRST_LOOK_DELAY_MS)
+    }
+
+    private fun repeatReviewDue(lastAskedAt: Long): Boolean =
+        now() - lastAskedAt >= REVIEW_REPEAT_AFTER_MS
+
     private fun scheduleReviewPrompt(delayMs: Long) {
-        if (preferencesRepository.didRequestReview()) return
         reviewJob?.cancel()
         reviewJob = viewModelScope.launch {
             delay(delayMs)
@@ -703,13 +736,18 @@ class AppViewModel(
 
     internal fun requestReviewIfEligible() {
         if (browserRepository.isDemo()) return
-        if (preferencesRepository.didRequestReview()) return
+        val firstAsk = !preferencesRepository.didRequestReview()
+        if (!firstAsk) {
+            val lastAskedAt = preferencesRepository.lastReviewRequestedAt() ?: return
+            if (!repeatReviewDue(lastAskedAt)) return
+        }
         val state = _browser.value
         if (!state.snapshot.hasSyncedTabs) return
         if (state.showShareTip) return
         if (state.showSyncSetupHint) return
         if (state.loading) return
-        preferencesRepository.setDidRequestReview(true)
+        if (firstAsk) preferencesRepository.setDidRequestReview(true)
+        preferencesRepository.setLastReviewRequestedAt(now())
         _reviewRequests.tryEmit(Unit)
     }
 
@@ -936,6 +974,7 @@ class AppViewModel(
     private companion object {
         const val REVIEW_FIRST_LOOK_DELAY_MS = 12_000L
         const val REVIEW_NEXT_OPEN_DELAY_MS = 1_500L
+        const val REVIEW_REPEAT_AFTER_MS = 14L * 24 * 60 * 60 * 1000
     }
 
     class Factory(private val context: Context) : ViewModelProvider.Factory {

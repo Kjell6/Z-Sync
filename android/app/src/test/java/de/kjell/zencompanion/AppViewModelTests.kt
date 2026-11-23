@@ -96,6 +96,7 @@ class AppViewModelTests {
         whatsNew: WhatsNewRepository = FakeWhatsNewRepository(),
         appVersion: String = "1.5",
         revokeSession: suspend (String) -> Unit = {},
+        now: () -> Long = { 0L },
     ) = AppViewModel(
         context,
         login,
@@ -105,6 +106,7 @@ class AppViewModelTests {
         revokeSession = revokeSession,
         whatsNewRepository = whatsNew,
         appVersion = appVersion,
+        now = now,
     ).also { createdViewModels += it }
 
     @Test
@@ -697,6 +699,108 @@ class AppViewModelTests {
     }
 
     @Test
+    fun firstReviewPromptRecordsWhenItWasAsked() = runTest(mainDispatcherRule.testDispatcher) {
+        val prefs = FakePreferencesRepository().apply { shareTipShown = true }
+        val vm = newViewModel(
+            browser = FakeBrowserRepository(snapshot = snapshotWithPinnedTab()),
+            preferences = prefs,
+            now = { 42L },
+        )
+        vm.completeSignIn(snapshot())
+        advanceTimeBy(12_000)
+        runCurrent()
+        assertTrue(prefs.reviewRequested)
+        assertEquals(42L, prefs.lastReviewAt)
+    }
+
+    @Test
+    fun reviewPromptRepeatsAfterTwoWeeks() = runTest(mainDispatcherRule.testDispatcher) {
+        var clock = 1_000L + TWO_WEEKS_MS
+        val prefs = FakePreferencesRepository().apply {
+            shareTipShown = true
+            reviewArmed = true
+            reviewRequested = true
+            lastReviewAt = 1_000L
+        }
+        val vm = newViewModel(
+            browser = FakeBrowserRepository(snapshot = snapshotWithPinnedTab()),
+            preferences = prefs,
+            now = { clock },
+        )
+        val received = mutableListOf<Unit>()
+        backgroundScope.launch { vm.reviewRequests.collect { received += it } }
+
+        vm.completeSignIn(snapshot())
+        runCurrent()
+        advanceTimeBy(11_999)
+        runCurrent()
+        assertTrue(received.isEmpty())
+
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(1, received.size)
+        assertEquals(clock, prefs.lastReviewAt)
+
+        // The next two weeks start from this ask.
+        clock += TWO_WEEKS_MS - 1
+        vm.requestReviewIfEligible()
+        runCurrent()
+        assertEquals(1, received.size)
+
+        clock += 1
+        vm.requestReviewIfEligible()
+        runCurrent()
+        assertEquals(2, received.size)
+    }
+
+    @Test
+    fun reviewPromptNotRepeatedBeforeTwoWeeks() = runTest(mainDispatcherRule.testDispatcher) {
+        val prefs = FakePreferencesRepository().apply {
+            shareTipShown = true
+            reviewArmed = true
+            reviewRequested = true
+            lastReviewAt = 1_000L
+        }
+        val vm = newViewModel(
+            browser = FakeBrowserRepository(snapshot = snapshotWithPinnedTab()),
+            preferences = prefs,
+            now = { 1_000L + TWO_WEEKS_MS - 1 },
+        )
+        val received = mutableListOf<Unit>()
+        backgroundScope.launch { vm.reviewRequests.collect { received += it } }
+
+        vm.completeSignIn(snapshot())
+        advanceTimeBy(20_000)
+        runCurrent()
+        vm.requestReviewIfEligible()
+        runCurrent()
+        assertTrue(received.isEmpty())
+        assertEquals(1_000L, prefs.lastReviewAt)
+    }
+
+    @Test
+    fun repeatClockStartsNowForEarlierAsks() = runTest(mainDispatcherRule.testDispatcher) {
+        val prefs = FakePreferencesRepository().apply {
+            shareTipShown = true
+            reviewArmed = true
+            reviewRequested = true
+        }
+        val vm = newViewModel(
+            browser = FakeBrowserRepository(snapshot = snapshotWithPinnedTab()),
+            preferences = prefs,
+            now = { 5_000L },
+        )
+        val received = mutableListOf<Unit>()
+        backgroundScope.launch { vm.reviewRequests.collect { received += it } }
+
+        vm.completeSignIn(snapshot())
+        advanceTimeBy(20_000)
+        runCurrent()
+        assertTrue(received.isEmpty())
+        assertEquals(5_000L, prefs.lastReviewAt)
+    }
+
+    @Test
     fun reviewPromptWaitsUntilShareTipIsDismissed() = runTest(mainDispatcherRule.testDispatcher) {
         val prefs = FakePreferencesRepository()
         val vm = newViewModel(
@@ -879,12 +983,15 @@ private class FakeBrowserRepository(
     override fun saveKind(): SaveKind = SaveKind.PINNED
 }
 
+private const val TWO_WEEKS_MS = 14L * 24 * 60 * 60 * 1000
+
 private class FakePreferencesRepository : PreferencesRepository {
     var state = PreferencesState()
     var syncSetupDismissedFlag = false
     var shareTipShown = false
     var reviewRequested = false
     var reviewArmed = false
+    var lastReviewAt: Long? = null
 
     override fun load(): PreferencesState = state
 
@@ -946,6 +1053,12 @@ private class FakePreferencesRepository : PreferencesRepository {
 
     override fun setDidArmReviewPrompt(armed: Boolean) {
         reviewArmed = armed
+    }
+
+    override fun lastReviewRequestedAt(): Long? = lastReviewAt
+
+    override fun setLastReviewRequestedAt(millis: Long) {
+        lastReviewAt = millis
     }
 }
 

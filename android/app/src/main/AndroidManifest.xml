@@ -20,6 +20,9 @@
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:name="android.hardware.location" android:required="false" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <!-- The portrait lock below would otherwise make portrait screens a requirement;
+         large screens are released from it in ScreenOrientation, so it is optional. -->
+    <uses-feature android:name="android.hardware.screen.portrait" android:required="false" />
 
     <queries>
         <intent>

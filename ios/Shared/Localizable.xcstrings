@@ -1243,6 +1243,16 @@
         }
       }
     },
+    "history.archive_footer": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pages you haven't looked at for this long close by themselves. You can still find them in the history below."
+          }
+        }
+      }
+    },
     "history.delete": {
       "localizations": {
         "en": {
@@ -1273,12 +1283,22 @@
         }
       }
     },
+    "history.section": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "History"
+          }
+        }
+      }
+    },
     "history.search": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Search history"
+            "value": "Search archive"
           }
         }
       }
@@ -1288,7 +1308,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Browsing History"
+            "value": "Archive"
           }
         }
       }
@@ -2900,7 +2920,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Auto-close"
+            "value": "Archive pages"
           }
         }
       }

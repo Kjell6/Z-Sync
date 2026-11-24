@@ -257,7 +257,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
         }
     }
 
-    /// The open pages, or the history once the overview is up. One piece of
+    /// The open pages, or the archive once the overview is up. One piece of
     /// glass: only what is printed on it changes.
     private var leadingControl: some View {
         let count = pages.pages.count
@@ -275,7 +275,7 @@ struct MiniBrowserChrome<NavBar: View>: View {
             .accessibilityLabel(Text("browser.page_count \(count)"))
 
             Button(action: onOpenHistory) {
-                Image(systemName: "clock.arrow.circlepath")
+                Image(systemName: "archivebox")
                     .font(.system(size: glyphSize, weight: .semibold))
                     .foregroundStyle(ink)
                     .frame(width: controlSide, height: controlSide)

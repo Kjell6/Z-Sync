@@ -1,6 +1,19 @@
 package de.kjell.zencompanion.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.outlined.ArrowDropDown
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import de.kjell.zencompanion.data.BrowserSettings
+import de.kjell.zencompanion.data.KeptPageLifetime
+import de.kjell.zencompanion.ui.theme.ZenListValue
+import de.kjell.zencompanion.ui.theme.ZenMenu
+import de.kjell.zencompanion.ui.theme.ZenMenuCheck
+import de.kjell.zencompanion.ui.theme.ZenMenuGroup
+import de.kjell.zencompanion.ui.theme.ZenSelectableMenuItem
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +51,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -70,7 +84,8 @@ internal fun dayOf(time: Long, calendar: Calendar = Calendar.getInstance()): Lon
 }
 
 /**
- * The pages opened in this browser, newest first and grouped by day. The same
+ * The browser's archive: when pages close by themselves, then every page
+ * opened in this browser, newest first and grouped by day. The same
  * card look as the Settings and Activity sheets: a quiet day label over one
  * lift card, favicons, app colours only.
  */
@@ -155,51 +170,147 @@ internal fun BrowserHistoryScreen(
                     .border(liftBorder(), RoundedCornerShape(16.dp)),
             )
 
-            if (found.isEmpty()) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = stringResource(
-                            if (query.isBlank()) R.string.history_empty else R.string.history_no_results,
-                        ),
-                        style = ZenType.rounded(15, FontWeight.Medium),
-                        color = zen.ink.copy(alpha = 0.55f),
-                    )
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                    start = 20.dp,
+                    end = 20.dp,
+                    top = 6.dp,
+                    bottom = 32.dp,
+                ),
+            ) {
+                // Settings, not results: searching hides it.
+                if (query.isBlank()) {
+                    item(key = LIFETIME_KEY) {
+                        ArchiveLifetime()
+                    }
+                    // The setting above and the pages below are two things;
+                    // the list gets its own title.
+                    item(key = HEADING_KEY) {
+                        Text(
+                            text = stringResource(R.string.history_section),
+                            style = ZenType.rounded(20, FontWeight.SemiBold),
+                            color = zen.ink,
+                            modifier = Modifier
+                                .padding(start = 4.dp, top = 28.dp, bottom = 12.dp)
+                                .semantics { heading() },
+                        )
+                    }
                 }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                        start = 20.dp,
-                        end = 20.dp,
-                        top = 6.dp,
-                        bottom = 32.dp,
-                    ),
-                ) {
-                    days.forEachIndexed { dayIndex, (day, group) ->
-                        // One item per label and one per row: a day of history
-                        // only composes as far as it is scrolled to.
-                        item(key = DAY_KEY + day) {
-                            DayLabel(
-                                label = dayFormat.format(Date(day)),
-                                spaced = dayIndex > 0,
-                            )
-                        }
-                        itemsIndexed(group, key = { _, visit -> visit.url }) { index, visit ->
-                            DayRow(
-                                visit = visit,
-                                time = timeFormat.format(Date(visit.lastVisited)),
-                                first = index == 0,
-                                last = index == group.lastIndex,
-                                onOpen = { onOpen(visit) },
-                                onDelete = { BrowserHistory.remove(visit) },
-                            )
-                        }
+                if (found.isEmpty()) {
+                    item(key = EMPTY_KEY) {
+                        Text(
+                            text = stringResource(
+                                if (query.isBlank()) R.string.history_empty else R.string.history_no_results,
+                            ),
+                            style = ZenType.rounded(15, FontWeight.Medium),
+                            color = zen.ink.copy(alpha = 0.55f),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 48.dp),
+                        )
+                    }
+                }
+                days.forEachIndexed { dayIndex, (day, group) ->
+                    // One item per label and one per row: a day of history
+                    // only composes as far as it is scrolled to.
+                    item(key = DAY_KEY + day) {
+                        DayLabel(
+                            label = dayFormat.format(Date(day)),
+                            spaced = dayIndex > 0,
+                        )
+                    }
+                    itemsIndexed(group, key = { _, visit -> visit.url }) { index, visit ->
+                        DayRow(
+                            visit = visit,
+                            time = timeFormat.format(Date(visit.lastVisited)),
+                            first = index == 0,
+                            last = index == group.lastIndex,
+                            onOpen = { onOpen(visit) },
+                            onDelete = { BrowserHistory.remove(visit) },
+                        )
                     }
                 }
             }
         }
     }
 }
+
+/** Keys for the rows above the days; no URL can equal them. */
+private const val LIFETIME_KEY = "archive-lifetime"
+private const val EMPTY_KEY = "archive-empty"
+private const val HEADING_KEY = "archive-heading"
+
+/**
+ * When unused pages close and land here: the same choice as Settings › Pages
+ * & tabs, so it can be changed where its effect shows up.
+ */
+@Composable
+private fun ArchiveLifetime() {
+    val zen = LocalZenColors.current
+    val context = LocalContext.current
+    var lifetime by remember { mutableStateOf(BrowserSettings.getKeptPageLifetime(context)) }
+    var expanded by remember { mutableStateOf(false) }
+    Column {
+        ZenListGroup {
+            Box(modifier = Modifier.fillMaxWidth()) {
+                ZenListItem(
+                    headline = stringResource(R.string.settings_kept_lifetime),
+                    onClick = { expanded = true },
+                    trailingContent = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            ZenListValue(lifetime.archiveLabel())
+                            Spacer(Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.Outlined.ArrowDropDown,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    },
+                )
+                Box(modifier = Modifier.align(Alignment.BottomEnd)) {
+                    ZenMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        val options = KeptPageLifetime.entries
+                        ZenMenuGroup(index = 0, count = 1) {
+                            options.forEachIndexed { index, option ->
+                                ZenSelectableMenuItem(
+                                    selected = option == lifetime,
+                                    onClick = {
+                                        lifetime = option
+                                        BrowserSettings.setKeptPageLifetime(context, option)
+                                        expanded = false
+                                    },
+                                    text = { Text(option.archiveLabel()) },
+                                    index = index,
+                                    count = options.size,
+                                    selectedLeadingIcon = { ZenMenuCheck() },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Text(
+            text = stringResource(R.string.history_archive_footer),
+            style = ZenType.rounded(13, FontWeight.Normal),
+            color = zen.ink.copy(alpha = 0.45f),
+            modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 8.dp),
+        )
+    }
+}
+
+@Composable
+private fun KeptPageLifetime.archiveLabel(): String = stringResource(
+    when (this) {
+        KeptPageLifetime.NEVER -> R.string.settings_kept_lifetime_never
+        KeptPageLifetime.DAY -> R.string.settings_kept_lifetime_day
+        KeptPageLifetime.WEEK -> R.string.settings_kept_lifetime_week
+        KeptPageLifetime.MONTH -> R.string.settings_kept_lifetime_month
+    },
+)
 
 /** Day headers are keyed by their day value, which no URL can equal. */
 private const val DAY_KEY = "history-day-"

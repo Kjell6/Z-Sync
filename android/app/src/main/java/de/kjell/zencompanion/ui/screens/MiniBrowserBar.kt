@@ -64,7 +64,7 @@ import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Description
@@ -1046,7 +1046,7 @@ internal fun OverviewDock(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         DockButton(
-            icon = Icons.Outlined.History,
+            icon = Icons.Outlined.Archive,
             description = stringResource(R.string.history_title),
             tint = zen.ink,
             onClick = onOpenHistory,

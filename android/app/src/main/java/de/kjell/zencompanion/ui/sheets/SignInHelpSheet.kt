@@ -27,8 +27,9 @@ import de.kjell.zencompanion.R
 import de.kjell.zencompanion.ui.theme.LocalZenColors
 
 /**
- * Port of the iOS `SignInHelpSheet`. The Hide My Email block is
- * Apple-specific and has no Android equivalent.
+ * Port of the iOS `SignInHelpSheet`. The private-address block matters here
+ * too: an account opened with Apple's Hide My Email signs in with that relay
+ * address on any device.
  */
 @Composable
 fun SignInHelpSheet(
@@ -80,6 +81,10 @@ fun SignInHelpSheet(
             HelpBlock(
                 title = stringResource(R.string.signin_help_how_title),
                 body = stringResource(R.string.signin_help_how),
+            )
+            HelpBlock(
+                title = stringResource(R.string.signin_help_hide_title),
+                body = stringResource(R.string.signin_help_hide),
             )
             HelpBlock(
                 title = stringResource(R.string.signin_help_passkey_title),

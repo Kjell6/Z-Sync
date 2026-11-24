@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
@@ -222,7 +221,7 @@ fun SpacesBrowserScreen(
                             modifier = Modifier
                                 .widthIn(max = ZenLayout.MaxContentWidth)
                                 .fillMaxWidth()
-                                .navigationBarsPadding(),
+                                .homeBottomBarPadding(),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             // Sits between the content and the switcher: the dock
@@ -242,7 +241,7 @@ fun SpacesBrowserScreen(
                         if (toolbarPlacement == ToolbarPlacement.BOTTOM) {
                             actionBar()
                         }
-                        Spacer(Modifier.navigationBarsPadding())
+                        Spacer(Modifier.homeBottomBarPadding())
                     }
                 }
             }

@@ -7,6 +7,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -38,6 +42,17 @@ import de.kjell.zencompanion.ui.theme.LocalZenColors
 import de.kjell.zencompanion.ui.theme.liftRim
 import de.kjell.zencompanion.ui.theme.pressFeedback
 import de.kjell.zencompanion.ui.theme.rememberTilePress
+
+/** Least air between the home screen's last row and the screen edge. */
+private val HomeMinBottomGap = 16.dp
+
+/**
+ * Navigation-bar padding with a floor: when the gesture bar is hidden the
+ * inset is 0 and the last row would sit flush on the screen edge (#111).
+ */
+@Composable
+internal fun Modifier.homeBottomBarPadding(): Modifier =
+    windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets(bottom = HomeMinBottomGap)))
 
 /**
  * Action bar: History | Search | Settings — all cards sharing the essentials

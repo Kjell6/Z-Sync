@@ -30,6 +30,8 @@
     <string name="signin_help_link">Need help signing in?</string>
     <string name="signin_help_title">Can\'t sign in?</string>
     <string name="signin_help_why">Sign in with the Mozilla account you already signed into on your desktop.</string>
+    <string name="signin_help_how_title">Other sign-in options are not shown</string>
+    <string name="signin_help_how">This login does not include sign-in through other services. If that is how you opened the Mozilla account, enter the email address of that service and the extra password you created for Firefox. That extra password is separate from the password of the other service. Only the Firefox one works here.\n\nIf you never created that extra Firefox password, because the other service was enough to sign in, you still need one on the Mozilla account. Open Firefox Accounts in a browser, set it there, then sign in here with that email and the extra password you just created.</string>
     <string name="signin_help_passkey_title">Passkeys are not supported here</string>
     <string name="signin_help_passkey">Signing in with a passkey does not work in the in-app sign-in window yet. Use your Mozilla account email address and password instead.</string>
     <string name="signin_help_open_mozilla">Open Firefox Accounts in your browser</string>

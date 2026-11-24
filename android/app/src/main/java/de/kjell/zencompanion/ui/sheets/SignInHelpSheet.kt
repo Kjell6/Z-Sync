@@ -27,9 +27,8 @@ import de.kjell.zencompanion.R
 import de.kjell.zencompanion.ui.theme.LocalZenColors
 
 /**
- * Port of the iOS `SignInHelpSheet`. Unlike iOS, Android does not hide the
- * Apple / Google sign-in options, so the "other sign-in options are not shown"
- * block has no Android equivalent; the Hide My Email block is Apple-specific.
+ * Port of the iOS `SignInHelpSheet`. The Hide My Email block is
+ * Apple-specific and has no Android equivalent.
  */
 @Composable
 fun SignInHelpSheet(
@@ -78,6 +77,10 @@ fun SignInHelpSheet(
             }
 
             HelpBlock(body = stringResource(R.string.signin_help_why))
+            HelpBlock(
+                title = stringResource(R.string.signin_help_how_title),
+                body = stringResource(R.string.signin_help_how),
+            )
             HelpBlock(
                 title = stringResource(R.string.signin_help_passkey_title),
                 body = stringResource(R.string.signin_help_passkey),

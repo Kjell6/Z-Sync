@@ -82,6 +82,19 @@ object FxAWeb {
     fun isAuthOrigin(url: String?): Boolean =
         url != null && isAuthOrigin(runCatching { Uri.parse(url) }.getOrNull())
 
+    /**
+     * Port of iOS `FxASocialAuth.shouldBlock`: Mozilla's Continue with
+     * Google / Apple hosts. They can't complete a Sync sign-in in this
+     * WebView, so they are never loaded and never handed to the browser.
+     */
+    fun isSocialAuth(uri: Uri?): Boolean = isSocialAuthHost(uri?.host)
+
+    fun isSocialAuthHost(host: String?): Boolean {
+        val h = host?.lowercase() ?: return false
+        return h == "appleid.apple.com" || h.endsWith(".appleid.apple.com") ||
+            h == "accounts.google.com" || h.endsWith(".accounts.google.com")
+    }
+
     const val loginURL =
         "https://accounts.firefox.com/?service=sync&context=fx_desktop_v3&entrypoint=zencompanion&action=email"
 
@@ -203,6 +216,51 @@ object FxAWeb {
       document.addEventListener('WebChannelMessageToChrome', handle);
       replay();
 
+      // Continue with Google / Apple cannot finish here: the provider pages
+      // leave the auth host (and Google refuses embedded WebViews), and Sync
+      // needs the account's own Mozilla password anyway. Same as iOS: hide
+      // the buttons so nobody ends up in the external browser, signed in
+      // there but never here.
+      function zenHideSocial() {
+        try {
+          var buttons = document.querySelectorAll('button');
+          for (var i = 0; i < buttons.length; i++) {
+            var el = buttons[i];
+            var label = (el.getAttribute('aria-label') || '').toLowerCase();
+            var text = (el.innerText || el.textContent || '').toLowerCase();
+            var html = (el.innerHTML || '').toLowerCase();
+            // Mozilla wraps brand names in invisible bidi isolates
+            // ("Continue with \u2068Google\u2069"); drop them before matching.
+            var blob = (label + ' ' + text + ' ' + html).replace(/[\u200e\u200f\u2066-\u2069]/g, '');
+            text = text.replace(/[\u200e\u200f\u2066-\u2069]/g, '');
+            var social = /continue with apple|continue with google|sign in with apple|sign in with google/.test(blob);
+            if (!social && /apple|google/.test(blob) && text.replace(/\s+/g, '') === '') social = true;
+            var w = el.offsetWidth, h = el.offsetHeight;
+            if (!social && w >= 52 && w <= 72 && h >= 52 && h <= 72) social = true;
+            if (!social) continue;
+            var parent = el.parentElement;
+            try { el.remove(); } catch (err) {}
+            if (parent && parent.children && parent.children.length === 0) {
+              try { parent.remove(); } catch (err2) {}
+            }
+          }
+        } catch (err) {}
+      }
+      window.__zenHideSocial = zenHideSocial;
+      zenHideSocial();
+      var socialTicks = 0;
+      var socialIv = setInterval(function() {
+        zenHideSocial();
+        if (++socialTicks > 80) clearInterval(socialIv);
+      }, 250);
+      try {
+        new MutationObserver(zenHideSocial).observe(document.documentElement, {
+          childList: true,
+          subtree: true,
+          attributes: true
+        });
+      } catch (err) {}
+
       // Passkey sign-in cannot work in this embedded WebView: platform
       // passkeys need an app<->accounts.firefox.com association, and
       // Mozilla's AASA/assetlinks do not list this app. Hide the CTA so
@@ -267,7 +325,8 @@ object FxAWeb {
      */
     fun replayJS(): String =
         "try { var r = sessionStorage.getItem('zencompanion.login'); if (r) { var o = JSON.parse(r); o.znonce = window.__znonce; AndroidBridge.fxa(JSON.stringify(o)); } } catch (e) {} " +
-            "try { window.__zenHidePasskeys && window.__zenHidePasskeys(); } catch (e) {}"
+            "try { window.__zenHidePasskeys && window.__zenHidePasskeys(); } catch (e) {} " +
+            "try { window.__zenHideSocial && window.__zenHideSocial(); } catch (e) {}"
 
     /**
      * Signs the sign-in page out for good: its cookies and its local storage
@@ -505,6 +564,7 @@ fun MozillaSignInScreen(
                                 view: WebView,
                                 request: WebResourceRequest,
                             ): Boolean {
+                                if (FxAWeb.isSocialAuth(request.url)) return true
                                 if (!request.isForMainFrame) return false
                                 if (FxAWeb.isAuthOrigin(request.url)) return false
                                 // Off-host navigations must never load inside the

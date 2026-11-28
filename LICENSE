@@ -25,3 +25,15 @@ SOFTWARE.
 Space icons (`zen-*` assets) are derived from Zen Browser and remain licensed
 under the Mozilla Public License 2.0.
 See https://www.mozilla.org/MPL/2.0/
+
+---
+
+The "Z-Sync" name and the Z-Sync logo and app icon are not licensed under the
+MIT License above. All rights reserved. This covers, among others,
+`ios/ZenCompanion/Assets.xcassets/AppIcon.appiconset`,
+`ios/ZenCompanion/Assets.xcassets/AppMark.imageset`,
+`android/app/src/main/res/drawable/ic_launcher_foreground.xml`,
+`android/app/src/main/res/drawable-nodpi/ic_app_mark.png` and the icon files
+in `docs/`. Forks may keep these files in the source, but builds you publish or
+distribute (App Store, TestFlight, Google Play, APKs and the like) must use
+their own name and icon and must not suggest they are the official Z-Sync app.
